@@ -3,9 +3,9 @@ import requests
 from bs4 import BeautifulSoup
 from PIL import Image
 from io import BytesIO
+from config import INCOMING
 
-# Configuración
-BASE_DIR = "/Users/domingo/⭐️ Documentación/Incoming"
+BASE_DIR = INCOMING
 MAX_WIDTH = 300
 
 def get_image_width(src):

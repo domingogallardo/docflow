@@ -1,5 +1,6 @@
 from pathlib import Path
 from markdownify import markdownify as md
+from config import INCOMING 
 
 def listar_archivos_html(ruta_directorio):
     return sorted(Path(ruta_directorio).rglob('*.html'))
@@ -15,8 +16,7 @@ def guardar_markdown(ruta_archivo_original, contenido_md):
     print(f'✅ Markdown guardado: {ruta_markdown}')
 
 if __name__ == "__main__":
-    # NUEVA RUTA: carpeta Incoming en la raíz
-    ruta = '/Users/domingo/⭐️ Documentación/Incoming'
+    ruta = INCOMING
     archivos_html = listar_archivos_html(ruta)
 
     # Filtrar solo los archivos que aún no tienen su versión en Markdown

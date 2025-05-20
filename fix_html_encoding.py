@@ -1,8 +1,8 @@
 import os
 import re
+from config import INCOMING
 
-# ←←← MODIFICA ESTA RUTA CON LA QUE QUIERAS ANALIZAR
-ROOT_PATH = "/Users/domingo/⭐️ Documentación/Incoming"
+ROOT_PATH = INCOMING
 
 def has_charset_meta(content):
     charset_regex = re.compile(

@@ -1,13 +1,13 @@
 #!/usr/bin/env python
 # coding: utf-8
 
-import os
 import requests
 import time
 from bs4 import BeautifulSoup
+from config import INCOMING, INSTAPAPER_USERNAME, INSTAPAPER_PASSWORD         
 
-USERNAME = os.environ.get("INSTAPAPER_USERNAME")
-PASSWORD = os.environ.get("INSTAPAPER_PASSWORD")
+USERNAME = INSTAPAPER_USERNAME
+PASSWORD = INSTAPAPER_PASSWORD
 
 if not USERNAME or not PASSWORD:
     raise ValueError("Por favor, define las variables de entorno INSTAPAPER_USERNAME y INSTAPAPER_PASSWORD")
@@ -19,8 +19,7 @@ s.post("https://www.instapaper.com/user/login", data={
     "keep_logged_in": "yes"
 })
 
-# NUEVO DESTINO: carpeta Incoming en la raíz de Documentación
-base = "/Users/domingo/⭐️ Documentación/Incoming/"
+base = INCOMING.as_posix() + "/" 
 
 def get_ids(page=1):
     r = s.get("https://www.instapaper.com/u/" + str(page))
