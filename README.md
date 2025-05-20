@@ -1,6 +1,6 @@
 # 📚 Pipeline de Documentación Personal
 
-Este proyecto automatiza la recopilación, procesamiento y organización de documentos personales (artículos HTML, PDFs, etc.) en un sistema estructurado por años. Utiliza scripts en Python y Bash para automatizar tareas frecuentes como descarga, conversión de formatos, generación de títulos atractivos con inteligencia artificial y gestión histórica de archivos.
+Este proyecto automatiza la recopilación, procesamiento y organización de documentos personales (artículos HTML, PDFs, etc.) en un sistema estructurado por años. Utiliza scripts en Python para automatizar tareas frecuentes como descarga, conversión de formatos, generación de títulos atractivos con inteligencia artificial y gestión histórica de archivos.
 
 ---
 
@@ -27,8 +27,7 @@ El pipeline realiza automáticamente las siguientes tareas:
 │   └── Posts <AÑO>/        # Posts procesados por años
 ├── Pdfs/
 │   └── Pdfs <AÑO>/         # PDFs procesados por años
-├── Historial.txt           # Registro histórico, más nuevo arriba
-└── scripts/                # Scripts del pipeline
+└── Historial.txt           # Registro histórico, más nuevo arriba
 ```
 
 ---
