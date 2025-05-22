@@ -11,7 +11,7 @@ El pipeline realiza automáticamente las siguientes tareas:
 1. **Descarga artículos HTML** desde una cuenta de Instapaper.
 2. **Convierte HTML en Markdown** usando `markdownify`.
 3. **Corrige la codificación de caracteres** y el formato HTML.
-4. **Ajusta automáticamente las imágenes** de gran tamaño.
+4. **Reduce automáticamente el ancho de las imágenes grandes**.
 5. **Genera automáticamente títulos descriptivos** para los artículos usando la API de Anthropic (Claude 3).
 6. **Organiza los archivos procesados** en carpetas anuales (`Posts 2025`, `Pdfs 2025`, etc.).
 7. **Mantiene un historial completo** en el fichero `Historial.txt`, mostrando primero los documentos más recientes.
@@ -68,15 +68,18 @@ python process_documents.py [--year 2025]
 
 ## 📌 Scripts incluidos
 
-| Script                      | Función                                                        |
-| --------------------------- | -------------------------------------------------------------- |
-| `scrape.py`                 | Descarga artículos desde Instapaper                            |
-| `html2md.py`                | Convierte HTML a Markdown                                      |
-| `fix_html_encoding.py`      | Inserta charset UTF-8 en documentos HTML                       |
-| `ajustar_ancho_imagenes.py` | Reduce automáticamente el ancho de imágenes grandes            |
-| `add_margin_html.py`        | Añade márgenes estándar al HTML                                |
-| `update_titles.py`          | Usa IA (Anthropic) para generar títulos descriptivos           |
-| `rebuild_historial.py`      | Reconstruye por completo `Historial.txt` por fecha de creación |
+| Script                       | Función                                                        |
+| ---------------------------- | -------------------------------------------------------------- |
+| `scrape.py`                  | Descarga artículos desde Instapaper                            |
+| `html2md.py`                 | Convierte HTML a Markdown                                      |
+| `fix_html_encoding.py`       | Inserta charset UTF-8 en documentos HTML                       |
+| `reduce_images_width.py`     | Reduce automáticamente el ancho de imágenes grandes            |
+| `add_margin_html.py`         | Añade márgenes estándar al HTML                                |
+| `update_titles.py`           | Usa IA (Anthropic) para generar títulos descriptivos           |
+| `utils/rebuild_historial.py` | Reconstruye por completo `Historial.txt` por fecha de creación |
+| `utils/borrar_cortos.py`     | Elimina documentos demasiado cortos                            |
+| `utils/count-files.py`       | Cuenta los archivos existentes                                 |
+| `utils/random-post.py`       | Selecciona aleatoriamente un post                              |
 
 ---
 
@@ -85,7 +88,7 @@ python process_documents.py [--year 2025]
 Si necesitas regenerar por completo el historial:
 
 ```bash
-python rebuild_historial.py
+python utils/rebuild_historial.py
 ```
 
 Este script genera un backup (`Historial.txt.bak`) antes de reconstruir el historial.
