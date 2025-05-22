@@ -37,7 +37,7 @@ def main():
     run_py("scrape.py")
     run_py("html2md.py")
     for step in ("fix_html_encoding.py",
-                 "ajustar_ancho_imagenes.py",
+                 "reduce_images_width.py",
                  "add_margin_html.py"):
         run_py(step)
     run_py("update_titles.py")

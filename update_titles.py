@@ -60,7 +60,7 @@ def gen_title(snippet: str, lang: str) -> str:
     resp = client.messages.create(
         model="claude-3-5-haiku-20241022",
         max_tokens=50,
-        system="Devuelve solo el título en una línea.",
+        system="Devuelve solo el título en una línea. Solo el título, sin ninguna indicación adicional del estilo de 'Aquí tienes un título atractivo'",
         messages=[{"role": "user", "content": prompt}]
     ).content[0].text.strip()
 
