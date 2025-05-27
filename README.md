@@ -76,6 +76,7 @@ python process_documents.py [--year 2025]
 | `reduce_images_width.py`     | Reduce automáticamente el ancho de imágenes grandes            |
 | `add_margin_html.py`         | Añade márgenes estándar al HTML                                |
 | `update_titles.py`           | Usa IA (Anthropic) para generar títulos descriptivos           |
+| `serve_html.py`              | Servidor web que lista archivos .html desde una carpeta dada   |
 | `utils/rebuild_historial.py` | Reconstruye por completo `Historial.txt` por fecha de creación |
 | `utils/borrar_cortos.py`     | Elimina documentos demasiado cortos                            |
 | `utils/count-files.py`       | Cuenta los archivos existentes                                 |
