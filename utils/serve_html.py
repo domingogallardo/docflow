@@ -14,7 +14,7 @@ class HTMLOnlyRequestHandler(http.server.SimpleHTTPRequestHandler):
             self.send_error(404, "No permission to list directory")
             return None
 
-        entries.sort()
+        entries.sort(key=lambda name: os.path.getctime(os.path.join(path, name)), reverse=True)
         r = []
         displaypath = urllib.parse.unquote(self.path)
         r.append(f"<html><head><title>Index of {displaypath}</title></head>")
@@ -34,7 +34,9 @@ class HTMLOnlyRequestHandler(http.server.SimpleHTTPRequestHandler):
                 linkname = name + "/"
                 r.append(f'<li><a href="{linkname}">{displayname}</a></li>')
             elif name.endswith(".html"):
-                r.append(f'<li><a href="{linkname}">{displayname}</a></li>')
+                r.append(f'<li>📄 <a href="{linkname}">{displayname}</a></li>')
+            elif name.endswith(".pdf"):
+                r.append(f'<li>📕 <a href="{linkname}">{displayname}</a></li>')
 
         r.append("</ul><hr></body></html>")
         encoded = "\n".join(r).encode("utf-8", "surrogateescape")
