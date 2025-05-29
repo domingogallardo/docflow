@@ -60,7 +60,7 @@ def gen_title(snippet: str, lang: str) -> str:
     resp = client.messages.create(
         model="claude-3-5-haiku-20241022",
         max_tokens=50,
-        system="Devuelve solo el título en una línea. Solo el título, sin ninguna indicación adicional del estilo de 'Aquí tienes un título atractivo'",
+        system="Devuelve solo el título en una línea. Solo el título, sin ninguna indicación adicional del estilo de 'Aquí tienes un título atractivo'. Si detectas el nombre de la newsletter, del autor del post o del repositorio o sitio web en el que se ha publicado el artículo, ponlo como primera parte del título, separándolo del resto con un guión. El nombre del autor del post suele estar al comienzo del artículo.",
         messages=[{"role": "user", "content": prompt}]
     ).content[0].text.strip()
 
