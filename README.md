@@ -42,14 +42,17 @@ El pipeline realiza automáticamente las siguientes tareas:
   pip install requests beautifulsoup4 markdownify anthropic pillow
   ```
 
-* **Claves API**:
+* **Claves API y credenciales**:
 
   * [Anthropic Claude 3 API](https://console.anthropic.com/settings/keys)
+  * Credenciales de Instapaper (para descarga automática)
 
-Guarda tus claves API en variables de entorno:
+Guarda tus claves API y credenciales en variables de entorno:
 
 ```bash
 export ANTHROPIC_API_KEY="tu_clave"
+export INSTAPAPER_USERNAME="tu_usuario"
+export INSTAPAPER_PASSWORD="tu_contraseña"
 ```
 
 ---
@@ -62,7 +65,9 @@ Para procesar documentos nuevos:
 python process_documents.py [--year 2025]
 ```
 
-* El año por defecto es el actual, pero se puede forzar con el flag `--year`.
+* El año por defecto es el actual, pero se puede especificar de dos formas:
+  * Con el flag `--year`: `python process_documents.py --year 2025`
+  * Con variable de entorno: `export DOCPIPE_YEAR="2025"`
 
 ---
 
@@ -80,7 +85,7 @@ python process_documents.py [--year 2025]
 | `utils/rebuild_historial.py` | Reconstruye por completo `Historial.txt` por fecha de creación |
 | `utils/borrar_cortos.py`     | Elimina documentos demasiado cortos                            |
 | `utils/count-files.py`       | Cuenta los archivos existentes                                 |
-| `utils/random-post.py`       | Selecciona aleatoriamente un post                              |
+| `utils/random-post.py`       | Selecciona aleatoriamente un post (requiere archivo `Posts.txt`) |
 
 ---
 
