@@ -50,15 +50,15 @@ def clean_lines(lines: Iterable[str]) -> list[str]:
             continue
         if '</details>' in lower:
             continue
-        # Convertir <summary> a texto plano
+        # Convertir <summary> a texto plano (pero eliminar si es solo "Click to expand")
         if '<summary' in lower:
-            cleaned_text = SUMMARY_TAG.sub(r"\1", line)
-            cleaned.append(cleaned_text.strip() + "\n")
+            cleaned_text = SUMMARY_TAG.sub(r"\1", line).strip()
+            # Eliminar si el contenido del summary es solo "Click to expand"
+            if cleaned_text.lower() != "click to expand":
+                cleaned.append(cleaned_text + "\n")
             continue
 
-        # Eliminar líneas que contienen solo "Click to expand"
-        if line.strip().lower() == "click to expand":
-            continue
+        # (Nota: "Click to expand" ya se maneja en el procesamiento de <summary>)
 
         # Eliminar reglas horizontales
         if HR_PATTERN.match(line):
