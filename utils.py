@@ -87,15 +87,23 @@ def move_files(files, dest):
         moved.append(new_path)
     return moved
 
-def register_paths(paths):
+def register_paths(paths, base_dir: Path = None, historial_path: Path = None):
+    """Registra rutas en el historial. Acepta base_dir y historial_path configurables para tests."""
     if not paths:
         return
-    lines_new = ["./" + p.relative_to(BASE_DIR).as_posix() + "\n" for p in paths]
-    if HISTORIAL.exists():
-        old_content = HISTORIAL.read_text(encoding="utf-8")
+    
+    # Usar valores por defecto si no se especifican (compatibilidad hacia atrás)
+    if base_dir is None:
+        base_dir = BASE_DIR
+    if historial_path is None:
+        historial_path = HISTORIAL
+    
+    lines_new = ["./" + p.relative_to(base_dir).as_posix() + "\n" for p in paths]
+    if historial_path.exists():
+        old_content = historial_path.read_text(encoding="utf-8")
     else:
         old_content = ""
-    HISTORIAL.write_text("".join(lines_new) + old_content, encoding="utf-8")
+    historial_path.write_text("".join(lines_new) + old_content, encoding="utf-8")
 
 def setup_logging(level="INFO"):
     logging.basicConfig(
