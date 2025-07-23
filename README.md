@@ -1,20 +1,55 @@
 # 📚 Pipeline de Documentación Personal
 
-Este proyecto automatiza la recopilación, procesamiento y organización de documentos personales (artículos HTML, PDFs, etc.) en un sistema estructurado por años. Utiliza scripts en Python para automatizar tareas frecuentes como descarga, conversión de formatos, generación de títulos atractivos con inteligencia artificial y gestión histórica de archivos.
+Este proyecto automatiza la recopilación, procesamiento y organización de documentos personales (artículos web, PDFs, podcasts, etc.) en un sistema estructurado por años. Utiliza scripts en Python para automatizar tareas frecuentes como descarga, conversión de formatos, generación de títulos atractivos con inteligencia artificial y gestión histórica de archivos.
 
 ---
 
-## 🚀 ¿Qué hace exactamente?
+## 🚦 Flujo de procesamiento de documentos
 
-El pipeline realiza automáticamente las siguientes tareas:
+### 1. **Preparación: ¿De dónde parten los documentos?**
+- **En el directorio `Incoming/` se colocan manualmente:**
+  - Archivos PDF que quieras organizar.
+  - Archivos Markdown exportados desde Snipd (transcripciones de podcasts).
+- **Además:**
+  - Los artículos guardados previamente en tu cuenta de Instapaper están listos para ser descargados y procesados automáticamente por el pipeline. Estos artículos se descargan como archivos HTML directamente en `Incoming/` por el propio sistema (no manualmente).
 
-1. **Descarga artículos HTML** desde una cuenta de Instapaper.
-2. **Convierte HTML en Markdown** usando `markdownify`.
-3. **Corrige la codificación de caracteres** y el formato HTML.
-4. **Reduce automáticamente el ancho de las imágenes grandes**.
-5. **Genera automáticamente títulos descriptivos** para los artículos usando la API de Anthropic (Claude 3).
-6. **Organiza los archivos procesados** en carpetas anuales (`Posts 2025`, `Pdfs 2025`, etc.).
-7. **Mantiene un historial completo** en el fichero `Historial.txt`, mostrando primero los documentos más recientes.
+De este modo, el pipeline parte de tres fuentes principales de documentos originales:
+- PDFs (manual, en `Incoming/`)
+- Podcasts exportados de Snipd (manual, en `Incoming/`)
+- Artículos web guardados en Instapaper (descarga automática, HTML generado en `Incoming/`)
+
+### 2. **Procesamiento de Podcasts (Snipd)**
+- Se detectan primero los archivos Markdown exportados desde Snipd (contienen "Episode metadata" y "## Snips").
+- **Pipeline especializado:**
+  1. Limpieza (`clean_snip.py`): elimina HTML innecesario, show notes, enlaces de audio y la frase "Click to expand".
+  2. Conversión a HTML (`md2html.py`).
+  3. Añadir márgenes (`add_margin_html.py`).
+- **Renombrado:**
+  - Se extraen el título del episodio y el nombre del show de los metadatos.
+  - Los archivos `.md` y `.html` se renombran con el formato: `Show - Episode title.md` / `.html`.
+- **Organización:**
+  - Se mueven inmediatamente a la carpeta anual de podcasts: `Podcasts/Podcasts <AÑO>/`.
+  - Así, **no pasan por el pipeline de posts normales** ni por la generación de títulos con IA.
+
+### 3. **Procesamiento de Posts y PDFs (Pipeline regular)**
+- Se procesan todos los archivos restantes en `Incoming/` (PDF, Markdown no-podcast y los HTML descargados automáticamente desde Instapaper).
+- **Pipeline:**
+  1. Descarga de artículos (`scrape.py`).
+  2. Conversión a Markdown (`html2md.py`).
+  3. Corrección de codificación (`fix_html_encoding.py`).
+  4. Reducción de imágenes (`reduce_images_width.py`).
+  5. Añadir márgenes (`add_margin_html.py`).
+  6. Generación de títulos con IA (`update_titles.py`):
+     - Renombra los archivos `.md` y `.html` de posts usando títulos generados por IA (Claude).
+     - **No afecta a los podcasts, que ya han sido movidos.**
+- **Organización:**
+  - **Posts:** Los archivos procesados se renombran y se mueven a `Posts/Posts <AÑO>/`.
+  - **PDFs:**
+    - **Se mueven a `Pdfs/Pdfs <AÑO>/` manteniendo su nombre original.**
+    - **No se renombran ni pasan por IA.**
+
+### 4. **Registro histórico**
+- Todos los archivos procesados (posts, PDFs, podcasts) se registran en `Historial.txt` (los más recientes arriba).
 
 ---
 
@@ -26,7 +61,9 @@ El pipeline realiza automáticamente las siguientes tareas:
 ├── Posts/
 │   └── Posts <AÑO>/        # Posts procesados por años
 ├── Pdfs/
-│   └── Pdfs <AÑO>/         # PDFs procesados por años
+│   └── Pdfs <AÑO>/         # PDFs procesados por años (nombre original)
+├── Podcasts/
+│   └── Podcasts <AÑO>/     # Podcasts procesados por años (renombrados por metadatos)
 └── Historial.txt           # Registro histórico, más nuevo arriba
 ```
 
@@ -81,6 +118,7 @@ python process_documents.py [--year 2025]
 | `reduce_images_width.py`     | Reduce automáticamente el ancho de imágenes grandes            |
 | `add_margin_html.py`         | Añade márgenes estándar al HTML                                |
 | `update_titles.py`           | Usa IA (Anthropic) para generar títulos descriptivos           |
+| `clean_snip.py`              | Limpia archivos Markdown exportados desde Snipd                |
 | `utils/serve_html.py`        | Servidor web que lista archivos .html desde una carpeta dada   |
 | `utils/rebuild_historial.py` | Reconstruye por completo `Historial.txt` por fecha de creación |
 | `utils/borrar_cortos.py`     | Elimina documentos demasiado cortos                            |
