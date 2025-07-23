@@ -79,6 +79,12 @@ De este modo, el pipeline parte de tres fuentes principales de documentos origin
   pip install requests beautifulsoup4 markdownify anthropic pillow
   ```
 
+* Librerías de desarrollo (opcional, para tests):
+
+  ```bash
+  pip install pytest
+  ```
+
 * **Claves API y credenciales**:
 
   * [Anthropic Claude 3 API](https://console.anthropic.com/settings/keys)
@@ -108,10 +114,27 @@ python process_documents.py [--year 2025]
 
 ---
 
+## 🏗️ Arquitectura
+
+El sistema utiliza una **arquitectura modular** con las siguientes clases principales:
+
+- **`DocumentProcessor`**: Clase principal que orquesta todo el pipeline
+- **`DocumentProcessorConfig`**: Configuración centralizada (directorios, año)
+- **`ScriptRunner`**: Interfaz para ejecutar scripts (fácil de mockear en tests)
+
+Esta arquitectura permite:
+- **Testabilidad**: Inyección de dependencias y mocks
+- **Flexibilidad**: Configuración dinámica de directorios base
+- **Mantenibilidad**: Separación clara de responsabilidades
+
+---
+
 ## 📌 Scripts incluidos
 
 | Script                       | Función                                                        |
 | ---------------------------- | -------------------------------------------------------------- |
+| `process_documents.py`       | **Script principal** - Ejecuta todo el pipeline completo      |
+| `document_processor.py`      | **Arquitectura modular** - Clases principales del sistema     |
 | `scrape.py`                  | Descarga artículos desde Instapaper                            |
 | `html2md.py`                 | Convierte HTML a Markdown                                      |
 | `fix_html_encoding.py`       | Inserta charset UTF-8 en documentos HTML                       |
@@ -119,11 +142,36 @@ python process_documents.py [--year 2025]
 | `add_margin_html.py`         | Añade márgenes estándar al HTML                                |
 | `update_titles.py`           | Usa IA (Anthropic) para generar títulos descriptivos           |
 | `clean_snip.py`              | Limpia archivos Markdown exportados desde Snipd                |
+| `utils.py`                   | Utilidades comunes (detección podcasts, renombrado, etc.)     |
 | `utils/serve_html.py`        | Servidor web que lista archivos .html desde una carpeta dada   |
 | `utils/rebuild_historial.py` | Reconstruye por completo `Historial.txt` por fecha de creación |
 | `utils/borrar_cortos.py`     | Elimina documentos demasiado cortos                            |
 | `utils/count-files.py`       | Cuenta los archivos existentes                                 |
 | `utils/random-post.py`       | Selecciona aleatoriamente un post (requiere archivo `Posts.txt`) |
+
+---
+
+## 🧪 Testing
+
+El proyecto incluye una suite de tests automatizados para garantizar la robustez:
+
+```bash
+# Ejecutar todos los tests
+pytest tests/
+
+# Ejecutar tests específicos
+pytest tests/test_utils.py
+pytest tests/test_clean_snip.py
+pytest tests/test_document_processor.py
+
+# Ejecutar con detalles
+pytest tests/ -v
+```
+
+**Tests incluidos:**
+- **Tests unitarios**: `extract_episode_title`, `is_podcast_file`, `clean_lines`
+- **Tests de integración**: Pipeline completo con directorios temporales y mocks
+- **Cobertura**: Funciones críticas de detección, renombrado y procesamiento
 
 ---
 
