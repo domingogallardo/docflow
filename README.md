@@ -7,10 +7,14 @@ Sistema automatizado para recopilar, procesar y organizar documentos personales 
 ## ⚙️ Uso
 
 ```bash
+# Pipeline completo
 python process_documents.py [--year 2025]
+
+# Solo convertir archivos .md a HTML
+python md_to_html.py
 ```
 
-El script procesa automáticamente:
+El script principal procesa automáticamente:
 - **Artículos de Instapaper** → `Posts/Posts <AÑO>/`
 - **Podcasts de Snipd** (MD) → `Podcasts/Podcasts <AÑO>/`
 - **PDFs** → `Pdfs/Pdfs <AÑO>/`
@@ -80,6 +84,7 @@ export INSTAPAPER_PASSWORD="tu_contraseña"
 | Script | Función |
 |--------|---------|
 | `process_documents.py` | Script principal - Pipeline completo |
+| `md_to_html.py` | Convierte archivos .md a HTML con márgenes |
 | `pipeline_manager.py` | Coordinación de procesadores |
 | `instapaper_processor.py` | Descarga y procesa artículos web |
 | `podcast_processor.py` | Procesa transcripciones de Snipd |
