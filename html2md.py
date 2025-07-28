@@ -28,11 +28,15 @@ if __name__ == "__main__":
     lote = 200  # Ajusta aquí el número de archivos a convertir por ejecución
     archivos_a_convertir = archivos_html[:lote]
 
-    print(f'Convirtiendo {len(archivos_a_convertir)} archivos de un total de {len(archivos_html)} pendientes\n')
+    if not archivos_a_convertir:
+        print('📄 No hay archivos HTML pendientes de convertir a Markdown')
+    else:
+        print(f'Convirtiendo {len(archivos_a_convertir)} archivos de un total de {len(archivos_html)} pendientes\n')
 
     for archivo_html in archivos_a_convertir:
         print(f'Procesando archivo: {archivo_html}')
         markdown = convertir_html_a_markdown(archivo_html)
         guardar_markdown(archivo_html, markdown)
 
-    print('\n🎉 Lote convertido con éxito.')
+    if archivos_a_convertir:
+        print('\n🎉 Lote convertido con éxito.')

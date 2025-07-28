@@ -13,11 +13,19 @@ if not USERNAME or not PASSWORD:
     raise ValueError("Por favor, define las variables de entorno INSTAPAPER_USERNAME y INSTAPAPER_PASSWORD")
 
 s = requests.Session()
-s.post("https://www.instapaper.com/user/login", data={
+login_response = s.post("https://www.instapaper.com/user/login", data={
     "username": USERNAME,
     "password": PASSWORD,
     "keep_logged_in": "yes"
 })
+
+# Verificar si el login fue exitoso
+if "login" in login_response.url or "error" in login_response.text.lower():
+    print("❌ Error: Credenciales de Instapaper incorrectas")
+    print("   Verifica INSTAPAPER_USERNAME e INSTAPAPER_PASSWORD en tu configuración")
+    exit(1)
+
+print("✅ Login en Instapaper exitoso")
 
 base = INCOMING.as_posix() + "/" 
 
@@ -78,9 +86,22 @@ page = 1
 
 failure_log = open("failed.txt", "a+")
 
-while has_more:
+# Verificar si hay artículos que descargar
+first_ids, has_more = get_ids(page)
+if not first_ids:
+    print("📚 No hay artículos nuevos en Instapaper para descargar")
+    failure_log.close()
+    exit(0)
+
+print(f"📚 Iniciando descarga de artículos de Instapaper...")
+
+while has_more or page == 1:  # Asegurar que procese al menos la primera página
     print("Page " + str(page))
-    ids, has_more = get_ids(page)
+    if page == 1:
+        ids = first_ids  # Usar los IDs ya obtenidos
+    else:
+        ids, has_more = get_ids(page)
+    
     for id in ids:
         print("  " + id + ": ", end="")
         start = time.time()
@@ -95,3 +116,6 @@ while has_more:
             duration = time.time() - start
             print(str(round(duration, 2)) + " seconds")
     page += 1
+
+failure_log.close()
+print("📚 Descarga de Instapaper completada")

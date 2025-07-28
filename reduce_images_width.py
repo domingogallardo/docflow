@@ -51,11 +51,19 @@ def process_html_file(file_path):
         print(f"❌ Error al procesar {file_path}: {e}")
 
 def process_directory(base_path):
+    html_files = []
     for dirpath, _, filenames in os.walk(base_path):
         for filename in filenames:
             if filename.lower().endswith(('.html', '.htm')):
                 full_path = os.path.join(dirpath, filename)
-                process_html_file(full_path)
+                html_files.append(full_path)
+    
+    if not html_files:
+        print('🖼️  No hay archivos HTML para procesar imágenes')
+        return
+    
+    for full_path in html_files:
+        process_html_file(full_path)
 
 if __name__ == '__main__':
     if not os.path.isdir(BASE_DIR):

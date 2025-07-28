@@ -38,10 +38,18 @@ def process_html_file(filepath):
         print(f"Error procesando {filepath}: {e}")
 
 def process_directory(root_path):
+    html_files = []
     for filename in os.listdir(root_path):
         filepath = os.path.join(root_path, filename)
         if os.path.isfile(filepath) and filename.lower().endswith(('.html', '.htm')):
-            process_html_file(filepath)
+            html_files.append(filepath)
+    
+    if not html_files:
+        print('🔧 No hay archivos HTML para procesar codificación')
+        return
+    
+    for filepath in html_files:
+        process_html_file(filepath)
 
 if __name__ == "__main__":
     process_directory(ROOT_PATH)

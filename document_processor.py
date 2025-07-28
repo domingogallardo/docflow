@@ -142,4 +142,22 @@ class DocumentProcessor:
             "update_titles.py"
         ]
         
-        return all(self.script_runner.run_script(script) for script in scripts) 
+        # Ejecutar scripts uno por uno, continuando aunque falle scrape.py
+        success = True
+        for script in scripts:
+            if script == "scrape.py":
+                # Para scrape.py, permitir que falle sin detener el pipeline
+                if not self.script_runner.run_script(script):
+                    print(f"⚠️  {script} falló, pero continuando con el resto del pipeline...")
+                    success = False
+                else:
+                    print(f"✅ {script} completado")
+            else:
+                # Para otros scripts, fallar si no se ejecutan correctamente
+                if not self.script_runner.run_script(script):
+                    print(f"❌ {script} falló, abortando pipeline")
+                    return False
+                else:
+                    print(f"✅ {script} completado")
+        
+        return success 
