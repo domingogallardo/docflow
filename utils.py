@@ -36,7 +36,7 @@ def extract_episode_title(file_path: Path) -> str | None:
             full_title = f"{show_name} - {episode_title}" if show_name else episode_title
             
             # Limpiar caracteres problemáticos para nombres de archivo
-            clean_title = re.sub(r'[<>:"/\\|?*]', '', full_title)
+            clean_title = re.sub(r'[<>:"/\\|?*#]', '', full_title)
             clean_title = re.sub(r'\s+', ' ', clean_title).strip()
             return clean_title[:200]  # Limitar longitud
         return None

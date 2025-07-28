@@ -65,7 +65,7 @@ def gen_title(snippet: str, lang: str) -> str:
     ).content[0].text.strip()
 
     # limpiar caracteres problemáticos
-    title = resp.replace('"', '').lstrip('# ').strip()
+    title = resp.replace('"', '').replace('#', '').lstrip().strip()
     for bad in [":", ".", "/"]:
         title = title.replace(bad, "-")
     return re.sub(r"\s+", " ", title)[:MAX_LEN]
