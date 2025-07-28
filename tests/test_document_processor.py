@@ -69,13 +69,12 @@ def test_document_processor_integration(tmp_path):
     # 7. Verificar que se ejecutaron solo los scripts que siguen siendo independientes
     executed_scripts = [script[0] for script in mock_runner.executed_scripts]
     
-    # Scripts de podcasts (siguen siendo independientes)
-    assert "clean_snip.py" in executed_scripts
-    assert "md2html.py" in executed_scripts
+    # Solo add_margin_html.py debería ejecutarse como script independiente
+    # (tanto para podcasts como para posts)
     assert "add_margin_html.py" in executed_scripts
     
+    # Scripts de podcasts ya NO aparecen porque están integrados en PodcastProcessor
     # Scripts de Instapaper ya NO aparecen porque están integrados en InstapaperProcessor
-    # pero add_margin_html.py sí debería aparecer para posts procesados
     
     # 8. Verificar que los archivos se movieron correctamente
     assert (tmp_path / "Podcasts" / "Podcasts 2025" / "Test Show - Test Episode.md").exists()
@@ -116,11 +115,14 @@ def test_process_podcasts_only(tmp_path):
     
     # Verificar scripts ejecutados
     executed_scripts = [script[0] for script in mock_runner.executed_scripts]
-    assert "clean_snip.py" in executed_scripts
-    assert "md2html.py" in executed_scripts
+    # Solo add_margin_html.py debería ejecutarse como script independiente
     assert "add_margin_html.py" in executed_scripts
     
-    # No debe ejecutar scripts de Instapaper (están integrados)
+    # Scripts de podcasts ya NO se ejecutan independientemente (están integrados en PodcastProcessor)
+    assert "clean_snip.py" not in executed_scripts
+    assert "md2html.py" not in executed_scripts
+    
+    # Scripts de Instapaper tampoco (están integrados)
     assert "scrape.py" not in executed_scripts
     assert "update_titles.py" not in executed_scripts
 

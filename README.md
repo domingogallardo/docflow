@@ -22,14 +22,12 @@ De este modo, el pipeline parte de tres fuentes principales de documentos origin
 
 ### 2. **Procesamiento de Podcasts (Snipd)**
 - Se detectan primero los archivos Markdown exportados desde Snipd (contienen "Episode metadata" y "## Snips").
-- **Pipeline especializado:**
-  1. Limpieza (`clean_snip.py`): elimina HTML innecesario, show notes, enlaces de audio y la frase "Click to expand".
-  2. Conversión a HTML (`md2html.py`).
-  3. Añadir márgenes (`add_margin_html.py`).
-- **Renombrado:**
-  - Se extraen el título del episodio y el nombre del show de los metadatos.
-  - Los archivos `.md` y `.html` se renombran con el formato: `Show - Episode title.md` / `.html`.  
-  - **Se eliminan caracteres problemáticos** (`#`, `/`, etc.) para evitar conflictos con servidores locales.
+- **Pipeline especializado mediante `PodcastProcessor`:**
+  1. Limpieza de archivos Snipd: elimina HTML innecesario, show notes, enlaces de audio y la frase "Click to expand"
+  2. Conversión Markdown → HTML con extensiones (tablas, código, TOC)
+  3. Renombrado usando metadatos del episodio
+  4. **Se eliminan caracteres problemáticos** (`#`, `/`, etc.) para evitar conflictos con servidores locales
+- **Aplicación de márgenes**: Script compartido `add_margin_html.py`
 - **Organización:**
   - Se mueven inmediatamente a la carpeta anual de podcasts: `Podcasts/Podcasts <AÑO>/`.
   - Así, **no pasan por el pipeline de posts normales** ni por la generación de títulos con IA.
@@ -126,12 +124,11 @@ python process_documents.py [--year 2025]
 | Script                       | Función                                                        |
 | ---------------------------- | -------------------------------------------------------------- |
 | `process_documents.py`       | **Script principal** - Ejecuta todo el pipeline completo      |
-| `document_processor.py`      | **Arquitectura modular** - Clases principales del sistema     |
-| `instapaper_processor.py`    | **Procesador unificado** - Maneja todo el pipeline de Instapaper |
+| `document_processor.py`      | **Orquestador** - Coordina todos los procesadores especializados |
+| `instapaper_processor.py`    | **Procesador de Instapaper** - Pipeline completo de posts web |
 | `pdf_processor.py`           | **Procesador de PDFs** - Mueve PDFs sin procesamiento adicional |
-| `clean_snip.py`              | Limpia archivos Markdown exportados desde Snipd                |
-| `md2html.py`                 | Convierte archivos Markdown a HTML                             |
-| `add_margin_html.py`         | Añade márgenes estándar al HTML (compartido por podcasts y posts) |
+| `podcast_processor.py`       | **Procesador de Podcasts** - Pipeline completo de Snipd |
+| `add_margin_html.py`         | **Script compartido** - Añade márgenes (usado por podcasts y posts) |
 | `utils.py`                   | Utilidades comunes (detección podcasts, renombrado, etc.)     |
 | `utils/serve_html.py`        | Servidor web que lista archivos .html desde una carpeta dada   |
 | `utils/rebuild_historial.py` | Reconstruye por completo `Historial.txt` por fecha de creación |
@@ -139,15 +136,23 @@ python process_documents.py [--year 2025]
 | `utils/count-files.py`       | Cuenta los archivos existentes                                 |
 | `utils/random-post.py`       | Selecciona aleatoriamente un post (requiere archivo `Posts.txt`) |
 
-### 🏗️ Arquitectura Modular
+### 🏗️ Arquitectura Completamente Modular
 
-El sistema está organizado en **procesadores especializados**:
+El sistema está organizado en **procesadores especializados independientes**:
 
 - **`InstapaperProcessor`**: Maneja descarga, conversión HTML→MD, corrección de encoding, reducción de imágenes y generación de títulos con IA
 - **`PDFProcessor`**: Procesa PDFs moviéndolos directamente (sin transformaciones)  
+- **`PodcastProcessor`**: Maneja limpieza de Snipd, conversión MD→HTML y renombrado por metadatos
 - **`DocumentProcessor`**: Orquesta todo el sistema y coordina los procesadores
 
-**Scripts compartidos**: Solo `add_margin_html.py` se ejecuta independientemente porque lo usan tanto podcasts como posts.
+**Script único compartido**: Solo `add_margin_html.py` se ejecuta independientemente porque lo usan tanto podcasts como posts.
+
+**Tests incluidos:**
+- **3 tests** para `DocumentProcessor` (integración y coordinación)
+- **5 tests** para `InstapaperProcessor` (pipeline completo de posts web)
+- **3 tests** para `PDFProcessor` (procesamiento simple de PDFs)
+- **5 tests** para `PodcastProcessor` (pipeline completo de Snipd)
+- **3 tests** para utilidades (`extract_episode_title`, `is_podcast_file`)
 
 ---
 

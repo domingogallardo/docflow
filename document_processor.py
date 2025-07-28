@@ -10,6 +10,7 @@ import sys
 import utils as U
 from pdf_processor import PDFProcessor
 from instapaper_processor import InstapaperProcessor
+from podcast_processor import PodcastProcessor
 
 
 class ScriptRunner(Protocol):
@@ -55,30 +56,24 @@ class DocumentProcessor:
         self.script_runner = script_runner or SubprocessScriptRunner()
         self.pdf_processor = PDFProcessor(self.config.incoming, self.config.pdfs_dest)
         self.instapaper_processor = InstapaperProcessor(self.config.incoming, self.config.posts_dest)
+        self.podcast_processor = PodcastProcessor(self.config.incoming, self.config.podcasts_dest)
         self.moved_podcasts: List[Path] = []
         self.moved_posts: List[Path] = []
         self.moved_pdfs: List[Path] = []
     
     def process_podcasts(self) -> List[Path]:
-        """Procesa archivos de podcast con pipeline especializado."""
-        podcasts = U.list_podcast_files(self.config.incoming)
-        if not podcasts:
-            return []
+        """Procesa archivos de podcast con procesador unificado."""
+        # Usar el procesador unificado para todo el pipeline de podcasts
+        moved_podcasts = self.podcast_processor.process_podcasts()
         
-        print(f"📻 Procesando {len(podcasts)} archivo(s) de podcast...")
+        # Aplicar márgenes HTML como paso final (script compartido)
+        if moved_podcasts:
+            print("📻 Aplicando márgenes a podcasts procesados...")
+            if not self.script_runner.run_script_with_dir("add_margin_html.py", str(self.config.podcasts_dest)):
+                print("⚠️ Error aplicando márgenes, pero podcasts ya están procesados")
         
-        # Pipeline específico para podcasts
-        if not self._run_podcast_pipeline():
-            print("❌ Error en el pipeline de podcasts")
-            return []
-        
-        # Renombrar y mover podcasts
-        renamed_files = U.rename_podcast_files(podcasts)
-        moved_files = U.move_files(renamed_files, self.config.podcasts_dest)
-        
-        print(f"📻 {len(moved_files)} archivo(s) de podcast movidos a {self.config.podcasts_dest}")
-        self.moved_podcasts = moved_files
-        return moved_files
+        self.moved_podcasts = moved_podcasts
+        return moved_podcasts
     
     def process_instapaper_posts(self) -> List[Path]:
         """Procesa posts web descargados de Instapaper con pipeline unificado."""
@@ -126,13 +121,4 @@ class DocumentProcessor:
         
         except Exception as e:
             print(f"❌ Error en el pipeline: {e}")
-            return False
-    
-    def _run_podcast_pipeline(self) -> bool:
-        """Ejecuta el pipeline específico de podcasts."""
-        incoming_str = str(self.config.incoming)
-        return (
-            self.script_runner.run_script_with_dir("clean_snip.py", incoming_str) and
-            self.script_runner.run_script_with_dir("md2html.py", incoming_str) and
-            self.script_runner.run_script_with_dir("add_margin_html.py", incoming_str)
-        ) 
+            return False 
