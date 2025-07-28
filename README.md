@@ -1,199 +1,78 @@
 # 📚 Pipeline de Documentación Personal
 
-Este proyecto automatiza la recopilación, procesamiento y organización de documentos personales (artículos web, PDFs, podcasts, etc.) en un sistema estructurado por años. Utiliza scripts en Python para automatizar tareas frecuentes como descarga, conversión de formatos, generación de títulos atractivos con inteligencia artificial y gestión histórica de archivos.
-
-El pipeline incluye **validación automática de credenciales**, **mensajes informativos** cuando no hay archivos que procesar, y es **robusto ante fallos** - continúa procesando archivos locales aunque falle algún servicio externo.
+Sistema automatizado para recopilar, procesar y organizar documentos personales (artículos web, PDFs, podcasts) en carpetas estructuradas por años.
 
 ---
 
-## 🚦 Flujo de procesamiento de documentos
+## ⚙️ Uso
 
-### 1. **Preparación: ¿De dónde parten los documentos?**
-- **En el directorio `Incoming/` se colocan manualmente:**
-  - Archivos PDF que quieras organizar.
-  - Archivos Markdown exportados desde Snipd (transcripciones de podcasts).
-- **Además:**
-  - Los artículos guardados previamente en tu cuenta de Instapaper están listos para ser descargados y procesados automáticamente por el pipeline. El sistema **valida automáticamente las credenciales** y muestra mensajes claros si hay problemas de conexión.
+```bash
+python process_documents.py [--year 2025]
+```
 
-De este modo, el pipeline parte de tres fuentes principales de documentos originales:
-- PDFs (manual, en `Incoming/`)
-- Podcasts exportados de Snipd (manual, en `Incoming/`)  
-- Artículos web guardados en Instapaper (descarga automática con validación, HTML generado en `Incoming/`)
-
-### 2. **Procesamiento de Podcasts (Snipd)**
-- Se detectan primero los archivos Markdown exportados desde Snipd (contienen "Episode metadata" y "## Snips").
-- **Pipeline especializado mediante `PodcastProcessor`:**
-  1. Limpieza de archivos Snipd: elimina HTML innecesario, show notes, enlaces de audio y la frase "Click to expand"
-  2. Conversión Markdown → HTML con extensiones (tablas, código, TOC)
-  3. Renombrado usando metadatos del episodio
-  4. **Se eliminan caracteres problemáticos** (`#`, `/`, etc.) para evitar conflictos con servidores locales
-- **Aplicación de márgenes**: Integrada automáticamente en cada procesador
-- **Organización:**
-  - Se mueven inmediatamente a la carpeta anual de podcasts: `Podcasts/Podcasts <AÑO>/`.
-  - Así, **no pasan por el pipeline de posts normales** ni por la generación de títulos con IA.
-
-### 3. **Procesamiento de Posts y PDFs (Pipeline regular)**
-- Se procesan todos los archivos restantes en `Incoming/` (PDF, Markdown no-podcast y los HTML descargados automáticamente desde Instapaper).
-- **Pipeline robusto y modular:**
-  1. **Posts de Instapaper**: Procesados por `InstapaperProcessor` que maneja internamente:
-     - Descarga de artículos desde Instapaper (con validación)
-     - Conversión HTML → Markdown  
-     - Corrección de codificación
-     - Reducción de imágenes
-     - Generación de títulos con IA
-     - **Elimina caracteres problemáticos** para compatibilidad con servidores web
-  2. **Aplicación de márgenes**: Integrada automáticamente en el procesador
-  3. **PDFs**: Procesados por `PDFProcessor` que los mueve directamente sin transformaciones
-- **Organización:**
-  - **Posts:** Los archivos procesados se renombran y se mueven a `Posts/Posts <AÑO>/`.
-  - **PDFs:** Se mueven a `Pdfs/Pdfs <AÑO>/` manteniendo su nombre original.
-
-### 4. **Transparencia del proceso**
-- **Cada script muestra mensajes informativos** cuando no hay archivos que procesar.
-- **Validación automática** de credenciales con mensajes de error claros.
-- **Pipeline tolerante a fallos**: Si falla la descarga de Instapaper, continúa procesando PDFs y otros archivos locales.
-
-### 5. **Registro histórico**
-- Todos los archivos procesados (posts, PDFs, podcasts) se registran en `Historial.txt` (los más recientes arriba).
+El script procesa automáticamente:
+- **Artículos de Instapaper** → `Posts/Posts <AÑO>/`
+- **Podcasts de Snipd** (MD) → `Podcasts/Podcasts <AÑO>/`
+- **PDFs** → `Pdfs/Pdfs <AÑO>/`
 
 ---
 
-## 📂 Estructura del proyecto
+## 📂 Estructura
 
 ```
 ⭐️ Documentación/
-├── Incoming/               # Archivos nuevos esperando procesamiento
-├── Posts/
-│   └── Posts <AÑO>/        # Posts procesados por años
-├── Pdfs/
-│   └── Pdfs <AÑO>/         # PDFs procesados por años (nombre original)
-├── Podcasts/
-│   └── Podcasts <AÑO>/     # Podcasts procesados por años (renombrados por metadatos)
-└── Historial.txt           # Registro histórico, más nuevo arriba
+├── Incoming/               # Archivos nuevos
+├── Posts/Posts <AÑO>/      # Artículos procesados
+├── Podcasts/Podcasts <AÑO>/ # Podcasts procesados  
+├── Pdfs/Pdfs <AÑO>/        # PDFs organizados
+└── Historial.txt           # Registro histórico
 ```
 
 ---
 
 ## 🛠 Requisitos
 
-* **Python 3.10+**
+**Python 3.10+** y librerías:
+```bash
+pip install requests beautifulsoup4 markdownify anthropic pillow pytest
+```
 
-* Librerías Python:
-
-  ```bash
-  pip install requests beautifulsoup4 markdownify anthropic pillow
-  ```
-
-* Librerías de desarrollo (opcional, para tests):
-
-  ```bash
-  pip install pytest
-  ```
-
-* **Claves API y credenciales**:
-
-  * [Anthropic Claude 3 API](https://console.anthropic.com/settings/keys)
-  * Credenciales de Instapaper (para descarga automática)
-
-Guarda tus claves API y credenciales en variables de entorno:
-
+**Variables de entorno:**
 ```bash
 export ANTHROPIC_API_KEY="tu_clave"
-export INSTAPAPER_USERNAME="tu_usuario"
+export INSTAPAPER_USERNAME="tu_usuario" 
 export INSTAPAPER_PASSWORD="tu_contraseña"
 ```
 
 ---
 
-## ⚙️ Uso
+## 📌 Scripts principales
 
-Para procesar documentos nuevos:
+| Script | Función |
+|--------|---------|
+| `process_documents.py` | Script principal - Pipeline completo |
+| `pipeline_manager.py` | Coordinación de procesadores |
+| `instapaper_processor.py` | Descarga y procesa artículos web |
+| `podcast_processor.py` | Procesa transcripciones de Snipd |
+| `pdf_processor.py` | Organiza PDFs |
+| `utils.py` | Utilidades comunes |
 
-```bash
-python process_documents.py [--year 2025]
-```
-
-* El año por defecto es el actual, pero se puede especificar de dos formas:
-  * Con el flag `--year`: `python process_documents.py --year 2025`
-  * Con variable de entorno: `export DOCPIPE_YEAR="2025"`
-
----
-
-## 📌 Scripts incluidos
-
-| Script                       | Función                                                        |
-| ---------------------------- | -------------------------------------------------------------- |
-| `process_documents.py`       | **Script principal** - Ejecuta todo el pipeline completo      |
-| `pipeline_manager.py`        | **Gestión de pipelines** - Clases principales del sistema y coordinación |
-| `instapaper_processor.py`    | **Procesador de Instapaper** - Pipeline completo de posts web |
-| `pdf_processor.py`           | **Procesador de PDFs** - Mueve PDFs sin procesamiento adicional |
-| `podcast_processor.py`       | **Procesador de Podcasts** - Pipeline completo de Snipd |
-| `utils.py`                   | Utilidades comunes (detección podcasts, renombrado, márgenes, etc.)     |
-| `utils/serve_html.py`        | Servidor web que lista archivos .html desde una carpeta dada   |
-| `utils/rebuild_historial.py` | Reconstruye por completo `Historial.txt` por fecha de creación |
-| `utils/borrar_cortos.py`     | Elimina documentos demasiado cortos                            |
-| `utils/count-files.py`       | Cuenta los archivos existentes                                 |
-| `utils/random-post.py`       | Selecciona aleatoriamente un post (requiere archivo `Posts.txt`) |
-
-### 🏗️ Arquitectura Completamente Modular
-
-El sistema está organizado en **procesadores especializados independientes**:
-
-- **`InstapaperProcessor`**: Maneja descarga, conversión HTML→MD, corrección de encoding, reducción de imágenes, aplicación automática de márgenes y generación de títulos con IA
-- **`PDFProcessor`**: Procesa PDFs moviéndolos directamente (sin transformaciones)  
-- **`PodcastProcessor`**: Maneja limpieza de Snipd, conversión MD→HTML, aplicación automática de márgenes y renombrado por metadatos
-- **`DocumentProcessor`**: Orquesta todo el sistema y coordina los procesadores (en `pipeline_manager.py`)
-
-**Funciones comunes**: Las utilidades compartidas como detección de podcasts, renombrado y aplicación de márgenes están centralizadas en `utils.py`.
-
-**Tests incluidos:**
-- **3 tests** para `DocumentProcessor` (integración y coordinación)
-- **5 tests** para `InstapaperProcessor` (pipeline completo de posts web)
-- **3 tests** para `PDFProcessor` (procesamiento simple de PDFs)
-- **5 tests** para `PodcastProcessor` (pipeline completo de Snipd)
-- **3 tests** para utilidades (`extract_episode_title`, `is_podcast_file`)
+### Utilidades adicionales
+- `utils/serve_html.py` - Servidor web local
+- `utils/rebuild_historial.py` - Reconstruir historial
+- `utils/borrar_cortos.py` - Eliminar documentos cortos
+- `utils/count-files.py` - Contar archivos
+- `utils/random-post.py` - Post aleatorio
 
 ---
 
 ## 🧪 Testing
 
-El proyecto incluye una suite de tests automatizados para garantizar la robustez:
-
 ```bash
-# Ejecutar todos los tests
-pytest tests/
-
-# Ejecutar tests específicos
-pytest tests/test_utils.py
-pytest tests/test_clean_snip.py
-pytest tests/test_document_processor.py
-
-# Ejecutar con detalles
 pytest tests/ -v
 ```
 
-**Tests incluidos:**
-- **Tests unitarios**: `extract_episode_title`, `is_podcast_file`, `clean_lines`
-- **Tests de integración**: Pipeline completo con directorios temporales y mocks
-- **Cobertura**: Funciones críticas de detección, renombrado y procesamiento
-
----
-
-## 🔄 Reconstruir Historial
-
-Si necesitas regenerar por completo el historial:
-
-```bash
-python utils/rebuild_historial.py
-```
-
-Este script genera un backup (`Historial.txt.bak`) antes de reconstruir el historial.
-
----
-
-## 💡 Licencia
-
-Este proyecto es para uso personal. Si deseas reutilizar o modificar partes del código, puedes hacerlo libremente.
+19 tests incluidos para validar todos los procesadores y utilidades.
 
 ---
 
