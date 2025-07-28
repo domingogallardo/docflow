@@ -66,12 +66,6 @@ class DocumentProcessor:
         # Usar el procesador unificado para todo el pipeline de podcasts
         moved_podcasts = self.podcast_processor.process_podcasts()
         
-        # Aplicar márgenes HTML como paso final (script compartido)
-        if moved_podcasts:
-            print("📻 Aplicando márgenes a podcasts procesados...")
-            if not self.script_runner.run_script_with_dir("add_margin_html.py", str(self.config.podcasts_dest)):
-                print("⚠️ Error aplicando márgenes, pero podcasts ya están procesados")
-        
         self.moved_podcasts = moved_podcasts
         return moved_podcasts
     
@@ -79,12 +73,6 @@ class DocumentProcessor:
         """Procesa posts web descargados de Instapaper con pipeline unificado."""
         # Usar el procesador unificado para todo el pipeline de Instapaper
         moved_posts = self.instapaper_processor.process_instapaper_posts()
-        
-        # Aplicar márgenes HTML como paso final (script compartido)
-        if moved_posts:
-            print("📄 Aplicando márgenes a posts procesados...")
-            if not self.script_runner.run_script_with_dir("add_margin_html.py", str(self.config.posts_dest)):
-                print("⚠️ Error aplicando márgenes, pero posts ya están procesados")
         
         self.moved_posts = moved_posts
         return moved_posts

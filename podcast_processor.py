@@ -6,6 +6,7 @@ from __future__ import annotations
 import re
 import argparse
 import markdown
+import os
 from pathlib import Path
 from typing import List, Iterable
 
@@ -40,7 +41,10 @@ class PodcastProcessor:
             # 2. Convertir Markdown a HTML
             self._convert_markdown_to_html()
             
-            # 3. Renombrar y mover archivos
+            # 3. Añadir márgenes
+            self._add_margins()
+            
+            # 4. Renombrar y mover archivos
             renamed_files = U.rename_podcast_files(podcasts)
             moved_files = U.move_files(renamed_files, self.destination_dir)
             
@@ -186,3 +190,7 @@ class PodcastProcessor:
             f"{body}\n"
             "</body>\n</html>\n"
         ) 
+
+    def _add_margins(self):
+        """Añade márgenes a los archivos HTML de podcast."""
+        U.add_margins_to_html_files(self.incoming_dir, file_filter=U.is_podcast_file) 

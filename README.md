@@ -27,7 +27,7 @@ De este modo, el pipeline parte de tres fuentes principales de documentos origin
   2. Conversión Markdown → HTML con extensiones (tablas, código, TOC)
   3. Renombrado usando metadatos del episodio
   4. **Se eliminan caracteres problemáticos** (`#`, `/`, etc.) para evitar conflictos con servidores locales
-- **Aplicación de márgenes**: Script compartido `add_margin_html.py`
+- **Aplicación de márgenes**: Integrada automáticamente en cada procesador
 - **Organización:**
   - Se mueven inmediatamente a la carpeta anual de podcasts: `Podcasts/Podcasts <AÑO>/`.
   - Así, **no pasan por el pipeline de posts normales** ni por la generación de títulos con IA.
@@ -42,7 +42,7 @@ De este modo, el pipeline parte de tres fuentes principales de documentos origin
      - Reducción de imágenes
      - Generación de títulos con IA
      - **Elimina caracteres problemáticos** para compatibilidad con servidores web
-  2. **Aplicación de márgenes**: Script compartido `add_margin_html.py`
+  2. **Aplicación de márgenes**: Integrada automáticamente en el procesador
   3. **PDFs**: Procesados por `PDFProcessor` que los mueve directamente sin transformaciones
 - **Organización:**
   - **Posts:** Los archivos procesados se renombran y se mueven a `Posts/Posts <AÑO>/`.
@@ -128,8 +128,7 @@ python process_documents.py [--year 2025]
 | `instapaper_processor.py`    | **Procesador de Instapaper** - Pipeline completo de posts web |
 | `pdf_processor.py`           | **Procesador de PDFs** - Mueve PDFs sin procesamiento adicional |
 | `podcast_processor.py`       | **Procesador de Podcasts** - Pipeline completo de Snipd |
-| `add_margin_html.py`         | **Script compartido** - Añade márgenes (usado por podcasts y posts) |
-| `utils.py`                   | Utilidades comunes (detección podcasts, renombrado, etc.)     |
+| `utils.py`                   | Utilidades comunes (detección podcasts, renombrado, márgenes, etc.)     |
 | `utils/serve_html.py`        | Servidor web que lista archivos .html desde una carpeta dada   |
 | `utils/rebuild_historial.py` | Reconstruye por completo `Historial.txt` por fecha de creación |
 | `utils/borrar_cortos.py`     | Elimina documentos demasiado cortos                            |
@@ -140,12 +139,12 @@ python process_documents.py [--year 2025]
 
 El sistema está organizado en **procesadores especializados independientes**:
 
-- **`InstapaperProcessor`**: Maneja descarga, conversión HTML→MD, corrección de encoding, reducción de imágenes y generación de títulos con IA
+- **`InstapaperProcessor`**: Maneja descarga, conversión HTML→MD, corrección de encoding, reducción de imágenes, aplicación automática de márgenes y generación de títulos con IA
 - **`PDFProcessor`**: Procesa PDFs moviéndolos directamente (sin transformaciones)  
-- **`PodcastProcessor`**: Maneja limpieza de Snipd, conversión MD→HTML y renombrado por metadatos
+- **`PodcastProcessor`**: Maneja limpieza de Snipd, conversión MD→HTML, aplicación automática de márgenes y renombrado por metadatos
 - **`DocumentProcessor`**: Orquesta todo el sistema y coordina los procesadores (en `pipeline_manager.py`)
 
-**Script único compartido**: Solo `add_margin_html.py` se ejecuta independientemente porque lo usan tanto podcasts como posts.
+**Funciones comunes**: Las utilidades compartidas como detección de podcasts, renombrado y aplicación de márgenes están centralizadas en `utils.py`.
 
 **Tests incluidos:**
 - **3 tests** para `DocumentProcessor` (integración y coordinación)

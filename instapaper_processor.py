@@ -51,10 +51,13 @@ class InstapaperProcessor:
             # 4. Reducir imágenes
             self._reduce_images_width()
             
-            # 5. Generar títulos con IA
+            # 5. Añadir márgenes
+            self._add_margins()
+            
+            # 6. Generar títulos con IA
             self._update_titles_with_ai()
             
-            # 6. Mover archivos procesados
+            # 7. Mover archivos procesados
             posts = self._list_processed_files()
             if posts:
                 moved_posts = self._move_files_to_destination(posts)
@@ -279,6 +282,11 @@ class InstapaperProcessor:
                     
             except Exception as e:
                 print(f"❌ Error procesando imágenes en {html_file}: {e}")
+    
+    def _add_margins(self):
+        """Añade márgenes a los archivos HTML."""
+        import utils as U
+        U.add_margins_to_html_files(self.incoming_dir)
     
     def _get_image_width(self, src):
         """Obtiene el ancho de una imagen."""

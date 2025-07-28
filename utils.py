@@ -110,3 +110,62 @@ def setup_logging(level="INFO"):
         level=getattr(logging, level.upper()),
         format="%(asctime)s | %(levelname)s | %(message)s",
     )
+
+def add_margins_to_html_files(directory: Path, file_filter=None):
+    """
+    Añade márgenes del 6% a todos los archivos HTML en un directorio.
+    
+    Args:
+        directory: Directorio donde buscar archivos HTML
+        file_filter: Función opcional para filtrar qué archivos procesar (ej: is_podcast_file)
+    """
+    from bs4 import BeautifulSoup
+    
+    margin_style = "body { margin-left: 6%; margin-right: 6%; }"
+    
+    html_files = []
+    for dirpath, _, filenames in os.walk(directory):
+        for filename in filenames:
+            if filename.lower().endswith(('.html', '.htm')):
+                file_path = Path(dirpath) / filename
+                # Aplicar filtro si se proporciona
+                if file_filter is None or file_filter(file_path):
+                    html_files.append(file_path)
+    
+    if not html_files:
+        print('📏 No hay archivos HTML para añadir márgenes')
+        return
+    
+    for html_file in html_files:
+        try:
+            with open(html_file, 'r', encoding='utf-8') as f:
+                soup = BeautifulSoup(f, 'html.parser')
+            
+            # Buscar la etiqueta <head>
+            head = soup.head
+            if head is None:
+                # Si no existe, crear un <head> nuevo y añadir el estilo
+                head = soup.new_tag("head")
+                style_tag = soup.new_tag("style")
+                style_tag.string = margin_style
+                head.append(style_tag)
+                if soup.html:
+                    soup.html.insert(0, head)
+            else:
+                # Si ya hay <head>, verificar si hay una etiqueta <style>
+                style_tag = head.find("style")
+                if style_tag:
+                    # Si hay una etiqueta <style>, añadir el margen al final del contenido existente
+                    style_tag.string += "\n" + margin_style
+                else:
+                    # Si no hay <style>, crear una nueva etiqueta <style> con el margen
+                    style_tag = soup.new_tag("style")
+                    style_tag.string = margin_style
+                    head.append(style_tag)
+            
+            with open(html_file, 'w', encoding='utf-8') as f:
+                f.write(str(soup))
+            print(f"📏 Márgenes añadidos: {html_file.name}")
+            
+        except Exception as e:
+            print(f"❌ Error añadiendo márgenes a {html_file}: {e}")

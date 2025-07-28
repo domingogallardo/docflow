@@ -66,12 +66,11 @@ def test_document_processor_integration(tmp_path):
     # 6. Verificar que el pipeline se ejecutó exitosamente
     assert success is True
     
-    # 7. Verificar que se ejecutaron solo los scripts que siguen siendo independientes
+    # 7. Verificar que NO se ejecutan scripts independientes (todo está integrado)
     executed_scripts = [script[0] for script in mock_runner.executed_scripts]
     
-    # Solo add_margin_html.py debería ejecutarse como script independiente
-    # (tanto para podcasts como para posts)
-    assert "add_margin_html.py" in executed_scripts
+    # Ya no se ejecutan scripts independientes - márgenes integrados en cada procesador
+    assert len(executed_scripts) == 0
     
     # Scripts de podcasts ya NO aparecen porque están integrados en PodcastProcessor
     # Scripts de Instapaper ya NO aparecen porque están integrados en InstapaperProcessor
@@ -113,10 +112,10 @@ def test_process_podcasts_only(tmp_path):
     assert len(moved_podcasts) >= 1  # Al menos el .md
     assert (tmp_path / "Podcasts" / "Podcasts 2025" / "Great Show - Amazing Episode.md").exists()
     
-    # Verificar scripts ejecutados
+    # Verificar scripts ejecutados - ya no se ejecutan independientemente
     executed_scripts = [script[0] for script in mock_runner.executed_scripts]
-    # Solo add_margin_html.py debería ejecutarse como script independiente
-    assert "add_margin_html.py" in executed_scripts
+    # Ya no se ejecuta add_margin_html.py independientemente (integrado en procesadores)
+    assert len(executed_scripts) == 0
     
     # Scripts de podcasts ya NO se ejecutan independientemente (están integrados en PodcastProcessor)
     assert "clean_snip.py" not in executed_scripts
@@ -160,9 +159,10 @@ def test_process_regular_documents_only(tmp_path):
     assert len(moved_pdfs) == 1
     assert (tmp_path / "Pdfs" / "Pdfs 2025" / "regular.pdf").exists()
     
-    # Verificar scripts ejecutados - solo add_margin_html.py debería ejecutarse como script independiente
+    # Verificar scripts ejecutados - ya no se ejecutan independientemente 
     executed_scripts = [script[0] for script in mock_runner.executed_scripts]
-    assert "add_margin_html.py" in executed_scripts
+    # Ya no se ejecuta add_margin_html.py independientemente (integrado en procesadores)
+    assert len(executed_scripts) == 0
     
     # Los scripts de Instapaper ya no se ejecutan independientemente
     assert "scrape.py" not in executed_scripts
