@@ -30,23 +30,13 @@ def convert_md_to_html():
         
         try:
             # Leer contenido Markdown
-            md_text = md_file.read_text(encoding="utf-8")
+            md_text = md_file.read_text(encoding="utf-8", errors="replace")
             
-            # Limpiar caracteres problemáticos
-            md_text = md_text.replace('\xa0', ' ')  # Non-breaking space
-            md_text = md_text.replace('\u2013', '-')  # En dash
-            md_text = md_text.replace('\u2014', '-')  # Em dash
-            md_text = md_text.replace('\u2018', "'")  # Left single quote
-            md_text = md_text.replace('\u2019', "'")  # Right single quote
-            md_text = md_text.replace('\u201c', '"')  # Left double quote
-            md_text = md_text.replace('\u201d', '"')  # Right double quote
+            # Limpiar solo caracteres realmente problemáticos
+            md_text = md_text.replace('\xa0', ' ')  # Non-breaking space problemático
             
-            # TODO: Implementar conversión de URLs cuando se resuelva el problema de regex
-            # # Convertir URLs de texto plano a enlaces Markdown de forma simple
-            # import re
-            # # Buscar URLs y convertirlas a enlaces Markdown
-            # url_pattern = r'https?://[^\s]+'
-            # md_text = re.sub(url_pattern, lambda m: f'[{m.group(0)}]({m.group(0)})', md_text)
+            # Convertir URLs de texto plano a enlaces Markdown
+            md_text = _convert_urls_to_links(md_text)
             
             # Convertir a HTML usando las mismas extensiones que podcasts
             try:
@@ -86,6 +76,32 @@ def convert_md_to_html():
     # Aplicar márgenes a todos los HTML generados
     print("📏 Aplicando márgenes...")
     U.add_margins_to_html_files(incoming_dir)
+
+
+def _convert_urls_to_links(text: str) -> str:
+    """Convierte URLs de texto plano a enlaces Markdown de forma robusta."""
+    import re
+    
+    # Dividir el texto en líneas para procesar línea por línea
+    lines = text.split('\n')
+    processed_lines = []
+    
+    for line in lines:
+        # Buscar URLs que no estén ya en enlaces Markdown o HTML
+        if 'http' in line:
+            # Regex simple para encontrar URLs
+            url_pattern = r'https?://[^\s\)\]>]+'
+            urls = re.findall(url_pattern, line)
+            
+            for url in urls:
+                # Verificar que no esté ya en un enlace Markdown [texto](url) o HTML <a href="url">
+                if not (f']({url})' in line or f'[{url}]' in line or f'href="{url}"' in line or f"href='{url}'" in line):
+                    # Reemplazar solo la primera ocurrencia que no esté en un enlace
+                    line = line.replace(url, f'[{url}]({url})', 1)
+        
+        processed_lines.append(line)
+    
+    return '\n'.join(processed_lines)
 
 
 if __name__ == "__main__":
