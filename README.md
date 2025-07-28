@@ -124,7 +124,7 @@ python process_documents.py [--year 2025]
 | Script                       | Función                                                        |
 | ---------------------------- | -------------------------------------------------------------- |
 | `process_documents.py`       | **Script principal** - Ejecuta todo el pipeline completo      |
-| `document_processor.py`      | **Orquestador** - Coordina todos los procesadores especializados |
+| `pipeline_manager.py`        | **Gestión de pipelines** - Clases principales del sistema y coordinación |
 | `instapaper_processor.py`    | **Procesador de Instapaper** - Pipeline completo de posts web |
 | `pdf_processor.py`           | **Procesador de PDFs** - Mueve PDFs sin procesamiento adicional |
 | `podcast_processor.py`       | **Procesador de Podcasts** - Pipeline completo de Snipd |
@@ -143,7 +143,7 @@ El sistema está organizado en **procesadores especializados independientes**:
 - **`InstapaperProcessor`**: Maneja descarga, conversión HTML→MD, corrección de encoding, reducción de imágenes y generación de títulos con IA
 - **`PDFProcessor`**: Procesa PDFs moviéndolos directamente (sin transformaciones)  
 - **`PodcastProcessor`**: Maneja limpieza de Snipd, conversión MD→HTML y renombrado por metadatos
-- **`DocumentProcessor`**: Orquesta todo el sistema y coordina los procesadores
+- **`DocumentProcessor`**: Orquesta todo el sistema y coordina los procesadores (en `pipeline_manager.py`)
 
 **Script único compartido**: Solo `add_margin_html.py` se ejecuta independientemente porque lo usan tanto podcasts como posts.
 

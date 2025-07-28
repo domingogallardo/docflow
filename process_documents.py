@@ -9,7 +9,7 @@ import argparse
 from datetime import datetime
 import os
 
-from document_processor import DocumentProcessor, DocumentProcessorConfig
+from pipeline_manager import DocumentProcessor, DocumentProcessorConfig
 import config as cfg
 
 
@@ -43,4 +43,4 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    main() 

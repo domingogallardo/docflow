@@ -5,7 +5,7 @@ Tests para DocumentProcessor
 import pytest
 from pathlib import Path
 
-from document_processor import DocumentProcessor, DocumentProcessorConfig
+from pipeline_manager import DocumentProcessor, DocumentProcessorConfig
 
 
 class MockScriptRunner:
