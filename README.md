@@ -2,6 +2,8 @@
 
 Este proyecto automatiza la recopilación, procesamiento y organización de documentos personales (artículos web, PDFs, podcasts, etc.) en un sistema estructurado por años. Utiliza scripts en Python para automatizar tareas frecuentes como descarga, conversión de formatos, generación de títulos atractivos con inteligencia artificial y gestión histórica de archivos.
 
+El pipeline incluye **validación automática de credenciales**, **mensajes informativos** cuando no hay archivos que procesar, y es **robusto ante fallos** - continúa procesando archivos locales aunque falle algún servicio externo.
+
 ---
 
 ## 🚦 Flujo de procesamiento de documentos
@@ -11,12 +13,12 @@ Este proyecto automatiza la recopilación, procesamiento y organización de docu
   - Archivos PDF que quieras organizar.
   - Archivos Markdown exportados desde Snipd (transcripciones de podcasts).
 - **Además:**
-  - Los artículos guardados previamente en tu cuenta de Instapaper están listos para ser descargados y procesados automáticamente por el pipeline. Estos artículos se descargan como archivos HTML directamente en `Incoming/` por el propio sistema (no manualmente).
+  - Los artículos guardados previamente en tu cuenta de Instapaper están listos para ser descargados y procesados automáticamente por el pipeline. El sistema **valida automáticamente las credenciales** y muestra mensajes claros si hay problemas de conexión.
 
 De este modo, el pipeline parte de tres fuentes principales de documentos originales:
 - PDFs (manual, en `Incoming/`)
-- Podcasts exportados de Snipd (manual, en `Incoming/`)
-- Artículos web guardados en Instapaper (descarga automática, HTML generado en `Incoming/`)
+- Podcasts exportados de Snipd (manual, en `Incoming/`)  
+- Artículos web guardados en Instapaper (descarga automática con validación, HTML generado en `Incoming/`)
 
 ### 2. **Procesamiento de Podcasts (Snipd)**
 - Se detectan primero los archivos Markdown exportados desde Snipd (contienen "Episode metadata" y "## Snips").
@@ -26,21 +28,23 @@ De este modo, el pipeline parte de tres fuentes principales de documentos origin
   3. Añadir márgenes (`add_margin_html.py`).
 - **Renombrado:**
   - Se extraen el título del episodio y el nombre del show de los metadatos.
-  - Los archivos `.md` y `.html` se renombran con el formato: `Show - Episode title.md` / `.html`.
+  - Los archivos `.md` y `.html` se renombran con el formato: `Show - Episode title.md` / `.html`.  
+  - **Se eliminan caracteres problemáticos** (`#`, `/`, etc.) para evitar conflictos con servidores locales.
 - **Organización:**
   - Se mueven inmediatamente a la carpeta anual de podcasts: `Podcasts/Podcasts <AÑO>/`.
   - Así, **no pasan por el pipeline de posts normales** ni por la generación de títulos con IA.
 
 ### 3. **Procesamiento de Posts y PDFs (Pipeline regular)**
 - Se procesan todos los archivos restantes en `Incoming/` (PDF, Markdown no-podcast y los HTML descargados automáticamente desde Instapaper).
-- **Pipeline:**
-  1. Descarga de artículos (`scrape.py`).
+- **Pipeline robusto:**
+  1. Descarga de artículos (`scrape.py`) - **continúa aunque falle**.
   2. Conversión a Markdown (`html2md.py`).
   3. Corrección de codificación (`fix_html_encoding.py`).
   4. Reducción de imágenes (`reduce_images_width.py`).
   5. Añadir márgenes (`add_margin_html.py`).
   6. Generación de títulos con IA (`update_titles.py`):
      - Renombra los archivos `.md` y `.html` de posts usando títulos generados por IA (Claude).
+     - **Elimina caracteres problemáticos** para compatibilidad con servidores web.
      - **No afecta a los podcasts, que ya han sido movidos.**
 - **Organización:**
   - **Posts:** Los archivos procesados se renombran y se mueven a `Posts/Posts <AÑO>/`.
@@ -48,7 +52,12 @@ De este modo, el pipeline parte de tres fuentes principales de documentos origin
     - **Se mueven a `Pdfs/Pdfs <AÑO>/` manteniendo su nombre original.**
     - **No se renombran ni pasan por IA.**
 
-### 4. **Registro histórico**
+### 4. **Transparencia del proceso**
+- **Cada script muestra mensajes informativos** cuando no hay archivos que procesar.
+- **Validación automática** de credenciales con mensajes de error claros.
+- **Pipeline tolerante a fallos**: Si falla la descarga de Instapaper, continúa procesando PDFs y otros archivos locales.
+
+### 5. **Registro histórico**
 - Todos los archivos procesados (posts, PDFs, podcasts) se registran en `Historial.txt` (los más recientes arriba).
 
 ---
