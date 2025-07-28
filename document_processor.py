@@ -8,6 +8,8 @@ import subprocess
 import sys
 
 import utils as U
+from pdf_processor import PDFProcessor
+from instapaper_processor import InstapaperProcessor
 
 
 class ScriptRunner(Protocol):
@@ -51,6 +53,8 @@ class DocumentProcessor:
     def __init__(self, config: DocumentProcessorConfig, script_runner: ScriptRunner = None):
         self.config = config
         self.script_runner = script_runner or SubprocessScriptRunner()
+        self.pdf_processor = PDFProcessor(self.config.incoming, self.config.pdfs_dest)
+        self.instapaper_processor = InstapaperProcessor(self.config.incoming, self.config.posts_dest)
         self.moved_podcasts: List[Path] = []
         self.moved_posts: List[Path] = []
         self.moved_pdfs: List[Path] = []
@@ -76,26 +80,25 @@ class DocumentProcessor:
         self.moved_podcasts = moved_files
         return moved_files
     
-    def process_regular_documents(self) -> tuple[List[Path], List[Path]]:
-        """Procesa posts regulares y PDFs."""
-        print("📄 Procesando posts regulares y PDFs...")
+    def process_instapaper_posts(self) -> List[Path]:
+        """Procesa posts web descargados de Instapaper con pipeline unificado."""
+        # Usar el procesador unificado para todo el pipeline de Instapaper
+        moved_posts = self.instapaper_processor.process_instapaper_posts()
         
-        # Pipeline regular
-        if not self._run_regular_pipeline():
-            print("❌ Error en el pipeline regular")
-            return [], []
-        
-        # Mover archivos procesados
-        posts = U.list_files({".html", ".htm", ".md"}, root=self.config.incoming)
-        pdfs = U.list_files({".pdf"}, root=self.config.incoming)
-        
-        moved_posts = U.move_files(posts, self.config.posts_dest)
-        moved_pdfs = U.move_files(pdfs, self.config.pdfs_dest)
+        # Aplicar márgenes HTML como paso final (script compartido)
+        if moved_posts:
+            print("📄 Aplicando márgenes a posts procesados...")
+            if not self.script_runner.run_script_with_dir("add_margin_html.py", str(self.config.posts_dest)):
+                print("⚠️ Error aplicando márgenes, pero posts ya están procesados")
         
         self.moved_posts = moved_posts
+        return moved_posts
+    
+    def process_pdfs(self) -> List[Path]:
+        """Procesa PDFs usando el procesador especializado."""
+        moved_pdfs = self.pdf_processor.process_pdfs()
         self.moved_pdfs = moved_pdfs
-        
-        return moved_posts, moved_pdfs
+        return moved_pdfs
     
     def register_all_files(self) -> None:
         """Registra todos los archivos procesados en el historial."""
@@ -109,10 +112,13 @@ class DocumentProcessor:
             # Fase 1: Procesar podcasts primero
             self.process_podcasts()
             
-            # Fase 2: Procesar posts regulares y PDFs
-            self.process_regular_documents()
+            # Fase 2: Procesar posts de Instapaper (con pipeline completo)
+            self.process_instapaper_posts()
             
-            # Fase 3: Registrar todo en historial
+            # Fase 3: Procesar PDFs (solo mover, sin pipeline)
+            self.process_pdfs()
+            
+            # Fase 4: Registrar todo en historial
             self.register_all_files()
             
             print("Pipeline completado ✅")
@@ -129,35 +135,4 @@ class DocumentProcessor:
             self.script_runner.run_script_with_dir("clean_snip.py", incoming_str) and
             self.script_runner.run_script_with_dir("md2html.py", incoming_str) and
             self.script_runner.run_script_with_dir("add_margin_html.py", incoming_str)
-        )
-    
-    def _run_regular_pipeline(self) -> bool:
-        """Ejecuta el pipeline regular de posts y PDFs."""
-        scripts = [
-            "scrape.py",
-            "html2md.py",
-            "fix_html_encoding.py",
-            "reduce_images_width.py",
-            "add_margin_html.py",
-            "update_titles.py"
-        ]
-        
-        # Ejecutar scripts uno por uno, continuando aunque falle scrape.py
-        success = True
-        for script in scripts:
-            if script == "scrape.py":
-                # Para scrape.py, permitir que falle sin detener el pipeline
-                if not self.script_runner.run_script(script):
-                    print(f"⚠️  {script} falló, pero continuando con el resto del pipeline...")
-                    success = False
-                else:
-                    print(f"✅ {script} completado")
-            else:
-                # Para otros scripts, fallar si no se ejecutan correctamente
-                if not self.script_runner.run_script(script):
-                    print(f"❌ {script} falló, abortando pipeline")
-                    return False
-                else:
-                    print(f"✅ {script} completado")
-        
-        return success 
+        ) 

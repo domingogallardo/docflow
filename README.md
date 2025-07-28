@@ -36,21 +36,19 @@ De este modo, el pipeline parte de tres fuentes principales de documentos origin
 
 ### 3. **Procesamiento de Posts y PDFs (Pipeline regular)**
 - Se procesan todos los archivos restantes en `Incoming/` (PDF, Markdown no-podcast y los HTML descargados automáticamente desde Instapaper).
-- **Pipeline robusto:**
-  1. Descarga de artículos (`scrape.py`) - **continúa aunque falle**.
-  2. Conversión a Markdown (`html2md.py`).
-  3. Corrección de codificación (`fix_html_encoding.py`).
-  4. Reducción de imágenes (`reduce_images_width.py`).
-  5. Añadir márgenes (`add_margin_html.py`).
-  6. Generación de títulos con IA (`update_titles.py`):
-     - Renombra los archivos `.md` y `.html` de posts usando títulos generados por IA (Claude).
-     - **Elimina caracteres problemáticos** para compatibilidad con servidores web.
-     - **No afecta a los podcasts, que ya han sido movidos.**
+- **Pipeline robusto y modular:**
+  1. **Posts de Instapaper**: Procesados por `InstapaperProcessor` que maneja internamente:
+     - Descarga de artículos desde Instapaper (con validación)
+     - Conversión HTML → Markdown  
+     - Corrección de codificación
+     - Reducción de imágenes
+     - Generación de títulos con IA
+     - **Elimina caracteres problemáticos** para compatibilidad con servidores web
+  2. **Aplicación de márgenes**: Script compartido `add_margin_html.py`
+  3. **PDFs**: Procesados por `PDFProcessor` que los mueve directamente sin transformaciones
 - **Organización:**
   - **Posts:** Los archivos procesados se renombran y se mueven a `Posts/Posts <AÑO>/`.
-  - **PDFs:**
-    - **Se mueven a `Pdfs/Pdfs <AÑO>/` manteniendo su nombre original.**
-    - **No se renombran ni pasan por IA.**
+  - **PDFs:** Se mueven a `Pdfs/Pdfs <AÑO>/` manteniendo su nombre original.
 
 ### 4. **Transparencia del proceso**
 - **Cada script muestra mensajes informativos** cuando no hay archivos que procesar.
@@ -123,40 +121,33 @@ python process_documents.py [--year 2025]
 
 ---
 
-## 🏗️ Arquitectura
-
-El sistema utiliza una **arquitectura modular** con las siguientes clases principales:
-
-- **`DocumentProcessor`**: Clase principal que orquesta todo el pipeline
-- **`DocumentProcessorConfig`**: Configuración centralizada (directorios, año)
-- **`ScriptRunner`**: Interfaz para ejecutar scripts (fácil de mockear en tests)
-
-Esta arquitectura permite:
-- **Testabilidad**: Inyección de dependencias y mocks
-- **Flexibilidad**: Configuración dinámica de directorios base
-- **Mantenibilidad**: Separación clara de responsabilidades
-
----
-
 ## 📌 Scripts incluidos
 
 | Script                       | Función                                                        |
 | ---------------------------- | -------------------------------------------------------------- |
 | `process_documents.py`       | **Script principal** - Ejecuta todo el pipeline completo      |
 | `document_processor.py`      | **Arquitectura modular** - Clases principales del sistema     |
-| `scrape.py`                  | Descarga artículos desde Instapaper                            |
-| `html2md.py`                 | Convierte HTML a Markdown                                      |
-| `fix_html_encoding.py`       | Inserta charset UTF-8 en documentos HTML                       |
-| `reduce_images_width.py`     | Reduce automáticamente el ancho de imágenes grandes            |
-| `add_margin_html.py`         | Añade márgenes estándar al HTML                                |
-| `update_titles.py`           | Usa IA (Anthropic) para generar títulos descriptivos           |
+| `instapaper_processor.py`    | **Procesador unificado** - Maneja todo el pipeline de Instapaper |
+| `pdf_processor.py`           | **Procesador de PDFs** - Mueve PDFs sin procesamiento adicional |
 | `clean_snip.py`              | Limpia archivos Markdown exportados desde Snipd                |
+| `md2html.py`                 | Convierte archivos Markdown a HTML                             |
+| `add_margin_html.py`         | Añade márgenes estándar al HTML (compartido por podcasts y posts) |
 | `utils.py`                   | Utilidades comunes (detección podcasts, renombrado, etc.)     |
 | `utils/serve_html.py`        | Servidor web que lista archivos .html desde una carpeta dada   |
 | `utils/rebuild_historial.py` | Reconstruye por completo `Historial.txt` por fecha de creación |
 | `utils/borrar_cortos.py`     | Elimina documentos demasiado cortos                            |
 | `utils/count-files.py`       | Cuenta los archivos existentes                                 |
 | `utils/random-post.py`       | Selecciona aleatoriamente un post (requiere archivo `Posts.txt`) |
+
+### 🏗️ Arquitectura Modular
+
+El sistema está organizado en **procesadores especializados**:
+
+- **`InstapaperProcessor`**: Maneja descarga, conversión HTML→MD, corrección de encoding, reducción de imágenes y generación de títulos con IA
+- **`PDFProcessor`**: Procesa PDFs moviéndolos directamente (sin transformaciones)  
+- **`DocumentProcessor`**: Orquesta todo el sistema y coordina los procesadores
+
+**Scripts compartidos**: Solo `add_margin_html.py` se ejecuta independientemente porque lo usan tanto podcasts como posts.
 
 ---
 

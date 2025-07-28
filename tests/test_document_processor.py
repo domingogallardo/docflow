@@ -1,20 +1,21 @@
-import sys
-from pathlib import Path
+#!/usr/bin/env python3
+"""
+Tests para DocumentProcessor
+"""
 import pytest
-from unittest.mock import Mock
+from pathlib import Path
 
-sys.path.append(str(Path(__file__).parent.parent))
 from document_processor import DocumentProcessor, DocumentProcessorConfig
 
 
 class MockScriptRunner:
-    """Mock del ScriptRunner para tests."""
+    """Mock del script runner para tests."""
     
     def __init__(self):
         self.executed_scripts = []
     
     def run_script(self, script_name: str, *args) -> bool:
-        self.executed_scripts.append((script_name, args))
+        self.executed_scripts.append((script_name, *args))
         return True
     
     def run_script_with_dir(self, script_name: str, directory: str) -> bool:
@@ -65,32 +66,21 @@ def test_document_processor_integration(tmp_path):
     # 6. Verificar que el pipeline se ejecutó exitosamente
     assert success is True
     
-    # 7. Verificar que se ejecutaron los scripts correctros
+    # 7. Verificar que se ejecutaron solo los scripts que siguen siendo independientes
     executed_scripts = [script[0] for script in mock_runner.executed_scripts]
     
-    # Scripts de podcasts
+    # Scripts de podcasts (siguen siendo independientes)
     assert "clean_snip.py" in executed_scripts
     assert "md2html.py" in executed_scripts
+    assert "add_margin_html.py" in executed_scripts
     
-    # Scripts del pipeline regular
-    assert "scrape.py" in executed_scripts
-    assert "html2md.py" in executed_scripts
-    assert "update_titles.py" in executed_scripts
+    # Scripts de Instapaper ya NO aparecen porque están integrados en InstapaperProcessor
+    # pero add_margin_html.py sí debería aparecer para posts procesados
     
-    # 8. Verificar estructura de directorios creada
-    assert (tmp_path / "Podcasts" / "Podcasts 2025").exists()
+    # 8. Verificar que los archivos se movieron correctamente
+    assert (tmp_path / "Podcasts" / "Podcasts 2025" / "Test Show - Test Episode.md").exists()
     assert (tmp_path / "Posts" / "Posts 2025").exists()
-    assert (tmp_path / "Pdfs" / "Pdfs 2025").exists()
-    
-    # 9. Verificar que los archivos se movieron correctamente
-    # El PDF debe mantener su nombre original
     assert (tmp_path / "Pdfs" / "Pdfs 2025" / "test.pdf").exists()
-    
-    # El podcast debe haberse renombrado usando metadatos
-    podcast_files = list((tmp_path / "Podcasts" / "Podcasts 2025").glob("*.md"))
-    assert len(podcast_files) > 0
-    # Debería contener "Test Show - Test Episode" en el nombre
-    assert any("Test Show - Test Episode" in f.name for f in podcast_files)
 
 
 def test_process_podcasts_only(tmp_path):
@@ -100,15 +90,16 @@ def test_process_podcasts_only(tmp_path):
     incoming = tmp_path / "Incoming"
     incoming.mkdir()
     
-    podcast_file = incoming / "test_podcast.md"
-    podcast_content = """# My Podcast
+    podcast_file = incoming / "podcast.md"
+    podcast_content = """# Test Podcast
 
-## Episode metadata  
+## Episode metadata
 - Episode title: Amazing Episode
-- Show: Cool Podcast
+- Show: Great Show
+- Owner / Host: Host Name
 
 ## Snips
-- Content here
+- Great content here
 """
     podcast_file.write_text(podcast_content, encoding="utf-8")
     
@@ -119,24 +110,33 @@ def test_process_podcasts_only(tmp_path):
     # Ejecutar solo fase de podcasts
     moved_podcasts = processor.process_podcasts()
     
-    # Verificar
-    assert len(moved_podcasts) > 0
-    assert (tmp_path / "Podcasts" / "Podcasts 2025").exists()
+    # Verificar - puede ser 1 o 2 archivos dependiendo de si se genera HTML
+    assert len(moved_podcasts) >= 1  # Al menos el .md
+    assert (tmp_path / "Podcasts" / "Podcasts 2025" / "Great Show - Amazing Episode.md").exists()
     
-    # Verificar que se ejecutaron solo scripts de podcasts
+    # Verificar scripts ejecutados
     executed_scripts = [script[0] for script in mock_runner.executed_scripts]
     assert "clean_snip.py" in executed_scripts
     assert "md2html.py" in executed_scripts
-    assert "scrape.py" not in executed_scripts  # No debe ejecutar pipeline regular
+    assert "add_margin_html.py" in executed_scripts
+    
+    # No debe ejecutar scripts de Instapaper (están integrados)
+    assert "scrape.py" not in executed_scripts
+    assert "update_titles.py" not in executed_scripts
 
 
 def test_process_regular_documents_only(tmp_path):
-    """Test específico para el procesamiento de documentos regulares."""
+    """Test específico para el procesamiento de posts y PDFs por separado."""
     
     # Preparar
     incoming = tmp_path / "Incoming"
     incoming.mkdir()
     
+    # Crear archivo HTML para posts
+    html_file = incoming / "article.html"
+    html_file.write_text("<html><body>Test article</body></html>")
+    
+    # Crear archivo PDF
     pdf_file = incoming / "regular.pdf"
     pdf_file.write_bytes(b"%PDF content")
     
@@ -144,15 +144,25 @@ def test_process_regular_documents_only(tmp_path):
     mock_runner = MockScriptRunner()
     processor = DocumentProcessor(config, script_runner=mock_runner)
     
-    # Ejecutar solo fase regular
-    moved_posts, moved_pdfs = processor.process_regular_documents()
+    # Ejecutar procesamiento de posts
+    moved_posts = processor.process_instapaper_posts()
     
-    # Verificar
+    # Ejecutar procesamiento de PDFs  
+    moved_pdfs = processor.process_pdfs()
+    
+    # Verificar posts - ahora devuelve tanto .html como .md
+    assert len(moved_posts) == 2  # .html y .md procesados
+    assert (tmp_path / "Posts" / "Posts 2025").exists()
+    
+    # Verificar PDFs
     assert len(moved_pdfs) == 1
     assert (tmp_path / "Pdfs" / "Pdfs 2025" / "regular.pdf").exists()
     
-    # Verificar scripts ejecutados
+    # Verificar scripts ejecutados - solo add_margin_html.py debería ejecutarse como script independiente
     executed_scripts = [script[0] for script in mock_runner.executed_scripts]
-    assert "scrape.py" in executed_scripts
-    assert "update_titles.py" in executed_scripts
-    assert "clean_snip.py" not in executed_scripts  # No debe ejecutar pipeline de podcasts 
+    assert "add_margin_html.py" in executed_scripts
+    
+    # Los scripts de Instapaper ya no se ejecutan independientemente
+    assert "scrape.py" not in executed_scripts
+    assert "html2md.py" not in executed_scripts
+    assert "update_titles.py" not in executed_scripts 
