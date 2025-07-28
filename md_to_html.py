@@ -32,16 +32,36 @@ def convert_md_to_html():
             # Leer contenido Markdown
             md_text = md_file.read_text(encoding="utf-8")
             
+            # Limpiar caracteres problemáticos
+            md_text = md_text.replace('\xa0', ' ')  # Non-breaking space
+            md_text = md_text.replace('\u2013', '-')  # En dash
+            md_text = md_text.replace('\u2014', '-')  # Em dash
+            md_text = md_text.replace('\u2018', "'")  # Left single quote
+            md_text = md_text.replace('\u2019', "'")  # Right single quote
+            md_text = md_text.replace('\u201c', '"')  # Left double quote
+            md_text = md_text.replace('\u201d', '"')  # Right double quote
+            
+            # TODO: Implementar conversión de URLs cuando se resuelva el problema de regex
+            # # Convertir URLs de texto plano a enlaces Markdown de forma simple
+            # import re
+            # # Buscar URLs y convertirlas a enlaces Markdown
+            # url_pattern = r'https?://[^\s]+'
+            # md_text = re.sub(url_pattern, lambda m: f'[{m.group(0)}]({m.group(0)})', md_text)
+            
             # Convertir a HTML usando las mismas extensiones que podcasts
-            html_body = markdown.markdown(
-                md_text,
-                extensions=[
-                    "fenced_code",
-                    "tables", 
-                    "toc",
-                ],
-                output_format="html5",
-            )
+            try:
+                html_body = markdown.markdown(
+                    md_text,
+                    extensions=[
+                        "fenced_code",
+                        "tables", 
+                        "toc",
+                    ],
+                    output_format="html5",
+                )
+            except Exception as e:
+                print(f"⚠️  Error en conversión markdown, intentando sin extensiones: {e}")
+                html_body = markdown.markdown(md_text, output_format="html5")
             
             # Crear HTML completo
             title = md_file.stem
@@ -60,6 +80,8 @@ def convert_md_to_html():
             
         except Exception as e:
             print(f"❌ Error convirtiendo {md_file.name}: {e}")
+            import traceback
+            traceback.print_exc()
     
     # Aplicar márgenes a todos los HTML generados
     print("📏 Aplicando márgenes...")

@@ -170,7 +170,23 @@ class PodcastProcessor:
     
     def _md_to_html(self, md_text: str) -> str:
         """Convierte texto Markdown en HTML usando la librería markdown."""
-        return markdown.markdown(
+        # Limpiar caracteres problemáticos
+        md_text = md_text.replace('\xa0', ' ')  # Non-breaking space
+        md_text = md_text.replace('\u2013', '-')  # En dash
+        md_text = md_text.replace('\u2014', '-')  # Em dash
+        md_text = md_text.replace('\u2018', "'")  # Left single quote
+        md_text = md_text.replace('\u2019', "'")  # Right single quote
+        md_text = md_text.replace('\u201c', '"')  # Left double quote
+        md_text = md_text.replace('\u201d', '"')  # Right double quote
+        
+        # TODO: Implementar conversión de URLs cuando se resuelva el problema de regex
+        # # Convertir URLs de texto plano a enlaces Markdown de forma simple
+        # import re
+        # # Buscar URLs y convertirlas a enlaces Markdown
+        # url_pattern = r'https?://[^\s]+'
+        # md_text = re.sub(url_pattern, lambda m: f'[{m.group(0)}]({m.group(0)})', md_text)
+        
+        html_body = markdown.markdown(
             md_text,
             extensions=[
                 "fenced_code",
@@ -179,6 +195,8 @@ class PodcastProcessor:
             ],
             output_format="html5",
         )
+        
+        return html_body
     
     def _wrap_html(self, title: str, body: str) -> str:
         """Devuelve un documento HTML con cabecera mínima y UTF-8."""
