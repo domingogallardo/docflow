@@ -17,6 +17,35 @@ El script procesa automáticamente:
 
 ---
 
+## 🎯 Resultado del procesamiento
+
+### 📄 Artículos de Instapaper
+**Entrada:** Artículos guardados en tu cuenta de Instapaper  
+**Resultado:** Archivos HTML y Markdown listos para lectura con:
+- ✅ Títulos generados automáticamente con IA
+- ✅ Imágenes redimensionadas (max 300px ancho)
+- ✅ Márgenes del 6% aplicados para mejor lectura
+- ✅ Codificación HTML corregida
+- ✅ Nombres de archivo limpio (sin caracteres problemáticos)
+
+### 🎧 Podcasts de Snipd  
+**Entrada:** Archivos Markdown exportados desde Snipd  
+**Resultado:** Transcripciones HTML limpias y organizadas con:
+- ✅ Contenido limpio (sin HTML innecesario ni "Click to expand")
+- ✅ Enlaces de audio convertidos a botones atractivos
+- ✅ Formato HTML con tablas y código renderizado
+- ✅ Nombres basados en metadatos del episodio
+- ✅ Márgenes aplicados para lectura cómoda
+
+### 📑 PDFs
+**Entrada:** Archivos PDF en `Incoming/`  
+**Resultado:** PDFs organizados por año manteniendo formato original
+- ✅ Organizados en carpetas anuales
+- ✅ Nombres originales preservados
+- ✅ Registro en historial para seguimiento
+
+---
+
 ## 📂 Estructura
 
 ```
