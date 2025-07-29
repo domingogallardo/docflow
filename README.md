@@ -1,6 +1,6 @@
 # 📚 Pipeline de Documentación Personal
 
-Sistema automatizado para recopilar, procesar y organizar documentos personales (artículos web, PDFs, podcasts) en carpetas estructuradas por años.
+Sistema automatizado para recopilar, procesar y organizar documentos personales (artículos web, PDFs, podcasts, tweets) en carpetas estructuradas por años.
 
 ---
 
@@ -15,8 +15,9 @@ python md_to_html.py
 ```
 
 El script principal procesa automáticamente:
-- **Artículos de Instapaper** → `Posts/Posts <AÑO>/`
 - **Podcasts de Snipd** (MD) → `Podcasts/Podcasts <AÑO>/`
+- **Tweets** (MD) → `Tweets/Tweets <AÑO>/`
+- **Artículos de Instapaper** → `Posts/Posts <AÑO>/`
 - **PDFs** → `Pdfs/Pdfs <AÑO>/`
 
 ---
@@ -39,7 +40,17 @@ El script principal procesa automáticamente:
 - ✅ Enlaces de audio convertidos a botones atractivos
 - ✅ Formato HTML con tablas y código renderizado
 - ✅ Nombres basados en metadatos del episodio
-- ✅ Márgenes aplicados para lectura cómoda
+- ✅ Tipografía del sistema (San Francisco) para lectura elegante
+
+### 🐦 Tweets
+**Entrada:** Archivos Markdown con tweets exportados (`Tweets *.md`)  
+**Resultado:** Colecciones HTML estilizadas con:
+- ✅ Tipografía del sistema (San Francisco) elegante
+- ✅ Estilo azul Twitter (#1DA1F2) para enlaces
+- ✅ Títulos en negrita con separadores sutiles
+- ✅ Márgenes del 6% para lectura cómoda
+- ✅ Archivo MD original preservado
+- ✅ Nombres de archivo mantenidos (ej: `Tweets 2025-07`)
 
 ### 📑 PDFs
 **Entrada:** Archivos PDF en `Incoming/`  
@@ -56,7 +67,8 @@ El script principal procesa automáticamente:
 ⭐️ Documentación/
 ├── Incoming/               # Archivos nuevos
 ├── Posts/Posts <AÑO>/      # Artículos procesados
-├── Podcasts/Podcasts <AÑO>/ # Podcasts procesados  
+├── Podcasts/Podcasts <AÑO>/ # Podcasts procesados
+├── Tweets/Tweets <AÑO>/    # Tweets procesados
 ├── Pdfs/Pdfs <AÑO>/        # PDFs organizados
 └── Historial.txt           # Registro histórico
 ```
@@ -88,12 +100,14 @@ export INSTAPAPER_PASSWORD="tu_contraseña"
 | `pipeline_manager.py` | Coordinación de procesadores |
 | `instapaper_processor.py` | Descarga y procesa artículos web |
 | `podcast_processor.py` | Procesa transcripciones de Snipd |
+| `tweet_processor.py` | Procesa colecciones de tweets |
 | `pdf_processor.py` | Organiza PDFs |
 | `utils.py` | Utilidades comunes |
 
 ### Utilidades adicionales
 - `utils/serve_html.py` - Servidor web local
 - `utils/rebuild_historial.py` - Reconstruir historial
+- `utils/update_font.py` - Actualizar tipografía en archivos HTML
 - `utils/borrar_cortos.py` - Eliminar documentos cortos
 - `utils/count-files.py` - Contar archivos
 - `utils/random-post.py` - Post aleatorio
@@ -106,7 +120,7 @@ export INSTAPAPER_PASSWORD="tu_contraseña"
 pytest tests/ -v
 ```
 
-19 tests incluidos para validar todos los procesadores y utilidades.
+23 tests incluidos para validar todos los procesadores y utilidades.
 
 ---
 
