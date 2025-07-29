@@ -182,15 +182,29 @@ def convert_urls_to_links(text: str) -> str:
     for line in lines:
         # Buscar URLs que no estén ya en enlaces Markdown o HTML
         if 'http' in line:
-            # Regex simple para encontrar URLs
-            url_pattern = r'https?://[^\s\)\]>]+'
-            urls = re.findall(url_pattern, line)
+            # Regex para encontrar URLs con sus posiciones
+            url_pattern = r'https?://[^\s\)\]>"\']+'
+            matches = list(re.finditer(url_pattern, line))
             
-            for url in urls:
-                # Verificar que no esté ya en un enlace Markdown [texto](url) o HTML <a href="url">
-                if not (f']({url})' in line or f'[{url}]' in line or f'href="{url}"' in line or f"href='{url}'" in line):
-                    # Reemplazar solo la primera ocurrencia que no esté en un enlace
-                    line = line.replace(url, f'[{url}]({url})', 1)
+            # Procesar matches en orden inverso para no alterar posiciones
+            for match in reversed(matches):
+                url = match.group()
+                start_pos = match.start()
+                
+                # Verificar el contexto antes de la URL
+                prefix = line[:start_pos].lower()
+                
+                # Verificar si está en un enlace Markdown o atributo HTML
+                is_in_markdown_link = '](' in prefix.split('\n')[-1]
+                is_in_html_attribute = any(attr in prefix.split()[-1] for attr in [
+                    'href=', 'src=', 'srcset=', 'poster=', 'data-src=', 'action=', 'cite='
+                ])
+                is_in_css_url = 'url(' in prefix.split()[-1]
+                
+                # Solo convertir si no está en ningún contexto especial
+                if not (is_in_markdown_link or is_in_html_attribute or is_in_css_url):
+                    # Reemplazar la URL
+                    line = line[:start_pos] + f'[{url}]({url})' + line[match.end():]
         
         processed_lines.append(line)
     
