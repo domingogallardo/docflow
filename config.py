@@ -10,6 +10,7 @@ INCOMING   = BASE_DIR / "Incoming"
 POSTS_DEST = BASE_DIR / "Posts" / f"Posts {YEAR}"
 PDFS_DEST  = BASE_DIR / "Pdfs"  / f"Pdfs {YEAR}"
 PODCASTS_DEST = BASE_DIR / "Podcasts" / f"Podcasts {YEAR}"
+TWEETS_DEST = BASE_DIR / "Tweets" / f"Tweets {YEAR}"
 HISTORIAL  = BASE_DIR / "Historial.txt"
 
 ANTHROPIC_KEY = os.getenv("ANTHROPIC_API_KEY")

@@ -41,10 +41,7 @@ class PodcastProcessor:
             # 2. Convertir Markdown a HTML
             self._convert_markdown_to_html()
             
-            # 3. Añadir márgenes
-            self._add_margins()
-            
-            # 4. Renombrar y mover archivos
+            # 3. Renombrar y mover archivos
             renamed_files = U.rename_podcast_files(podcasts)
             moved_files = U.move_files(renamed_files, self.destination_dir)
             
@@ -173,16 +170,17 @@ class PodcastProcessor:
         return U.markdown_to_html(md_text).split('<body>\n')[1].split('\n</body>')[0]
     
     def _wrap_html(self, title: str, body: str) -> str:
-        """Devuelve un documento HTML con cabecera mínima y UTF-8."""
+        """Devuelve un documento HTML con cabecera mínima, UTF-8 y estilos CSS."""
         return (
             "<!DOCTYPE html>\n"
             "<html>\n<head>\n<meta charset=\"UTF-8\">\n"
             f"<title>{title}</title>\n"
+            "<style>\n"
+            f"{U.get_base_css()}"
+            "blockquote { border-left: 4px solid #667eea; }\n"
+            "a { color: #667eea; }\n"
+            "</style>\n"
             "</head>\n<body>\n"
             f"{body}\n"
             "</body>\n</html>\n"
-        )
-
-    def _add_margins(self):
-        """Añade márgenes a los archivos HTML de podcast."""
-        U.add_margins_to_html_files(self.incoming_dir, file_filter=U.is_podcast_file) 
+        ) 

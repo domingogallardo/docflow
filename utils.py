@@ -272,3 +272,15 @@ def markdown_to_html(md_text: str, title: str = None) -> str:
     )
     
     return full_html
+
+
+def get_base_css() -> str:
+    """Devuelve el CSS base con la tipografía del sistema y estilos comunes."""
+    return (
+        "body { margin: 6%; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; }\n"
+        "h1, h2, h3 { font-weight: bold; border-bottom: 1px solid #eee; padding-bottom: 10px; }\n"
+        "blockquote { margin-left: 0; padding-left: 20px; color: #666; }\n"
+        "a { text-decoration: none; }\n"
+        "a:hover { text-decoration: underline; }\n"
+        "hr { border: none; border-top: 1px solid #eee; margin: 30px 0; }\n"
+    )

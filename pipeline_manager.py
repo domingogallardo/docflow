@@ -11,6 +11,7 @@ import utils as U
 from pdf_processor import PDFProcessor
 from instapaper_processor import InstapaperProcessor
 from podcast_processor import PodcastProcessor
+from tweet_processor import TweetProcessor
 
 
 class ScriptRunner(Protocol):
@@ -45,6 +46,7 @@ class DocumentProcessorConfig:
         self.posts_dest = base_dir / "Posts" / f"Posts {year}"
         self.pdfs_dest = base_dir / "Pdfs" / f"Pdfs {year}"
         self.podcasts_dest = base_dir / "Podcasts" / f"Podcasts {year}"
+        self.tweets_dest = base_dir / "Tweets" / f"Tweets {year}"
         self.historial = base_dir / "Historial.txt"
 
 
@@ -57,9 +59,11 @@ class DocumentProcessor:
         self.pdf_processor = PDFProcessor(self.config.incoming, self.config.pdfs_dest)
         self.instapaper_processor = InstapaperProcessor(self.config.incoming, self.config.posts_dest)
         self.podcast_processor = PodcastProcessor(self.config.incoming, self.config.podcasts_dest)
+        self.tweet_processor = TweetProcessor(self.config.incoming, self.config.tweets_dest)
         self.moved_podcasts: List[Path] = []
         self.moved_posts: List[Path] = []
         self.moved_pdfs: List[Path] = []
+        self.moved_tweets: List[Path] = []
     
     def process_podcasts(self) -> List[Path]:
         """Procesa archivos de podcast con procesador unificado."""
@@ -83,9 +87,15 @@ class DocumentProcessor:
         self.moved_pdfs = moved_pdfs
         return moved_pdfs
     
+    def process_tweets(self) -> List[Path]:
+        """Procesa archivos de tweets usando el procesador especializado."""
+        moved_tweets = self.tweet_processor.process_tweets()
+        self.moved_tweets = moved_tweets
+        return moved_tweets
+    
     def register_all_files(self) -> None:
         """Registra todos los archivos procesados en el historial."""
-        all_files = self.moved_posts + self.moved_pdfs + self.moved_podcasts
+        all_files = self.moved_posts + self.moved_pdfs + self.moved_podcasts + self.moved_tweets
         if all_files:
             U.register_paths(all_files, base_dir=self.config.base_dir, historial_path=self.config.historial)
     
@@ -95,13 +105,16 @@ class DocumentProcessor:
             # Fase 1: Procesar podcasts primero
             self.process_podcasts()
             
-            # Fase 2: Procesar posts de Instapaper (con pipeline completo)
+            # Fase 2: Procesar tweets (convertir MD a HTML y mover) - ANTES que Instapaper
+            self.process_tweets()
+            
+            # Fase 3: Procesar posts de Instapaper (con pipeline completo)
             self.process_instapaper_posts()
             
-            # Fase 3: Procesar PDFs (solo mover, sin pipeline)
+            # Fase 4: Procesar PDFs (solo mover, sin pipeline)
             self.process_pdfs()
             
-            # Fase 4: Registrar todo en historial
+            # Fase 5: Registrar todo en historial
             self.register_all_files()
             
             print("Pipeline completado ✅")
