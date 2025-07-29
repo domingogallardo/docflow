@@ -15,9 +15,9 @@ python md_to_html.py
 ```
 
 El script principal procesa automáticamente:
-- **Podcasts de Snipd** (MD) → `Podcasts/Podcasts <AÑO>/`
-- **Tweets** (MD) → `Tweets/Tweets <AÑO>/`
-- **Artículos de Instapaper** → `Posts/Posts <AÑO>/`
+- **Podcasts de Snipd** (Markdown) → `Podcasts/Podcasts <AÑO>/`
+- **Tweets** (Markdown) → `Tweets/Tweets <AÑO>/`
+- **Artículos de Instapaper** (HTML) → `Posts/Posts <AÑO>/`
 - **PDFs** → `Pdfs/Pdfs <AÑO>/`
 
 ---
