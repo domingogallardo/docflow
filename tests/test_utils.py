@@ -74,4 +74,46 @@ def test_processors_maintain_different_colors():
     
     # Verificar colores específicos
     assert "#1DA1F2" in tweet_html and "#1DA1F2" not in podcast_html, "Colores no diferenciados correctamente"
-    assert "#667eea" in podcast_html and "#667eea" not in tweet_html, "Colores no diferenciados correctamente" 
+    assert "#667eea" in podcast_html and "#667eea" not in tweet_html, "Colores no diferenciados correctamente"
+
+
+def test_clean_duplicate_markdown_links():
+    """Test para verificar la limpieza de enlaces Markdown duplicados."""
+    from utils import clean_duplicate_markdown_links
+    
+    # Test con enlace duplicado
+    text_with_duplicate = """See more details: [https://people.idsia.ch/~juergen/who-invented-backpropagation.html](https://people.idsia.ch/~juergen/who-invented-backpropagation.html)"""
+    
+    result = clean_duplicate_markdown_links(text_with_duplicate)
+    
+    # Verificar que la URL se truncó y limpió
+    assert "people.idsia.ch/~juergen/who-invented-back..." in result
+    assert result.count("https://people.idsia.ch/~juergen/who-invented-backpropagation.html") == 1  # Solo en el enlace
+    
+    # Test con enlace normal (no duplicado) - no debe cambiar
+    text_normal = """See [this article](https://example.com) for more info."""
+    result_normal = clean_duplicate_markdown_links(text_normal)
+    assert result_normal == text_normal
+    
+    # Test con URL corta - no debe truncarse
+    text_short = """Visit [https://x.com/test](https://x.com/test)"""
+    result_short = clean_duplicate_markdown_links(text_short)
+    assert "x.com/test" in result_short
+    assert "..." not in result_short
+
+
+def test_convert_urls_integration():
+    """Test integral del procesamiento de URLs (duplicados + conversión)."""
+    from utils import convert_urls_to_links
+    
+    test_text = """Enlaces duplicados: [https://people.idsia.ch/~juergen/very-long-path-that-should-be-truncated.html](https://people.idsia.ch/~juergen/very-long-path-that-should-be-truncated.html)
+    
+URL aislada: https://x.com/SchmidhuberAI/status/1950194864940835159"""
+    
+    result = convert_urls_to_links(test_text)
+    
+    # Verificar que el enlace duplicado se limpió
+    assert "people.idsia.ch/~juergen/very-long-path-th..." in result
+    
+    # Verificar que la URL aislada se convirtió a enlace
+    assert "[https://x.com/SchmidhuberAI/status/1950194864940835159](https://x.com/SchmidhuberAI/status/1950194864940835159)" in result 

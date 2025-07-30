@@ -174,9 +174,40 @@ def add_margins_to_html_files(directory: Path, file_filter=None):
             print(f"❌ Error añadiendo márgenes a {html_file}: {e}")
 
 
+def clean_duplicate_markdown_links(text: str) -> str:
+    """Limpia enlaces Markdown donde el texto y la URL son idénticos."""
+    import re
+    
+    # Patrón para encontrar enlaces Markdown donde el texto es la misma URL
+    # [https://example.com](https://example.com)
+    duplicate_link_pattern = r'\[(https?://[^\]]+)\]\(\1\)'
+    
+    def replace_duplicate_link(match):
+        url = match.group(1)
+        # Extraer dominio y path corto para mostrar
+        try:
+            from urllib.parse import urlparse
+            parsed = urlparse(url)
+            domain = parsed.netloc
+            # Si el path es muy largo, truncarlo
+            path = parsed.path
+            if len(path) > 30:
+                path = path[:27] + "..."
+            display_text = f"{domain}{path}"
+            return f'[{display_text}]({url})'
+        except:
+            # Si hay algún error, usar un texto genérico
+            return f'[Ver enlace]({url})'
+    
+    return re.sub(duplicate_link_pattern, replace_duplicate_link, text)
+
+
 def convert_urls_to_links(text: str) -> str:
     """Convierte URLs de texto plano a enlaces Markdown de forma robusta."""
     import re
+    
+    # Primero limpiar enlaces duplicados
+    text = clean_duplicate_markdown_links(text)
     
     # Dividir el texto en líneas para procesar línea por línea
     lines = text.split('\n')
