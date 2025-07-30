@@ -8,8 +8,14 @@ Rebuild Historial.txt from scratch.
 • Sobrescribe Historial.txt (hace copia .bak por seguridad)
 """
 
+import sys
 from pathlib import Path
+
+# Agregar el directorio padre al path para poder importar config
+sys.path.insert(0, str(Path(__file__).parent.parent))
+
 import shutil
+from datetime import datetime
 import config as cfg  # BASE_DIR, HISTORIAL
 
 def collect_files():
@@ -40,9 +46,12 @@ def main():
     # Ordenar por fecha de creación (más recientes primero)
     all_files.sort(key=get_creation_time, reverse=True)
 
-    # Formatear rutas relativas con "./"
-    lines = ["./" + f.relative_to(cfg.BASE_DIR).as_posix() + "\n"
-             for f in all_files]
+    # Formatear rutas relativas con "./" e incluir fecha de creación
+    lines = []
+    for f in all_files:
+        creation_time = datetime.fromtimestamp(f.stat().st_ctime).strftime("%Y-%m-%d %H:%M:%S")
+        line = "./" + f.relative_to(cfg.BASE_DIR).as_posix() + " - " + creation_time + "\n"
+        lines.append(line)
 
     # Copia de seguridad
     if cfg.HISTORIAL.exists():

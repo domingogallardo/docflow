@@ -1,5 +1,6 @@
 from pathlib import Path
 from config import BASE_DIR, INCOMING, HISTORIAL
+from datetime import datetime
 import os, shutil, logging, re
 
 def list_files(exts, root=INCOMING):
@@ -98,7 +99,9 @@ def register_paths(paths, base_dir: Path = None, historial_path: Path = None):
     if historial_path is None:
         historial_path = HISTORIAL
     
-    lines_new = ["./" + p.relative_to(base_dir).as_posix() + "\n" for p in paths]
+    # Agregar fecha y hora al final de cada línea
+    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    lines_new = ["./" + p.relative_to(base_dir).as_posix() + " - " + timestamp + "\n" for p in paths]
     if historial_path.exists():
         old_content = historial_path.read_text(encoding="utf-8")
     else:
@@ -194,12 +197,16 @@ def convert_urls_to_links(text: str) -> str:
                 # Verificar el contexto antes de la URL
                 prefix = line[:start_pos].lower()
                 
-                # Verificar si está en un enlace Markdown o atributo HTML
-                is_in_markdown_link = '](' in prefix.split('\n')[-1]
-                is_in_html_attribute = any(attr in prefix.split()[-1] for attr in [
+                # Verificar si está en un enlace Markdown o atributo HTML de forma robusta
+                prefix_lines = prefix.split('\n')
+                is_in_markdown_link = '](' in prefix_lines[-1] if prefix_lines else False
+                
+                prefix_words = prefix.split()
+                last_word = prefix_words[-1] if prefix_words else ""
+                is_in_html_attribute = any(attr in last_word for attr in [
                     'href=', 'src=', 'srcset=', 'poster=', 'data-src=', 'action=', 'cite='
                 ])
-                is_in_css_url = 'url(' in prefix.split()[-1]
+                is_in_css_url = 'url(' in last_word
                 
                 # Solo convertir si no está en ningún contexto especial
                 if not (is_in_markdown_link or is_in_html_attribute or is_in_css_url):

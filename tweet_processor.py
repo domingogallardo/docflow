@@ -52,7 +52,7 @@ class TweetProcessor:
                 all_files_to_move.append(md_file)
         
         if all_files_to_move:
-            moved_files = U.move_files(all_files_to_move, self.destination_dir)
+            moved_files = self._move_files_with_replacement(all_files_to_move, self.destination_dir)
             
             if moved_files:
                 print(f"🐦 {len(moved_files)} archivo(s) de tweets movidos a {self.destination_dir}")
@@ -91,6 +91,7 @@ class TweetProcessor:
             print(f"❌ Error convirtiendo {md_file}: {e}")
             return None
     
+
     def _wrap_html(self, title: str, body: str) -> str:
         """Crea un documento HTML completo con título y estilos básicos."""
         return (
@@ -105,4 +106,25 @@ class TweetProcessor:
             "</head>\n<body>\n"
             f"{body}\n"
             "</body>\n</html>\n"
-        ) 
+        )
+    
+    def _move_files_with_replacement(self, files: List[Path], dest: Path) -> List[Path]:
+        """Mueve archivos al destino, reemplazando archivos existentes con el mismo nombre."""
+        import shutil
+        
+        dest.mkdir(parents=True, exist_ok=True)
+        moved = []
+        
+        for f in files:
+            new_path = dest / f.name
+            
+            # Si el archivo de destino ya existe, eliminarlo primero
+            if new_path.exists():
+                print(f"🔄 Reemplazando archivo existente: {new_path.name}")
+                new_path.unlink()  # Eliminar archivo existente
+            
+            # Mover el nuevo archivo
+            shutil.move(str(f), new_path)
+            moved.append(new_path)
+        
+        return moved 

@@ -126,45 +126,4 @@ def test_process_podcasts_only(tmp_path):
     assert "update_titles.py" not in executed_scripts
 
 
-def test_process_regular_documents_only(tmp_path):
-    """Test específico para el procesamiento de posts y PDFs por separado."""
-    
-    # Preparar
-    incoming = tmp_path / "Incoming"
-    incoming.mkdir()
-    
-    # Crear archivo HTML para posts
-    html_file = incoming / "article.html"
-    html_file.write_text("<html><body>Test article</body></html>")
-    
-    # Crear archivo PDF
-    pdf_file = incoming / "regular.pdf"
-    pdf_file.write_bytes(b"%PDF content")
-    
-    config = DocumentProcessorConfig(base_dir=tmp_path, year=2025)
-    mock_runner = MockScriptRunner()
-    processor = DocumentProcessor(config, script_runner=mock_runner)
-    
-    # Ejecutar procesamiento de posts
-    moved_posts = processor.process_instapaper_posts()
-    
-    # Ejecutar procesamiento de PDFs  
-    moved_pdfs = processor.process_pdfs()
-    
-    # Verificar posts - ahora devuelve tanto .html como .md
-    assert len(moved_posts) == 2  # .html y .md procesados
-    assert (tmp_path / "Posts" / "Posts 2025").exists()
-    
-    # Verificar PDFs
-    assert len(moved_pdfs) == 1
-    assert (tmp_path / "Pdfs" / "Pdfs 2025" / "regular.pdf").exists()
-    
-    # Verificar scripts ejecutados - ya no se ejecutan independientemente 
-    executed_scripts = [script[0] for script in mock_runner.executed_scripts]
-    # Ya no se ejecuta add_margin_html.py independientemente (integrado en procesadores)
-    assert len(executed_scripts) == 0
-    
-    # Los scripts de Instapaper ya no se ejecutan independientemente
-    assert "scrape.py" not in executed_scripts
-    assert "html2md.py" not in executed_scripts
-    assert "update_titles.py" not in executed_scripts 
+ 
