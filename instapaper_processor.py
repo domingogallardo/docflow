@@ -89,8 +89,13 @@ class InstapaperProcessor:
             # Verificar login de manera más robusta
             login_successful = True
             
+            # Verificar código de estado HTTP
+            if login_response.status_code >= 400:
+                print(f"❌ Error HTTP {login_response.status_code} - URL incorrecta o servidor no disponible")
+                login_successful = False
+            
             # Verificar si fuimos redirigidos a la página de login (fallo)
-            if "login" in login_response.url:
+            elif "login" in login_response.url:
                 print("❌ Redirigido a página de login - credenciales incorrectas")
                 login_successful = False
             
