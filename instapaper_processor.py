@@ -86,8 +86,30 @@ class InstapaperProcessor:
                 "keep_logged_in": "yes"
             })
             
-            # Verificar login
-            if "login" in login_response.url or "error" in login_response.text.lower():
+            # Verificar login de manera más robusta
+            login_successful = True
+            
+            # Verificar si fuimos redirigidos a la página de login (fallo)
+            if "login" in login_response.url:
+                print("❌ Redirigido a página de login - credenciales incorrectas")
+                login_successful = False
+            
+            # Verificar si hay mensajes de error específicos en el contenido
+            soup = BeautifulSoup(login_response.text, "html.parser")
+            error_messages = soup.find_all(class_="error")
+            if error_messages:
+                print("❌ Mensajes de error encontrados en la página de login")
+                for error in error_messages:
+                    print(f"   - {error.get_text().strip()}")
+                login_successful = False
+            
+            # Verificar si hay formulario de login (indica que no estamos logueados)
+            login_form = soup.find("form")
+            if login_form and "login" in login_form.get("action", ""):
+                print("❌ Formulario de login encontrado - no estamos logueados")
+                login_successful = False
+            
+            if not login_successful:
                 print("❌ Credenciales de Instapaper incorrectas")
                 return False
             
