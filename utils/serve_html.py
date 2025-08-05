@@ -1,12 +1,11 @@
-import http.server
-import socketserver
+from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 import os
 import urllib
 
 PORT = 8000
 SERVE_DIR = "/Users/domingo/⭐️ Documentación"
 
-class HTMLOnlyRequestHandler(http.server.SimpleHTTPRequestHandler):
+class HTMLOnlyRequestHandler(SimpleHTTPRequestHandler):
     def list_directory(self, path):
         try:
             entries = os.listdir(path)
@@ -14,13 +13,14 @@ class HTMLOnlyRequestHandler(http.server.SimpleHTTPRequestHandler):
             self.send_error(404, "No permission to list directory")
             return None
 
+        # Ordenar por fecha de creación, más recientes primero
         entries.sort(key=lambda name: os.path.getctime(os.path.join(path, name)), reverse=True)
         r = []
         displaypath = urllib.parse.unquote(self.path)
         r.append(f"<html><head><title>Index of {displaypath}</title></head>")
         r.append(f"<body><h2>Index of {displaypath}</h2><hr><ul>")
 
-        # Añade enlace para volver atrás
+        # Enlace para volver atrás
         if displaypath != "/":
             parent = os.path.dirname(displaypath.rstrip("/"))
             r.append(f'<li><a href="{parent or "/"}">../</a></li>')
@@ -29,7 +29,6 @@ class HTMLOnlyRequestHandler(http.server.SimpleHTTPRequestHandler):
             fullname = os.path.join(path, name)
             displayname = linkname = name
             if os.path.isdir(fullname):
-                # añade subdirectorio (con barra final)
                 displayname = name + "/"
                 linkname = name + "/"
                 r.append(f'<li><a href="{linkname}">{displayname}</a></li>')
@@ -53,9 +52,10 @@ class HTMLOnlyRequestHandler(http.server.SimpleHTTPRequestHandler):
         path = path.lstrip("/")
         return os.path.join(SERVE_DIR, *path.split("/"))
 
+# Cambiar al directorio root antes de servir
 os.chdir(SERVE_DIR)
 
-with socketserver.TCPServer(("", PORT), HTMLOnlyRequestHandler) as httpd:
+with ThreadingHTTPServer(("", PORT), HTMLOnlyRequestHandler) as httpd:
     print(f"Serving ONLY .html files (and folders) from: {SERVE_DIR}")
     print(f"Access at: http://localhost:{PORT}")
     httpd.serve_forever()
