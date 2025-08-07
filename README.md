@@ -111,6 +111,12 @@ export INSTAPAPER_PASSWORD="tu_contraseña"
 - `utils/borrar_cortos.py` - Eliminar documentos cortos
 - `utils/count-files.py` - Contar archivos
 - `utils/random-post.py` - Post aleatorio
+- `utils/bump.py` - Subir archivos a lo más alto en Finder ajustando solo mtime
+
+Uso rápido de bump:
+```bash
+python utils/bump.py <archivo1> [archivo2 ...]
+```
 
 ---
 
