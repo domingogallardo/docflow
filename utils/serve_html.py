@@ -13,7 +13,7 @@ class HTMLOnlyRequestHandler(SimpleHTTPRequestHandler):
             self.send_error(404, "No permission to list directory")
             return None
 
-        # Ordenar de forma lexicográfica por el comentario del archivo
+        # Ordenar por fecha de creación, más recientes primero
         entries.sort(key=lambda name: os.path.getctime(os.path.join(path, name)), reverse=True)
         r = []
         displaypath = urllib.parse.unquote(self.path)
