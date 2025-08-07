@@ -118,6 +118,9 @@ Uso rápido de bump:
 python utils/bump.py <archivo1> [archivo2 ...]
 ```
 
+Versión para Shortcuts (AppleScript): `utils/bump.applescript`.
+Importa este script en la app Atajos/Shortcuts y pásale los archivos como entrada.
+
 ---
 
 ## 🧪 Testing

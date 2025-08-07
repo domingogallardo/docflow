@@ -3,8 +3,9 @@
 "bump": Sube archivos a la parte superior en Finder sin renombrar ni mover.
 
 - No abre ni modifica el contenido; solo ajusta la fecha de modificación (mtime).
-- Usa fechas futuras (>= 2100-01-01) y suma 1s entre archivos para mantener orden.
-- Repetible: escanea la carpeta y continúa por encima del mayor mtime futuro ya existente.
+- Base: ahora + 100 años y suma 1s entre archivos para mantener orden.
+- Repetible: cada ejecución usa un tiempo base más reciente, por lo que los nuevos
+  quedarán por encima de los anteriores.
 
 Uso:
   python utils/bump.py <archivo1> [archivo2 ...]
@@ -16,10 +17,7 @@ import datetime as _dt
 import os
 import sys
 from pathlib import Path
-from typing import Dict, Iterable, List
-
-
-FUTURE_BASE = _dt.datetime(2100, 1, 1, tzinfo=_dt.timezone.utc)
+from typing import Iterable, List
 
 
 def ensure_files(paths: Iterable[str]) -> List[Path]:
@@ -34,43 +32,33 @@ def ensure_files(paths: Iterable[str]) -> List[Path]:
     return files
 
 
-def group_by_folder(paths: Iterable[Path]) -> Dict[Path, List[Path]]:
-    per_folder: Dict[Path, List[Path]] = {}
+def group_by_folder(paths: Iterable[Path]):
+    per_folder = {}
     for p in paths:
         per_folder.setdefault(p.parent, []).append(p)
     return per_folder
 
 
-def next_epoch_start(folder: Path) -> float:
-    base = FUTURE_BASE.timestamp()
-    max_epoch = base
+def add_years(dt: _dt.datetime, years: int) -> _dt.datetime:
+    """Añade años de forma segura (maneja 29-feb)."""
     try:
-        for entry in folder.iterdir():
-            try:
-                t = entry.stat().st_mtime
-                if t >= base and t > max_epoch:
-                    max_epoch = t
-            except FileNotFoundError:
-                continue
-    except PermissionError:
-        pass
-    return max_epoch
+        return dt.replace(year=dt.year + years)
+    except ValueError:
+        # Si es 29-feb, retrocede a 28-feb
+        return dt.replace(month=2, day=28, year=dt.year + years)
 
 
 def bump(files: List[Path]) -> None:
-    per_folder = group_by_folder(files)
-    # Mantener el orden de invocación por carpeta
-    order: Dict[Path, List[Path]] = {f: [] for f in per_folder}
-    for p in files:
-        order[p.parent].append(p)
+    # Base: ahora + 100 años, en zona local del sistema para parecerse al comportamiento de 'date -v+100y'
+    now_local = _dt.datetime.now().astimezone()
+    base_dt = add_years(now_local, 100)
+    next_epoch = base_dt.timestamp()
 
-    for folder, ordered_files in order.items():
-        next_epoch = max(next_epoch_start(folder), FUTURE_BASE.timestamp())
-        for f in ordered_files:
-            next_epoch += 1.0
-            os.utime(f, (next_epoch, next_epoch), follow_symlinks=False)
-            when = _dt.datetime.fromtimestamp(next_epoch).astimezone().strftime("%Y-%m-%d %H:%M:%S %Z")
-            print(f"Bumped: {f} -> {when}")
+    for f in files:
+        next_epoch += 1.0
+        os.utime(f, (next_epoch, next_epoch), follow_symlinks=False)
+        when = _dt.datetime.fromtimestamp(next_epoch).astimezone().strftime("%Y-%m-%d %H:%M:%S %Z")
+        print(f"Bumped: {f} -> {when}")
 
 
 def main(argv: List[str]) -> int:
