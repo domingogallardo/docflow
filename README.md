@@ -105,7 +105,7 @@ export INSTAPAPER_PASSWORD="tu_contraseña"
 | `utils.py` | Utilidades comunes |
 
 ### Utilidades adicionales
-- `utils/serve_html.py` - Servidor web local
+- `utils/serve_html.py` - Servidor web local (lista directorios, `.html` y `.pdf` ordenados por mtime desc.)
 - `utils/rebuild_historial.py` - Reconstruir historial
 - `utils/update_font.py` - Actualizar tipografía en archivos HTML
 - `utils/borrar_cortos.py` - Eliminar documentos cortos
@@ -129,7 +129,7 @@ Importa este script en la app Atajos/Shortcuts y pásale los archivos como entra
 pytest tests/ -v
 ```
 
-23 tests incluidos para validar todos los procesadores y utilidades.
+31 tests incluidos para validar todos los procesadores y utilidades.
 
 ---
 
