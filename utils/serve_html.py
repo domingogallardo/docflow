@@ -13,8 +13,8 @@ class HTMLOnlyRequestHandler(SimpleHTTPRequestHandler):
             self.send_error(404, "No permission to list directory")
             return None
 
-        # Ordenar por fecha de creación, más recientes primero
-        entries.sort(key=lambda name: os.path.getctime(os.path.join(path, name)), reverse=True)
+        # Ordenar por fecha de modificación (mtime), más recientes primero
+        entries.sort(key=lambda name: os.path.getmtime(os.path.join(path, name)), reverse=True)
         r = []
         displaypath = urllib.parse.unquote(self.path)
         r.append(f"<html><head><title>Index of {displaypath}</title></head>")
