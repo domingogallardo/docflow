@@ -1,11 +1,10 @@
 #!/usr/bin/env python3
 """
-"bump": Sube archivos a la parte superior en Finder sin renombrar ni mover.
-
-- No abre ni modifica el contenido; solo ajusta la fecha de modificación (mtime).
-- Base: ahora + 100 años y suma 1s entre archivos para mantener orden.
-- Repetible: cada ejecución usa un tiempo base más reciente, por lo que los nuevos
-  quedarán por encima de los anteriores.
+"bump-simple": Igual que la opción 2 (AppleScript):
+- mtime := (ahora + 100 años) + i segundos, manteniendo el orden de entrada
+- No modifica la fecha de creación
+- Preserva atime (como 'touch -mt')
+- Repetible: cada ejecución usa una base más reciente
 
 Uso:
   python utils/bump.py <archivo1> [archivo2 ...]
@@ -32,13 +31,6 @@ def ensure_files(paths: Iterable[str]) -> List[Path]:
     return files
 
 
-def group_by_folder(paths: Iterable[Path]):
-    per_folder = {}
-    for p in paths:
-        per_folder.setdefault(p.parent, []).append(p)
-    return per_folder
-
-
 def add_years(dt: _dt.datetime, years: int) -> _dt.datetime:
     """Añade años de forma segura (maneja 29-feb)."""
     try:
@@ -49,16 +41,23 @@ def add_years(dt: _dt.datetime, years: int) -> _dt.datetime:
 
 
 def bump(files: List[Path]) -> None:
-    # Base: ahora + 100 años, en zona local del sistema para parecerse al comportamiento de 'date -v+100y'
+    # Base: ahora (zona local) + 100 años, truncado a segundos (igual a 'date -v+100y +%s')
     now_local = _dt.datetime.now().astimezone()
-    base_dt = add_years(now_local, 100)
-    next_epoch = base_dt.timestamp()
+    base_dt = add_years(now_local, 100).replace(microsecond=0)
+    base_epoch = int(base_dt.timestamp())
 
+    counter = 0
     for f in files:
-        next_epoch += 1.0
-        os.utime(f, (next_epoch, next_epoch), follow_symlinks=False)
-        when = _dt.datetime.fromtimestamp(next_epoch).astimezone().strftime("%Y-%m-%d %H:%M:%S %Z")
-        print(f"Bumped: {f} -> {when}")
+        counter += 1
+        new_mtime = base_epoch + counter
+
+        # Conservar atime (como hace 'touch -mt', que no lo cambia)
+        st = f.stat()  # sigue enlaces simbólicos (igual que AppleScript)
+        os.utime(f, (st.st_atime, new_mtime))  # follow_symlinks=True por defecto
+
+        # Mensaje informativo (opcional)
+        when_local = _dt.datetime.fromtimestamp(new_mtime).astimezone()
+        print(f"Bumped: {f} -> {when_local:%Y-%m-%d %H:%M:%S %Z}")
 
 
 def main(argv: List[str]) -> int:
@@ -76,5 +75,3 @@ def main(argv: List[str]) -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main(sys.argv[1:]))
-
-
