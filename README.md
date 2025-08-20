@@ -10,6 +10,9 @@ Sistema automatizado para recopilar, procesar y organizar documentos personales 
 # Pipeline completo
 python process_documents.py [--year 2025]
 
+# Solo procesar tweets y PDFs
+python process_documents.py tweets pdfs
+
 # Solo convertir archivos .md a HTML
 python md_to_html.py
 ```
@@ -95,7 +98,7 @@ export INSTAPAPER_PASSWORD="tu_contraseña"
 
 | Script | Función |
 |--------|---------|
-| `process_documents.py` | Script principal - Pipeline completo |
+| `process_documents.py` | Script principal - Pipeline completo o parcial |
 | `md_to_html.py` | Convierte archivos .md a HTML con márgenes |
 | `pipeline_manager.py` | Coordinación de procesadores |
 | `instapaper_processor.py` | Descarga y procesa artículos web |
