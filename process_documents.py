@@ -3,7 +3,7 @@
 Procesa el pipeline de documentos.
 
 Uso:
-    python process_documents.py [--year 2026] [tweets|pdfs|podcasts|posts]
+    python process_documents.py [--year 2026] [tweets|pdfs|podcasts|posts|all]
 """
 import argparse
 from datetime import datetime
@@ -17,9 +17,12 @@ def parse_args():
     p = argparse.ArgumentParser()
     p.add_argument("--year", type=int,
                    help="Usa ese año en lugar del actual")
-    p.add_argument("targets", nargs="*",
-                   choices=["tweets", "pdfs", "podcasts", "posts"],
-                   help="Procesa solo los tipos indicados")
+    p.add_argument(
+        "targets",
+        nargs="+",
+        choices=["tweets", "pdfs", "podcasts", "posts", "all"],
+        help="Procesa solo los tipos indicados",
+    )
     return p.parse_args()
 
 
@@ -40,7 +43,7 @@ def main():
     # Crear procesador
     processor = DocumentProcessor(config)
 
-    if not args.targets:
+    if "all" in args.targets:
         success = processor.process_all()
     else:
         mapping = {
