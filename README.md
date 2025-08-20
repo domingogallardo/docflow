@@ -8,7 +8,7 @@ Sistema automatizado para recopilar, procesar y organizar documentos personales 
 
 ```bash
 # Pipeline completo
-python process_documents.py [--year 2025]
+python process_documents.py all [--year 2025]
 
 # Solo procesar tweets y PDFs
 python process_documents.py tweets pdfs
