@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """
-Procesa todo el pipeline de documentos.
+Procesa el pipeline de documentos.
 
 Uso:
-    python process_documents.py [--year 2026]
+    python process_documents.py [--year 2026] [tweets|pdfs|podcasts|posts]
 """
 import argparse
 from datetime import datetime
@@ -17,6 +17,9 @@ def parse_args():
     p = argparse.ArgumentParser()
     p.add_argument("--year", type=int,
                    help="Usa ese año en lugar del actual")
+    p.add_argument("targets", nargs="*",
+                   choices=["tweets", "pdfs", "podcasts", "posts"],
+                   help="Procesa solo los tipos indicados")
     return p.parse_args()
 
 
@@ -34,13 +37,31 @@ def main():
     # Crear configuración del procesador
     config = DocumentProcessorConfig(base_dir=cfg.BASE_DIR, year=year)
     
-    # Crear y ejecutar procesador
+    # Crear procesador
     processor = DocumentProcessor(config)
-    success = processor.process_all()
-    
+
+    if not args.targets:
+        success = processor.process_all()
+    else:
+        mapping = {
+            "podcasts": processor.process_podcasts,
+            "tweets": processor.process_tweets,
+            "posts": processor.process_instapaper_posts,
+            "pdfs": processor.process_pdfs,
+        }
+        try:
+            for target in args.targets:
+                mapping[target]()
+            processor.register_all_files()
+            print("Pipeline completado ✅")
+            success = True
+        except Exception as e:
+            print(f"❌ Error en el pipeline: {e}")
+            success = False
+
     if not success:
         exit(1)
 
 
 if __name__ == "__main__":
-    main() 
+    main()
