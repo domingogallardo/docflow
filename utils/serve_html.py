@@ -1,6 +1,7 @@
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 import os
 import urllib
+import time
 
 PORT = 8000
 SERVE_DIR = "/Users/domingo/⭐️ Documentación"
@@ -25,17 +26,21 @@ class HTMLOnlyRequestHandler(SimpleHTTPRequestHandler):
             parent = os.path.dirname(displaypath.rstrip("/"))
             r.append(f'<li><a href="{parent or "/"}">../</a></li>')
 
+        now = time.time()
         for name in entries:
             fullname = os.path.join(path, name)
             displayname = linkname = name
+            mtime = os.path.getmtime(fullname)
+            bumped_style = ' style="background-color: yellow;"' if mtime > now else ''
+            prefix = '🔥 ' if mtime > now else ''
             if os.path.isdir(fullname):
                 displayname = name + "/"
                 linkname = name + "/"
-                r.append(f'<li><a href="{linkname}">{displayname}</a></li>')
+                r.append(f'<li{bumped_style}>{prefix}<a href="{linkname}">{displayname}</a></li>')
             elif name.endswith(".html"):
-                r.append(f'<li>📄 <a href="{linkname}">{displayname}</a></li>')
+                r.append(f'<li{bumped_style}>{prefix}📄 <a href="{linkname}">{displayname}</a></li>')
             elif name.endswith(".pdf"):
-                r.append(f'<li>📕 <a href="{linkname}">{displayname}</a></li>')
+                r.append(f'<li{bumped_style}>{prefix}📕 <a href="{linkname}">{displayname}</a></li>')
 
         r.append("</ul><hr></body></html>")
         encoded = "\n".join(r).encode("utf-8", "surrogateescape")
