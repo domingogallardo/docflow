@@ -60,3 +60,8 @@ def test_selective_processing(monkeypatch, tmp_path):
     calls = run_main(monkeypatch, tmp_path, ["tweets", "pdfs"])
     assert calls == ["tweets", "pdfs", "register"]
 
+
+def test_all_processing(monkeypatch, tmp_path):
+    calls = run_main(monkeypatch, tmp_path, ["all"])
+    assert calls == ["all"]
+
