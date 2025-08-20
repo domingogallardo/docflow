@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Tests for process_documents CLI selection."""
 import sys
+import pytest
 import process_documents
 
 
@@ -43,9 +44,16 @@ def run_main(monkeypatch, tmp_path, args):
     return calls
 
 
-def test_default_runs_all(monkeypatch, tmp_path):
-    calls = run_main(monkeypatch, tmp_path, [])
-    assert calls == ["all"]
+def test_no_args_shows_help_and_exits(monkeypatch, tmp_path, capsys):
+    # Sin argumentos debe mostrar ayuda y salir con código 2
+    monkeypatch.setattr(process_documents.cfg, "BASE_DIR", tmp_path)
+    monkeypatch.setenv("DOCPIPE_YEAR", "2025")
+    monkeypatch.setattr(sys, "argv", ["process_documents.py"]) 
+    with pytest.raises(SystemExit) as e:
+        process_documents.main()
+    assert e.value.code == 2
+    captured = capsys.readouterr()
+    assert "usage:" in captured.err.lower()
 
 
 def test_selective_processing(monkeypatch, tmp_path):
