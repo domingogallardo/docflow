@@ -127,24 +127,43 @@ def test_process_podcasts_only(tmp_path):
     assert "update_titles.py" not in executed_scripts
 
 
-def test_bump_special_files(tmp_path):
-    """Los archivos que cumplen la condición especial reciben un bump de fecha."""
+def test_bump_starred_instapaper_html(tmp_path):
+    """Los HTML marcados como 'starred' en Instapaper reciben bump automático."""
 
     incoming = tmp_path / "Incoming"
     incoming.mkdir()
 
-    special_pdf = incoming / "special_report.pdf"
-    special_pdf.write_bytes(b"%PDF-1.4 test content")
-
-    # Configurar una condición que marque como especiales los archivos con 'special' en el nombre
-    config = DocumentProcessorConfig(
-        base_dir=tmp_path, year=2025, special_condition=lambda p: "special" in p.name
+    # Crear un HTML con meta de 'starred'
+    starred_html = incoming / "sample.html"
+    starred_html.write_text(
+        """<!DOCTYPE html>
+        <html data-instapaper-starred=\"true\">
+        <head>
+          <meta charset=\"UTF-8\">
+          <meta name=\"instapaper-starred\" content=\"true\">
+          <title>Sample</title>
+        </head>
+        <body><h1>Sample</h1></body>
+        </html>
+        """,
+        encoding="utf-8",
     )
+
+    config = DocumentProcessorConfig(base_dir=tmp_path, year=2025)
     processor = DocumentProcessor(config)
 
-    processor.process_pdfs()
+    # Evitar ejecutar el pipeline real de Instapaper: simulamos el movimiento
+    def fake_process_instapaper_posts():
+        config.posts_dest.mkdir(parents=True, exist_ok=True)
+        dest = config.posts_dest / starred_html.name
+        dest.write_text(starred_html.read_text(encoding="utf-8"), encoding="utf-8")
+        return [dest]
 
-    moved = config.pdfs_dest / "special_report.pdf"
+    processor.instapaper_processor.process_instapaper_posts = fake_process_instapaper_posts
+
+    processor.process_instapaper_posts()
+
+    moved = config.posts_dest / "sample.html"
     assert moved.exists()
 
     # Debe tener un mtime muy en el futuro (aprox. > 90 años)
