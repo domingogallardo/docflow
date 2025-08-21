@@ -218,11 +218,40 @@ def clean_duplicate_markdown_links(text: str) -> str:
                 path = path[:27] + "..."
             display_text = f"{domain}{path}"
             return f'[{display_text}]({url})'
-        except:
+        except Exception:
             # Si hay algún error, usar un texto genérico
             return f'[Ver enlace]({url})'
-    
+
     return re.sub(duplicate_link_pattern, replace_duplicate_link, text)
+
+
+def is_instapaper_starred_file(file_path: Path) -> bool:
+    """Detecta si un archivo HTML/MD pertenece a un artículo de Instapaper marcado con estrella.
+
+    Criterios:
+    - HTML: meta `<meta name="instapaper-starred" content="true">` o atributo
+      `data-instapaper-starred="true"` o comentario marcador.
+    - Markdown: front matter inicial `instapaper_starred: true`.
+    """
+    try:
+        suffix = file_path.suffix.lower()
+        if suffix in {".html", ".htm"}:
+            content = file_path.read_text(encoding="utf-8", errors="ignore")
+            if re.search(r'<meta\s+name=["\']instapaper-starred["\']\s+content=["\']true["\']', content, re.I):
+                return True
+            if re.search(r'data-instapaper-starred=["\']true["\']', content, re.I):
+                return True
+            if re.search(r'instapaper_starred:\s*true', content, re.I):
+                return True
+            return False
+        if suffix == ".md":
+            # Leer sólo la cabecera (primeros KB)
+            head = file_path.read_text(encoding="utf-8", errors="ignore")[:4096]
+            return bool(re.search(r'^---\s*\n.*?^instapaper_starred:\s*true\s*$.*?^---\s*$', head, re.I | re.M | re.S) or
+                        re.search(r'^instapaper_starred:\s*true\s*$', head, re.I | re.M))
+        return False
+    except Exception:
+        return False
 
 
 def convert_urls_to_links(text: str) -> str:
