@@ -38,8 +38,8 @@ class SubprocessScriptRunner:
 
 class DocumentProcessorConfig:
     """Configuración para el procesador de documentos."""
-    
-    def __init__(self, base_dir: Path, year: int):
+
+    def __init__(self, base_dir: Path, year: int, special_condition=None):
         self.base_dir = base_dir
         self.year = year
         self.incoming = base_dir / "Incoming"
@@ -48,6 +48,9 @@ class DocumentProcessorConfig:
         self.podcasts_dest = base_dir / "Podcasts" / f"Podcasts {year}"
         self.tweets_dest = base_dir / "Tweets" / f"Tweets {year}"
         self.historial = base_dir / "Historial.txt"
+        # Función opcional que determina si un archivo es "especial" y debe
+        # recibir un bump en su fecha de modificación.
+        self.special_condition = special_condition
 
 
 class DocumentProcessor:
@@ -64,12 +67,23 @@ class DocumentProcessor:
         self.moved_posts: List[Path] = []
         self.moved_pdfs: List[Path] = []
         self.moved_tweets: List[Path] = []
+
+    def _bump_if_special(self, files: List[Path]):
+        """Aplica bump de mtime a archivos que cumplan la condición especial."""
+        condition = getattr(self.config, "special_condition", None)
+        if not condition:
+            return
+        special_files = [f for f in files if condition(f)]
+        if special_files:
+            U.bump_files(special_files)
     
     def process_podcasts(self) -> List[Path]:
         """Procesa archivos de podcast con procesador unificado."""
         # Usar el procesador unificado para todo el pipeline de podcasts
         moved_podcasts = self.podcast_processor.process_podcasts()
-        
+
+        self._bump_if_special(moved_podcasts)
+
         self.moved_podcasts = moved_podcasts
         return moved_podcasts
     
@@ -77,19 +91,23 @@ class DocumentProcessor:
         """Procesa posts web descargados de Instapaper con pipeline unificado."""
         # Usar el procesador unificado para todo el pipeline de Instapaper
         moved_posts = self.instapaper_processor.process_instapaper_posts()
-        
+
+        self._bump_if_special(moved_posts)
+
         self.moved_posts = moved_posts
         return moved_posts
     
     def process_pdfs(self) -> List[Path]:
         """Procesa PDFs usando el procesador especializado."""
         moved_pdfs = self.pdf_processor.process_pdfs()
+        self._bump_if_special(moved_pdfs)
         self.moved_pdfs = moved_pdfs
         return moved_pdfs
     
     def process_tweets(self) -> List[Path]:
         """Procesa archivos de tweets usando el procesador especializado."""
         moved_tweets = self.tweet_processor.process_tweets()
+        self._bump_if_special(moved_tweets)
         self.moved_tweets = moved_tweets
         return moved_tweets
     
