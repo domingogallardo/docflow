@@ -32,7 +32,11 @@ class InstapaperProcessor:
         self.max_title_len = 250
         self.num_words = 500
         self.max_bytes_md = 1600
-    
+
+        # Detectar artículos destacados
+        self.starred_ids: set[str] = set()
+
+
     def process_instapaper_posts(self) -> List[Path]:
         """Ejecuta el pipeline completo de procesamiento de posts de Instapaper."""
         print("📄 Procesando posts de Instapaper...")
@@ -85,7 +89,7 @@ class InstapaperProcessor:
                 "password": INSTAPAPER_PASSWORD,
                 "keep_logged_in": "yes"
             })
-            
+
             # Verificar login de manera más robusta
             login_successful = True
             
@@ -160,15 +164,108 @@ class InstapaperProcessor:
         except Exception as e:
             print(f"❌ Error en la descarga de Instapaper: {e}")
             return False
-    
+
+    def _has_star_emoji_prefix(self, s: str) -> bool:
+        """Devuelve True si s comienza con un emoji/ símbolo de estrella común."""
+        if not s:
+            return False
+        s = s.strip()
+        # incluye la variante con selector de variación: '⭐️'
+        STAR_PREFIXES = ("⭐", "⭐️", "★", "✪", "✭")
+        return s.startswith(STAR_PREFIXES)
+
+    def _strip_star_prefix(self, s: str) -> str:
+        """Elimina prefijos de estrella en títulos (⭐, ⭐️, ★, ✪, ✭ + espacios)."""
+        if not s:
+            return s
+        s = s.strip()
+        # U+2B50 ⭐, U+FE0F VS16, U+2605 ★, U+272A ✪, U+272D ✭
+        return re.sub(r'^\s*(?:[\u2B50\u2605\u272A\u272D]\uFE0F?\s*)+', '', s)
+
+    def _is_starred_in_read_html(self, html: str) -> bool:
+        """
+        Detección de 'estrella' en la página /read/<id>.
+        1) Señal principal: emoji de estrella al inicio de <title> o del H1 visible.
+        2) Señales secundarias: enlaces 'unstar', controles con aria-pressed, clases 'on', etc.
+        """
+        try:
+            soup = BeautifulSoup(html, "html.parser")
+
+            # 0) STAR EN <title>
+            page_title = ""
+            if soup.title and soup.title.string:
+                page_title = soup.title.string
+                if self._has_star_emoji_prefix(page_title):
+                    return True
+
+            # 1) STAR EN H1 (algunas plantillas también lo ponen ahí)
+            h1 = soup.select_one("#titlebar h1")
+            if h1:
+                h1_text = h1.get_text(strip=True)
+                if self._has_star_emoji_prefix(h1_text):
+                    return True
+
+            # 2) Enlaces/acciones típicas "unstar"/"unfavorite"
+            for a in soup.find_all("a", href=True):
+                href = a["href"].lower()
+                if "unstar" in href or "unfavorite" in href:
+                    return True
+
+            # 3) Controles con aria-pressed o clases de 'on'
+            for b in soup.find_all(["button", "a"]):
+                cls = " ".join(b.get("class", [])).lower()
+                aria_pressed = (b.get("aria-pressed") or "").lower()
+                aria_label = (b.get("aria-label") or "").lower()
+                title_attr = (b.get("title") or "").lower()
+                data_action = (b.get("data-action") or "").lower()
+
+                if any("star" in x for x in (cls, aria_label, title_attr, data_action)):
+                    if aria_pressed in ("true", "1"):
+                        return True
+                    if any(k in cls for k in ("star-on", "star_on", "starred", "active", "on", "filled", "selected")):
+                        return True
+
+            # 4) SVG con aria-label de 'star' y clase de 'on'
+            for sv in soup.find_all("svg"):
+                aria = (sv.get("aria-label") or "").lower()
+                if "star" in aria and any(k in (sv.get("class") or "").lower() for k in ("on", "filled", "active", "selected", "starred")):
+                    return True
+
+            # 5) Texto visible con 'unstar' en la UI (último recurso)
+            txt = soup.get_text(" ", strip=True).lower()
+            if "unstar" in txt or "quitar estrella" in txt or "desmarcar" in txt:
+                return True
+
+            # Nada encontrado
+            return False
+
+        except Exception:
+            return False
+
+
     def _get_article_ids(self, page=1):
-        """Obtiene IDs de artículos de una página."""
-        r = self.session.get(f"https://www.instapaper.com/u/{page}")
-        print(r.url)
+        """Obtiene IDs de artículos de una página y detecta si están 'starred'."""
+        url = f"https://www.instapaper.com/u/{page}"
+        r = self.session.get(url)
+
         soup = BeautifulSoup(r.text, "html.parser")
-        
-        articles = soup.find(id="article_list").find_all("article")
-        ids = [i["id"].replace("article_", "") for i in articles]
+        container = soup.find(id="article_list")
+        if not container:
+            return [], False
+
+        articles = container.find_all("article")
+
+        ids = []
+        for idx, art in enumerate(articles, start=1):
+            aid = (art.get("id") or "").replace("article_", "")
+            classes = " ".join(art.get("class", []))
+            ids.append(aid) if aid else None
+
+            if aid:
+                is_star = self._is_article_starred(art)
+                if is_star:
+                    self.starred_ids.add(aid)
+
         has_more = soup.find(class_="paginate_older") is not None
         return ids, has_more
     
@@ -176,27 +273,58 @@ class InstapaperProcessor:
         """Descarga un artículo específico."""
         r = self.session.get(f"https://www.instapaper.com/read/{article_id}")
         soup = BeautifulSoup(r.text, "html.parser")
-        
-        title = soup.find(id="titlebar").find("h1").getText()
+
+        title_el = soup.find(id="titlebar").find("h1")
+        raw_title = title_el.getText() if title_el else (soup.title.string if soup.title else f"Instapaper {article_id}")
+        title = self._strip_star_prefix(raw_title)  # ← SANEAMOS AQUÍ
+
         origin = soup.find(id="titlebar").find(class_="origin_line")
-        content = soup.find(id="story").decode_contents()
-        
-        # Limpiar nombre de archivo
-        file_name = "".join([c for c in title if c.isalpha() or c.isdigit() or c == " "]).rstrip()
-        file_name = self._truncate_filename(file_name, ".html")
+        content_node = soup.find(id="story")
+        content = content_node.decode_contents() if content_node else ""
+
+        # --- DETECCIÓN DE ESTRELLA ---
+        is_starred_list = str(article_id) in self.starred_ids
+        is_starred_read = self._is_starred_in_read_html(r.text)
+        is_starred_final = bool(is_starred_list or is_starred_read)
+
+        # (opcional) conserva consistencia interna
+        if is_starred_final and not is_starred_list:
+            self.starred_ids.add(str(article_id))
+
+        # --- NOMBRE DE FICHERO ROBUSTO ---
+        safe = "".join([c for c in title if c.isalpha() or c.isdigit() or c == " "]).strip()
+        if not safe:
+            safe = f"Instapaper {article_id}"
+        file_name = self._truncate_filename(safe, ".html")
         file_path = self.incoming_dir / file_name
-        
-        # Crear HTML
-        html_content = (
-            "<!DOCTYPE html>\n<html>\n<head>\n<meta charset=\"UTF-8\">\n"
-            f"<title>{title}</title>\n"
-            "</head>\n<body>\n"
-            f"<h1>{title}</h1>\n"
-            f"<div id='origin'>{origin} · {article_id}</div>\n"
-            f"{content}\n"
-            "</body>\n</html>"
-        )
-        
+
+        # --- ESCRITURA DE HTML: usa SIEMPRE is_starred_final ---
+        if is_starred_final:
+            html_content = (
+                "<!DOCTYPE html>\n"
+                "<!-- instapaper_starred: true method=read_or_list -->\n"
+                '<html data-instapaper-starred="true">\n'
+                "<head>\n"
+                '<meta charset="UTF-8">\n'
+                '<meta name="instapaper-starred" content="true">\n'
+                f"<title>{title}</title>\n"
+                "</head>\n<body>\n"
+                f"<h1>{title}</h1>\n"
+                f"<div id='origin'>{origin} · {article_id}</div>\n"
+                f"{content}\n"
+                "</body>\n</html>"
+            )
+        else:
+            html_content = (
+                "<!DOCTYPE html>\n<html>\n<head>\n<meta charset=\"UTF-8\">\n"
+                f"<title>{title}</title>\n"
+                "</head>\n<body>\n"
+                f"<h1>{title}</h1>\n"
+                f"<div id='origin'>{origin} · {article_id}</div>\n"
+                f"{content}\n"
+                "</body>\n</html>"
+            )
+
         file_path.write_text(html_content, encoding="utf-8")
         return file_path
     
@@ -223,14 +351,34 @@ class InstapaperProcessor:
         for html_file in html_files:
             try:
                 html_content = html_file.read_text(encoding='utf-8')
-                markdown_content = md(html_content, heading_style="ATX")
+
+                # ¿Está marcado? (solo si existe el meta que pusimos en el HTML)
+                is_starred = bool(re.search(
+                    r'<meta\s+name=["\']instapaper-starred["\']\s+content=["\']true["\']',
+                    html_content, re.I
+                ))
+
+                markdown_body = md(html_content, heading_style="ATX")
+
+                markdown_body = re.sub(
+                    r'^(#{1,6}\s*)(?:[\u2B50\u2605\u272A\u272D]\uFE0F?\s*)+',
+                    r'\1',
+                    markdown_body,
+                    flags=re.MULTILINE
+                )
                 
+                if is_starred:
+                    front_matter = "---\ninstapaper_starred: true\n---\n\n"
+                    markdown_content = front_matter + markdown_body
+                else:
+                    markdown_content = markdown_body  # sin cabecera
+
                 md_file = html_file.with_suffix('.md')
                 md_file.write_text(markdown_content, encoding='utf-8')
-                print(f'✅ Markdown guardado: {md_file}')
+                print(f'✅ Markdown guardado: {md_file} | starred={is_starred}')
             except Exception as e:
                 print(f"❌ Error convirtiendo {html_file}: {e}")
-    
+                    
     def _fix_html_encoding(self):
         """Corrige la codificación de archivos HTML."""
         html_files = [f for f in self.incoming_dir.iterdir() 
@@ -250,7 +398,56 @@ class InstapaperProcessor:
                     print(f"🔧 Codificación actualizada: {html_file}")
             except Exception as e:
                 print(f"❌ Error procesando codificación de {html_file}: {e}")
-    
+
+    def _is_article_starred(self, article) -> bool:
+        """Devuelve True si el artículo del listado aparece marcado con estrella."""
+        try:
+            # 1) clase directa en <article>
+            cls_list = article.get("class", [])
+            cls = " ".join(cls_list)
+            if any("starred" in c.lower() for c in cls_list):
+                return True
+
+            # 2) elementos típicos de estrella
+            selectors = [
+                ".star", ".starred", ".icon-star", ".icon-star-filled",
+                ".action_star", ".star-on", ".star_on", ".starred_icon",
+                ".starButton", ".star-button", ".bookmark_star"
+            ]
+            tags = article.select(", ".join(selectors))
+            for t in tags:
+                tcls = " ".join(t.get("class", []))
+                aria = (t.get("aria-label") or "").lower()
+                title = (t.get("title") or "").lower()
+                if any(k in tcls.lower() for k in ["starred", "star-on", "star_on", "filled", "active", "on"]):
+                    return True
+                if any(w in aria for w in ("star", "favorito", "estrella", "like")):
+                    return True
+                if any(w in title for w in ("star", "favorito", "estrella", "like")):
+                    return True
+
+            # 3) heurística por href
+            for a in article.find_all("a", href=True):
+                href = a["href"]
+                if "/star/" in href or "/unstar/" in href:
+                    return True
+
+            # 4) SVG/iconos
+            svgs = article.find_all("svg")
+            for sv in svgs:
+                aria = (sv.get("aria-label") or "").lower()
+                if "star" in aria or "estrella" in aria:
+                    return True
+
+            # 5) Texto cercano
+            txt = (article.get_text(" ", strip=True) or "").lower()
+            if "starred" in txt or "favorito" in txt or "marcado con estrella" in txt:
+                return True
+
+            return False
+        except Exception:
+            return False
+
     def _has_charset_meta(self, content):
         """Verifica si el HTML ya tiene meta charset."""
         charset_regex = re.compile(
