@@ -9,6 +9,72 @@ from unittest.mock import Mock, patch
 from instapaper_processor import InstapaperProcessor
 
 
+def test_star_prefix_stripping_variants():
+    """Quita prefijos de estrella comunes del título."""
+    p = InstapaperProcessor(Path("/tmp/incoming"), Path("/tmp/dest"))
+    cases = [
+        ("⭐ Title", "Title"),
+        ("⭐️ Title", "Title"),
+        ("★ Title", "Title"),
+        ("✪ Title", "Title"),
+        ("✭ Title", "Title"),
+        ("  ⭐   Title", "Title"),
+        ("No Star Title", "No Star Title"),
+    ]
+    for raw, expected in cases:
+        assert p._strip_star_prefix(raw) == expected
+
+
+def test_instapaper_star_detection_and_propagation_from_read_html(tmp_path):
+    """Detecta estrella en /read y la propaga a HTML y Markdown."""
+    incoming = tmp_path / "Incoming"
+    destination = tmp_path / "Posts"
+    incoming.mkdir()
+    destination.mkdir()
+
+    # Página de lectura con estrella en <title> y en H1
+    read_html = """<!DOCTYPE html>
+    <html>
+    <head>
+      <title>⭐ Starred Sample</title>
+    </head>
+    <body>
+      <div id=\"titlebar\">
+        <h1>⭐ Starred Sample</h1>
+        <div class=\"origin_line\">Example.com</div>
+      </div>
+      <div id=\"story\"><p>Body</p></div>
+    </body>
+    </html>"""
+
+    processor = InstapaperProcessor(incoming, destination)
+
+    # Mockear la sesión HTTP
+    mock_resp = Mock()
+    mock_resp.text = read_html
+    processor.session = Mock()
+    processor.session.get.return_value = mock_resp
+
+    # Descargar y escribir el HTML del artículo
+    html_path = processor._download_article("12345")
+    html_text = html_path.read_text(encoding="utf-8")
+
+    # Debe contener la marca de estrella y atributo en <html>
+    assert '<meta name="instapaper-starred" content="true">' in html_text
+    assert 'data-instapaper-starred="true"' in html_text
+    # El título debe estar limpio (sin prefijo de estrella)
+    assert "<title>Starred Sample</title>" in html_text
+    assert "<h1>Starred Sample</h1>" in html_text
+
+    # Convertir a Markdown debe añadir front matter
+    processor._convert_html_to_markdown()
+    md_path = html_path.with_suffix('.md')
+    md_text = md_path.read_text(encoding="utf-8")
+    assert md_text.startswith("---\ninstapaper_starred: true\n---\n")
+    # No debe quedar estrella al inicio del encabezado
+    assert not md_text.splitlines()[3].startswith("# ⭐")
+
+
 def test_instapaper_processor_with_existing_html(tmp_path):
     """Test que verifica el procesamiento de archivos HTML existentes (sin descarga)."""
     
