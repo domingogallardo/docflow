@@ -35,6 +35,7 @@ El script principal procesa automáticamente:
 - ✅ Márgenes del 6% aplicados para mejor lectura
 - ✅ Codificación HTML corregida
 - ✅ Nombres de archivo limpio (sin caracteres problemáticos)
+- ✅ Marcado de artículos destacados (estrella) propagado a HTML/MD
 
 ### 🎧 Podcasts de Snipd  
 **Entrada:** Archivos Markdown exportados desde Snipd  
@@ -125,7 +126,26 @@ export INSTAPAPER_PASSWORD="tu_contraseña"
 pytest tests/ -v
 ```
 
-31 tests incluidos para validar todos los procesadores y utilidades.
+32 tests incluidos para validar todos los procesadores y utilidades.
+
+---
+
+## ⭐ Instapaper: Artículos Destacados
+
+- Detección: se identifica si un artículo está marcado con estrella tanto en el listado (`/u/<página>`) como en la página de lectura (`/read/<id>`). Se consideran:
+  - Estrella al inicio del `<title>` o del `h1` visible (⭐, ⭐️, ★, ✪, ✭).
+  - Indicadores de UI: enlaces `unstar`, controles con `aria-pressed=true`, clases `starred/on/filled`, o SVGs relacionados.
+- Normalización del título: cualquier prefijo de estrella en el título se elimina para nombrar y mostrar sin el emoji.
+- Salida HTML: si está destacado, se añade
+  - `<meta name="instapaper-starred" content="true">`
+  - Atributo en la raíz: `<html data-instapaper-starred="true">`
+  - Comentario de marca: `<!-- instapaper_starred: true -->`
+- Salida Markdown: se incluye front matter YAML al inicio:
+  - `---\ninstapaper_starred: true\n---`
+
+Uso downstream:
+- Filtrar Markdown por front matter (`instapaper_starred: true`) en tu generador estático o script.
+- Para HTML, buscar el meta `<meta name="instapaper-starred" content="true">` o el atributo `data-instapaper-starred="true"` para resaltar o priorizar.
 
 ---
 
