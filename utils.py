@@ -1,6 +1,6 @@
 from pathlib import Path
 from config import BASE_DIR, INCOMING, HISTORIAL
-from datetime import datetime
+from datetime import datetime, timedelta
 import os, shutil, logging, re
 
 def list_files(exts, root=INCOMING):
@@ -87,6 +87,29 @@ def move_files(files, dest):
         shutil.move(str(f), new_path)
         moved.append(new_path)
     return moved
+
+
+def bump_files(files, years: int = 100):
+    """Ajusta el mtime de los archivos a (ahora + years) + i segundos.
+
+    Replica el comportamiento de ``bump.applescript`` para poder
+    "empinar" archivos desde Python. Los tiempos de modificación se
+    fijan en una fecha en el futuro y se incrementan un segundo por
+    archivo para mantener un orden estable.
+
+    Args:
+        files: lista de ``Path`` de archivos a modificar.
+        years: número de años a sumar a la fecha actual (por defecto 100).
+    """
+    if not files:
+        return
+
+    base_time = datetime.now() + timedelta(days=365 * years)
+    base_ts = int(base_time.timestamp())
+
+    for i, f in enumerate(files, start=1):
+        ts = base_ts + i
+        os.utime(f, (ts, ts))
 
 def register_paths(paths, base_dir: Path = None, historial_path: Path = None):
     """Registra rutas en el historial. Acepta base_dir y historial_path configurables para tests."""
