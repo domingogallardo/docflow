@@ -4,6 +4,7 @@ Tests para DocumentProcessor
 """
 import pytest
 from pathlib import Path
+import time
 
 from pipeline_manager import DocumentProcessor, DocumentProcessorConfig
 
@@ -120,10 +121,35 @@ def test_process_podcasts_only(tmp_path):
     # Scripts de podcasts ya NO se ejecutan independientemente (están integrados en PodcastProcessor)
     assert "clean_snip.py" not in executed_scripts
     assert "md2html.py" not in executed_scripts
-    
+
     # Scripts de Instapaper tampoco (están integrados)
     assert "scrape.py" not in executed_scripts
     assert "update_titles.py" not in executed_scripts
+
+
+def test_bump_special_files(tmp_path):
+    """Los archivos que cumplen la condición especial reciben un bump de fecha."""
+
+    incoming = tmp_path / "Incoming"
+    incoming.mkdir()
+
+    special_pdf = incoming / "special_report.pdf"
+    special_pdf.write_bytes(b"%PDF-1.4 test content")
+
+    # Configurar una condición que marque como especiales los archivos con 'special' en el nombre
+    config = DocumentProcessorConfig(
+        base_dir=tmp_path, year=2025, special_condition=lambda p: "special" in p.name
+    )
+    processor = DocumentProcessor(config)
+
+    processor.process_pdfs()
+
+    moved = config.pdfs_dest / "special_report.pdf"
+    assert moved.exists()
+
+    # Debe tener un mtime muy en el futuro (aprox. > 90 años)
+    future_threshold = time.time() + 90 * 365 * 24 * 3600
+    assert moved.stat().st_mtime > future_threshold
 
 
  
