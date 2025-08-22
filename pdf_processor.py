@@ -30,5 +30,5 @@ class PDFProcessor:
         
         if moved_pdfs:
             print(f"📚 {len(moved_pdfs)} PDF(s) movidos a {self.destination_dir}")
-        
-        return moved_pdfs 
+
+        return moved_pdfs
