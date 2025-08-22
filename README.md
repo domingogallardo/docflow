@@ -83,7 +83,7 @@ El script principal procesa automáticamente:
 
 **Python 3.10+** y librerías:
 ```bash
-pip install requests beautifulsoup4 markdownify anthropic pillow pytest
+pip install requests beautifulsoup4 markdownify anthropic pillow pytest markdown
 ```
 
 **Variables de entorno:**

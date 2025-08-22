@@ -3,7 +3,6 @@
 Convierte archivos Markdown a HTML en el directorio Incoming/
 Aplica el mismo procesamiento que los podcasts: conversión + márgenes
 """
-import markdown
 from pathlib import Path
 import config as cfg
 import utils as U

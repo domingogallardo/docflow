@@ -1,7 +1,7 @@
 from pathlib import Path
 from config import BASE_DIR, INCOMING, HISTORIAL
 from datetime import datetime, timedelta
-import os, shutil, logging, re
+import os, shutil, re
 
 
 def list_files(exts, root=INCOMING):
@@ -138,11 +138,7 @@ def register_paths(paths, base_dir: Path = None, historial_path: Path = None):
         old_content = ""
     historial_path.write_text("".join(lines_new) + old_content, encoding="utf-8")
 
-def setup_logging(level="INFO"):
-    logging.basicConfig(
-        level=getattr(logging, level.upper()),
-        format="%(asctime)s | %(levelname)s | %(message)s",
-    )
+# Nota: logging centralizado eliminado por no usarse
 
 def add_margins_to_html_files(directory: Path, file_filter=None):
     """
