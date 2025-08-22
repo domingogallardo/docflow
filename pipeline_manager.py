@@ -91,8 +91,6 @@ class DocumentProcessor:
             # No bloquear el pipeline si falla la detección
             pass
 
-        # Bump opcional por condición especial (si se configuró)
-
         self.moved_posts = moved_posts
         return moved_posts
     
