@@ -1,39 +1,15 @@
 #!/usr/bin/env python3
 """
-DocumentProcessor - Clase principal para el procesamiento de documentos con configuración inyectable
+DocumentProcessor - Clase principal para el procesamiento de documentos
 """
 from pathlib import Path
-from typing import List, Protocol
-import subprocess
-import sys
+from typing import List
 
 import utils as U
 from pdf_processor import PDFProcessor
 from instapaper_processor import InstapaperProcessor
 from podcast_processor import PodcastProcessor
 from tweet_processor import TweetProcessor
-
-
-class ScriptRunner(Protocol):
-    """Interfaz para ejecutar scripts, fácil de mockear en tests."""
-    def run_script(self, script_name: str, *args) -> bool:
-        ...
-    def run_script_with_dir(self, script_name: str, directory: str) -> bool:
-        ...
-
-
-class SubprocessScriptRunner:
-    """Implementación real usando subprocess."""
-    
-    def run_script(self, script_name: str, *args) -> bool:
-        try:
-            subprocess.run([sys.executable, script_name] + list(args), check=True)
-            return True
-        except subprocess.CalledProcessError:
-            return False
-    
-    def run_script_with_dir(self, script_name: str, directory: str) -> bool:
-        return self.run_script(script_name, "--dir", directory)
 
 
 class DocumentProcessorConfig:
@@ -53,9 +29,8 @@ class DocumentProcessorConfig:
 class DocumentProcessor:
     """Procesador principal de documentos con lógica modular y configurable."""
     
-    def __init__(self, config: DocumentProcessorConfig, script_runner: ScriptRunner = None):
+    def __init__(self, config: DocumentProcessorConfig):
         self.config = config
-        self.script_runner = script_runner or SubprocessScriptRunner()
         self.pdf_processor = PDFProcessor(self.config.incoming, self.config.pdfs_dest)
         self.instapaper_processor = InstapaperProcessor(self.config.incoming, self.config.posts_dest)
         self.podcast_processor = PodcastProcessor(self.config.incoming, self.config.podcasts_dest)

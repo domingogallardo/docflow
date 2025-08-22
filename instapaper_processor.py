@@ -401,7 +401,7 @@ class InstapaperProcessor:
         U.add_margins_to_html_files(self.incoming_dir)
     
     def _get_image_width(self, src):
-        """Obtiene el ancho de una imagen."""
+        """Obtiene el ancho de una imagen, soportando URLs remotas y rutas locales."""
         try:
             if src.startswith('http'):
                 response = requests.get(src, timeout=1)
