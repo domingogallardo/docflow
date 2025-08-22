@@ -117,3 +117,6 @@ URL aislada: https://x.com/SchmidhuberAI/status/1950194864940835159"""
     
     # Verificar que la URL aislada se convirtió a enlace
     assert "[https://x.com/SchmidhuberAI/status/1950194864940835159](https://x.com/SchmidhuberAI/status/1950194864940835159)" in result 
+
+
+# (tests de is_instapaper_starred_file se movieron a tests/test_instapaper_starred_utils.py
