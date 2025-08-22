@@ -166,21 +166,9 @@ class PodcastProcessor:
                 print(f"❌ Error convirtiendo {md_file}: {e}")
     
     def _md_to_html(self, md_text: str) -> str:
-        """Convierte texto Markdown en HTML usando funciones centralizadas."""
-        return U.markdown_to_html(md_text).split('<body>\n')[1].split('\n</body>')[0]
+        """Convierte texto Markdown en HTML y devuelve solo el contenido."""
+        return U.markdown_to_html_body(md_text)
     
     def _wrap_html(self, title: str, body: str) -> str:
-        """Devuelve un documento HTML con cabecera mínima, UTF-8 y estilos CSS."""
-        return (
-            "<!DOCTYPE html>\n"
-            "<html>\n<head>\n<meta charset=\"UTF-8\">\n"
-            f"<title>{title}</title>\n"
-            "<style>\n"
-            f"{U.get_base_css()}"
-            "blockquote { border-left: 4px solid #667eea; }\n"
-            "a { color: #667eea; }\n"
-            "</style>\n"
-            "</head>\n<body>\n"
-            f"{body}\n"
-            "</body>\n</html>\n"
-        ) 
+        """Envuelve el contenido en un HTML con estilos y color de podcast."""
+        return U.wrap_html(title, body, "#667eea")

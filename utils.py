@@ -374,8 +374,19 @@ def markdown_to_html(md_text: str, title: str = None) -> str:
         f"{html_body}\n"
         "</body>\n</html>\n"
     )
-    
+
     return full_html
+
+
+def extract_html_body(html: str) -> str:
+    """Extrae el contenido dentro de la etiqueta <body>."""
+    body = re.search(r"<body>(.*)</body>", html, re.DOTALL | re.IGNORECASE)
+    return body.group(1).strip() if body else html
+
+
+def markdown_to_html_body(md_text: str, title: str = None) -> str:
+    """Convierte Markdown a HTML y devuelve solo el contenido del <body>."""
+    return extract_html_body(markdown_to_html(md_text, title))
 
 
 def get_base_css() -> str:
@@ -387,4 +398,21 @@ def get_base_css() -> str:
         "a { text-decoration: none; }\n"
         "a:hover { text-decoration: underline; }\n"
         "hr { border: none; border-top: 1px solid #eee; margin: 30px 0; }\n"
+    )
+
+
+def wrap_html(title: str, body: str, accent_color: str) -> str:
+    """Envuelve contenido en un HTML mínimo con estilos base y color destacado."""
+    return (
+        "<!DOCTYPE html>\n"
+        "<html>\n<head>\n<meta charset=\"UTF-8\">\n"
+        f"<title>{title}</title>\n"
+        "<style>\n"
+        f"{get_base_css()}"
+        f"blockquote {{ border-left: 4px solid {accent_color}; }}\n"
+        f"a {{ color: {accent_color}; }}\n"
+        "</style>\n"
+        "</head>\n<body>\n"
+        f"{body}\n"
+        "</body>\n</html>\n"
     )
