@@ -3,6 +3,7 @@ from config import BASE_DIR, INCOMING, HISTORIAL
 from datetime import datetime, timedelta
 import os, shutil, logging, re
 
+
 def list_files(exts, root=INCOMING):
     return [p for p in Path(root).rglob("*") if p.suffix.lower() in exts]
 
@@ -89,6 +90,14 @@ def move_files(files, dest):
     return moved
 
 
+def _add_years(dt: datetime, years: int) -> datetime:
+    """Suma años de calendario. Si cae en 29-feb y no es bisiesto, usa 28-feb."""
+    try:
+        return dt.replace(year=dt.year + years)
+    except ValueError:
+        # Caso 29-feb → 28-feb en año no bisiesto
+        return dt.replace(month=2, day=28, year=dt.year + years)
+    
 def bump_files(files, years: int = 100):
     """Ajusta el mtime de los archivos a (ahora + years) + i segundos.
 
@@ -103,13 +112,11 @@ def bump_files(files, years: int = 100):
     """
     if not files:
         return
-
-    base_time = datetime.now() + timedelta(days=365 * years)
+    base_time = _add_years(datetime.now().replace(microsecond=0), years)
     base_ts = int(base_time.timestamp())
-
     for i, f in enumerate(files, start=1):
         ts = base_ts + i
-        os.utime(f, (ts, ts))
+        os.utime(f, (ts, ts))  # atime, mtime
 
 def register_paths(paths, base_dir: Path = None, historial_path: Path = None):
     """Registra rutas en el historial. Acepta base_dir y historial_path configurables para tests."""
