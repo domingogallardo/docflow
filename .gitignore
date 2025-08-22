@@ -1,4 +1,5 @@
 .DS_Store
+.pytest_tmp
 failed.txt
 procesados.txt
 __pycache__

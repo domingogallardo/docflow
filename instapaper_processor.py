@@ -15,7 +15,7 @@ from markdownify import markdownify as md
 from PIL import Image
 from io import BytesIO
 
-from config import INCOMING, INSTAPAPER_USERNAME, INSTAPAPER_PASSWORD, ANTHROPIC_KEY
+from config import INSTAPAPER_USERNAME, INSTAPAPER_PASSWORD, ANTHROPIC_KEY
 
 
 class InstapaperProcessor:
