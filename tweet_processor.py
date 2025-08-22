@@ -69,15 +69,9 @@ class TweetProcessor:
             # Leer contenido Markdown
             md_text = md_file.read_text(encoding="utf-8")
             
-            # Convertir a HTML usando las utilidades existentes
-            html_body = U.markdown_to_html(md_text)
-            
-            # Extraer solo el contenido del body
-            if '<body>' in html_body and '</body>' in html_body:
-                body_content = html_body.split('<body>')[1].split('</body>')[0].strip()
-            else:
-                body_content = html_body
-            
+            # Convertir a HTML y extraer el cuerpo
+            body_content = U.markdown_to_html_body(md_text)
+
             # Crear HTML completo con estructura mínima
             full_html = self._wrap_html(md_file.stem, body_content)
             
@@ -94,19 +88,7 @@ class TweetProcessor:
 
     def _wrap_html(self, title: str, body: str) -> str:
         """Crea un documento HTML completo con título y estilos básicos."""
-        return (
-            "<!DOCTYPE html>\n"
-            "<html>\n<head>\n<meta charset=\"UTF-8\">\n"
-            f"<title>{title}</title>\n"
-            "<style>\n"
-            f"{U.get_base_css()}"
-            "blockquote { border-left: 4px solid #1DA1F2; }\n"
-            "a { color: #1DA1F2; }\n"
-            "</style>\n"
-            "</head>\n<body>\n"
-            f"{body}\n"
-            "</body>\n</html>\n"
-        )
+        return U.wrap_html(title, body, "#1DA1F2")
     
     def _move_files_with_replacement(self, files: List[Path], dest: Path) -> List[Path]:
         """Mueve archivos al destino, reemplazando archivos existentes con el mismo nombre."""
@@ -126,5 +108,5 @@ class TweetProcessor:
             # Mover el nuevo archivo
             shutil.move(str(f), new_path)
             moved.append(new_path)
-        
-        return moved 
+
+        return moved
