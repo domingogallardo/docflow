@@ -16,6 +16,11 @@ This repository automates collecting and organizing personal documents (Instapap
 - Tests (verbose): `pytest -v`
 - Targeted tests: `pytest tests/test_podcast_processor.py -q`
 
+## Instapaper Starred & Bump
+- Star marking: to mark an Instapaper article as highlighted, simply add a star (⭐) at the beginning of its title in Instapaper.
+- Propagation: the pipeline normalizes the title (removes the star for naming), adds `data-instapaper-starred="true"` and `<meta name="instapaper-starred" content="true">` to HTML, and `instapaper_starred: true` front matter to Markdown.
+- Auto-bump: starred Instapaper HTML files are automatically bumped (their `mtime` is set to the future) so they sort to the top in date-ordered listings. The local server `utils/serve_docs.py` highlights bumped files (🔥) and allows Unbump from the overlay.
+
 ## Coding Style & Naming
 - Python 3.10+; 4-space indentation; keep functions small and cohesive.
 - Use type hints where practical and module-level docstrings.

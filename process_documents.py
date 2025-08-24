@@ -4,6 +4,11 @@ Procesa el pipeline de documentos.
 
 Uso:
     python process_documents.py [--year 2026] [tweets|pdfs|podcasts|posts|all]
+
+Notas:
+- Los artículos HTML de Instapaper marcados como destacados se bumpean automáticamente
+  (se ajusta su mtime al futuro) para que aparezcan arriba en listados por fecha.
+- Para destacar en Instapaper: basta con añadir una estrella (⭐) al inicio del título.
 """
 import argparse
 from datetime import datetime
@@ -14,7 +19,17 @@ import config as cfg
 
 
 def parse_args():
-    p = argparse.ArgumentParser()
+    p = argparse.ArgumentParser(
+        description=(
+            "Pipeline de documentos: podcasts, tweets, Instapaper y PDFs. "
+            "Los HTML de Instapaper destacados se bumpean automáticamente."
+        ),
+        epilog=(
+            "Para marcar un artículo como destacado en Instapaper, añade una estrella (⭐) "
+            "al inicio del título. El pipeline lo detecta, propaga la marca a HTML/MD y "
+            "bumpéa el HTML para priorizarlo en listados por fecha."
+        ),
+    )
     p.add_argument("--year", type=int,
                    help="Usa ese año en lugar del actual")
     p.add_argument(

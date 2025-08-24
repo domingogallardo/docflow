@@ -54,6 +54,9 @@ class DocumentProcessor:
         moved_posts = self.instapaper_processor.process_instapaper_posts()
 
         # Bump automático: solo HTML marcados como "starred" por Instapaper
+        # Nota para contribuidores: un artículo se considera "destacado" si en Instapaper
+        # se le añade una ⭐ al inicio del título. Al bumpear ajustamos su mtime al futuro
+        # para que aparezca arriba en listados ordenados por fecha.
         try:
             from utils import is_instapaper_starred_file
             starred_htmls = [

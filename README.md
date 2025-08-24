@@ -39,6 +39,7 @@ El script principal procesa automáticamente:
 - ✅ Codificación HTML corregida
 - ✅ Nombres de archivo limpio (sin caracteres problemáticos)
 - ✅ Marcado de artículos destacados (estrella) propagado a HTML/MD
+- ✅ Si el artículo está destacado, el HTML se bumpea automáticamente (ajuste de mtime al futuro) para que aparezca arriba en listados por fecha
 
 ### 🎧 Podcasts de Snipd  
 **Entrada:** Archivos Markdown exportados desde Snipd  
@@ -149,6 +150,13 @@ pytest tests/ -v
   - Comentario de marca: `<!-- instapaper_starred: true -->`
 - Salida Markdown: se incluye front matter YAML al inicio:
   - `---\ninstapaper_starred: true\n---`
+
+### Cómo preparar el artículo en Instapaper
+- Basta con añadir una estrella (⭐) al inicio del título del artículo en Instapaper. Con eso es suficiente para que el pipeline lo detecte como destacado.
+
+### Bump automático de HTML destacados
+- Los artículos destacados se bumpean automáticamente al terminar el procesamiento: se ajusta su `mtime` al futuro para que queden arriba en listados ordenados por fecha (por ejemplo, en Finder o en el servidor `utils/serve_docs.py`).
+- En el servidor de lectura (`utils/serve_docs.py`), los archivos bumpeados se resaltan con 🔥 y puedes hacer Unbump desde el overlay (atajos: `u` o ⌘/Ctrl+U).
 
 Uso downstream:
 - Filtrar Markdown por front matter (`instapaper_starred: true`) en tu generador estático o script.
