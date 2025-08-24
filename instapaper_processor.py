@@ -481,12 +481,22 @@ class InstapaperProcessor:
                 # Extraer todo el texto de los bloques
                 parts = []
                 for block in getattr(resp, "content", []) or []:
-                    # SDK nuevo: objetos con .type/.text; SDK antiguo: dicts
+                    # SDK nuevo: objetos con .type/.text; SDK antiguo: dicts; tests: Mocks con .text
                     if getattr(block, "type", None) == "text":
-                        parts.append(block.text or "")
+                        parts.append(getattr(block, "text", "") or "")
+                    elif hasattr(block, "text"):
+                        parts.append(getattr(block, "text", "") or "")
                     elif isinstance(block, dict) and block.get("type") == "text":
                         parts.append(block.get("text", ""))
                 text = "".join(parts).strip()
+                # Fallback ultra-compatible (por si el SDK devuelve un único bloque)
+                if not text:
+                    content = getattr(resp, "content", None)
+                    if content:
+                        first = content[0]
+                        t = getattr(first, "text", None)
+                        if t:
+                            text = str(t).strip()
                 if not text:
                     raise RuntimeError("Respuesta vacía de Anthropic")
                 return text
