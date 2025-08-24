@@ -15,6 +15,9 @@ python process_documents.py tweets pdfs
 
 # Solo convertir archivos .md a HTML
 python md_to_html.py
+
+# Servir HTML/PDF con overlay de Bump/Unbump
+PORT=8000 SERVE_DIR="/Users/domingo/⭐️ Documentación" python utils/serve_docs.py
 ```
 
 El script principal procesa automáticamente:
@@ -30,7 +33,7 @@ El script principal procesa automáticamente:
 ### 📄 Artículos de Instapaper
 **Entrada:** Artículos guardados en tu cuenta de Instapaper  
 **Resultado:** Archivos HTML y Markdown listos para lectura con:
-- ✅ Títulos generados automáticamente con IA
+- ✅ Títulos generados automáticamente con IA (ES/EN, con reintentos y fallback)
 - ✅ Imágenes redimensionadas (max 300px ancho)
 - ✅ Márgenes del 6% aplicados para mejor lectura
 - ✅ Codificación HTML corregida
@@ -109,7 +112,11 @@ export INSTAPAPER_PASSWORD="tu_contraseña"
 | `utils.py` | Utilidades comunes |
 
 ### Utilidades adicionales
-- `utils/serve_html.py` - Servidor web local (lista directorios, `.html` y `.pdf` ordenados por mtime desc.)
+- `utils/serve_docs.py` - Servidor local de lectura para `.html` y `.pdf` con:
+  - Overlay en páginas HTML para hacer Bump/Unbump del archivo abierto (botón y atajos: b / u / l y ⌘/Ctrl+B, ⌘/Ctrl+U)
+  - Listado de carpetas/archivos ordenado por mtime (desc), resaltando ficheros bump con 🔥
+  - Assets del overlay servidos como ficheros externos (evita CSP inline). Desactivar overlay con `?raw=1`
+  - Config por entorno: `PORT` (8000), `SERVE_DIR` (ruta base), `BUMP_YEARS` (100)
 - `utils/rebuild_historial.py` - Reconstruir historial
 - `utils/update_font.py` - Actualizar tipografía en archivos HTML
 - `utils/borrar_cortos.py` - Eliminar documentos cortos
