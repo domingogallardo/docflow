@@ -14,6 +14,7 @@ from bs4 import BeautifulSoup
 from markdownify import markdownify as md
 from PIL import Image
 from io import BytesIO
+import random 
 
 from config import INSTAPAPER_USERNAME, INSTAPAPER_PASSWORD, ANTHROPIC_KEY
 
@@ -412,7 +413,7 @@ class InstapaperProcessor:
             return img.width
         except Exception:
             return None
-    
+        
     def _update_titles_with_ai(self):
         """Genera títulos atractivos usando IA para archivos Markdown."""
         done = self._load_done_titles()
@@ -429,8 +430,7 @@ class InstapaperProcessor:
                 old_title, snippet = self._extract_content(md_file)
                 lang = self._detect_language(" ".join(snippet.split()[:20]))
                 new_title = self._generate_title(snippet, lang)
-                
-                print(f"📄 {old_title} → {new_title}")
+                print(f"📄 {old_title} → {new_title} [{lang}]")
                 
                 md_final = self._rename_file_pair(md_file, new_title)
                 self._mark_title_done(md_final)
@@ -440,6 +440,7 @@ class InstapaperProcessor:
                 print(f"❌ Error generando título para {md_file}: {e}")
         
         print("🤖 Títulos actualizados ✅")
+
     
     def _load_done_titles(self) -> set[str]:
         """Carga archivos ya procesados para títulos."""
@@ -463,36 +464,95 @@ class InstapaperProcessor:
                     break
         snippet = " ".join(words[:self.num_words]).encode("utf-8")[:self.max_bytes_md].decode("utf-8", "ignore")
         return raw_name, snippet
-    
-    def _detect_language(self, text20: str) -> str:
-        """Detecta el idioma del texto."""
-        prompt = f"Identifica si el texto es español o inglés.\n\nTexto:\n{text20}\n\nIdioma:"
-        resp = self.anthropic_client.messages.create(
-            model="claude-3-5-haiku-20241022",
-            max_tokens=5,
-            system="Responde únicamente español o inglés, en minúsculas.",
-            messages=[{"role": "user", "content": prompt}]
-        )
-        return "español" if "español" in resp.content[0].text.lower() else "inglés"
-    
-    def _generate_title(self, snippet: str, lang: str) -> str:
-        """Genera un título atractivo usando IA."""
-        prompt = (
-            f"Dado el siguiente contenido, genera un título atractivo (máx {self.max_title_len} "
-            f"caracteres) en {lang}. Contenido:\n{snippet}\n\nTítulo:"
-        )
-        resp = self.anthropic_client.messages.create(
-            model="claude-3-5-haiku-20241022",
-            max_tokens=50,
-            system="Devuelve solo el título en una línea. Solo el título, sin ninguna indicación adicional del estilo de 'Aquí tienes un título atractivo'. Si detectas el nombre de la newsletter, del autor del post o del repositorio o sitio web en el que se ha publicado el artículo, ponlo como primera parte del título, separándolo del resto con un guión. El nombre del autor del post suele estar al comienzo del artículo.",
-            messages=[{"role": "user", "content": prompt}]
-        ).content[0].text.strip()
         
-        # Limpiar caracteres problemáticos
-        title = resp.replace('"', '').replace('#', '').lstrip().strip()
+    # Helper común para llamar a Anthropic con reintentos
+    def _anthropic_text(self, *, system: str, prompt: str, max_tokens: int, retries: int = 6) -> str:
+        delay = 1.0
+        last_err = None
+        for attempt in range(1, retries + 1):
+            try:
+                resp = self.anthropic_client.messages.create(
+                    model="claude-3-5-haiku-20241022",
+                    max_tokens=max_tokens,
+                    system=system,
+                    messages=[{"role": "user", "content": prompt}],
+                    timeout=30,  # por si hay cuelgues de red
+                )
+                # Extraer todo el texto de los bloques
+                parts = []
+                for block in getattr(resp, "content", []) or []:
+                    # SDK nuevo: objetos con .type/.text; SDK antiguo: dicts
+                    if getattr(block, "type", None) == "text":
+                        parts.append(block.text or "")
+                    elif isinstance(block, dict) and block.get("type") == "text":
+                        parts.append(block.get("text", ""))
+                text = "".join(parts).strip()
+                if not text:
+                    raise RuntimeError("Respuesta vacía de Anthropic")
+                return text
+            except Exception as e:
+                last_err = e
+                # Clasificar errores transitorios por código/status si está disponible
+                status = getattr(e, "status_code", None) or getattr(getattr(e, "response", None), "status_code", None)
+                msg = str(e).lower()
+                transient = (
+                    (isinstance(status, int) and status in (429, 500, 502, 503, 504, 529)) or
+                    "overloaded" in msg or "timeout" in msg or "temporarily unavailable" in msg
+                )
+                if attempt < retries and transient:
+                    time.sleep(delay + random.uniform(0, 0.5))
+                    delay = min(delay * 2, 20)
+                    continue
+                raise  # no transitorio o agotamos reintentos
+        # por si acaso
+        raise last_err
+
+    def _detect_language(self, text20: str) -> str:
+        """
+        Detecta si el texto está en español o inglés.
+        1) Pregunta al modelo (reintentando con backoff).
+        2) Si la respuesta no es clara, usa una heurística simple.
+        """
+        system = "Responde EXACTAMENTE una palabra: 'español' o 'inglés'. Sin comillas, sin puntuación."
+        prompt = f"Indica el idioma del siguiente texto (español o inglés):\n\n{text20}\n\nIdioma:"
+        try:
+            resp = self._anthropic_text(system=system, prompt=prompt, max_tokens=3)
+            t = resp.strip().lower()
+            if "español" in t or "espanol" in t:
+                return "español"
+            if "inglés" in t or "ingles" in t or "english" in t:
+                return "inglés"
+        except Exception:
+            pass  # caer al fallback
+
+        # Fallback heurístico muy simple
+        if re.search(r"[áéíóúñ¿¡]", text20, re.I):
+            return "español"
+        return "inglés"
+
+    def _generate_title(self, snippet: str, lang: str) -> str:
+        """
+        Genera un título en el idioma indicado (lang ∈ {'español','inglés'}).
+        Usa el helper con reintentos.
+        """
+        system = (
+            f"Devuelve SOLO un título en una línea y nada más. "
+            f"Escríbelo en {lang}. "
+            "Si detectas el nombre de la newsletter, del autor o del repositorio/sitio, "
+            "ponlo al inicio y sepáralo con un guion. "
+            f"Máx {self.max_title_len} caracteres."
+        )
+        prompt = (
+            "Genera un título atractivo para el siguiente contenido.\n\n"
+            f"Contenido:\n{snippet}\n\nTítulo:"
+        )
+        resp = self._anthropic_text(system=system, prompt=prompt, max_tokens=64)
+        # Limpieza
+        title = resp.replace('"', '').replace('#', '').strip()
         for bad in [":", ".", "/"]:
             title = title.replace(bad, "-")
         return re.sub(r"\s+", " ", title)[:self.max_title_len]
+
     
     def _rename_file_pair(self, md_path: Path, new_title: str) -> Path:
         """Renombra archivos .md y .html asociados."""
