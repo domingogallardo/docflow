@@ -18,6 +18,7 @@ This repository automates collecting and organizing personal documents (Instapap
 
 ## Deploy & Verify (Web)
 - Remote deploy: `env REMOTE_USER=root REMOTE_HOST=<SERVER_IP> bash web/deploy.sh`
+- One‑liner with public checks: `env REMOTE_USER=root REMOTE_HOST=167.99.142.146 VERIFY_DOMAIN=domingogallardo.com bash web/deploy.sh`
 - What it does:
   - Generates minimal static indexes for `/public/posts` (HTML) and `/public/docs` (HTML + PDF), ordered by mtime desc (bumps first), with entries as: `FileName — YYYY-Mon-DD HH:MM`.
   - Bundles `web/Dockerfile`, `web/nginx.conf`, and `web/public/` and deploys to `/opt/web-domingo` on the remote host.
@@ -25,11 +26,11 @@ This repository automates collecting and organizing personal documents (Instapap
 - Nginx inside the container:
 - `/posts/` and `/docs/` serve static `index.html` (no dynamic directory listing module).
   - `/data/` keeps WebDAV-like PUT enabled; listing is via `autoindex on;` (unchanged).
-- Public checks:
-  - `curl -I https://domingogallardo.com/posts/` (200 OK)
-  - `curl -s https://domingogallardo.com/posts/ | head -n 40` (UL simple con “Nombre — Fecha”, futuro arriba)
-  - `curl -I https://domingogallardo.com/docs/` (200 OK)
-  - `curl -s https://domingogallardo.com/docs/ | head -n 20`
+Public checks (si no usas VERIFY_DOMAIN):
+- `curl -I https://domingogallardo.com/posts/` (200 OK)
+- `curl -s https://domingogallardo.com/posts/ | head -n 40` (UL simple con “Nombre — Fecha”, futuro arriba)
+- `curl -I https://domingogallardo.com/docs/` (200 OK)
+- `curl -s https://domingogallardo.com/docs/ | head -n 20`
 
 Notes for agents
 - Do not touch `/data/` auth or methods; only `/posts/` and `/docs/` are static listings now.
