@@ -121,15 +121,4 @@ echo "✅ Despliegue completo. El contenedor sirve por http://localhost:8080 en 
 echo "🌐 Nginx del host termina HTTPS y hace proxy a este puerto."
 echo "📝 Edición en /editor → PUT sobre /data/nota.txt (BasicAuth)."
 
-# Verificación pública opcional (si se define VERIFY_DOMAIN)
-if [[ -n "${VERIFY_DOMAIN:-}" ]]; then
-  echo "🔎 Verificando endpoints públicos en https://${VERIFY_DOMAIN}…"
-  for path in posts docs; do
-    code=$(curl -s -o /dev/null -w "%{http_code}" "https://${VERIFY_DOMAIN}/${path}/")
-    echo "  • ${path}/ → HTTP ${code}"
-  done
-  echo "--- Top de /posts/ (primeras 12 líneas) ---"
-  curl -s "https://${VERIFY_DOMAIN}/posts/" | sed -n '1,12p'
-  echo "--- Top de /docs/ (primeras 8 líneas) ---"
-  curl -s "https://${VERIFY_DOMAIN}/docs/" | sed -n '1,8p'
-fi
+:
