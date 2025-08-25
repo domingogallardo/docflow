@@ -18,7 +18,6 @@ This repository automates collecting and organizing personal documents (Instapap
 
 ## Deploy & Verify (Web)
 - Remote deploy: `env REMOTE_USER=root REMOTE_HOST=<SERVER_IP> bash web/deploy.sh`
-- One‑liner with public checks: `env REMOTE_USER=root REMOTE_HOST=167.99.142.146 VERIFY_DOMAIN=domingogallardo.com bash web/deploy.sh`
 - What it does:
   - Generates minimal static indexes for `/public/posts` (HTML) and `/public/docs` (HTML + PDF), ordered by mtime desc (bumps first), with entries as: `FileName — YYYY-Mon-DD HH:MM`.
   - Bundles `web/Dockerfile`, `web/nginx.conf`, and `web/public/` and deploys to `/opt/web-domingo` on the remote host.
@@ -26,11 +25,25 @@ This repository automates collecting and organizing personal documents (Instapap
 - Nginx inside the container:
 - `/posts/` and `/docs/` serve static `index.html` (no dynamic directory listing module).
   - `/data/` keeps WebDAV-like PUT enabled; listing is via `autoindex on;` (unchanged).
-Public checks (si no usas VERIFY_DOMAIN):
+Public checks:
 - `curl -I https://domingogallardo.com/posts/` (200 OK)
 - `curl -s https://domingogallardo.com/posts/ | head -n 40` (UL simple con “Nombre — Fecha”, futuro arriba)
 - `curl -I https://domingogallardo.com/docs/` (200 OK)
 - `curl -s https://domingogallardo.com/docs/ | head -n 20`
+
+## Git: Checks previos a commit/push
+- Rama actual: `git branch --show-current` (debe ser `main`).
+- Remotos: `git remote -v` (origin → https://github.com/domingogallardo/docflow.git).
+- Upstream tracking: `git rev-parse --abbrev-ref @{upstream} || echo "(sin upstream)"`.
+- Sin cambios pendientes: `git status -sb` (revisa `??` y ` M`).
+- Último commit: `git log -1 --oneline` (mensaje estilo Conventional Commits).
+- Sin divergencias: `git fetch -p && git status -sb` (no `ahead/behind`).
+- Permisos de push: `git push --dry-run`.
+
+Configuración útil (si es un entorno nuevo)
+- Identidad: `git config --get user.name` / `git config --get user.email`.
+- Token/SSH: asegúrate de tener credenciales válidas (GitHub HTTPS token o SSH).
+- Upstream por defecto: `git push -u origin main` (solo la primera vez).
 
 Notes for agents
 - Do not touch `/data/` auth or methods; only `/posts/` and `/docs/` are static listings now.
