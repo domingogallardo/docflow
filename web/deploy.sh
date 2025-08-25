@@ -13,6 +13,65 @@ fi
 REMOTE_PATH="/opt/web-domingo"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
+# Generador de índices estáticos (lista simple con fecha, sin CSS)
+gen_index() {
+  local DIR_PATH="$1"; local TITLE="$2"; local EXT_FILTER="$3"
+  if [[ -d "$DIR_PATH" ]]; then
+    echo "🧾 Generando índice estático de ${TITLE} (mtime desc)..."
+    PYTHON_BIN="python3"; command -v python3 >/dev/null 2>&1 || PYTHON_BIN=python
+    DIR_PATH="$DIR_PATH" TITLE="$TITLE" EXT_FILTER="$EXT_FILTER" "$PYTHON_BIN" - << 'PY'
+import os, sys, time, html
+from urllib.parse import quote
+
+dir_path = os.environ.get('DIR_PATH')
+title = os.environ.get('TITLE', 'Index')
+ext_filter = os.environ.get('EXT_FILTER', '')
+allowed = tuple([e.strip().lower() for e in ext_filter.split(',') if e.strip()]) if ext_filter else None
+if not dir_path:
+    print('DIR_PATH no definido', file=sys.stderr); sys.exit(1)
+
+entries = []
+for name in os.listdir(dir_path):
+    if name.startswith('.'): continue
+    path = os.path.join(dir_path, name)
+    if not os.path.isfile(path): continue
+    low = name.lower()
+    if low in ('index.html','index.htm'): continue
+    if allowed and not low.endswith(allowed): continue
+    st = os.stat(path)
+    entries.append((st.st_mtime, name))
+
+entries.sort(key=lambda x: x[0], reverse=True)  # mtime DESC
+
+MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"]
+def fmt_date(ts: float) -> str:
+    t = time.localtime(ts); return f"{t.tm_year}-{MONTHS[t.tm_mon-1]}-{t.tm_mday:02d} {t.tm_hour:02d}:{t.tm_min:02d}"
+
+items = []
+for mtime, name in entries:
+    href = quote(name); esc = html.escape(name); d = fmt_date(mtime)
+    items.append(f'<li><a href="{href}" title="{esc}">{esc}</a> — {d}</li>')
+
+html_doc = (
+    '<!DOCTYPE html><html><head><meta charset="utf-8">'
+    '<meta name="viewport" content="width=device-width">'
+    f'<title>{html.escape(title)}</title></head><body>'
+    f'<h1>{html.escape(title)}</h1>'
+    '<ul>' + "\n".join(items) + '</ul>'
+    '</body></html>'
+)
+
+out = os.path.join(dir_path, 'index.html')
+with open(out, 'w', encoding='utf-8') as f: f.write(html_doc)
+print(f"✓ Generado {out}")
+PY
+  fi
+}
+
+# Generar índices para /posts (solo HTML) y /docs (HTML + PDF)
+gen_index "$SCRIPT_DIR/public/posts" "Posts" ".html,.htm"
+gen_index "$SCRIPT_DIR/public/docs" "Docs" ".html,.htm,.pdf"
+
 echo "📦 Empaquetando archivos (sin metadatos de macOS)..."
 # Evita xattrs y archivos AppleDouble (.DS_Store, ._*) que provocan warnings en GNU tar
 COPYFILE_DISABLE=1 tar \

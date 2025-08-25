@@ -140,10 +140,12 @@ pytest tests/ -v
 
 ## 🌐 Infraestructura y despliegue (Docker/Nginx)
 
+Sitio en producción: https://domingogallardo.com
+
 Este repo incluye una configuración opcional para servir tu contenido procesado en un servidor propio:
 
 - Directorio `web/` (infra):
-  - `Dockerfile` y `nginx.conf`: Imagen Nginx (Alpine + FancyIndex) que sirve HTML/PDF y lista `/docs/` y `/posts/` por fecha (mtime desc). Provee `/data/` para ediciones vía PUT protegido con BasicAuth.
+  - `Dockerfile` y `nginx.conf`: Imagen Nginx (Alpine) que sirve HTML/PDF y expone `/docs/` y `/posts/` mediante índices estáticos generados en el deploy, ordenados por fecha (mtime desc). Provee `/data/` para ediciones vía PUT protegido con BasicAuth.
   - `docker-compose.yml` (solo local): monta `./public` y `./dynamic-data` en modo lectura (`:ro`) y expone `8080:80`.
   - `deploy.sh`: empaqueta y despliega al servidor remoto en `/opt/web-domingo` y levanta el contenedor `web-domingo`. Requiere `REMOTE_USER` y `REMOTE_HOST` (no se incluyen secretos en el repo).
   - `.dockerignore` para builds reproducibles.
@@ -179,7 +181,7 @@ Uso downstream:
 - Filtrar Markdown por front matter (`instapaper_starred: true`) en tu generador estático o script.
 - Para HTML, buscar el meta `<meta name="instapaper-starred" content="true">` o el atributo `data-instapaper-starred="true"` para resaltar o priorizar.
 
-- Publicación opcional: puedes copiar manualmente una selección de HTML (p. ej., los bumpeados) a `web/public/posts/` para exponerlos en la web. El contenedor los sirve bajo `/posts/` (FancyIndex por mtime desc), y así puedes referenciarlos fácilmente desde Obsidian.
+- Publicación opcional: puedes copiar manualmente una selección de HTML (p. ej., los bumpeados) a `web/public/posts/` para exponerlos en la web. El contenedor los sirve bajo `/posts/` con un índice estático generado automáticamente (orden mtime desc), y así puedes referenciarlos fácilmente desde Obsidian.
 
 ---
 
