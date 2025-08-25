@@ -1,6 +1,6 @@
-# 📚 Pipeline de Documentación Personal
+# 📚 docflow — Pipeline de Documentación Personal
 
-Sistema automatizado para recopilar, procesar y organizar documentos personales (artículos web, PDFs, podcasts, tweets) en carpetas estructuradas por años.
+docflow es un sistema automatizado para recopilar, procesar y organizar documentos personales (artículos web, PDFs, podcasts, tweets) en carpetas estructuradas por años.
 
 ---
 
