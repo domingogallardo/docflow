@@ -1,6 +1,43 @@
+# OS/editor
 .DS_Store
+*.swp
+*.swo
+*.bak
+*~
+
+# Python
+__pycache__/
+*.pyc
+.pytest_cache/
 .pytest_tmp
+
+# Local files from pipeline runs
 failed.txt
 procesados.txt
-__pycache__
 Misc/
+
+# Env and secrets (never commit)
+.env
+.env.*
+*.env
+*.key
+*.pem
+*.crt
+*.p12
+*.cer
+*.der
+*.keystore
+*.jks
+.htpasswd
+
+# Web app: keep only configs, ignore public and data
+web/*
+!web/Dockerfile
+!web/docker-compose.yml
+!web/nginx.conf
+!web/deploy.sh
+!web/.dockerignore
+!web/README.md
+
+# Artifacts created by deploy script
+web/*.tar.gz
