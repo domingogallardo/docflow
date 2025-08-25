@@ -1,4 +1,4 @@
-# Infrastructure: Ubuntu Host (Nginx TLS) + Docker App (Nginx)
+# docflow Infra: Ubuntu Host (Nginx TLS) + Docker App (Nginx)
 
 _Public-facing guide for deploying a simple, secure web stack with a reverse-proxy on the **host** and an **app container** serving static content and date-ordered listings (FancyIndex), plus a minimal WebDAV-like editing endpoint guarded by BasicAuth._
 
@@ -6,7 +6,7 @@ _Public-facing guide for deploying a simple, secure web stack with a reverse-pro
 > - No secrets or sensitive values are included here. Replace placeholders like `<YOUR_DOMAIN>` and create credentials locally.
 > - Keep `.htpasswd` and any private files **out of the repo**. Use bind-mounts at deploy time.
 
-> **Repo specifics (this project)**
+> **Repo specifics (docflow)**
 > - The infra lives under `web/` in this repo (not `infra/`).
 > - Provided files: `web/Dockerfile`, `web/nginx.conf`, `web/docker-compose.yml`, `web/deploy.sh`.
 > - Names/paths used here: container name `web-domingo`, remote path `/opt/web-domingo` (match `web/deploy.sh`).
