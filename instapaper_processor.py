@@ -14,9 +14,16 @@ from bs4 import BeautifulSoup
 from markdownify import markdownify as md
 from PIL import Image
 from io import BytesIO
-import random 
+from urllib.parse import urlsplit, urlunsplit
+import random
 
 from config import INSTAPAPER_USERNAME, INSTAPAPER_PASSWORD, ANTHROPIC_KEY
+
+
+MEDIUM_UA = (
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 14_7_1) AppleWebKit/537.36 "
+    "(KHTML, like Gecko) Chrome/127.0 Safari/537.36"
+)
 
 
 class InstapaperProcessor:
@@ -50,16 +57,19 @@ class InstapaperProcessor:
             # 3. Corregir codificación HTML
             self._fix_html_encoding()
             
-            # 4. Reducir imágenes
+            # 4. Descargar imágenes problemáticas
+            self._download_problematic_images()
+
+            # 5. Reducir imágenes
             self._reduce_images_width()
-            
-            # 5. Añadir márgenes
+
+            # 6. Añadir márgenes
             self._add_margins()
-            
-            # 6. Generar títulos con IA
+
+            # 7. Generar títulos con IA
             self._update_titles_with_ai()
-            
-            # 7. Mover archivos procesados
+
+            # 8. Mover archivos procesados
             posts = self._list_processed_files()
             if posts:
                 moved_posts = self._move_files_to_destination(posts)
@@ -349,12 +359,90 @@ class InstapaperProcessor:
         """Inserta meta charset en HTML."""
         head_tag = re.search(r"<head[^>]*>", content, re.IGNORECASE)
         meta_tag = f'<meta charset="{encoding}">\n'
-        
+
         if head_tag:
             insert_pos = head_tag.end()
             return content[:insert_pos] + "\n" + meta_tag + content[insert_pos:]
         else:
             return meta_tag + content
+
+    def _download_problematic_images(self):
+        """Descarga imágenes remotas que fallan sin Referer y actualiza el HTML."""
+        html_files = list(self.incoming_dir.rglob('*.html'))
+
+        if not html_files:
+            print('🖼️  No hay archivos HTML para verificar imágenes')
+            return
+
+        for html_file in html_files:
+            try:
+                soup = BeautifulSoup(html_file.read_text(encoding='utf-8'), 'html.parser')
+                modified = False
+                for idx, img in enumerate(soup.find_all('img')):
+                    src = img.get('src') or img.get('data-src') or img.get('data-original-src')
+                    if not src or not src.startswith('http'):
+                        continue
+
+                    try:
+                        check = requests.get(src, timeout=5)
+                        if check.status_code != 403:
+                            continue
+                    except Exception:
+                        continue
+
+                    try:
+                        resp = self._fetch_image(src)
+                        ext = self._guess_image_extension(resp.content)
+                        local_name = f"{html_file.stem}_img{idx}.{ext}"
+                        local_path = html_file.with_name(local_name)
+                        local_path.write_bytes(resp.content)
+                        img['src'] = local_name
+                        for attr in ('srcset', 'data-src', 'data-original-src', 'data-old-src'):
+                            img.attrs.pop(attr, None)
+                        modified = True
+                        print(f"🖼️  Imagen descargada: {src} → {local_name}")
+                    except Exception as e:
+                        print(f"❌ Error descargando {src}: {e}")
+
+                if modified:
+                    html_file.write_text(str(soup), encoding='utf-8')
+                    print(f"✅ Imágenes problemáticas actualizadas: {html_file}")
+            except Exception as e:
+                print(f"❌ Error procesando {html_file}: {e}")
+
+    def _clean_medium_url(self, url: str) -> str:
+        """Elimina parámetros de firma en URLs de Medium para reintentos."""
+        p = urlsplit(url)
+        if p.query and any(k in p.query for k in ("Signature", "Policy", "Key-Pair-Id", "Expires")):
+            p = p._replace(query="")
+        path = re.sub(r"/v2/(?:resize:[^/]+/)?(?:format:[^/]+/)?", "/v2/", p.path)
+        return urlunsplit(p._replace(path=path))
+
+    def _fetch_image(self, url: str):
+        """Descarga una imagen intentando headers compatibles con Medium."""
+        base_headers = {
+            "User-Agent": MEDIUM_UA,
+            "Accept": "image/avif,image/webp,image/apng,image/*,*/*;q=0.8",
+        }
+        tried_clean = False
+        u = url
+        for _ in range(4):
+            for extra in ({}, {"Referer": "https://medium.com"}, {"Referer": "https://medium.com/"}):
+                resp = requests.get(
+                    u,
+                    headers={**base_headers, **extra},
+                    timeout=20,
+                    stream=True,
+                    allow_redirects=True,
+                )
+                ctype = resp.headers.get("content-type", "")
+                if resp.status_code == 200 and ctype.startswith("image"):
+                    return resp
+                if resp.status_code in (403, 404) and not tried_clean:
+                    u = self._clean_medium_url(u)
+                    tried_clean = True
+                    break
+        raise RuntimeError(f"No pude descargar {url}")
     
     def _reduce_images_width(self):
         """Reduce el ancho de imágenes en archivos HTML."""
@@ -413,6 +501,14 @@ class InstapaperProcessor:
             return img.width
         except Exception:
             return None
+
+    def _guess_image_extension(self, content: bytes) -> str:
+        """Intenta deducir la extensión de la imagen."""
+        try:
+            img = Image.open(BytesIO(content))
+            return img.format.lower()
+        except Exception:
+            return 'jpg'
         
     def _update_titles_with_ai(self):
         """Genera títulos atractivos usando IA para archivos Markdown."""
@@ -577,9 +673,9 @@ class InstapaperProcessor:
         return md_new
     
     def _list_processed_files(self) -> List[Path]:
-        """Lista archivos procesados listos para mover."""
-        return [f for f in self.incoming_dir.rglob("*") 
-                if f.is_file() and f.suffix.lower() in ['.html', '.htm', '.md']]
+        """Lista archivos procesados (HTML, Markdown e imágenes locales)."""
+        exts = ['.html', '.htm', '.md', '.jpg', '.jpeg', '.png', '.gif', '.webp']
+        return [f for f in self.incoming_dir.rglob("*") if f.is_file() and f.suffix.lower() in exts]
     
     def _move_files_to_destination(self, files: List[Path]) -> List[Path]:
         """Mueve archivos al destino final."""
