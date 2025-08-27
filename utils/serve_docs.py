@@ -29,6 +29,19 @@ import subprocess
 import calendar as _cal
 from typing import Optional
 
+# Paths relativos al repo (para publicar)
+SCRIPT_DIR = os.path.abspath(os.path.dirname(__file__))
+REPO_ROOT = os.path.abspath(os.path.join(SCRIPT_DIR, os.pardir))
+PUBLIC_POSTS_DIR = os.getenv(
+    "PUBLIC_POSTS_DIR",
+    os.path.join(REPO_ROOT, "web", "public", "posts"),
+)
+DEPLOY_SCRIPT = os.getenv(
+    "DEPLOY_SCRIPT",
+    os.path.join(REPO_ROOT, "web", "deploy.sh"),
+)
+PUBLIC_POSTS_URL_BASE = os.getenv("PUBLIC_POSTS_URL_BASE", "")
+
 # --------- CONFIG ---------
 PORT = int(os.getenv("PORT", "8000"))
 SERVE_DIR = os.getenv("SERVE_DIR", "/Users/domingo/⭐️ Documentación")
@@ -48,9 +61,18 @@ OVERLAY_CSS = (
     "display:flex;gap:8px;align-items:center}"
     "#dg-overlay button{padding:6px 10px;border:1px solid #ccc;"
     "border-radius:8px;background:#f9f9f9;cursor:pointer}"
+    "#dg-overlay button[disabled]{opacity:.6;cursor:default}"
     "#dg-overlay .meta{color:#666;margin-left:6px}"
     "#dg-overlay .ok{color:#0a0}#dg-overlay .err{color:#a00}"
     "#dg-overlay a{text-decoration:none;color:#06c}"
+    "#dg-toast{position:fixed;z-index:2147483647;right:12px;bottom:60px;"
+    "background:#0a0;color:#fff;border-radius:10px;padding:8px 12px;"
+    "box-shadow:0 6px 20px rgba(0,0,0,.15);opacity:0;transform:translateY(8px);"
+    "transition:opacity .15s ease, transform .15s ease;"
+    "font:13px -apple-system,system-ui,Segoe UI,Roboto,Helvetica,Arial;}"
+    "#dg-toast.show{opacity:1;transform:translateY(0)}"
+    "#dg-toast.err{background:#a00}#dg-toast.ok{background:#0a0}"
+    "#dg-toast a{color:#fff;text-decoration:underline;margin-left:8px}"
 ).encode("utf-8")
 
 OVERLAY_JS = (
@@ -58,11 +80,24 @@ OVERLAY_JS = (
     "  const script = document.currentScript;\n"
     "  const rel = script.dataset.path || '';\n"
     "  let bumped = (script.dataset.bumped === '1');\n"
+    "  let published = (script.dataset.published === '1');\n"
+    "  let publishing = false;\n"
+    "  let unpublishing = false;\n"
+    "  const publicBase = script.dataset.publicBase || '';\n"
     "  function el(tag, attrs, text){\n"
     "    const e = document.createElement(tag);\n"
     "    if(attrs){ for(const k in attrs){ e.setAttribute(k, attrs[k]); } }\n"
     "    if(text){ e.textContent = text; }\n"
     "    return e;\n"
+    "  }\n"
+    "  function toast(kind, text, href){\n"
+    "    let t = document.getElementById('dg-toast');\n"
+    "    if(!t){ t = el('div', {id:'dg-toast'}, ''); document.body.appendChild(t); }\n"
+    "    t.className = kind ? kind + ' show' : 'show';\n"
+    "    t.textContent = text || '';\n"
+    "    if(href){ const a = el('a', {href, target:'_blank', rel:'noopener'}, 'Ver'); t.appendChild(a); }\n"
+    "    clearTimeout(window.__dg_toast_timer);\n"
+    "    window.__dg_toast_timer = setTimeout(()=>{ t.classList.remove('show'); }, 2200);\n"
     "  }\n"
     "  async function call(action){\n"
     "    const body = new URLSearchParams({path: rel, action}).toString();\n"
@@ -74,6 +109,37 @@ OVERLAY_JS = (
     "    const parent = p.endsWith('/') ? p : p.substring(0, p.lastIndexOf('/') + 1);\n"
     "    window.location.href = parent || '/';\n"
     "  }\n"
+    "  async function publish(){\n"
+    "    if(publishing || !bumped || published) return;\n"
+    "    publishing = true; render(); msg.textContent = '⏳ publicando…'; msg.className = 'meta';\n"
+    "    const ok = await call('publish');\n"
+    "    msg.textContent = ok ? '✓ publicado' : '× error';\n"
+    "    msg.className = ok ? 'meta ok' : 'meta err';\n"
+    "    if(ok){\n"
+    "      published = true; render();\n"
+    "      const fname = rel.split('/').pop();\n"
+    "      const base = publicBase ? (publicBase.endsWith('/') ? publicBase : publicBase + '/') : '';\n"
+    "      const url = base ? (base + encodeURIComponent(fname)) : '';\n"
+    "      toast('ok', 'Publicado', url);\n"
+    "    } else {\n"
+    "      publishing = false; render();\n"
+    "      toast('err', 'Error publicando');\n"
+    "    }\n"
+    "  }\n"
+    "  async function unpublish(){\n"
+    "    if(unpublishing || !published) return;\n"
+    "    unpublishing = true; render(); msg.textContent = '⏳ despublicando…'; msg.className = 'meta';\n"
+    "    const ok = await call('unpublish');\n"
+    "    msg.textContent = ok ? '✓ despublicado' : '× error';\n"
+    "    msg.className = ok ? 'meta ok' : 'meta err';\n"
+    "    if(ok){\n"
+    "      published = false; unpublishing = false; render();\n"
+    "      toast('ok', 'Despublicado');\n"
+    "    } else {\n"
+    "      unpublishing = false; render();\n"
+    "      toast('err', 'Error despublicando');\n"
+    "    }\n"
+    "  }\n"
     "  function render(){\n"
     "    bar.innerHTML = '';\n"
     "    bar.appendChild(el('strong', null, '📄 ' + rel));\n"
@@ -83,6 +149,20 @@ OVERLAY_JS = (
     "      msg.textContent = ok ? '✓ hecho' : '× error'; msg.className = ok ? 'meta ok' : 'meta err';\n"
     "      if(ok){ bumped = !bumped; render(); }\n"
     "    });\n"
+    "    if(bumped && !published){\n"
+    "      const pub = el('button', null, 'Publicar');\n"
+    "      pub.title = 'Copiar a /web/public/posts y desplegar';\n"
+    "      if(publishing){ pub.textContent = 'Publicando…'; pub.setAttribute('disabled',''); }\n"
+    "      pub.addEventListener('click', publish);\n"
+    "      bar.appendChild(pub);\n"
+    "    }\n"
+    "    if(published){\n"
+    "      const unp = el('button', null, 'Despublicar');\n"
+    "      unp.title = 'Eliminar de /web/public/posts y desplegar';\n"
+    "      if(unpublishing){ unp.textContent = 'Despublicando…'; unp.setAttribute('disabled',''); }\n"
+    "      unp.addEventListener('click', unpublish);\n"
+    "      bar.appendChild(unp);\n"
+    "    }\n"
     "    const raw = el('a', {href:'?raw=1', title:'Ver sin overlay'}, 'raw');\n"
     "    bar.appendChild(btn); bar.appendChild(raw); bar.appendChild(msg);\n"
     "  }\n"
@@ -99,6 +179,8 @@ OVERLAY_JS = (
     "      e.preventDefault(); const ok = await call('unbump_now'); if(ok){ bumped=false; render(); msg.textContent='✓ hecho'; msg.className='meta ok'; }\n"
     "    }\n"
     "    if(k==='l' && !e.metaKey && !e.ctrlKey && !e.altKey){ e.preventDefault(); goList(); }\n"
+    "    if(k==='p' && bumped && !published && !publishing){ e.preventDefault(); publish(); }\n"
+    "    if(k==='d' && published && !unpublishing){ e.preventDefault(); unpublish(); }\n"
     "  });\n"
     "  document.addEventListener('DOMContentLoaded', ()=>{ document.body.appendChild(bar); render(); });\n"
     "})();\n"
@@ -193,11 +275,13 @@ def compute_bump_mtime() -> int:
     return base_epoch_cached() + _BUMP_COUNTER
 
 
-def inject_overlay(html_text: str, rel_fs: str, bumped: bool) -> bytes:
+def inject_overlay(html_text: str, rel_fs: str, bumped: bool, published: bool) -> bytes:
     tags = (
         '<link rel="stylesheet" href="/__overlay.css">'
         f'<script src="/__overlay.js" defer data-path="{html.escape(rel_fs)}" '
-        f'data-bumped="{"1" if bumped else "0"}"></script>'
+        f'data-bumped="{"1" if bumped else "0"}" '
+        f' data-published="{"1" if published else "0"}"'
+        f' data-public-base="{html.escape(PUBLIC_POSTS_URL_BASE)}"></script>'
     )
     low = html_text.lower()
     idx = low.rfind("</body>")
@@ -235,23 +319,101 @@ class HTMLOnlyRequestHandler(SimpleHTTPRequestHandler):
             return
 
         try:
-            st = os.stat(abs_path)
-            atime = st.st_atime  # conservamos atime
+            if action in ("bump", "unbump_now"):
+                st = os.stat(abs_path)
+                atime = st.st_atime  # conservamos atime
 
-            if action == "bump":
-                mtime = compute_bump_mtime()
-            elif action == "unbump_now":
-                cre = get_creation_epoch(abs_path)
-                if cre is not None:
-                    mtime = cre
-                else:
-                    mtime = st.st_mtime if st.st_mtime <= time.time() else time.time() - 60
-            else:
-                self.send_error(400, "Unknown action")
+                if action == "bump":
+                    mtime = compute_bump_mtime()
+                else:  # unbump_now
+                    cre = get_creation_epoch(abs_path)
+                    if cre is not None:
+                        mtime = cre
+                    else:
+                        mtime = st.st_mtime if st.st_mtime <= time.time() else time.time() - 60
+
+                os.utime(abs_path, (atime, mtime))
+                self._send_bytes(b'{"ok":true}', "application/json; charset=utf-8")
                 return
 
-            os.utime(abs_path, (atime, mtime))
-            self._send_bytes(b'{"ok":true}', "application/json; charset=utf-8")
+            if action == "publish":
+                # Requiere que el fichero esté bumped (defensa extra)
+                try:
+                    st_src = os.stat(abs_path)
+                except Exception as e:
+                    self.send_error(500, f"No se pudo leer el fichero: {e}")
+                    return
+                if not is_bumped(st_src.st_mtime):
+                    self.send_error(400, "No publicado: el fichero no está bumped")
+                    return
+                # 1) Copiar a web/public/posts
+                dst_dir = PUBLIC_POSTS_DIR
+                try:
+                    os.makedirs(dst_dir, exist_ok=True)
+                except Exception as e:
+                    self.send_error(500, f"No se pudo crear destino: {e}")
+                    return
+
+                dst_path = os.path.join(dst_dir, os.path.basename(abs_path))
+                try:
+                    src_stat = st_src
+                    with open(abs_path, 'rb') as src, open(dst_path, 'wb') as dst:
+                        while True:
+                            chunk = src.read(1024 * 1024)
+                            if not chunk:
+                                break
+                            dst.write(chunk)
+                    # Preservar tiempos (especialmente mtime para mantener bumps)
+                    try:
+                        os.utime(dst_path, (src_stat.st_atime, src_stat.st_mtime))
+                    except Exception:
+                        pass
+                except Exception as e:
+                    self.send_error(500, f"Error copiando: {e}")
+                    return
+
+                # 2) Lanzar deploy
+                if not os.path.isfile(DEPLOY_SCRIPT) or not os.access(DEPLOY_SCRIPT, os.X_OK):
+                    self.send_error(500, f"Deploy no disponible: {DEPLOY_SCRIPT}")
+                    return
+
+                try:
+                    # heredamos entorno (requiere REMOTE_USER/REMOTE_HOST configurados)
+                    subprocess.run([DEPLOY_SCRIPT], check=True)
+                except subprocess.CalledProcessError as e:
+                    self.send_error(500, f"Fallo en deploy ({e.returncode})")
+                    return
+
+                self._send_bytes(b'{"ok":true}', "application/json; charset=utf-8")
+                return
+
+            if action == "unpublish":
+                # Elimina el archivo del directorio de posts y despliega
+                dst_path = os.path.join(PUBLIC_POSTS_DIR, os.path.basename(abs_path))
+                try:
+                    if os.path.exists(dst_path):
+                        os.remove(dst_path)
+                    else:
+                        # Si no existe, consideramos la operación idempotente
+                        pass
+                except Exception as e:
+                    self.send_error(500, f"Error despublicando: {e}")
+                    return
+
+                # Lanzar deploy
+                if not os.path.isfile(DEPLOY_SCRIPT) or not os.access(DEPLOY_SCRIPT, os.X_OK):
+                    self.send_error(500, f"Deploy no disponible: {DEPLOY_SCRIPT}")
+                    return
+                try:
+                    subprocess.run([DEPLOY_SCRIPT], check=True)
+                except subprocess.CalledProcessError as e:
+                    self.send_error(500, f"Fallo en deploy ({e.returncode})")
+                    return
+
+                self._send_bytes(b'{"ok":true}', "application/json; charset=utf-8")
+                return
+
+            self.send_error(400, "Unknown action")
         except OSError as e:
             self.send_error(500, str(e))
 
@@ -282,7 +444,13 @@ class HTMLOnlyRequestHandler(SimpleHTTPRequestHandler):
                     return super().do_GET()
 
                 st = os.stat(abs_path)
-                out = inject_overlay(text, rel_fs, is_bumped(st.st_mtime))
+                # Publicado si ya existe un archivo con el mismo nombre en posts/
+                published = False
+                try:
+                    published = os.path.exists(os.path.join(PUBLIC_POSTS_DIR, os.path.basename(abs_path)))
+                except Exception:
+                    published = False
+                out = inject_overlay(text, rel_fs, is_bumped(st.st_mtime), published)
                 return self._send_bytes(out, "text/html; charset=utf-8", {"X-Overlay": "1"})
 
         # Resto: comportamiento normal
