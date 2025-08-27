@@ -1,6 +1,12 @@
 #!/usr/bin/env python3
 """
-InstapaperProcessor - Módulo unificado para el procesamiento completo de artículos de Instapaper
+InstapaperProcessor - Módulo unificado para el procesamiento completo de
+artículos de Instapaper.
+
+Nota: el procesador trabaja únicamente con el HTML que entrega
+Instapaper. Los recursos externos (imágenes, vídeos, etc.) se enlazan sin
+descargarlos, por lo que su disponibilidad depende del servidor de
+origen.
 """
 from __future__ import annotations
 import os
@@ -224,7 +230,14 @@ class InstapaperProcessor:
 
     
     def _download_article(self, article_id):
-        """Descarga un artículo específico."""
+        """Descarga un artículo específico.
+
+        Solo se persiste el HTML devuelto por Instapaper. Las etiquetas
+        ``<img>`` se conservan con sus URLs originales y **no** se
+        descargan los recursos remotos. Esto implica que, si el servidor
+        de origen bloquea el hotlinking, las imágenes podrían no
+        mostrarse en la copia almacenada.
+        """
         r = self.session.get(f"https://www.instapaper.com/read/{article_id}")
         soup = BeautifulSoup(r.text, "html.parser")
 
@@ -367,7 +380,14 @@ class InstapaperProcessor:
             return meta_tag + content
 
     def _download_problematic_images(self):
-        """Descarga imágenes remotas que fallan sin Referer y actualiza el HTML."""
+        """Descarga imágenes remotas que fallan sin Referer y actualiza el HTML.
+
+        Este paso es **opcional** y solo intenta cubrir el caso de
+        servidores (como `miro.medium.com`) que devuelven 403 cuando se
+        enlazan desde otro dominio. El pipeline no realiza una descarga
+        masiva de todos los recursos gráficos, por lo que la mayoría de
+        imágenes siguen referenciándose de forma remota.
+        """
         html_files = list(self.incoming_dir.rglob('*.html'))
 
         if not html_files:
@@ -445,7 +465,12 @@ class InstapaperProcessor:
         raise RuntimeError(f"No pude descargar {url}")
     
     def _reduce_images_width(self):
-        """Reduce el ancho de imágenes en archivos HTML."""
+        """Reduce el ancho de imágenes en archivos HTML.
+
+        Para estimar el tamaño se realiza una solicitud temporal al
+        recurso remoto; la imagen **no** se conserva en disco. El HTML
+        resultante sigue apuntando al servidor de origen.
+        """
         html_files = []
         for dirpath, _, filenames in os.walk(self.incoming_dir):
             for filename in filenames:
