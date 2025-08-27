@@ -28,7 +28,25 @@ El script principal procesa automáticamente:
 
 ---
 
-## 🎯 Resultado del procesamiento
+## 🛠 Requisitos
+
+**Python 3.10+** y librerías:
+```bash
+pip install requests beautifulsoup4 markdownify anthropic pillow pytest markdown
+```
+
+**Variables de entorno:**
+```bash
+export ANTHROPIC_API_KEY="tu_clave"
+export INSTAPAPER_USERNAME="tu_usuario" 
+export INSTAPAPER_PASSWORD="tu_contraseña"
+export REMOTE_USER="usuario_en_host_web_pública"
+export REMOTE_HOST="IP_host_web_pública"
+```
+Nota: `REMOTE_USER` y `REMOTE_HOST` solo son necesarios si vas a Publicar/Despublicar desde el overlay del “Servidor web local”.
+---
+
+## 🎯 Descarga de documentos
 
 ### 📄 Artículos de Instapaper
 **Entrada:** Artículos guardados en tu cuenta de Instapaper  
@@ -74,61 +92,6 @@ El script principal procesa automáticamente:
 
 ---
 
-## 📂 Estructura
-
-```
-⭐️ Documentación/
-├── Incoming/               # Archivos nuevos
-├── Posts/Posts <AÑO>/      # Artículos procesados
-├── Podcasts/Podcasts <AÑO>/ # Podcasts procesados
-├── Tweets/Tweets <AÑO>/    # Tweets procesados
-├── Pdfs/Pdfs <AÑO>/        # PDFs organizados
-└── Historial.txt           # Registro histórico
-```
-
----
-
-## 🛠 Requisitos
-
-**Python 3.10+** y librerías:
-```bash
-pip install requests beautifulsoup4 markdownify anthropic pillow pytest markdown
-```
-
-**Variables de entorno:**
-```bash
-export ANTHROPIC_API_KEY="tu_clave"
-export INSTAPAPER_USERNAME="tu_usuario" 
-export INSTAPAPER_PASSWORD="tu_contraseña"
-```
-
----
-
-## 📌 Scripts principales
-
-| Script | Función |
-|--------|---------|
-| `process_documents.py` | Script principal - Pipeline completo o parcial |
-| `md_to_html.py` | Convierte archivos .md a HTML con márgenes |
-| `pipeline_manager.py` | Coordinación de procesadores |
-| `instapaper_processor.py` | Descarga y procesa artículos web |
-| `podcast_processor.py` | Procesa transcripciones de Snipd |
-| `tweet_processor.py` | Procesa colecciones de tweets |
-| `pdf_processor.py` | Organiza PDFs |
-| `utils.py` | Utilidades comunes |
-
-### Utilidades adicionales
-- `utils/serve_docs.py` — ver sección “Servidor web local”.
-- `utils/rebuild_historial.py` - Reconstruir historial
-- `utils/update_font.py` - Actualizar tipografía en archivos HTML
-- `utils/borrar_cortos.py` - Eliminar documentos cortos
-- `utils/count-files.py` - Contar archivos
-- `utils/random-post.py` - Post aleatorio
-- `utils/bump.applescript` - Atajo AppleScript para subir archivos en Finder ajustando mtime
-- `utils/un-bump.applescript` - Tal cual dice el título
-
----
-
 ## ⭐ Instapaper: Artículos Destacados
 
 - Detección: se identifica si un artículo está marcado con estrella tanto en el listado (`/u/<página>`) como en la página de lectura (`/read/<id>`). Se consideran:
@@ -154,6 +117,22 @@ Uso downstream:
 - Para HTML, buscar el meta `<meta name="instapaper-starred" content="true">` o el atributo `data-instapaper-starred="true"` para resaltar o priorizar.
 
 - Publicación opcional: puedes copiar manualmente una selección de HTML (p. ej., los bumpeados) a `web/public/posts/` para exponerlos en la web. El contenedor los sirve bajo `/posts/` con un índice estático generado automáticamente (orden mtime desc), y así puedes referenciarlos fácilmente desde Obsidian.
+
+---
+
+## 📂 Estructura de directorios
+
+```
+⭐️ Documentación/
+├── Incoming/               # Archivos nuevos
+├── Posts/Posts <AÑO>/      # Artículos procesados
+├── Podcasts/Podcasts <AÑO>/ # Podcasts procesados
+├── Tweets/Tweets <AÑO>/    # Tweets procesados
+├── Pdfs/Pdfs <AÑO>/        # PDFs organizados
+└── Historial.txt           # Registro histórico
+```
+Esta estructura es el destino natural de la “Descarga de documentos”.
+---
 
 ## Web pública (carpeta `web/`)
 
@@ -210,7 +189,7 @@ Publicar/Despublicar:
 Variables de entorno:
 - Básicas: `PORT` (8000), `SERVE_DIR` (ruta base), `BUMP_YEARS` (100)
 - Publicación: `PUBLIC_POSTS_DIR` (destino local; por defecto `web/public/posts`), `DEPLOY_SCRIPT` (por defecto `web/deploy.sh`), `PUBLIC_POSTS_URL_BASE` (ej. `https://domingogallardo.com/posts`)
-- Deploy: `REMOTE_USER` y `REMOTE_HOST` (requeridos por `web/deploy.sh`)
+- Deploy: `REMOTE_USER` y `REMOTE_HOST` (requeridos por `web/deploy.sh`; el script hereda estas variables y debe ser ejecutable con `chmod +x web/deploy.sh`)
 
 Índices estáticos en el deploy:
 - `web/deploy.sh` regenera índices para `/posts/` (solo HTML) y `/docs/` (HTML/PDF) ordenando por `mtime` desc. Los bumpeados aparecen primero.
@@ -222,13 +201,40 @@ Solución de problemas:
 - Toast sin enlace “Ver”: define `PUBLIC_POSTS_URL_BASE`.
 - Índice de `/posts/` no cambia: el deploy regenera `index.html`. Fuerza recarga. Verifica que `web/deploy.sh` terminó sin errores.
 
+---
+
+## 📌 Scripts principales
+
+| Script | Función |
+|--------|---------|
+| `process_documents.py` | Script principal - Pipeline completo o parcial |
+| `md_to_html.py` | Convierte archivos .md a HTML con márgenes |
+| `pipeline_manager.py` | Coordinación de procesadores |
+| `instapaper_processor.py` | Descarga y procesa artículos web |
+| `podcast_processor.py` | Procesa transcripciones de Snipd |
+| `tweet_processor.py` | Procesa colecciones de tweets |
+| `pdf_processor.py` | Organiza PDFs |
+| `utils.py` | Utilidades comunes |
+
+### Utilidades adicionales
+- `utils/serve_docs.py` — ver sección “Servidor web local”.
+- `utils/rebuild_historial.py` - Reconstruir historial
+- `utils/update_font.py` - Actualizar tipografía en archivos HTML
+- `utils/borrar_cortos.py` - Eliminar documentos cortos
+- `utils/count-files.py` - Contar archivos
+- `utils/random-post.py` - Post aleatorio
+- `utils/bump.applescript` - Atajo AppleScript para subir archivos en Finder ajustando mtime
+- `utils/un-bump.applescript` - Tal cual dice el título
+
+---
+
 ## 🧪 Testing
 
 ```bash
 pytest tests/ -v
 ```
 
-32 tests incluidos para validar todos los procesadores y utilidades.
+Incluye una batería de tests para validar los procesadores y utilidades.
 
 ---
 
@@ -247,10 +253,8 @@ Este repo incluye una configuración opcional para servir tu contenido procesado
   - El contenido público (`web/public/`) no se versiona: está ignorado en `.gitignore`. En GitHub sólo se publican los ficheros de configuración.
   - Guía completa (host Nginx con TLS + contenedor app): ver `README-infra.md`.
 
-Nota: si quieres edición autenticada de `/data/` en el servidor, crea y monta un `.htpasswd` en `/opt/web-domingo/nginx/.htpasswd` (fuera del repo). Por defecto, en `docker-compose` local `/data` se monta en solo lectura.
 
 ---
 
----
 
 © 2025 Domingo Gallardo López
