@@ -129,6 +129,28 @@ export INSTAPAPER_PASSWORD="tu_contraseña"
 
 ---
 
+## Web pública (carpeta `web/`)
+
+La carpeta `web/` contiene la infraestructura y el contenido estático que se publica en tu servidor remoto.
+
+- Contenido público: `web/public/`
+  - `posts/` y `docs/` sirven archivos HTML (y PDF en `docs/`).
+  - Los índices `index.html` de ambos directorios se generan en cada deploy, ordenados por `mtime` descendente; los archivos bumpeados (con fecha futura) aparecen arriba.
+  - El overlay de `utils/serve_docs.py` publica/despublica copiando o borrando archivos en `web/public/posts/` y ejecutando el deploy.
+- Deploy: `web/deploy.sh`
+  - Requiere `REMOTE_USER` y `REMOTE_HOST` en el entorno.
+  - Empaqueta `web/Dockerfile`, `web/nginx.conf` y `web/public/`, los sube a `/opt/web-domingo` y levanta el contenedor `web-domingo` en el servidor (Nginx en host termina HTTPS y hace proxy al puerto 8080 del contenedor).
+  - Verificación pública rápida:
+    - `curl -I https://domingogallardo.com/posts/`
+    - `curl -s https://domingogallardo.com/posts/ | head -n 40`
+    - `curl -I https://domingogallardo.com/docs/`
+    - `curl -s https://domingogallardo.com/docs/ | head -n 20`
+- `/data/` en el contenedor mantiene PUT habilitado (estilo WebDAV); el listado sigue con `autoindex on;` (no se modifica desde este repo).
+
+Más detalles de Docker/Nginx y del proceso de despliegue en la sección “🌐 Infraestructura y despliegue (Docker/Nginx)”.
+
+---
+
 ## Servidor web local
 
 `utils/serve_docs.py` levanta un servidor para leer `.html`/`.pdf` y gestionar tus documentos con un overlay sencillo y rápido.
