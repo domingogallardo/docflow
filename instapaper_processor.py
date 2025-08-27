@@ -1,6 +1,14 @@
 #!/usr/bin/env python3
 """
-InstapaperProcessor - Módulo unificado para el procesamiento completo de artículos de Instapaper
+InstapaperProcessor - Módulo unificado para el procesamiento completo de
+artículos de Instapaper.
+
+Nota: el procesador trabaja únicamente con el HTML que entrega
+Instapaper. Los recursos externos (imágenes, vídeos, etc.) se enlazan sin
+descargarlos, por lo que su disponibilidad depende del servidor de
+origen. Si el servicio de origen (por ejemplo, Medium) bloqueó la
+descarga cuando Instapaper creó su copia, esas imágenes ya no están
+presentes y el pipeline no puede recuperarlas.
 """
 from __future__ import annotations
 import os
@@ -14,7 +22,7 @@ from bs4 import BeautifulSoup
 from markdownify import markdownify as md
 from PIL import Image
 from io import BytesIO
-import random 
+import random
 
 from config import INSTAPAPER_USERNAME, INSTAPAPER_PASSWORD, ANTHROPIC_KEY
 
@@ -49,16 +57,16 @@ class InstapaperProcessor:
             
             # 3. Corregir codificación HTML
             self._fix_html_encoding()
-            
+
             # 4. Reducir imágenes
             self._reduce_images_width()
-            
+
             # 5. Añadir márgenes
             self._add_margins()
-            
+
             # 6. Generar títulos con IA
             self._update_titles_with_ai()
-            
+
             # 7. Mover archivos procesados
             posts = self._list_processed_files()
             if posts:
@@ -214,7 +222,14 @@ class InstapaperProcessor:
 
     
     def _download_article(self, article_id):
-        """Descarga un artículo específico."""
+        """Descarga un artículo específico.
+
+        Solo se persiste el HTML devuelto por Instapaper. Las etiquetas
+        ``<img>`` se conservan con sus URLs originales y **no** se
+        descargan los recursos remotos. Esto implica que, si el servidor
+        de origen bloquea el hotlinking, las imágenes podrían no
+        mostrarse en la copia almacenada.
+        """
         r = self.session.get(f"https://www.instapaper.com/read/{article_id}")
         soup = BeautifulSoup(r.text, "html.parser")
 
@@ -349,15 +364,20 @@ class InstapaperProcessor:
         """Inserta meta charset en HTML."""
         head_tag = re.search(r"<head[^>]*>", content, re.IGNORECASE)
         meta_tag = f'<meta charset="{encoding}">\n'
-        
+
         if head_tag:
             insert_pos = head_tag.end()
             return content[:insert_pos] + "\n" + meta_tag + content[insert_pos:]
         else:
             return meta_tag + content
-    
+
     def _reduce_images_width(self):
-        """Reduce el ancho de imágenes en archivos HTML."""
+        """Reduce el ancho de imágenes en archivos HTML.
+
+        Para estimar el tamaño se realiza una solicitud temporal al
+        recurso remoto; la imagen **no** se conserva en disco. El HTML
+        resultante sigue apuntando al servidor de origen.
+        """
         html_files = []
         for dirpath, _, filenames in os.walk(self.incoming_dir):
             for filename in filenames:
@@ -413,7 +433,7 @@ class InstapaperProcessor:
             return img.width
         except Exception:
             return None
-        
+
     def _update_titles_with_ai(self):
         """Genera títulos atractivos usando IA para archivos Markdown."""
         done = self._load_done_titles()
@@ -577,9 +597,9 @@ class InstapaperProcessor:
         return md_new
     
     def _list_processed_files(self) -> List[Path]:
-        """Lista archivos procesados listos para mover."""
-        return [f for f in self.incoming_dir.rglob("*") 
-                if f.is_file() and f.suffix.lower() in ['.html', '.htm', '.md']]
+        """Lista archivos procesados (HTML y Markdown)."""
+        exts = ['.html', '.htm', '.md']
+        return [f for f in self.incoming_dir.rglob("*") if f.is_file() and f.suffix.lower() in exts]
     
     def _move_files_to_destination(self, files: List[Path]) -> List[Path]:
         """Mueve archivos al destino final."""

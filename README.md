@@ -35,6 +35,11 @@ El script principal procesa automáticamente:
 **Resultado:** Archivos HTML y Markdown listos para lectura con:
 - ✅ Títulos generados automáticamente con IA (ES/EN, con reintentos y fallback)
 - ✅ Imágenes redimensionadas (max 300px ancho)
+- ⚠️ Las imágenes no se descargan; se enlazan a su servidor de origen.
+  Si Instapaper no pudo obtenerlas (por ejemplo, porque Medium bloqueó su
+  descarga), en el HTML final ni siquiera habrá etiquetas `<img>` para
+  ellas. Si el servidor de origen solo impide el hotlinking, las imágenes
+  enlazadas pueden aparecer rotas.
 - ✅ Márgenes del 6% aplicados para mejor lectura
 - ✅ Codificación HTML corregida
 - ✅ Nombres de archivo limpio (sin caracteres problemáticos)
