@@ -2,7 +2,6 @@
 
 docflow es un sistema automatizado para recopilar, procesar y organizar documentos personales (artículos web, PDFs, podcasts, tweets) en carpetas estructuradas por años.
 
----
 
 ## ⚙️ Uso
 
@@ -26,8 +25,6 @@ El script principal procesa automáticamente:
 - **Artículos de Instapaper** (HTML) → `Posts/Posts <AÑO>/`
 - **PDFs** → `Pdfs/Pdfs <AÑO>/`
 
----
-
 ## 🛠 Requisitos
 
 **Python 3.10+** y librerías:
@@ -36,6 +33,7 @@ pip install requests beautifulsoup4 markdownify anthropic pillow pytest markdown
 ```
 
 **Variables de entorno:**
+
 ```bash
 export ANTHROPIC_API_KEY="tu_clave"
 export INSTAPAPER_USERNAME="tu_usuario" 
@@ -43,8 +41,8 @@ export INSTAPAPER_PASSWORD="tu_contraseña"
 export REMOTE_USER="usuario_en_host_web_pública"
 export REMOTE_HOST="IP_host_web_pública"
 ```
+
 Nota: `REMOTE_USER` y `REMOTE_HOST` solo son necesarios si vas a Publicar/Despublicar desde el overlay del “Servidor web local”.
----
 
 ## 🎯 Descarga de documentos
 
@@ -90,23 +88,16 @@ Nota: `REMOTE_USER` y `REMOTE_HOST` solo son necesarios si vas a Publicar/Despub
 - ✅ Nombres originales preservados
 - ✅ Registro en historial para seguimiento
 
----
-
 ## ⭐ Instapaper: Artículos Destacados
 
-- Detección: se identifica si un artículo está marcado con estrella tanto en el listado (`/u/<página>`) como en la página de lectura (`/read/<id>`). Se consideran:
-  - Estrella al inicio del `<title>` o del `h1` visible (⭐, ⭐️, ★, ✪, ✭).
-  - Indicadores de UI: enlaces `unstar`, controles con `aria-pressed=true`, clases `starred/on/filled`, o SVGs relacionados.
-- Normalización del título: cualquier prefijo de estrella en el título se elimina para nombrar y mostrar sin el emoji.
+- Si quieres destacar un artículo para que se "bumpee" automáticamente, basta con editar el título del artículo en Instapaper añadiendo una estrella  (⭐) al comienzo.
+
 - Salida HTML: si está destacado, se añade
   - `<meta name="instapaper-starred" content="true">`
   - Atributo en la raíz: `<html data-instapaper-starred="true">`
   - Comentario de marca: `<!-- instapaper_starred: true -->`
 - Salida Markdown: se incluye front matter YAML al inicio:
   - `---\ninstapaper_starred: true\n---`
-
-### Cómo preparar el artículo en Instapaper
-- Basta con añadir una estrella (⭐) al inicio del título del artículo en Instapaper. Con eso es suficiente para que el pipeline lo detecte como destacado.
 
 ### Bump automático de HTML destacados
 - Los artículos destacados se bumpean automáticamente al terminar el procesamiento: se ajusta su `mtime` al futuro para que queden arriba en listados ordenados por fecha (por ejemplo, en Finder o en el servidor `utils/serve_docs.py`).
@@ -116,9 +107,6 @@ Uso downstream:
 - Filtrar Markdown por front matter (`instapaper_starred: true`) en tu generador estático o script.
 - Para HTML, buscar el meta `<meta name="instapaper-starred" content="true">` o el atributo `data-instapaper-starred="true"` para resaltar o priorizar.
 
-- Publicación opcional: puedes copiar manualmente una selección de HTML (p. ej., los bumpeados) a `web/public/posts/` para exponerlos en la web. El contenedor los sirve bajo `/posts/` con un índice estático generado automáticamente (orden mtime desc), y así puedes referenciarlos fácilmente desde Obsidian.
-
----
 
 ## 📂 Estructura de directorios
 
@@ -131,8 +119,9 @@ Uso downstream:
 ├── Pdfs/Pdfs <AÑO>/        # PDFs organizados
 └── Historial.txt           # Registro histórico
 ```
+
 Esta estructura es el destino natural de la “Descarga de documentos”.
----
+
 
 ## Web pública (carpeta `web/`)
 
@@ -153,8 +142,6 @@ La carpeta `web/` contiene la infraestructura y el contenido estático que se pu
 - `/data/` en el contenedor mantiene PUT habilitado (estilo WebDAV); el listado sigue con `autoindex on;` (no se modifica desde este repo).
 
 Más detalles de Docker/Nginx y del proceso de despliegue en la sección “🌐 Infraestructura y despliegue (Docker/Nginx)”.
-
----
 
 ## Servidor web local
 
@@ -201,8 +188,6 @@ Solución de problemas:
 - Toast sin enlace “Ver”: define `PUBLIC_POSTS_URL_BASE`.
 - Índice de `/posts/` no cambia: el deploy regenera `index.html`. Fuerza recarga. Verifica que `web/deploy.sh` terminó sin errores.
 
----
-
 ## 📌 Scripts principales
 
 | Script | Función |
@@ -226,8 +211,6 @@ Solución de problemas:
 - `utils/bump.applescript` - Atajo AppleScript para subir archivos en Finder ajustando mtime
 - `utils/un-bump.applescript` - Tal cual dice el título
 
----
-
 ## 🧪 Testing
 
 ```bash
@@ -236,7 +219,6 @@ pytest tests/ -v
 
 Incluye una batería de tests para validar los procesadores y utilidades.
 
----
 
 ## 🌐 Infraestructura y despliegue (Docker/Nginx)
 
@@ -253,8 +235,6 @@ Este repo incluye una configuración opcional para servir tu contenido procesado
   - El contenido público (`web/public/`) no se versiona: está ignorado en `.gitignore`. En GitHub sólo se publican los ficheros de configuración.
   - Guía completa (host Nginx con TLS + contenedor app): ver `README-infra.md`.
 
-
 ---
-
 
 © 2025 Domingo Gallardo López
