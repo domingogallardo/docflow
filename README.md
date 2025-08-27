@@ -118,22 +118,7 @@ export INSTAPAPER_PASSWORD="tu_contraseña"
 | `utils.py` | Utilidades comunes |
 
 ### Utilidades adicionales
-- `utils/serve_docs.py` - Servidor local de lectura para `.html` y `.pdf` con:
-  - Overlay en páginas HTML para hacer Bump/Unbump del archivo abierto (botón y atajos: b / u / l y ⌘/Ctrl+B, ⌘/Ctrl+U)
-  - Publicar/Despublicar al sitio público desde el overlay:
-    - Publicar: copia el HTML activo a `web/public/posts/` preservando `mtime` y ejecuta `web/deploy.sh`.
-    - Despublicar: elimina el HTML de `web/public/posts/` y ejecuta `web/deploy.sh`.
-    - Atajos: `p` para Publicar (si está bumped y no publicado) y `d` para Despublicar (si ya está publicado).
-    - UI: indicador de progreso (“⏳ publicando…/despublicando…”) y notificación tipo toast; opcionalmente añade enlace “Ver” si `PUBLIC_POSTS_URL_BASE` está definido.
-    - Lógica de visibilidad: “Publicar” aparece solo si el archivo está bumped y aún no existe en `web/public/posts/`. “Despublicar” aparece si ya existe.
-  - Listado de carpetas/archivos ordenado por mtime (desc), resaltando ficheros bump con 🔥
-  - Assets del overlay servidos como ficheros externos (evita CSP inline). Desactivar overlay con `?raw=1`
-  - Config por entorno: `PORT` (8000), `SERVE_DIR` (ruta base), `BUMP_YEARS` (100)
-  - Config extra (publicación):
-    - `PUBLIC_POSTS_DIR` (destino local, por defecto `web/public/posts` dentro del repo)
-    - `DEPLOY_SCRIPT` (script de despliegue, por defecto `web/deploy.sh`)
-    - `PUBLIC_POSTS_URL_BASE` (base pública para el toast, ej. `https://domingogallardo.com/posts`)
-    - Requiere exportar `REMOTE_USER` y `REMOTE_HOST` para que `web/deploy.sh` pueda desplegar.
+- `utils/serve_docs.py` — ver sección “Servidor web local”.
 - `utils/rebuild_historial.py` - Reconstruir historial
 - `utils/update_font.py` - Actualizar tipografía en archivos HTML
 - `utils/borrar_cortos.py` - Eliminar documentos cortos
@@ -143,6 +128,51 @@ export INSTAPAPER_PASSWORD="tu_contraseña"
 - `utils/un-bump.applescript` - Tal cual dice el título
 
 ---
+
+## Servidor web local
+
+`utils/serve_docs.py` levanta un servidor para leer `.html`/`.pdf` y gestionar tus documentos con un overlay sencillo y rápido.
+
+- Overlay en `.html` con Bump/Unbump, Publicar/Despublicar y atajos de teclado.
+- Listado de carpetas/archivos ordenado por `mtime` descendente; los bumpeados se resaltan con 🔥.
+- Overlay desactivable con `?raw=1`. CSS/JS externos para evitar bloqueos CSP.
+
+Arranque rápido (con publicación/despliegue habilitados):
+
+```bash
+REMOTE_USER=root REMOTE_HOST=<SERVER_IP> \
+PUBLIC_POSTS_URL_BASE=https://domingogallardo.com/posts \
+PORT=8000 SERVE_DIR="/Users/domingo/⭐️ Documentación" \
+python utils/serve_docs.py
+```
+
+Acciones y atajos del overlay:
+- Bump: botón o `b` (también ⌘/Ctrl+B)
+- Unbump: botón o `u` (también ⌘/Ctrl+U)
+- Ir al listado (carpeta): `l`
+- Publicar: botón o `p` cuando el archivo está bumpeado y no publicado
+- Despublicar: botón o `d` cuando el archivo ya está publicado
+
+Publicar/Despublicar:
+- Publicar copia el `.html` abierto a `web/public/posts/` preservando `mtime` y lanza `web/deploy.sh`.
+- Despublicar elimina ese archivo de `web/public/posts/` y lanza `web/deploy.sh`.
+- Estados en la UI: “⏳ publicando…” / “⏳ despublicando…”, botón deshabilitado durante la operación, y confirmación con toast. Si defines `PUBLIC_POSTS_URL_BASE`, el toast incluye enlace “Ver”.
+- Visibilidad: “Publicar” aparece si el archivo está bumpeado y aún no existe en `web/public/posts/`. “Despublicar” aparece si ya existe.
+
+Variables de entorno:
+- Básicas: `PORT` (8000), `SERVE_DIR` (ruta base), `BUMP_YEARS` (100)
+- Publicación: `PUBLIC_POSTS_DIR` (destino local; por defecto `web/public/posts`), `DEPLOY_SCRIPT` (por defecto `web/deploy.sh`), `PUBLIC_POSTS_URL_BASE` (ej. `https://domingogallardo.com/posts`)
+- Deploy: `REMOTE_USER` y `REMOTE_HOST` (requeridos por `web/deploy.sh`)
+
+Índices estáticos en el deploy:
+- `web/deploy.sh` regenera índices para `/posts/` (solo HTML) y `/docs/` (HTML/PDF) ordenando por `mtime` desc. Los bumpeados aparecen primero.
+
+Solución de problemas:
+- “Publicar” no aparece: el archivo no está bumpeado o ya existe en `PUBLIC_POSTS_DIR`. Comprueba `mtime` y que el nombre no exista en destino.
+- “Despublicar” no aparece: el archivo no está en `PUBLIC_POSTS_DIR` (detección por nombre). Revisa `PUBLIC_POSTS_DIR` efectivo.
+- Error al publicar/desplegar: mira la consola de `serve_docs.py` para el detalle. Asegura `chmod +x web/deploy.sh` y exporta `REMOTE_USER`/`REMOTE_HOST`.
+- Toast sin enlace “Ver”: define `PUBLIC_POSTS_URL_BASE`.
+- Índice de `/posts/` no cambia: el deploy regenera `index.html`. Fuerza recarga. Verifica que `web/deploy.sh` terminó sin errores.
 
 ## 🧪 Testing
 
@@ -170,23 +200,6 @@ Este repo incluye una configuración opcional para servir tu contenido procesado
   - Guía completa (host Nginx con TLS + contenedor app): ver `README-infra.md`.
 
 Nota: si quieres edición autenticada de `/data/` en el servidor, crea y monta un `.htpasswd` en `/opt/web-domingo/nginx/.htpasswd` (fuera del repo). Por defecto, en `docker-compose` local `/data` se monta en solo lectura.
-
-### 📤 Publicar desde el servidor local (resumen rápido)
-
-```bash
-# Arrancar el servidor local con publicación habilitada
-REMOTE_USER=root REMOTE_HOST=<SERVER_IP> \
-PUBLIC_POSTS_URL_BASE=https://domingogallardo.com/posts \
-PORT=8000 SERVE_DIR="/Users/domingo/⭐️ Documentación" \
-python utils/serve_docs.py
-```
-
-- Abre un `.html` y usa:
-  - `b` para Bump, `u` para Unbump, `l` para ir al listado
-  - `p` para Publicar (si bumped y no publicado) → copia + deploy
-  - `d` para Despublicar (si publicado) → borra + deploy
-
-El índice de `/posts/` y `/docs/` se regenera en el deploy, mostrando los archivos ordenados por `mtime` descendente (los bumpeados aparecen arriba).
 
 ---
 
