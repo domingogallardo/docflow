@@ -129,6 +129,32 @@ export INSTAPAPER_PASSWORD="tu_contraseña"
 
 ---
 
+## ⭐ Instapaper: Artículos Destacados
+
+- Detección: se identifica si un artículo está marcado con estrella tanto en el listado (`/u/<página>`) como en la página de lectura (`/read/<id>`). Se consideran:
+  - Estrella al inicio del `<title>` o del `h1` visible (⭐, ⭐️, ★, ✪, ✭).
+  - Indicadores de UI: enlaces `unstar`, controles con `aria-pressed=true`, clases `starred/on/filled`, o SVGs relacionados.
+- Normalización del título: cualquier prefijo de estrella en el título se elimina para nombrar y mostrar sin el emoji.
+- Salida HTML: si está destacado, se añade
+  - `<meta name="instapaper-starred" content="true">`
+  - Atributo en la raíz: `<html data-instapaper-starred="true">`
+  - Comentario de marca: `<!-- instapaper_starred: true -->`
+- Salida Markdown: se incluye front matter YAML al inicio:
+  - `---\ninstapaper_starred: true\n---`
+
+### Cómo preparar el artículo en Instapaper
+- Basta con añadir una estrella (⭐) al inicio del título del artículo en Instapaper. Con eso es suficiente para que el pipeline lo detecte como destacado.
+
+### Bump automático de HTML destacados
+- Los artículos destacados se bumpean automáticamente al terminar el procesamiento: se ajusta su `mtime` al futuro para que queden arriba en listados ordenados por fecha (por ejemplo, en Finder o en el servidor `utils/serve_docs.py`).
+- En el servidor de lectura (`utils/serve_docs.py`), los archivos bumpeados se resaltan con 🔥 y puedes hacer Unbump desde el overlay (atajos: `u` o ⌘/Ctrl+U).
+
+Uso downstream:
+- Filtrar Markdown por front matter (`instapaper_starred: true`) en tu generador estático o script.
+- Para HTML, buscar el meta `<meta name="instapaper-starred" content="true">` o el atributo `data-instapaper-starred="true"` para resaltar o priorizar.
+
+- Publicación opcional: puedes copiar manualmente una selección de HTML (p. ej., los bumpeados) a `web/public/posts/` para exponerlos en la web. El contenedor los sirve bajo `/posts/` con un índice estático generado automáticamente (orden mtime desc), y así puedes referenciarlos fácilmente desde Obsidian.
+
 ## Web pública (carpeta `web/`)
 
 La carpeta `web/` contiene la infraestructura y el contenido estático que se publica en tu servidor remoto.
@@ -224,32 +250,6 @@ Este repo incluye una configuración opcional para servir tu contenido procesado
 Nota: si quieres edición autenticada de `/data/` en el servidor, crea y monta un `.htpasswd` en `/opt/web-domingo/nginx/.htpasswd` (fuera del repo). Por defecto, en `docker-compose` local `/data` se monta en solo lectura.
 
 ---
-
-## ⭐ Instapaper: Artículos Destacados
-
-- Detección: se identifica si un artículo está marcado con estrella tanto en el listado (`/u/<página>`) como en la página de lectura (`/read/<id>`). Se consideran:
-  - Estrella al inicio del `<title>` o del `h1` visible (⭐, ⭐️, ★, ✪, ✭).
-  - Indicadores de UI: enlaces `unstar`, controles con `aria-pressed=true`, clases `starred/on/filled`, o SVGs relacionados.
-- Normalización del título: cualquier prefijo de estrella en el título se elimina para nombrar y mostrar sin el emoji.
-- Salida HTML: si está destacado, se añade
-  - `<meta name="instapaper-starred" content="true">`
-  - Atributo en la raíz: `<html data-instapaper-starred="true">`
-  - Comentario de marca: `<!-- instapaper_starred: true -->`
-- Salida Markdown: se incluye front matter YAML al inicio:
-  - `---\ninstapaper_starred: true\n---`
-
-### Cómo preparar el artículo en Instapaper
-- Basta con añadir una estrella (⭐) al inicio del título del artículo en Instapaper. Con eso es suficiente para que el pipeline lo detecte como destacado.
-
-### Bump automático de HTML destacados
-- Los artículos destacados se bumpean automáticamente al terminar el procesamiento: se ajusta su `mtime` al futuro para que queden arriba en listados ordenados por fecha (por ejemplo, en Finder o en el servidor `utils/serve_docs.py`).
-- En el servidor de lectura (`utils/serve_docs.py`), los archivos bumpeados se resaltan con 🔥 y puedes hacer Unbump desde el overlay (atajos: `u` o ⌘/Ctrl+U).
-
-Uso downstream:
-- Filtrar Markdown por front matter (`instapaper_starred: true`) en tu generador estático o script.
-- Para HTML, buscar el meta `<meta name="instapaper-starred" content="true">` o el atributo `data-instapaper-starred="true"` para resaltar o priorizar.
-
-- Publicación opcional: puedes copiar manualmente una selección de HTML (p. ej., los bumpeados) a `web/public/posts/` para exponerlos en la web. El contenedor los sirve bajo `/posts/` con un índice estático generado automáticamente (orden mtime desc), y así puedes referenciarlos fácilmente desde Obsidian.
 
 ---
 
