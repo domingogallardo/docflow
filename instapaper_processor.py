@@ -597,8 +597,8 @@ class InstapaperProcessor:
         return md_new
     
     def _list_processed_files(self) -> List[Path]:
-        """Lista archivos procesados (HTML, Markdown e imágenes locales)."""
-        exts = ['.html', '.htm', '.md', '.jpg', '.jpeg', '.png', '.gif', '.webp']
+        """Lista archivos procesados (HTML y Markdown)."""
+        exts = ['.html', '.htm', '.md']
         return [f for f in self.incoming_dir.rglob("*") if f.is_file() and f.suffix.lower() in exts]
     
     def _move_files_to_destination(self, files: List[Path]) -> List[Path]:
