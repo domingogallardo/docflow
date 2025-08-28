@@ -128,24 +128,22 @@ Esta estructura es el destino natural de la “Descarga de documentos”.
 La carpeta `web/` contiene la infraestructura y el contenido estático que se publica en tu servidor remoto.
 
 - Contenido público: `web/public/`
-  - `posts/` y `docs/` sirven archivos HTML (y PDF en `docs/`).
-  - Los índices `index.html` de ambos directorios se generan en cada deploy, ordenados por `mtime` descendente; los archivos bumpeados (con fecha futura) aparecen arriba.
-  - El overlay de `utils/serve_docs.py` publica/despublica copiando o borrando archivos en `web/public/posts/` y ejecutando el deploy.
+  - Directorio: `reads/` (HTML + PDFs descargados).
+  - Los índices `index.html` se generan en cada deploy, ordenados por `mtime` desc; los bumpeados (fecha futura) suben arriba.
+  - El overlay de `utils/serve_docs.py` publica/despublica copiando o borrando archivos en `web/public/reads/` y ejecutando el deploy.
 - Deploy: `web/deploy.sh`
   - Requiere `REMOTE_USER` y `REMOTE_HOST` en el entorno.
   - Empaqueta `web/Dockerfile`, `web/nginx.conf` y `web/public/`, los sube a `/opt/web-domingo` y levanta el contenedor `web-domingo` en el servidor (Nginx en host termina HTTPS y hace proxy al puerto 8080 del contenedor).
   - Verificación pública rápida:
-    - `curl -I https://domingogallardo.com/posts/`
-    - `curl -s https://domingogallardo.com/posts/ | head -n 40`
-    - `curl -I https://domingogallardo.com/docs/`
-    - `curl -s https://domingogallardo.com/docs/ | head -n 20`
+    - `curl -I https://domingogallardo.com/read/`
+    - `curl -s https://domingogallardo.com/read/ | head -n 40`
 - `/data/` en el contenedor mantiene PUT habilitado (estilo WebDAV); el listado sigue con `autoindex on;` (no se modifica desde este repo).
 
 Más detalles de Docker/Nginx y del proceso de despliegue en la sección “🌐 Infraestructura y despliegue (Docker/Nginx)”.
 
 ## Servidor web local
 
-`utils/serve_docs.py` levanta un servidor para leer `.html`/`.pdf` y gestionar tus documentos con un overlay sencillo y rápido.
+`utils/serve_docs.py` levanta un servidor para leer `.html`/`.pdf` y gestionar tus documentos con un overlay sencillo y rápido. Publica/despublica en `web/public/reads/`.
 
 - Overlay en `.html` con Bump/Unbump, Publicar/Despublicar y atajos de teclado.
 - Listado de carpetas/archivos ordenado por `mtime` descendente; los bumpeados se resaltan con 🔥.
@@ -155,7 +153,7 @@ Arranque rápido (con publicación/despliegue habilitados):
 
 ```bash
 REMOTE_USER=root REMOTE_HOST=<SERVER_IP> \
-PUBLIC_POSTS_URL_BASE=https://domingogallardo.com/posts \
+PUBLIC_READS_URL_BASE=https://domingogallardo.com/read \
 PORT=8000 SERVE_DIR="/Users/domingo/⭐️ Documentación" \
 python utils/serve_docs.py
 ```
@@ -168,25 +166,28 @@ Acciones y atajos del overlay:
 - Despublicar: botón o `d` cuando el archivo ya está publicado
 
 Publicar/Despublicar:
-- Publicar copia el `.html` abierto a `web/public/posts/` preservando `mtime` y lanza `web/deploy.sh`.
-- Despublicar elimina ese archivo de `web/public/posts/` y lanza `web/deploy.sh`.
-- Estados en la UI: “⏳ publicando…” / “⏳ despublicando…”, botón deshabilitado durante la operación, y confirmación con toast. Si defines `PUBLIC_POSTS_URL_BASE`, el toast incluye enlace “Ver”.
-- Visibilidad: “Publicar” aparece si el archivo está bumpeado y aún no existe en `web/public/posts/`. “Despublicar” aparece si ya existe.
+- Publicar copia el `.html` abierto o un `.pdf` (desde el índice) a `web/public/reads/` preservando `mtime` y lanza `web/deploy.sh`.
+- Despublicar elimina ese archivo de `web/public/reads/` y lanza `web/deploy.sh`.
+- Estados en la UI: “⏳ publicando…” / “⏳ despublicando…”, botón deshabilitado durante la operación, y confirmación con toast. Si defines `PUBLIC_READS_URL_BASE`, el toast incluye enlace “Ver”.
+- Visibilidad: “Publicar” aparece si el archivo está bumpeado y aún no existe en `web/public/reads/`. “Despublicar” aparece si ya existe.
 
 Variables de entorno:
 - Básicas: `PORT` (8000), `SERVE_DIR` (ruta base), `BUMP_YEARS` (100)
-- Publicación: `PUBLIC_POSTS_DIR` (destino local; por defecto `web/public/posts`), `DEPLOY_SCRIPT` (por defecto `web/deploy.sh`), `PUBLIC_POSTS_URL_BASE` (ej. `https://domingogallardo.com/posts`)
+- Publicación (local):
+  - `PUBLIC_READS_DIR` (por defecto `web/public/reads`)
+  - `DEPLOY_SCRIPT` (por defecto `web/deploy.sh`)
+  - `PUBLIC_READS_URL_BASE` (ej. `https://domingogallardo.com/read` para el enlace “Ver” del overlay)
 - Deploy: `REMOTE_USER` y `REMOTE_HOST` (requeridos por `web/deploy.sh`; el script hereda estas variables y debe ser ejecutable con `chmod +x web/deploy.sh`)
 
 Índices estáticos en el deploy:
-- `web/deploy.sh` regenera índices para `/posts/` (solo HTML) y `/docs/` (HTML/PDF) ordenando por `mtime` desc. Los bumpeados aparecen primero.
+- `web/deploy.sh` regenera el índice para `/read/` (HTML/PDF). Orden por `mtime` desc.
 
 Solución de problemas:
-- “Publicar” no aparece: el archivo no está bumpeado o ya existe en `PUBLIC_POSTS_DIR`. Comprueba `mtime` y que el nombre no exista en destino.
-- “Despublicar” no aparece: el archivo no está en `PUBLIC_POSTS_DIR` (detección por nombre). Revisa `PUBLIC_POSTS_DIR` efectivo.
+- “Publicar” no aparece: el archivo no está bumpeado o ya existe en `PUBLIC_READS_DIR`. Comprueba `mtime` y que el nombre no exista en destino.
+- “Despublicar” no aparece: el archivo no está en `PUBLIC_READS_DIR` (detección por nombre). Revisa `PUBLIC_READS_DIR` efectivo.
 - Error al publicar/desplegar: mira la consola de `serve_docs.py` para el detalle. Asegura `chmod +x web/deploy.sh` y exporta `REMOTE_USER`/`REMOTE_HOST`.
-- Toast sin enlace “Ver”: define `PUBLIC_POSTS_URL_BASE`.
-- Índice de `/posts/` no cambia: el deploy regenera `index.html`. Fuerza recarga. Verifica que `web/deploy.sh` terminó sin errores.
+- Toast sin enlace “Ver”: define `PUBLIC_READS_URL_BASE`.
+- Índice de `/read/` no cambia: el deploy regenera `index.html`. Fuerza recarga. Verifica que `web/deploy.sh` terminó sin errores.
 
 ## 📌 Scripts principales
 
@@ -227,7 +228,7 @@ Sitio en producción: https://domingogallardo.com
 Este repo incluye una configuración opcional para servir tu contenido procesado en un servidor propio:
 
 - Directorio `web/` (infra):
-  - `Dockerfile` y `nginx.conf`: Imagen Nginx (Alpine) que sirve HTML/PDF y expone `/docs/` y `/posts/` mediante índices estáticos generados en el deploy, ordenados por fecha (mtime desc). Provee `/data/` para ediciones vía PUT protegido con BasicAuth.
+  - `Dockerfile` y `nginx.conf`: Imagen Nginx (Alpine) que sirve HTML/PDF y expone `/read/` mediante índice estático generado en el deploy, ordenado por fecha (mtime desc). Provee `/data/` para ediciones vía PUT protegido con BasicAuth.
   - `docker-compose.yml` (solo local): monta `./public` y `./dynamic-data` en modo lectura (`:ro`) y expone `8080:80`.
   - `deploy.sh`: empaqueta y despliega al servidor remoto en `/opt/web-domingo` y levanta el contenedor `web-domingo`. Requiere `REMOTE_USER` y `REMOTE_HOST` (no se incluyen secretos en el repo).
   - `.dockerignore` para builds reproducibles.

@@ -32,20 +32,21 @@ from typing import Optional
 # Paths relativos al repo (para publicar)
 SCRIPT_DIR = os.path.abspath(os.path.dirname(__file__))
 REPO_ROOT = os.path.abspath(os.path.join(SCRIPT_DIR, os.pardir))
-PUBLIC_POSTS_DIR = os.getenv(
-    "PUBLIC_POSTS_DIR",
-    os.path.join(REPO_ROOT, "web", "public", "posts"),
-)
 DEPLOY_SCRIPT = os.getenv(
     "DEPLOY_SCRIPT",
     os.path.join(REPO_ROOT, "web", "deploy.sh"),
 )
-PUBLIC_POSTS_URL_BASE = os.getenv("PUBLIC_POSTS_URL_BASE", "")
+PUBLIC_READS_URL_BASE = os.getenv("PUBLIC_READS_URL_BASE", "")
+PUBLIC_READS_DIR = os.getenv(
+    "PUBLIC_READS_DIR",
+    os.path.join(REPO_ROOT, "web", "public", "reads"),
+)
 
 # --------- CONFIG ---------
 PORT = int(os.getenv("PORT", "8000"))
 SERVE_DIR = os.getenv("SERVE_DIR", "/Users/domingo/⭐️ Documentación")
 BUMP_YEARS = int(os.getenv("BUMP_YEARS", "100"))
+ 
 
 # Contador de la sesión (equivale al "counter" del AppleScript en un run)
 _BUMP_COUNTER = 0
@@ -151,14 +152,14 @@ OVERLAY_JS = (
     "    });\n"
     "    if(bumped && !published){\n"
     "      const pub = el('button', null, 'Publicar');\n"
-    "      pub.title = 'Copiar a /web/public/posts y desplegar';\n"
+    "      pub.title = 'Copiar a /web/public/reads y desplegar';\n"
     "      if(publishing){ pub.textContent = 'Publicando…'; pub.setAttribute('disabled',''); }\n"
     "      pub.addEventListener('click', publish);\n"
     "      bar.appendChild(pub);\n"
     "    }\n"
     "    if(published){\n"
     "      const unp = el('button', null, 'Despublicar');\n"
-    "      unp.title = 'Eliminar de /web/public/posts y desplegar';\n"
+    "      unp.title = 'Eliminar de /web/public/reads y desplegar';\n"
     "      if(unpublishing){ unp.textContent = 'Despublicando…'; unp.setAttribute('disabled',''); }\n"
     "      unp.addEventListener('click', unpublish);\n"
     "      bar.appendChild(unp);\n"
@@ -183,6 +184,29 @@ OVERLAY_JS = (
     "    if(k==='d' && published && !unpublishing){ e.preventDefault(); unpublish(); }\n"
     "  });\n"
     "  document.addEventListener('DOMContentLoaded', ()=>{ document.body.appendChild(bar); render(); });\n"
+    "})();\n"
+).encode("utf-8")
+
+# JS para acciones rápidas en el índice (PDFs: bump/publicar/despublicar)
+INDEX_JS = (
+    "(()=>{\n"
+    "  function send(action, rel, target){\n"
+    "    const params = {path: rel, action};\n"
+    "    if(target){ params.target = target; }\n"
+    "    const body = new URLSearchParams(params).toString();\n"
+    "    return fetch('/__bump', {method:'POST', headers:{'Content-Type':'application/x-www-form-urlencoded'}, body});\n"
+    "  }\n"
+    "  document.addEventListener('click', (e)=>{\n"
+    "    const a = e.target.closest('[data-dg-act]');\n"
+    "    if(!a) return;\n"
+    "    e.preventDefault();\n"
+    "    const action = a.getAttribute('data-dg-act');\n"
+    "    const rel = a.getAttribute('data-dg-path');\n"
+    "    const tgt = a.getAttribute('data-dg-target');\n"
+    "    if(!action || !rel) return;\n"
+    "    a.textContent = '…'; a.setAttribute('disabled','');\n"
+    "    send(action, rel, tgt).then(r=>{ if(r.ok){ location.reload(); } else { alert('Error'); a.removeAttribute('disabled'); } });\n"
+    "  });\n"
     "})();\n"
 ).encode("utf-8")
 
@@ -275,13 +299,16 @@ def compute_bump_mtime() -> int:
     return base_epoch_cached() + _BUMP_COUNTER
 
 
+ 
+
+
 def inject_overlay(html_text: str, rel_fs: str, bumped: bool, published: bool) -> bytes:
     tags = (
         '<link rel="stylesheet" href="/__overlay.css">'
         f'<script src="/__overlay.js" defer data-path="{html.escape(rel_fs)}" '
         f'data-bumped="{"1" if bumped else "0"}" '
         f' data-published="{"1" if published else "0"}"'
-        f' data-public-base="{html.escape(PUBLIC_POSTS_URL_BASE)}"></script>'
+        f' data-public-base="{html.escape(PUBLIC_READS_URL_BASE)}"></script>'
     )
     low = html_text.lower()
     idx = low.rfind("</body>")
@@ -346,8 +373,14 @@ class HTMLOnlyRequestHandler(SimpleHTTPRequestHandler):
                 if not is_bumped(st_src.st_mtime):
                     self.send_error(400, "No publicado: el fichero no está bumped")
                     return
-                # 1) Copiar a web/public/posts
-                dst_dir = PUBLIC_POSTS_DIR
+                # 1) Copiar a directorio público READS siempre
+                if not os.path.isdir(PUBLIC_READS_DIR):
+                    try:
+                        os.makedirs(PUBLIC_READS_DIR, exist_ok=True)
+                    except Exception as e:
+                        self.send_error(500, f"No se pudo crear destino: {e}")
+                        return
+                dst_dir = PUBLIC_READS_DIR
                 try:
                     os.makedirs(dst_dir, exist_ok=True)
                 except Exception as e:
@@ -388,14 +421,13 @@ class HTMLOnlyRequestHandler(SimpleHTTPRequestHandler):
                 return
 
             if action == "unpublish":
-                # Elimina el archivo del directorio de posts y despliega
-                dst_path = os.path.join(PUBLIC_POSTS_DIR, os.path.basename(abs_path))
+                # Elimina el archivo del directorio público READS y despliega
+                removed = False
                 try:
+                    dst_path = os.path.join(PUBLIC_READS_DIR, os.path.basename(abs_path))
                     if os.path.exists(dst_path):
                         os.remove(dst_path)
-                    else:
-                        # Si no existe, consideramos la operación idempotente
-                        pass
+                        removed = True
                 except Exception as e:
                     self.send_error(500, f"Error despublicando: {e}")
                     return
@@ -426,6 +458,8 @@ class HTMLOnlyRequestHandler(SimpleHTTPRequestHandler):
 
         if parsed.path == "/__overlay.js":
             return self._send_bytes(OVERLAY_JS, "application/javascript; charset=utf-8")
+        if parsed.path == "/__index.js":
+            return self._send_bytes(INDEX_JS, "application/javascript; charset=utf-8")
 
         # Páginas HTML: inyectar overlay salvo ?raw=1
         rel_path = parsed.path.lstrip("/")
@@ -444,10 +478,10 @@ class HTMLOnlyRequestHandler(SimpleHTTPRequestHandler):
                     return super().do_GET()
 
                 st = os.stat(abs_path)
-                # Publicado si ya existe un archivo con el mismo nombre en posts/
+                # Publicado si ya existe un archivo con el mismo nombre en reads/
                 published = False
                 try:
-                    published = os.path.exists(os.path.join(PUBLIC_POSTS_DIR, os.path.basename(abs_path)))
+                    published = os.path.exists(os.path.join(PUBLIC_READS_DIR, os.path.basename(abs_path)))
                 except Exception:
                     published = False
                 out = inject_overlay(text, rel_fs, is_bumped(st.st_mtime), published)
@@ -470,8 +504,26 @@ class HTMLOnlyRequestHandler(SimpleHTTPRequestHandler):
 
         r = []
         displaypath = urllib.parse.unquote(self.path)
-        r.append(f"<html><head><meta charset='utf-8'><title>Index of {html.escape(displaypath)}</title></head><body>")
-        r.append(f"<h2>Index of {html.escape(displaypath)}</h2><hr><ul>")
+        r.append(
+            f"<html><head><meta charset='utf-8'><title>Index of {html.escape(displaypath)}</title>"
+            "<style>"
+            "body{margin:14px 18px;font:14px -apple-system,system-ui,Segoe UI,Roboto,Helvetica,Arial;color:#222}"
+            "h2{margin:6px 0 10px;font-weight:600}"
+            "hr{border:0;border-top:1px solid #e6e6e6;margin:8px 0}"
+            "ul.dg-index{list-style:none;padding-left:0}"
+            ".dg-index li{padding:2px 6px;border-radius:6px;margin:2px 0;display:flex;justify-content:space-between;align-items:center}"
+            ".dg-bump{background:#fff6e5}"
+            ".dg-pub a{color:#0a7;font-weight:600}"
+            ".dg-legend{color:#666;font:13px -apple-system,system-ui,Segoe UI,Roboto,Helvetica,Arial;margin-bottom:6px}"
+            ".dg-actions{display:inline-flex;gap:6px}"
+            ".dg-actions button, .dg-actions a{padding:2px 6px;border:1px solid #ccc;border-radius:6px;background:#f7f7f7;text-decoration:none;color:#333;font:12px -apple-system,system-ui,Segoe UI,Roboto,Helvetica,Arial}"
+            ".dg-actions button[disabled], .dg-actions a[disabled]{opacity:.6;pointer-events:none}"
+            "</style>"
+            "<script src='/__index.js' defer></script>"
+            "</head><body>"
+        )
+        r.append(f"<h2>Index of {html.escape(displaypath)}</h2>")
+        r.append("<div class='dg-legend'>🔥 bumped · 🟢 publicado</div><hr><ul class='dg-index'>")
 
         if displaypath != "/":
             parent = os.path.dirname(displaypath.rstrip("/"))
@@ -486,16 +538,50 @@ class HTMLOnlyRequestHandler(SimpleHTTPRequestHandler):
             except FileNotFoundError:
                 continue
             bumped = (mtime > now)
-            prefix = '🔥 ' if bumped else ''
+            # Consideramos publicado si existe en READS
+            published = False
+            try:
+                if name.lower().endswith((".html", ".htm", ".pdf")):
+                    if os.path.exists(os.path.join(PUBLIC_READS_DIR, name)):
+                        published = True
+            except Exception:
+                published = False
+            icon_pub = '🟢 ' if published else ''
+            prefix = ("🔥 " if bumped else "") + icon_pub
             is_dir = e.is_dir()
             disp = name + ("/" if is_dir else "")
             link = urllib.parse.quote(name + ("/" if is_dir else ""))
+            li_classes = []
+            if bumped:
+                li_classes.append("dg-bump")
+            if published:
+                li_classes.append("dg-pub")
+            cls = f" class=\"{' '.join(li_classes)}\"" if li_classes else ""
+            # Acciones para PDFs (no podemos inyectar overlay en visor)
+            actions_html = ""
+            rel_from_root = os.path.relpath(fullname, SERVE_DIR)
+            if name.lower().endswith(".pdf"):
+                parts = []
+                if bumped:
+                    parts.append(f"<a href='#' class='dg-act' data-dg-act='unbump_now' data-dg-path='{html.escape(rel_from_root)}'>Unbump</a>")
+                else:
+                    parts.append(f"<a href='#' class='dg-act' data-dg-act='bump' data-dg-path='{html.escape(rel_from_root)}'>Bump</a>")
+                if published:
+                    parts.append(f"<a href='#' class='dg-act' data-dg-act='unpublish' data-dg-path='{html.escape(rel_from_root)}'>Despublicar</a>")
+                else:
+                    if bumped:
+                        parts.append(
+                            f"<a href='#' class='dg-act' data-dg-act='publish' data-dg-path='{html.escape(rel_from_root)}'>Publicar</a>"
+                        )
+                if parts:
+                    actions_html = f"<span class='dg-actions'>{' '.join(parts)}</span>"
+
             if is_dir:
-                r.append(f'<li>{prefix}<a href="{link}">{html.escape(disp)}</a></li>')
+                r.append(f'<li{cls}><span>{prefix}<a href="{link}">{html.escape(disp)}</a></span>{actions_html}</li>')
             elif name.lower().endswith(".html"):
-                r.append(f'<li>{prefix}📄 <a href="{link}">{html.escape(disp)}</a></li>')
+                r.append(f'<li{cls}><span>{prefix}📄 <a href="{link}">{html.escape(disp)}</a></span>{actions_html}</li>')
             elif name.lower().endswith(".pdf"):
-                r.append(f'<li>{prefix}📕 <a href="{link}">{html.escape(disp)}</a></li>')
+                r.append(f'<li{cls}><span>{prefix}📕 <a href="{link}">{html.escape(disp)}</a></span>{actions_html}</li>')
 
         r.append("</ul><hr></body></html>")
         encoded = "\n".join(r).encode("utf-8", "surrogateescape")

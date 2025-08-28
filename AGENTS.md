@@ -19,17 +19,15 @@ This repository automates collecting and organizing personal documents (Instapap
 ## Deploy & Verify (Web)
 - Remote deploy: `env REMOTE_USER=root REMOTE_HOST=<SERVER_IP> bash web/deploy.sh`
 - What it does:
-  - Generates minimal static indexes for `/public/posts` (HTML) and `/public/docs` (HTML + PDF), ordered by mtime desc (bumps first), with entries as: `FileName — YYYY-Mon-DD HH:MM`.
+  - Generates a minimal static index for `/public/reads` (HTML + PDF), ordered by mtime desc (bumps first), with entries as: `FileName — YYYY-Mon-DD HH:MM`.
   - Bundles `web/Dockerfile`, `web/nginx.conf`, and `web/public/` and deploys to `/opt/web-domingo` on the remote host.
   - Rebuilds and runs the container `web-domingo` on port 8080.
 - Nginx inside the container:
-- `/posts/` and `/docs/` serve static `index.html` (no dynamic directory listing module).
+- `/read/` serves a static `index.html` (no dynamic directory listing module).
   - `/data/` keeps WebDAV-like PUT enabled; listing is via `autoindex on;` (unchanged).
 Public checks:
-- `curl -I https://domingogallardo.com/posts/` (200 OK)
-- `curl -s https://domingogallardo.com/posts/ | head -n 40` (UL simple con “Nombre — Fecha”, futuro arriba)
-- `curl -I https://domingogallardo.com/docs/` (200 OK)
-- `curl -s https://domingogallardo.com/docs/ | head -n 20`
+- `curl -I https://domingogallardo.com/read/` (200 OK)
+- `curl -s https://domingogallardo.com/read/ | head -n 40` (UL simple con “Nombre — Fecha”, futuro arriba)
 
 ## Git: Checks previos a commit/push
 - Rama actual: `git branch --show-current` (debe ser `main`).
@@ -46,7 +44,7 @@ Configuración útil (si es un entorno nuevo)
 - Upstream por defecto: `git push -u origin main` (solo la primera vez).
 
 Notes for agents
-- Do not touch `/data/` auth or methods; only `/posts/` and `/docs/` are static listings now.
+- Do not touch `/data/` auth or methods; `/read/` is a static listing now.
 - Note: the old directory-listing CSS is not used anymore by these static indexes.
 - If the server is reachable and you have approval, you can run `web/deploy.sh` directly; otherwise provide the exact command for the user to run.
 

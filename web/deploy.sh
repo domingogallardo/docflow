@@ -68,9 +68,8 @@ PY
   fi
 }
 
-# Generar índices para /posts (solo HTML) y /docs (HTML + PDF)
-gen_index "$SCRIPT_DIR/public/posts" "Posts" ".html,.htm"
-gen_index "$SCRIPT_DIR/public/docs" "Docs" ".html,.htm,.pdf"
+# Generar índice para /read (HTML+PDF combinados)
+gen_index "$SCRIPT_DIR/public/reads" "Reads" ".html,.htm,.pdf"
 
 echo "📦 Empaquetando archivos (sin metadatos de macOS)..."
 # Evita xattrs y archivos AppleDouble (.DS_Store, ._*) que provocan warnings en GNU tar
