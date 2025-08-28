@@ -144,12 +144,15 @@ OVERLAY_JS = (
     "  function render(){\n"
     "    bar.innerHTML = '';\n"
     "    bar.appendChild(el('strong', null, '📄 ' + rel));\n"
-    "    const btn = el('button', null, bumped ? 'Unbump' : 'Bump');\n"
-    "    btn.addEventListener('click', async ()=>{\n"
-    "      const ok = await call(bumped ? 'unbump_now' : 'bump');\n"
-    "      msg.textContent = ok ? '✓ hecho' : '× error'; msg.className = ok ? 'meta ok' : 'meta err';\n"
-    "      if(ok){ bumped = !bumped; render(); }\n"
-    "    });\n"
+    "    if(!published){\n"
+    "      const btn = el('button', null, bumped ? 'Unbump' : 'Bump');\n"
+    "      btn.addEventListener('click', async ()=>{\n"
+    "        const ok = await call(bumped ? 'unbump_now' : 'bump');\n"
+    "        msg.textContent = ok ? '✓ hecho' : '× error'; msg.className = ok ? 'meta ok' : 'meta err';\n"
+    "        if(ok){ bumped = !bumped; render(); }\n"
+    "      });\n"
+    "      bar.appendChild(btn);\n"
+    "    }\n"
     "    if(bumped && !published){\n"
     "      const pub = el('button', null, 'Publicar');\n"
     "      pub.title = 'Copiar a /web/public/reads y desplegar';\n"
@@ -165,7 +168,7 @@ OVERLAY_JS = (
     "      bar.appendChild(unp);\n"
     "    }\n"
     "    const raw = el('a', {href:'?raw=1', title:'Ver sin overlay'}, 'raw');\n"
-    "    bar.appendChild(btn); bar.appendChild(raw); bar.appendChild(msg);\n"
+    "    bar.appendChild(raw); bar.appendChild(msg);\n"
     "  }\n"
     "  function isEditingTarget(t){ return t && (t.tagName==='INPUT' || t.tagName==='TEXTAREA' || t.isContentEditable); }\n"
     "  const bar = el('div', {id:'dg-overlay'});\n"
@@ -173,10 +176,10 @@ OVERLAY_JS = (
     "  document.addEventListener('keydown', async (e)=>{\n"
     "    if(isEditingTarget(document.activeElement)) return;\n"
     "    const k = (e.key || '').toLowerCase();\n"
-    "    if(k==='b'){\n"
+    "    if(k==='b' && !published){\n"
     "      e.preventDefault(); const ok = await call('bump'); if(ok){ bumped=true; render(); msg.textContent='✓ hecho'; msg.className='meta ok'; }\n"
     "    }\n"
-    "    if(k==='u'){\n"
+    "    if(k==='u' && !published){\n"
     "      e.preventDefault(); const ok = await call('unbump_now'); if(ok){ bumped=false; render(); msg.textContent='✓ hecho'; msg.className='meta ok'; }\n"
     "    }\n"
     "    if(k==='l' && !e.metaKey && !e.ctrlKey && !e.altKey){ e.preventDefault(); goList(); }\n"
@@ -347,6 +350,14 @@ class HTMLOnlyRequestHandler(SimpleHTTPRequestHandler):
 
         try:
             if action in ("bump", "unbump_now"):
+                # No permitir (un)bump si el archivo está publicado en reads/
+                try:
+                    is_published = os.path.exists(os.path.join(PUBLIC_READS_DIR, os.path.basename(abs_path)))
+                except Exception:
+                    is_published = False
+                if is_published:
+                    self.send_error(400, "No se puede (un)bump mientras está publicado")
+                    return
                 st = os.stat(abs_path)
                 atime = st.st_atime  # conservamos atime
 
@@ -562,17 +573,14 @@ class HTMLOnlyRequestHandler(SimpleHTTPRequestHandler):
             rel_from_root = os.path.relpath(fullname, SERVE_DIR)
             if name.lower().endswith(".pdf"):
                 parts = []
-                if bumped:
-                    parts.append(f"<a href='#' class='dg-act' data-dg-act='unbump_now' data-dg-path='{html.escape(rel_from_root)}'>Unbump</a>")
-                else:
-                    parts.append(f"<a href='#' class='dg-act' data-dg-act='bump' data-dg-path='{html.escape(rel_from_root)}'>Bump</a>")
                 if published:
                     parts.append(f"<a href='#' class='dg-act' data-dg-act='unpublish' data-dg-path='{html.escape(rel_from_root)}'>Despublicar</a>")
                 else:
                     if bumped:
-                        parts.append(
-                            f"<a href='#' class='dg-act' data-dg-act='publish' data-dg-path='{html.escape(rel_from_root)}'>Publicar</a>"
-                        )
+                        parts.append(f"<a href='#' class='dg-act' data-dg-act='unbump_now' data-dg-path='{html.escape(rel_from_root)}'>Unbump</a>")
+                        parts.append(f"<a href='#' class='dg-act' data-dg-act='publish' data-dg-path='{html.escape(rel_from_root)}'>Publicar</a>")
+                    else:
+                        parts.append(f"<a href='#' class='dg-act' data-dg-act='bump' data-dg-path='{html.escape(rel_from_root)}'>Bump</a>")
                 if parts:
                     actions_html = f"<span class='dg-actions'>{' '.join(parts)}</span>"
 

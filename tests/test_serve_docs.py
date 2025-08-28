@@ -116,6 +116,9 @@ def test_directory_index_pdf_actions_and_publish_detection(tmp_path, monkeypatch
     for line in html.splitlines():
         if "paper_publicado.pdf" in line:
             assert "🟢" in line or "dg-pub" in line
+            # No debe ofrecer Bump/Unbump estando publicado
+            assert "data-dg-act='bump'" not in line
+            assert "data-dg-act='unbump_now'" not in line
             break
 
     # El PDF bumped muestra acciones Unbump y una opción de Publicar (reads)
