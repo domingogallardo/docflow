@@ -165,6 +165,17 @@ Acciones y atajos del overlay:
 - Publicar: botón o `p` cuando el archivo está bumpeado y no publicado
 - Despublicar: botón o `d` cuando el archivo ya está publicado
 
+### Flujo de estados (UI)
+
+- S0 — Unbumped + No publicado: solo muestra Bump.
+- S1 — Bumped + No publicado: muestra Unbump y Publicar.
+- S2 — Publicado: solo muestra Despublicar (Bump/Unbump ocultos y atajos `b`/`u` desactivados).
+- Reglas de validación:
+  - Publicar requiere que el archivo esté bumped y no publicado.
+  - Mientras esté publicado, no se permite (ni se muestra) Bump/Unbump.
+  - El servidor rechaza `bump`/`unbump_now` si el archivo está publicado, evitando “Publicado + Unbumped”.
+  - Este flujo aplica al overlay (HTML) y al índice (PDFs).
+
 Publicar/Despublicar:
 - Publicar copia el `.html` abierto o un `.pdf` (desde el índice) a `web/public/reads/` preservando `mtime` y lanza `web/deploy.sh`.
 - Despublicar elimina ese archivo de `web/public/reads/` y lanza `web/deploy.sh`.
