@@ -100,8 +100,8 @@ ssh $REMOTE_USER@$REMOTE_HOST << 'EOF'
   fi
   rm deploy.tar.gz
 
-  # Permisos para edición (UID/GID 101 = nginx en Alpine)
-  chown -R 101:101 /opt/web-domingo/dynamic-data
+  # Permisos para edición (nginx en Alpine: uid=100, gid=101)
+  chown -R 100:101 /opt/web-domingo/dynamic-data
   chmod -R 755 /opt/web-domingo/dynamic-data
 
   docker stop web-domingo || true
