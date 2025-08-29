@@ -73,8 +73,8 @@ curl -fsSL https://get.docker.com | sudo sh
 ```bash
 sudo mkdir -p /opt/web-domingo/dynamic-data
 sudo mkdir -p /opt/web-domingo/nginx
-# Allow writes from Nginx in Alpine (UID/GID 101 is typical for 'nginx')
-sudo chown -R 101:101 /opt/web-domingo/dynamic-data
+# Allow writes from Nginx in Alpine (nginx defaults: uid=100, gid=101)
+sudo chown -R 100:101 /opt/web-domingo/dynamic-data
 sudo chmod -R 755 /opt/web-domingo/dynamic-data
 ```
 
@@ -212,6 +212,8 @@ CMD ["nginx", "-g", "daemon off;"]
 ```nginx
 # Load dynamic modules installed via apk (none required for static indexes)
 include /etc/nginx/modules/*.conf;
+
+user nginx;
 
 worker_processes 1;
 
