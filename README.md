@@ -138,6 +138,11 @@ La carpeta `web/` contiene la infraestructura y el contenido estático que se pu
 - Deploy: `web/deploy.sh`
   - Requiere `REMOTE_USER` y `REMOTE_HOST` en el entorno.
   - Empaqueta `web/Dockerfile`, `web/nginx.conf` y `web/public/`, los sube a `/opt/web-domingo` y levanta el contenedor `web-domingo` en el servidor (Nginx en host termina HTTPS y hace proxy al puerto 8080 del contenedor).
+  - Editor y credenciales:
+    - `/editor` es una página estática que edita `/data/nota.txt` mediante `PUT`.
+    - `/data/` exige BasicAuth. El contenedor lee `/etc/nginx/.htpasswd` montado desde el host en `/opt/web-domingo/nginx/.htpasswd` (ro).
+    - Permisos: el `.htpasswd` debe ser legible por Nginx; usa `chmod 644 /opt/web-domingo/nginx/.htpasswd` en el host.
+    - Deploy con credenciales: si defines `HTPASSWD_USER` y `HTPASSWD_PSS`, el deploy genera/actualiza el `.htpasswd` en el host con hash bcrypt (la contraseña se pasa por stdin; no se guarda en Git).
   - Verificación pública rápida:
     - `curl -I https://domingogallardo.com/read/`
     - `curl -s https://domingogallardo.com/read/ | head -n 40`
