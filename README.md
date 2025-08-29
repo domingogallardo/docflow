@@ -40,6 +40,10 @@ export INSTAPAPER_USERNAME="tu_usuario"
 export INSTAPAPER_PASSWORD="tu_contraseña"
 export REMOTE_USER="usuario_en_host_web_pública"
 export REMOTE_HOST="IP_host_web_pública"
+# Opcional: actualizar credenciales BasicAuth del editor en el deploy
+# (se genera bcrypt en el host; no se guarda nada en Git)
+# export HTPASSWD_USER="editor"
+# export HTPASSWD_PSS="mi-contraseña-segura"
 ```
 
 Nota: `REMOTE_USER` y `REMOTE_HOST` solo son necesarios si vas a Publicar/Despublicar desde el overlay del “Servidor web local”.
@@ -189,6 +193,7 @@ Variables de entorno:
   - `DEPLOY_SCRIPT` (por defecto `web/deploy.sh`)
   - `PUBLIC_READS_URL_BASE` (ej. `https://domingogallardo.com/read` para el enlace “Ver” del overlay)
 - Deploy: `REMOTE_USER` y `REMOTE_HOST` (requeridos por `web/deploy.sh`; el script hereda estas variables y debe ser ejecutable con `chmod +x web/deploy.sh`)
+ - Deploy (opcional, gestión de BasicAuth): si defines `HTPASSWD_USER` y `HTPASSWD_PSS`, el deploy actualizará `/opt/web-domingo/nginx/.htpasswd` en el host generando un hash bcrypt (la contraseña viaja por `stdin`, no se muestra en `argv`).
 
 Índices estáticos en el deploy:
 - `web/deploy.sh` regenera el índice para `/read/` (HTML/PDF). Orden por `mtime` desc.
