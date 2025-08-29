@@ -315,7 +315,7 @@ ssh "$REMOTE_USER@$REMOTE_HOST" <<'EOF'
   cd /opt/web-domingo
   tar xzf deploy.tar.gz && rm deploy.tar.gz
 
-  chown -R 101:101 /opt/web-domingo/dynamic-data
+  chown -R 100:101 /opt/web-domingo/dynamic-data
   chmod -R 755 /opt/web-domingo/dynamic-data
 
   docker stop web-domingo || true
@@ -340,6 +340,35 @@ echo "Done."
 ```
 
 > For CI/CD, replicate the same build/run steps but inject secrets (domain, auth) via your CI’s secret manager.
+
+### 6.1 Manage `.htpasswd` during deploy (optional)
+
+If you don't want to touch the host manually, `web/deploy.sh` can update `/opt/web-domingo/nginx/.htpasswd` as part of the deploy. Enable with environment variables (do not commit secrets):
+
+- `MANAGE_HTPASSWD=1`: turns on credential management.
+- Choose one method:
+  - `HTPASSWD_FILE=/path/local/.htpasswd`: copies the file as-is to the host.
+  - `HTPASSWD_ENTRY='user:$2y$12$…'`: writes a single bcrypt line; no plaintext needed.
+  - `HTPASSWD_USER='editor'` and `HTPASSWD_PASS='…'`: generates bcrypt on the host (uses `htpasswd`, password passed via stdin — not visible in argv). Optional `HTPASSWD_BCRYPT_COST=12`.
+
+Examples:
+
+```bash
+# Using a pre-hashed line stored as a CI secret (recommended)
+MANAGE_HTPASSWD=1 \
+HTPASSWD_ENTRY="$HTPASSWD_ENTRY_SECRET" \
+REMOTE_USER=root REMOTE_HOST=<SERVER_IP> bash web/deploy.sh
+
+# Generate from plaintext provided via env (local only; do not commit values)
+MANAGE_HTPASSWD=1 \
+HTPASSWD_USER=editor HTPASSWD_PASS='my-strong-pass' \
+REMOTE_USER=root REMOTE_HOST=<SERVER_IP> bash web/deploy.sh
+
+# Copy a local file (not tracked by Git)
+MANAGE_HTPASSWD=1 \
+HTPASSWD_FILE=~/.secrets/web-domingo.htpasswd \
+REMOTE_USER=root REMOTE_HOST=<SERVER_IP> bash web/deploy.sh
+```
 
 ---
 

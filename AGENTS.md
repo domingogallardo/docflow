@@ -20,6 +20,8 @@ This repository automates collecting and organizing personal documents (Instapap
 - Remote deploy: `env REMOTE_USER=root REMOTE_HOST=<SERVER_IP> bash web/deploy.sh`
 - What it does:
   - Generates a minimal static index for `/public/read` (HTML + PDF), ordered by mtime desc (bumps first), with entries as: `FileName — YYYY-Mon-DD HH:MM`.
+  - Optionally manages host BasicAuth when `MANAGE_HTPASSWD=1`:
+    - `HTPASSWD_FILE` to copy a ready-made file; or `HTPASSWD_ENTRY` with `user:bcryptHash`; or `HTPASSWD_USER` + `HTPASSWD_PASS` (bcrypt generated on host).
   - Bundles `web/Dockerfile`, `web/nginx.conf`, and `web/public/` and deploys to `/opt/web-domingo` on the remote host.
   - Rebuilds and runs the container `web-domingo` on port 8080.
 - Nginx inside the container:

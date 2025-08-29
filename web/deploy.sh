@@ -85,6 +85,40 @@ COPYFILE_DISABLE=1 tar \
 echo "📁 Preparando servidor remoto..."
 ssh "$REMOTE_USER@$REMOTE_HOST" "mkdir -p $REMOTE_PATH $REMOTE_PATH/dynamic-data"
 
+# (Opcional) Gestionar credenciales BasicAuth (.htpasswd) en el host remoto
+# Usa una (y solo una) de estas formas, habilitando MANAGE_HTPASSWD=1:
+#  - HTPASSWD_FILE: ruta local a un archivo .htpasswd para copiar tal cual
+#  - HTPASSWD_ENTRY: línea completa 'usuario:hash_bcrypt' (no plaintext)
+#  - HTPASSWD_USER + HTPASSWD_PASS: el script generará bcrypt en remoto (requiere apache2-utils)
+if [[ "${MANAGE_HTPASSWD:-0}" == "1" ]]; then
+  echo "🔐 Actualizando .htpasswd en el host remoto (modo seguro)…"
+  # Asegurar carpeta nginx
+  ssh "$REMOTE_USER@$REMOTE_HOST" "mkdir -p $REMOTE_PATH/nginx"
+  if [[ -n "${HTPASSWD_FILE:-}" ]]; then
+    scp "$HTPASSWD_FILE" "$REMOTE_USER@$REMOTE_HOST:$REMOTE_PATH/nginx/.htpasswd"
+  elif [[ -n "${HTPASSWD_ENTRY:-}" ]]; then
+    # Evita problemas de quoting enviando por stdin
+    printf '%s' "$HTPASSWD_ENTRY" | ssh "$REMOTE_USER@$REMOTE_HOST" "cat > $REMOTE_PATH/nginx/.htpasswd"
+  elif [[ -n "${HTPASSWD_USER:-}" && -n "${HTPASSWD_PASS:-}" ]]; then
+    # Generar con bcrypt en remoto sin exponer la contraseña en argv (usa -i)
+    PASS_B64=$(printf '%s' "$HTPASSWD_PASS" | base64)
+    ssh "$REMOTE_USER@$REMOTE_HOST" bash -s << 'EOSSH'
+set -euo pipefail
+if ! command -v htpasswd >/dev/null 2>&1; then
+  apt-get update -y >/dev/null && apt-get install -y apache2-utils >/dev/null
+fi
+mkdir -p /opt/web-domingo/nginx
+umask 027
+printf '%s' "$PASS_B64" | base64 -d | htpasswd -iB -C "${HTPASSWD_BCRYPT_COST:-12}" -c /opt/web-domingo/nginx/.htpasswd "$HTPASSWD_USER"
+chown root:root /opt/web-domingo/nginx/.htpasswd
+chmod 640 /opt/web-domingo/nginx/.htpasswd
+EOSSH
+    unset PASS_B64
+  else
+    echo "ℹ️ MANAGE_HTPASSWD=1 pero no se proporcionó HTPASSWD_FILE, HTPASSWD_ENTRY ni HTPASSWD_USER+HTPASSWD_PASS. Se omite." >&2
+  fi
+fi
+
 echo "🚀 Subiendo archivos..."
 scp "$SCRIPT_DIR/deploy.tar.gz" "$REMOTE_USER@$REMOTE_HOST:$REMOTE_PATH/"
 
