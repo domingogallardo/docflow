@@ -19,7 +19,7 @@ This repository automates collecting and organizing personal documents (Instapap
 ## Deploy & Verify (Web)
 - Remote deploy: `env REMOTE_USER=root REMOTE_HOST=<SERVER_IP> bash web/deploy.sh`
 - What it does:
-  - Generates a minimal static index for `/public/reads` (HTML + PDF), ordered by mtime desc (bumps first), with entries as: `FileName — YYYY-Mon-DD HH:MM`.
+  - Generates a minimal static index for `/public/read` (HTML + PDF), ordered by mtime desc (bumps first), with entries as: `FileName — YYYY-Mon-DD HH:MM`.
   - Bundles `web/Dockerfile`, `web/nginx.conf`, and `web/public/` and deploys to `/opt/web-domingo` on the remote host.
   - Rebuilds and runs the container `web-domingo` on port 8080.
 - Nginx inside the container:

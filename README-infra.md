@@ -255,7 +255,7 @@ http {
         # Read: static index (mtime desc, generated at deploy)
         location = /read { return 301 /read/; }
         location /read/ {
-            alias /usr/share/nginx/html/reads/;
+            alias /usr/share/nginx/html/read/;
             index index.html;
             try_files $uri $uri/ /read/index.html;
         }
