@@ -69,7 +69,7 @@ PY
 }
 
 # Generar índice para /read (HTML+PDF combinados)
-gen_index "$SCRIPT_DIR/public/reads" "Reads" ".html,.htm,.pdf"
+gen_index "$SCRIPT_DIR/public/read" "Read" ".html,.htm,.pdf"
 
 echo "📦 Empaquetando archivos (sin metadatos de macOS)..."
 # Evita xattrs y archivos AppleDouble (.DS_Store, ._*) que provocan warnings en GNU tar

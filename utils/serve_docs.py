@@ -39,7 +39,7 @@ DEPLOY_SCRIPT = os.getenv(
 PUBLIC_READS_URL_BASE = os.getenv("PUBLIC_READS_URL_BASE", "")
 PUBLIC_READS_DIR = os.getenv(
     "PUBLIC_READS_DIR",
-    os.path.join(REPO_ROOT, "web", "public", "reads"),
+    os.path.join(REPO_ROOT, "web", "public", "read"),
 )
 
 # --------- CONFIG ---------
@@ -155,14 +155,14 @@ OVERLAY_JS = (
     "    }\n"
     "    if(bumped && !published){\n"
     "      const pub = el('button', null, 'Publicar');\n"
-    "      pub.title = 'Copiar a /web/public/reads y desplegar';\n"
+    "      pub.title = 'Copiar a /web/public/read y desplegar';\n"
     "      if(publishing){ pub.textContent = 'Publicando…'; pub.setAttribute('disabled',''); }\n"
     "      pub.addEventListener('click', publish);\n"
     "      bar.appendChild(pub);\n"
     "    }\n"
     "    if(published){\n"
     "      const unp = el('button', null, 'Despublicar');\n"
-    "      unp.title = 'Eliminar de /web/public/reads y desplegar';\n"
+    "      unp.title = 'Eliminar de /web/public/read y desplegar';\n"
     "      if(unpublishing){ unp.textContent = 'Despublicando…'; unp.setAttribute('disabled',''); }\n"
     "      unp.addEventListener('click', unpublish);\n"
     "      bar.appendChild(unp);\n"
@@ -350,7 +350,7 @@ class HTMLOnlyRequestHandler(SimpleHTTPRequestHandler):
 
         try:
             if action in ("bump", "unbump_now"):
-                # No permitir (un)bump si el archivo está publicado en reads/
+                # No permitir (un)bump si el archivo está publicado en read/
                 try:
                     is_published = os.path.exists(os.path.join(PUBLIC_READS_DIR, os.path.basename(abs_path)))
                 except Exception:
@@ -489,7 +489,7 @@ class HTMLOnlyRequestHandler(SimpleHTTPRequestHandler):
                     return super().do_GET()
 
                 st = os.stat(abs_path)
-                # Publicado si ya existe un archivo con el mismo nombre en reads/
+                # Publicado si ya existe un archivo con el mismo nombre en read/
                 published = False
                 try:
                     published = os.path.exists(os.path.join(PUBLIC_READS_DIR, os.path.basename(abs_path)))
