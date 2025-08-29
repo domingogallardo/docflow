@@ -84,7 +84,7 @@ sudo chmod -R 755 /opt/web-domingo/dynamic-data
 sudo apt -y install apache2-utils
 sudo htpasswd -B -c /opt/web-domingo/nginx/.htpasswd <YOUR_USER>
 sudo chown root:root /opt/web-domingo/nginx/.htpasswd
-sudo chmod 640 /opt/web-domingo/nginx/.htpasswd
+sudo chmod 644 /opt/web-domingo/nginx/.htpasswd
 ```
 
 > Do **not** commit `.htpasswd`. Create/update it directly on the host.
@@ -343,32 +343,19 @@ echo "Done."
 
 ### 6.1 Manage `.htpasswd` during deploy (optional)
 
-If you don't want to touch the host manually, `web/deploy.sh` can update `/opt/web-domingo/nginx/.htpasswd` as part of the deploy. Enable with environment variables (do not commit secrets):
+To avoid manual host edits, `web/deploy.sh` can update `/opt/web-domingo/nginx/.htpasswd` if both variables are set:
 
-- `MANAGE_HTPASSWD=1`: turns on credential management.
-- Choose one method:
-  - `HTPASSWD_FILE=/path/local/.htpasswd`: copies the file as-is to the host.
-  - `HTPASSWD_ENTRY='user:$2y$12$…'`: writes a single bcrypt line; no plaintext needed.
-  - `HTPASSWD_USER='editor'` and `HTPASSWD_PASS='…'`: generates bcrypt on the host (uses `htpasswd`, password passed via stdin — not visible in argv). Optional `HTPASSWD_BCRYPT_COST=12`.
+- `HTPASSWD_USER`: username for BasicAuth.
+- `HTPASSWD_PSS`: plaintext password passed via env; the script generates a bcrypt hash on the host using `htpasswd -iB` (password is piped via stdin; not visible in argv).
 
-Examples:
+Example:
 
 ```bash
-# Using a pre-hashed line stored as a CI secret (recommended)
-MANAGE_HTPASSWD=1 \
-HTPASSWD_ENTRY="$HTPASSWD_ENTRY_SECRET" \
-REMOTE_USER=root REMOTE_HOST=<SERVER_IP> bash web/deploy.sh
-
-# Generate from plaintext provided via env (local only; do not commit values)
-MANAGE_HTPASSWD=1 \
-HTPASSWD_USER=editor HTPASSWD_PASS='my-strong-pass' \
-REMOTE_USER=root REMOTE_HOST=<SERVER_IP> bash web/deploy.sh
-
-# Copy a local file (not tracked by Git)
-MANAGE_HTPASSWD=1 \
-HTPASSWD_FILE=~/.secrets/web-domingo.htpasswd \
+HTPASSWD_USER=editor \
+HTPASSWD_PSS='my-strong-pass' \
 REMOTE_USER=root REMOTE_HOST=<SERVER_IP> bash web/deploy.sh
 ```
+
 
 ---
 

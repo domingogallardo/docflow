@@ -86,37 +86,23 @@ echo "📁 Preparando servidor remoto..."
 ssh "$REMOTE_USER@$REMOTE_HOST" "mkdir -p $REMOTE_PATH $REMOTE_PATH/dynamic-data"
 
 # (Opcional) Gestionar credenciales BasicAuth (.htpasswd) en el host remoto
-# Usa una (y solo una) de estas formas, habilitando MANAGE_HTPASSWD=1:
-#  - HTPASSWD_FILE: ruta local a un archivo .htpasswd para copiar tal cual
-#  - HTPASSWD_ENTRY: línea completa 'usuario:hash_bcrypt' (no plaintext)
-#  - HTPASSWD_USER + HTPASSWD_PASS: el script generará bcrypt en remoto (requiere apache2-utils)
-if [[ "${MANAGE_HTPASSWD:-0}" == "1" ]]; then
-  echo "🔐 Actualizando .htpasswd en el host remoto (modo seguro)…"
-  # Asegurar carpeta nginx
+# Modo único y simple: definir HTPASSWD_USER y HTPASSWD_PSS en el entorno.
+# - La contraseña nunca se muestra en argv: se pasa por stdin y se codifica base64 para el salto SSH.
+if [[ -n "${HTPASSWD_USER:-}" && -n "${HTPASSWD_PSS:-}" ]]; then
+  echo "🔐 Actualizando .htpasswd en el host remoto (usuario: $HTPASSWD_USER)…"
   ssh "$REMOTE_USER@$REMOTE_HOST" "mkdir -p $REMOTE_PATH/nginx"
-  if [[ -n "${HTPASSWD_FILE:-}" ]]; then
-    scp "$HTPASSWD_FILE" "$REMOTE_USER@$REMOTE_HOST:$REMOTE_PATH/nginx/.htpasswd"
-  elif [[ -n "${HTPASSWD_ENTRY:-}" ]]; then
-    # Evita problemas de quoting enviando por stdin
-    printf '%s' "$HTPASSWD_ENTRY" | ssh "$REMOTE_USER@$REMOTE_HOST" "cat > $REMOTE_PATH/nginx/.htpasswd"
-  elif [[ -n "${HTPASSWD_USER:-}" && -n "${HTPASSWD_PASS:-}" ]]; then
-    # Generar con bcrypt en remoto sin exponer la contraseña en argv (usa -i)
-    PASS_B64=$(printf '%s' "$HTPASSWD_PASS" | base64)
-    ssh "$REMOTE_USER@$REMOTE_HOST" bash -s << 'EOSSH'
+  PASS_B64=$(printf '%s' "$HTPASSWD_PSS" | base64)
+  ssh "$REMOTE_USER@$REMOTE_HOST" HTPASSWD_USER="$HTPASSWD_USER" PASS_B64="$PASS_B64" bash -s << 'EOSSH'
 set -euo pipefail
 if ! command -v htpasswd >/dev/null 2>&1; then
   apt-get update -y >/dev/null && apt-get install -y apache2-utils >/dev/null
 fi
-mkdir -p /opt/web-domingo/nginx
 umask 027
-printf '%s' "$PASS_B64" | base64 -d | htpasswd -iB -C "${HTPASSWD_BCRYPT_COST:-12}" -c /opt/web-domingo/nginx/.htpasswd "$HTPASSWD_USER"
+printf '%s' "$PASS_B64" | base64 -d | htpasswd -iB -c /opt/web-domingo/nginx/.htpasswd "$HTPASSWD_USER"
 chown root:root /opt/web-domingo/nginx/.htpasswd
-chmod 640 /opt/web-domingo/nginx/.htpasswd
+chmod 644 /opt/web-domingo/nginx/.htpasswd
 EOSSH
-    unset PASS_B64
-  else
-    echo "ℹ️ MANAGE_HTPASSWD=1 pero no se proporcionó HTPASSWD_FILE, HTPASSWD_ENTRY ni HTPASSWD_USER+HTPASSWD_PASS. Se omite." >&2
-  fi
+  unset PASS_B64
 fi
 
 echo "🚀 Subiendo archivos..."
