@@ -87,12 +87,41 @@ for mtime, name in entries:
   </pre>
 </details>'''
 
+    ascii_open = r'''<style>
+  .ascii-head { margin-top: 28px; color: #666; font-size: 14px; }
+  pre.ascii-logo {
+    margin: 10px 0 0;
+    color: #666;
+    line-height: 1.05;
+    font-size: 12px;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+    white-space: pre;
+  }
+</style>
+<div class="ascii-head"><a href="https://github.com/domingogallardo/docflow" target="_blank" rel="noopener">Dockflow</a></div>
+<pre class="ascii-logo" aria-hidden="true">         _
+        /^\\ 
+        |-|
+        |D|
+        |O|
+        |C|
+        |F|
+        |L|
+        |O|
+        |W|
+       /| |\\
+      /_| |_\\
+        /_\\
+       /___\\
+      /_/ \\_\\
+</pre>'''
+
     html_doc = (
     '<!DOCTYPE html><html><head><meta charset="utf-8">'
     '<meta name="viewport" content="width=device-width">'
     f'<title>{html.escape(title)}</title>' + ascii_style + '</head><body>'
     f'<h1>{html.escape(title)}</h1>'
-    '<ul>' + "\n".join(items) + '</ul>' + ascii_block +
+    '<ul>' + "\n".join(items) + '</ul>' + ascii_open +
     '</body></html>'
 )
 
