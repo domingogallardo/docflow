@@ -112,6 +112,8 @@ echo "🔧 Desplegando en el servidor..."
 ssh $REMOTE_USER@$REMOTE_HOST << 'EOF'
   set -e
   cd /opt/web-domingo
+  # Limpiar "public" previo para evitar residuos (p.ej. /public/posts)
+  rm -rf public
   # Extrae silenciando warnings por keywords desconocidos y timestamps futuros si está soportado
   if tar --help 2>&1 | grep -q -- '--warning'; then
     tar --warning=no-unknown-keyword --warning=no-timestamp -xzf deploy.tar.gz
