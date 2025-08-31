@@ -275,7 +275,8 @@ Este repo incluye una configuración opcional para servir tu contenido procesado
   - `.dockerignore` para builds reproducibles.
 - Seguridad y alcance:
   - El contenido público (`web/public/`) no se versiona: está ignorado en `.gitignore`. En GitHub sólo se publican los ficheros de configuración.
-  - Guía completa (host Nginx con TLS + contenedor app): ver `README-infra.md`.
+  - Guía completa (host Nginx con TLS + contenedor app): ver [README-infra.md](README-infra.md).
+  - Playbook de operaciones del host: ver [OPS-PLAYBOOK.md](OPS-PLAYBOOK.md).
 
 ---
 
