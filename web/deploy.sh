@@ -67,7 +67,7 @@ ascii_open = r'''<style>
 </style>
 <div class="ascii-head"><a href="https://github.com/domingogallardo/docflow" target="_blank" rel="noopener">Docflow</a></div>
 <pre class="ascii-logo" aria-hidden="true">         _
-        /^\\ 
+        /^\
         |-|
         |D|
         |O|
@@ -76,11 +76,11 @@ ascii_open = r'''<style>
         |L|
         |O|
         |W|
-       /| |\\
-      /_| |_\\
-        /_\\
-       /___\\
-      /_/ \\_\\
+       /| |\
+      /_| |_\
+        /_\
+       /___\
+      /_/ \_\
 </pre>'''
 
 html_doc = (
