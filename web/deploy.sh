@@ -52,42 +52,9 @@ for mtime, name in entries:
     href = quote(name); esc = html.escape(name); d = fmt_date(mtime)
     items.append(f'<li><a href="{href}" title="{esc}">{esc}</a> — {d}</li>')
 
-    ascii_style = '''
-    <style>
-      details.ascii { margin-top: 28px; }
-      details.ascii summary { cursor: pointer; color: #666; }
-      pre.ascii-logo {
-        margin: 10px 0 0;
-        color: #666;
-        line-height: 1.05;
-        font-size: 12px;
-        font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
-        white-space: pre;
-      }
-    </style>
-    '''
+    # (el ASCII art se define fuera del bucle)
 
-    ascii_block = r'''<details class="ascii">
-  <summary>Dockflow (ASCII)</summary>
-  <pre class="ascii-logo" aria-hidden="true">         _
-        /^\ 
-        |-|
-        |D|
-        |O|
-        |C|
-        |F|
-        |L|
-        |O|
-        |W|
-       /| |\
-      /_| |_\
-        /_\
-       /___\
-      /_/ \_\
-  </pre>
-</details>'''
-
-    ascii_open = r'''<style>
+ascii_open = r'''<style>
   .ascii-head { margin-top: 28px; color: #666; font-size: 14px; }
   pre.ascii-logo {
     margin: 10px 0 0;
@@ -98,7 +65,7 @@ for mtime, name in entries:
     white-space: pre;
   }
 </style>
-<div class="ascii-head"><a href="https://github.com/domingogallardo/docflow" target="_blank" rel="noopener">Dockflow</a></div>
+<div class="ascii-head"><a href="https://github.com/domingogallardo/docflow" target="_blank" rel="noopener">Docflow</a></div>
 <pre class="ascii-logo" aria-hidden="true">         _
         /^\\ 
         |-|
@@ -116,13 +83,13 @@ for mtime, name in entries:
       /_/ \\_\\
 </pre>'''
 
-    html_doc = (
-    '<!DOCTYPE html><html><head><meta charset="utf-8">'
-    '<meta name="viewport" content="width=device-width">'
-    f'<title>{html.escape(title)}</title>' + ascii_style + '</head><body>'
-    f'<h1>{html.escape(title)}</h1>'
-    '<ul>' + "\n".join(items) + '</ul>' + ascii_open +
-    '</body></html>'
+html_doc = (
+'<!DOCTYPE html><html><head><meta charset="utf-8">'
+'<meta name="viewport" content="width=device-width">'
+f'<title>{html.escape(title)}</title></head><body>'
+f'<h1>{html.escape(title)}</h1>'
+'<ul>' + "\n".join(items) + '</ul>' + ascii_open +
+'</body></html>'
 )
 
 out = os.path.join(dir_path, 'index.html')
