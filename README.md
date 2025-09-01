@@ -2,8 +2,6 @@
 
 docflow es un sistema automatizado para recopilar, procesar y organizar documentos personales (artículos web, PDFs, podcasts, tweets) en carpetas estructuradas por años.
 
-## Dockflow (ASCII)
-
 ```text
           _
          /^\ 
