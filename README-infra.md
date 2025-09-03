@@ -210,51 +210,51 @@ CMD ["nginx", "-g", "daemon off;"]
 ### 5.3 `nginx.conf` inside the container
 
 ```nginx
-# Load dynamic modules installed via apk (none required for static indexes)
 include /etc/nginx/modules/*.conf;
 
 user nginx;
 
 worker_processes 1;
 
-events { worker_connections 1024; }
+events {
+    worker_connections 1024;
+}
 
 http {
     include       mime.types;
     default_type  application/octet-stream;
-    charset       utf-8;
-    client_max_body_size 100m;
 
     server {
         listen 80;
-        server_name _;
+        server_name localhost;
 
         root /usr/share/nginx/html;
 
         # Editor page (static)
-        location = /editor { try_files /editor.html =404; }
+        location = /editor {
+            try_files /editor.html =404;   # serves public/editor.html
+        }
 
-        # Host-mounted data (PUT via WebDAV-like DAV)
+        # Host-mounted data (PUT via DAV)
         location /data/ {
             alias /data/;
 
-            # Optional directory listing in /data (remove if not desired)
+            # Optional directory listing
             autoindex on;
-            autoindex_exact_size off;
-            autoindex_localtime on;
 
-            # IMPORTANT: Do not use try_files here, to allow PUT for new files
+            # WebDAV: only PUT (no DELETE, no MKCOL)
             create_full_put_path on;
             dav_methods PUT;
             dav_access user:rw group:r all:r;
 
+            # Read allowed without auth; writes require BasicAuth
             limit_except GET HEAD {
-                auth_basic "Protected edit area";
+                auth_basic "Edición protegida";
                 auth_basic_user_file /etc/nginx/.htpasswd;
             }
         }
 
-        # Read: static index (mtime desc, generated at deploy)
+        # /read: HTML + PDF (static index generated at deploy)
         location = /read { return 301 /read/; }
         location /read/ {
             alias /usr/share/nginx/html/read/;
@@ -262,11 +262,19 @@ http {
             try_files $uri $uri/ /read/index.html;
         }
 
+        # /papers: site PDFs (optional section)
+        location = /papers { return 301 /papers/; }
+        location /papers/ {
+            alias /usr/share/nginx/html/papers/;
+            index index.html;
+            try_files $uri $uri/ /papers/index.html;
+        }
+
         # Fallback for other static assets
         location / { try_files $uri $uri/ =404; }
 
-        add_header X-Content-Type-Options nosniff always;
-        add_header X-Frame-Options DENY always;
+        add_header X-Content-Type-Options nosniff;
+        add_header X-Frame-Options DENY;
     }
 }
 ```
@@ -288,58 +296,26 @@ services:
 
 ---
 
-## 6) Deploy script (example)
+## 6) Deploy script (provided)
 
-Minimal `deploy.sh` that bundles and deploys via `scp` and restarts the container on the host. **Parameterize** your remote and avoid committing secrets.
+Use the included `web/deploy.sh`. It bundles the app, uploads it, and rebuilds/restarts the container on the remote host.
 
-```bash
-#!/usr/bin/env bash
-set -euo pipefail
+- Usage:
+  - `env REMOTE_USER=root REMOTE_HOST=<SERVER_IP> bash web/deploy.sh`
+  - Optional BasicAuth update: set `HTPASSWD_USER` and `HTPASSWD_PSS` (see 6.1).
 
-: "${REMOTE_USER:?Set REMOTE_USER}"
-: "${REMOTE_HOST:?Set REMOTE_HOST}"
-REMOTE_PATH="/opt/web-domingo"
+- What it does (summary):
+  - Generates a static index for `/public/read` combining HTML and PDF, ordered by mtime desc.
+  - Packages `web/Dockerfile`, `web/nginx.conf`, and `web/public/` (excludes `.DS_Store` and AppleDouble files).
+  - Ensures remote paths exist under `/opt/web-domingo` and uploads the bundle.
+  - Cleans any previous `/opt/web-domingo/public` folder before extracting to avoid stale files.
+  - Optionally creates/updates `/opt/web-domingo/nginx/.htpasswd` on the host when `HTPASSWD_USER` and `HTPASSWD_PSS` are provided (bcrypt via `htpasswd -iB`).
+  - Extracts the archive (suppressing non-critical tar warnings when supported) and resets permissions for `/opt/web-domingo/dynamic-data` (uid=100,gid=101; chmod 755).
+  - Rebuilds the image and runs the container as `web-domingo` on host port `8080` with mounts:
+    - `/opt/web-domingo/dynamic-data:/data:rw`
+    - `/opt/web-domingo/nginx/.htpasswd:/etc/nginx/.htpasswd:ro`
 
-echo "Packing…"
-tar czf deploy.tar.gz Dockerfile nginx.conf public
-
-echo "Preparing remote…"
-ssh "$REMOTE_USER@$REMOTE_HOST" "mkdir -p $REMOTE_PATH $REMOTE_PATH/dynamic-data $REMOTE_PATH/nginx"
-
-echo "Uploading…"
-scp deploy.tar.gz "$REMOTE_USER@$REMOTE_HOST:$REMOTE_PATH/"
-
-echo "Deploying…"
-ssh "$REMOTE_USER@$REMOTE_HOST" <<'EOF'
-  set -e
-  cd /opt/web-domingo
-  tar xzf deploy.tar.gz && rm deploy.tar.gz
-
-  chown -R 100:101 /opt/web-domingo/dynamic-data
-  chmod -R 755 /opt/web-domingo/dynamic-data
-
-  docker stop web-domingo || true
-  docker rm web-domingo || true
-  docker build -t web-domingo .
-
-  HTPASSWD_MOUNT=""
-  if [ -f /opt/web-domingo/nginx/.htpasswd ]; then
-    HTPASSWD_MOUNT="-v /opt/web-domingo/nginx/.htpasswd:/etc/nginx/.htpasswd:ro"
-  else
-    echo "⚠️  Missing /opt/web-domingo/nginx/.htpasswd (create with: htpasswd -B -c /opt/web-domingo/nginx/.htpasswd <YOUR_USER>)"
-  fi
-
-  docker run -d -p 8080:80 \
-    -v /opt/web-domingo/dynamic-data:/data:rw \
-    $HTPASSWD_MOUNT \
-    --name web-domingo web-domingo
-EOF
-
-rm deploy.tar.gz
-echo "Done."
-```
-
-> For CI/CD, replicate the same build/run steps but inject secrets (domain, auth) via your CI’s secret manager.
+> For CI/CD, replicate these steps and inject credentials via your CI secret manager.
 
 ### 6.1 Manage `.htpasswd` during deploy (optional)
 
@@ -387,6 +363,7 @@ docker logs -n 200 web-domingo
 - If you don’t want a directory listing in `/data`, remove `autoindex on;` in that block.
 - Avoid `try_files` in the `/data/` location if you need to **PUT new files**.
 - Inside the container, use `server_name _;` (catch‑all). The host sets the real domain.
+- Inside the container, the config uses `server_name localhost` (host handles the real domain).
 - Adjust `client_max_body_size` if you plan to upload large files via `/data`.
 
 ---
