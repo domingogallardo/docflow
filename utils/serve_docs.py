@@ -230,7 +230,10 @@ def is_bumped(ts: float) -> bool:
 
 
 def fmt_ts(ts: float) -> str:
-    return datetime.fromtimestamp(ts).strftime("%Y-%m-%d %H:%M")
+    """Formato estilo /read/: YYYY-Mon-DD HH:MM (mes en inglés abreviado)."""
+    t = time.localtime(ts)
+    MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"]
+    return f"{t.tm_year}-{MONTHS[t.tm_mon-1]}-{t.tm_mday:02d} {t.tm_hour:02d}:{t.tm_min:02d}"
 
 
 def _apple_like_base_epoch() -> int:
@@ -529,6 +532,7 @@ class HTMLOnlyRequestHandler(SimpleHTTPRequestHandler):
             ".dg-actions{display:inline-flex;gap:6px}"
             ".dg-actions button, .dg-actions a{padding:2px 6px;border:1px solid #ccc;border-radius:6px;background:#f7f7f7;text-decoration:none;color:#333;font:12px -apple-system,system-ui,Segoe UI,Roboto,Helvetica,Arial}"
             ".dg-actions button[disabled], .dg-actions a[disabled]{opacity:.6;pointer-events:none}"
+            ".dg-date{color:#666;margin-left:10px;white-space:nowrap}"
             "</style>"
             "<script src='/__index.js' defer></script>"
             "</head><body>"
@@ -584,12 +588,13 @@ class HTMLOnlyRequestHandler(SimpleHTTPRequestHandler):
                 if parts:
                     actions_html = f"<span class='dg-actions'>{' '.join(parts)}</span>"
 
+            date_html = f"<span class='dg-date'> — {fmt_ts(mtime)}</span>"
             if is_dir:
-                r.append(f'<li{cls}><span>{prefix}<a href="{link}">{html.escape(disp)}</a></span>{actions_html}</li>')
+                r.append(f'<li{cls}><span>{prefix}<a href="{link}">{html.escape(disp)}</a>{date_html}</span>{actions_html}</li>')
             elif name.lower().endswith(".html"):
-                r.append(f'<li{cls}><span>{prefix}📄 <a href="{link}">{html.escape(disp)}</a></span>{actions_html}</li>')
+                r.append(f'<li{cls}><span>{prefix}📄 <a href="{link}">{html.escape(disp)}</a>{date_html}</span>{actions_html}</li>')
             elif name.lower().endswith(".pdf"):
-                r.append(f'<li{cls}><span>{prefix}📕 <a href="{link}">{html.escape(disp)}</a></span>{actions_html}</li>')
+                r.append(f'<li{cls}><span>{prefix}📕 <a href="{link}">{html.escape(disp)}</a>{date_html}</span>{actions_html}</li>')
 
         r.append("</ul><hr></body></html>")
         encoded = "\n".join(r).encode("utf-8", "surrogateescape")
