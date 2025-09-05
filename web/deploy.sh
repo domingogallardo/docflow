@@ -13,11 +13,11 @@ fi
 REMOTE_PATH="/opt/web-domingo"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-# Generador de índices estáticos (lista simple con fecha, sin CSS)
+# Generador de listados estáticos (lista simple con fecha, sin CSS)
 gen_index() {
   local DIR_PATH="$1"; local TITLE="$2"; local EXT_FILTER="$3"
   if [[ -d "$DIR_PATH" ]]; then
-    echo "🧾 Generando índice estático de ${TITLE} (mtime desc)..."
+    echo "🧾 Generando listado estático de ${TITLE} (mtime desc)..."
     PYTHON_BIN="python3"; command -v python3 >/dev/null 2>&1 || PYTHON_BIN=python
     DIR_PATH="$DIR_PATH" TITLE="$TITLE" EXT_FILTER="$EXT_FILTER" "$PYTHON_BIN" - << 'PY'
 import os, sys, time, html
@@ -36,7 +36,7 @@ for name in os.listdir(dir_path):
     path = os.path.join(dir_path, name)
     if not os.path.isfile(path): continue
     low = name.lower()
-    if low in ('index.html','index.htm'): continue
+    if low in ('read.html','index.html','index.htm'): continue
     if allowed and not low.endswith(allowed): continue
     st = os.stat(path)
     entries.append((st.st_mtime, name))
@@ -92,14 +92,14 @@ f'<h1>{html.escape(title)}</h1>'
 '</body></html>'
 )
 
-out = os.path.join(dir_path, 'index.html')
+out = os.path.join(dir_path, 'read.html')
 with open(out, 'w', encoding='utf-8') as f: f.write(html_doc)
 print(f"✓ Generado {out}")
 PY
   fi
 }
 
-# Generar índice para /read (HTML+PDF combinados)
+# Generar read.html para /read (HTML+PDF combinados)
 gen_index "$SCRIPT_DIR/public/read" "Read" ".html,.htm,.pdf"
 
 echo "📦 Empaquetando archivos (sin metadatos de macOS)..."
