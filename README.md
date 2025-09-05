@@ -151,7 +151,7 @@ La carpeta `web/` contiene la infraestructura y el contenido estático que se pu
 
 - Contenido público: `web/public/`
   - Ruta pública: `/read/` (HTML + PDFs combinados).
-  - Los índices `index.html` se generan en cada deploy, ordenados por `mtime` desc; los bumpeados (fecha futura) suben arriba.
+  - `read.html` se genera en cada deploy, ordenado por `mtime` desc; el directorio se sirve con el listado automático de nginx.
   - El overlay de `utils/serve_docs.py` publica/despublica copiando o borrando archivos en `web/public/read/` y ejecutando el deploy.
 - Deploy: `web/deploy.sh`
   - Requiere `REMOTE_USER` y `REMOTE_HOST` en el entorno.
@@ -218,15 +218,15 @@ Variables de entorno:
 - Deploy: `REMOTE_USER` y `REMOTE_HOST` (requeridos por `web/deploy.sh`; el script hereda estas variables y debe ser ejecutable con `chmod +x web/deploy.sh`)
  - Deploy (opcional, gestión de BasicAuth): si defines `HTPASSWD_USER` y `HTPASSWD_PSS`, el deploy actualizará `/opt/web-domingo/nginx/.htpasswd` en el host generando un hash bcrypt (la contraseña viaja por `stdin`, no se muestra en `argv`).
 
-Índices estáticos en el deploy:
-- `web/deploy.sh` regenera el índice para `/read/` (HTML/PDF). Orden por `mtime` desc.
+Listado estático en el deploy:
+- `web/deploy.sh` genera `read.html` para `/read/` (HTML/PDF) ordenado por `mtime` desc.
 
 Solución de problemas:
 - “Publicar” no aparece: el archivo no está bumpeado o ya existe en `PUBLIC_READS_DIR`. Comprueba `mtime` y que el nombre no exista en destino.
 - “Despublicar” no aparece: el archivo no está en `PUBLIC_READS_DIR` (detección por nombre). Revisa `PUBLIC_READS_DIR` efectivo.
 - Error al publicar/desplegar: mira la consola de `serve_docs.py` para el detalle. Asegura `chmod +x web/deploy.sh` y exporta `REMOTE_USER`/`REMOTE_HOST`.
 - Toast sin enlace “Ver”: define `PUBLIC_READS_URL_BASE`.
-- Índice de `/read/` no cambia: el deploy regenera `index.html`. Fuerza recarga. Verifica que `web/deploy.sh` terminó sin errores.
+- `read.html` no cambia: el deploy lo regenera. Fuerza recarga. Verifica que `web/deploy.sh` terminó sin errores.
 
 ## 📌 Scripts principales
 
@@ -267,7 +267,7 @@ Sitio en producción: https://domingogallardo.com
 Este repo incluye una configuración opcional para servir tu contenido procesado en un servidor propio:
 
 - Directorio `web/` (infra):
-  - `Dockerfile` y `nginx.conf`: Imagen Nginx (Alpine) que sirve HTML/PDF y expone `/read/` mediante índice estático generado en el deploy, ordenado por fecha (mtime desc). Provee `/data/` para ediciones vía PUT protegido con BasicAuth.
+  - `Dockerfile` y `nginx.conf`: Imagen Nginx (Alpine) que sirve HTML/PDF y expone `/read/` con listado automático; `read.html` se genera en el deploy ordenado por fecha (mtime desc). Provee `/data/` para ediciones vía PUT protegido con BasicAuth.
   - `docker-compose.yml` (solo local): monta `./public` y `./dynamic-data` en modo lectura (`:ro`) y expone `8080:80`.
   - `deploy.sh`: empaqueta y despliega al servidor remoto en `/opt/web-domingo` y levanta el contenedor `web-domingo`. Requiere `REMOTE_USER` y `REMOTE_HOST` (no se incluyen secretos en el repo).
   - `.dockerignore` para builds reproducibles.

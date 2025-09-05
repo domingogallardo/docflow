@@ -13,7 +13,7 @@ Production site: https://domingogallardo.com
 > - Provided files: `web/Dockerfile`, `web/nginx.conf`, `web/docker-compose.yml`, `web/deploy.sh`.
 > - Names/paths used here: container name `web-domingo`, remote path `/opt/web-domingo` (match `web/deploy.sh`).
 > - Local compose mounts `/data` read‑only (safe default); the deploy script mounts `/data` read‑write on the server.
-> - The bundled `web/nginx.conf` serves `/read/` (HTML+PDF). Static `index.html` files are generated at deploy time. The container uses `server_name localhost`.
+> - The bundled `web/nginx.conf` serves `/read/` (HTML+PDF) with nginx's autoindex. A `read.html` listing is generated at deploy time. The container uses `server_name localhost`.
 > - Public assets under `web/public/` are not tracked in the public repo (ignored via `.gitignore`).
 
 ---
@@ -24,11 +24,11 @@ Production site: https://domingogallardo.com
   - Terminates **HTTPS** (Let’s Encrypt), redirects HTTP→HTTPS, and reverse‑proxies to the app on `localhost:8080`.
 - **[APP] Nginx in Docker container**  
   - Serves **static** content from the image (`/usr/share/nginx/html`).  
-- Exposes **/read** (HTML+PDF) with static index ordered by **mtime desc** (ideal for “bumps”).
+- Exposes **/read** (HTML+PDF) with nginx autoindex; `read.html` (mtime desc) is generated at deploy time for convenience.
   - Provides **/data** for simple edits via **HTTP PUT** (no delete) protected by **BasicAuth** using a host‑mounted `.htpasswd`.
 
 **Why mtime sorting?**  
-Setting a file’s modification time (mtime) lets you “bump” items so they float to the top in the directory listing. The deploy script generates indexes sorted by date descending, which pairs nicely with this workflow.
+Setting a file’s modification time (mtime) lets you “bump” items so they float to the top in the directory listing. The deploy script generates `read.html` sorted by date descending, which pairs nicely with this workflow.
 
 ---
 
@@ -254,12 +254,11 @@ http {
             }
         }
 
-        # /read: HTML + PDF (static index generated at deploy)
+        # /read: HTML + PDF (autoindex)
         location = /read { return 301 /read/; }
         location /read/ {
             alias /usr/share/nginx/html/read/;
-            index index.html;
-            try_files $uri $uri/ /read/index.html;
+            autoindex on;
         }
 
         # /papers: site PDFs (optional section)
@@ -305,7 +304,7 @@ Use the included `web/deploy.sh`. It bundles the app, uploads it, and rebuilds/r
   - Optional BasicAuth update: set `HTPASSWD_USER` and `HTPASSWD_PSS` (see 6.1).
 
 - What it does (summary):
-  - Generates a static index for `/public/read` combining HTML and PDF, ordered by mtime desc.
+  - Generates `read.html` for `/public/read` combining HTML and PDF, ordered by mtime desc.
   - Packages `web/Dockerfile`, `web/nginx.conf`, and `web/public/` (excludes `.DS_Store` and AppleDouble files).
   - Ensures remote paths exist under `/opt/web-domingo` and uploads the bundle.
   - Cleans any previous `/opt/web-domingo/public` folder before extracting to avoid stale files.
