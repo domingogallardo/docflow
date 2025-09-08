@@ -1,6 +1,8 @@
 from pathlib import Path
 import io
 import importlib.util
+import time
+import urllib.parse
 
 
 def _make_dummy_handler(handler_cls):
@@ -81,7 +83,7 @@ def test_directory_index_pdf_actions_and_publish_detection(tmp_path, monkeypatch
     assert spec and spec.loader
     spec.loader.exec_module(sd)  # type: ignore[union-attr]
 
-    # Estructura: un PDF bump/no-pub y otro publicado
+    # Estructura: un PDF bumped/no-pub y otro bumped+publicado
     serve_dir = tmp_path / "serve"
     serve_dir.mkdir()
     pdf_pub = serve_dir / "paper_publicado.pdf"
@@ -89,10 +91,12 @@ def test_directory_index_pdf_actions_and_publish_detection(tmp_path, monkeypatch
     pdf_pub.write_bytes(b"%PDF-1.4\n")
     pdf_local.write_bytes(b"%PDF-1.4\n")
 
-    # Marcar uno como bumped (mtime en futuro)
+    # Marcar ambos como bumped (mtime en futuro)
     future = sd.base_epoch_cached() + 10
     at = pdf_local.stat().st_atime
     __import__("os").utime(str(pdf_local), (at, future))
+    at_pub = pdf_pub.stat().st_atime
+    __import__("os").utime(str(pdf_pub), (at_pub, future))
 
     # Directorio público de reads temporal con el homónimo publicado
     public_reads = tmp_path / "public_reads"
@@ -111,17 +115,17 @@ def test_directory_index_pdf_actions_and_publish_detection(tmp_path, monkeypatch
     h.list_directory(str(serve_dir))
     html = h.wfile.getvalue().decode("utf-8")
 
-    # El publicado aparece con marcador 🟢
+    # El PDF publicado muestra acciones Unbump y Despublicar
     assert "paper_publicado.pdf" in html
     for line in html.splitlines():
         if "paper_publicado.pdf" in line:
             assert "🟢" in line or "dg-pub" in line
-            # No debe ofrecer Bump/Unbump estando publicado
-            assert "data-dg-act='bump'" not in line
-            assert "data-dg-act='unbump_now'" not in line
+            assert "data-dg-act='unbump_now'" in line
+            assert "data-dg-act='unpublish'" in line
+            assert "data-dg-act='publish'" not in line
             break
 
-    # El PDF bumped muestra acciones Unbump y una opción de Publicar (reads)
+    # El PDF local bumped muestra acciones Unbump y una opción de Publicar (reads)
     assert "paper_local.pdf" in html
     for line in html.splitlines():
         if "paper_local.pdf" in line:
@@ -129,3 +133,54 @@ def test_directory_index_pdf_actions_and_publish_detection(tmp_path, monkeypatch
             assert "data-dg-act='publish'" in line
             assert "data-dg-target" not in line
             break
+
+
+def test_unbump_published_file_via_post(tmp_path, monkeypatch):
+    repo_root = Path(__file__).resolve().parents[1]
+    sd_path = repo_root / "utils" / "serve_docs.py"
+    spec = importlib.util.spec_from_file_location("serve_docs_post", sd_path)
+    sd = importlib.util.module_from_spec(spec)  # type: ignore[arg-type]
+    assert spec and spec.loader
+    spec.loader.exec_module(sd)  # type: ignore[union-attr]
+
+    serve_dir = tmp_path / "serve"
+    serve_dir.mkdir()
+    html_file = serve_dir / "doc.html"
+    html_file.write_text("<html></html>", encoding="utf-8")
+    future = sd.base_epoch_cached() + 10
+    at = html_file.stat().st_atime
+    __import__("os").utime(str(html_file), (at, future))
+
+    public_reads = tmp_path / "public_reads"
+    public_reads.mkdir()
+    (public_reads / html_file.name).write_text("<html></html>", encoding="utf-8")
+    monkeypatch.setattr(sd, "PUBLIC_READS_DIR", str(public_reads), raising=False)
+    monkeypatch.setattr(sd, "SERVE_DIR", str(serve_dir), raising=False)
+
+    body = f"path={urllib.parse.quote(html_file.name)}&action=unbump_now"
+
+    class Dummy(sd.HTMLOnlyRequestHandler):
+        def __init__(self):
+            self.path = "/__bump"
+            self.command = "POST"
+            self.requestline = "POST /__bump HTTP/1.1"
+            self.headers = {"Content-Length": str(len(body))}
+            self.rfile = io.BytesIO(body.encode("utf-8"))
+            self.wfile = io.BytesIO()
+            self._sent = {"status": None}
+            self.client_address = ("127.0.0.1", 0)
+
+        def send_response(self, code, message=None):  # type: ignore[override]
+            self._sent["status"] = code
+
+        def send_header(self, key, value):  # type: ignore[override]
+            pass
+
+        def end_headers(self):  # type: ignore[override]
+            pass
+
+    h = Dummy()
+    h.do_POST()
+    assert h._sent["status"] == 200
+    assert html_file.stat().st_mtime <= time.time()
+
