@@ -21,7 +21,6 @@ from typing import List
 from bs4 import BeautifulSoup
 from markdownify import markdownify as md
 from PIL import Image
-from io import BytesIO
 import random
 
 from config import INSTAPAPER_USERNAME, INSTAPAPER_PASSWORD, ANTHROPIC_KEY
@@ -372,11 +371,12 @@ class InstapaperProcessor:
             return meta_tag + content
 
     def _reduce_images_width(self):
-        """Reduce el ancho de imágenes en archivos HTML.
+        """Reduce el ancho de imágenes en archivos HTML sin medir remotamente.
 
-        Para estimar el tamaño se realiza una solicitud temporal al
-        recurso remoto; la imagen **no** se conserva en disco. El HTML
-        resultante sigue apuntando al servidor de origen.
+        Política: si el HTML declara un width mayor a 300px, lo limitamos a 300px
+        y eliminamos height para preservar la proporción. Si no declara width,
+        no tocamos el elemento y confiamos en el CSS global
+        `img { max-width: 300px; height: auto; }` que se inyecta en _add_margins().
         """
         html_files = []
         for dirpath, _, filenames in os.walk(self.incoming_dir):
@@ -391,6 +391,8 @@ class InstapaperProcessor:
         max_width = 300
         for html_file in html_files:
             try:
+                # Log minimal para identificar en qué archivo se procesa
+                print(f"🖼️  Revisando imágenes: {html_file}")
                 with open(html_file, 'r', encoding='utf-8') as f:
                     soup = BeautifulSoup(f, 'html.parser')
                 
@@ -400,8 +402,16 @@ class InstapaperProcessor:
                     if not src:
                         continue
                     
-                    width = self._get_image_width(src)
-                    if width and width > max_width:
+                    # Usar el ancho declarado si viene en el HTML; no realizar medición remota
+                    width_attr = img.get('width')
+                    width = None
+                    if width_attr:
+                        try:
+                            width = int(str(width_attr).strip())
+                        except Exception:
+                            width = None
+                    
+                    if width is not None and width > max_width:
                         img['width'] = str(max_width)
                         if 'height' in img.attrs:
                             del img['height']
@@ -422,15 +432,16 @@ class InstapaperProcessor:
         U.add_margins_to_html_files(self.incoming_dir)
     
     def _get_image_width(self, src):
-        """Obtiene el ancho de una imagen, soportando URLs remotas y rutas locales."""
+        """Obtiene el ancho de una imagen local.
+
+        No realiza ninguna petición de red para imágenes remotas.
+        """
         try:
             if src.startswith('http'):
-                response = requests.get(src, timeout=1)
-                img = Image.open(BytesIO(response.content))
-            else:
-                abs_path = os.path.abspath(src)
-                img = Image.open(abs_path)
-            return img.width
+                return None
+            abs_path = os.path.abspath(src)
+            with Image.open(abs_path) as img:
+                return img.width
         except Exception:
             return None
 
