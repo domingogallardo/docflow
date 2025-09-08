@@ -12,6 +12,8 @@ Servidor local de HTML/PDF con "bump" desde la propia página leída.
 - Botón "inteligente": solo Bump o Unbump según mtime > now.
 - Atajos: b / u / l y ⌘B / ⌘U (o Ctrl+B / Ctrl+U).
   · 'l' navega al listado (carpeta padre) del archivo actual.
+- Bump y publicación son estados independientes; se puede (des)bump aunque esté
+  publicado.
 
 Variables de entorno:
   PORT        (por defecto 8000)
@@ -144,15 +146,13 @@ OVERLAY_JS = (
     "  function render(){\n"
     "    bar.innerHTML = '';\n"
     "    bar.appendChild(el('strong', null, '📄 ' + rel));\n"
-    "    if(!published){\n"
-    "      const btn = el('button', null, bumped ? 'Unbump' : 'Bump');\n"
-    "      btn.addEventListener('click', async ()=>{\n"
-    "        const ok = await call(bumped ? 'unbump_now' : 'bump');\n"
-    "        msg.textContent = ok ? '✓ hecho' : '× error'; msg.className = ok ? 'meta ok' : 'meta err';\n"
-    "        if(ok){ bumped = !bumped; render(); }\n"
-    "      });\n"
-    "      bar.appendChild(btn);\n"
-    "    }\n"
+    "    const btn = el('button', null, bumped ? 'Unbump' : 'Bump');\n"
+    "    btn.addEventListener('click', async ()=>{\n"
+    "      const ok = await call(bumped ? 'unbump_now' : 'bump');\n"
+    "      msg.textContent = ok ? '✓ hecho' : '× error'; msg.className = ok ? 'meta ok' : 'meta err';\n"
+    "      if(ok){ bumped = !bumped; render(); }\n"
+    "    });\n"
+    "    bar.appendChild(btn);\n"
     "    if(bumped && !published){\n"
     "      const pub = el('button', null, 'Publicar');\n"
     "      pub.title = 'Copiar a /web/public/read y desplegar';\n"
@@ -176,10 +176,10 @@ OVERLAY_JS = (
     "  document.addEventListener('keydown', async (e)=>{\n"
     "    if(isEditingTarget(document.activeElement)) return;\n"
     "    const k = (e.key || '').toLowerCase();\n"
-    "    if(k==='b' && !published){\n"
+    "    if(k==='b'){\n"
     "      e.preventDefault(); const ok = await call('bump'); if(ok){ bumped=true; render(); msg.textContent='✓ hecho'; msg.className='meta ok'; }\n"
     "    }\n"
-    "    if(k==='u' && !published){\n"
+    "    if(k==='u'){\n"
     "      e.preventDefault(); const ok = await call('unbump_now'); if(ok){ bumped=false; render(); msg.textContent='✓ hecho'; msg.className='meta ok'; }\n"
     "    }\n"
     "    if(k==='l' && !e.metaKey && !e.ctrlKey && !e.altKey){ e.preventDefault(); goList(); }\n"
@@ -353,14 +353,6 @@ class HTMLOnlyRequestHandler(SimpleHTTPRequestHandler):
 
         try:
             if action in ("bump", "unbump_now"):
-                # No permitir (un)bump si el archivo está publicado en read/
-                try:
-                    is_published = os.path.exists(os.path.join(PUBLIC_READS_DIR, os.path.basename(abs_path)))
-                except Exception:
-                    is_published = False
-                if is_published:
-                    self.send_error(400, "No se puede (un)bump mientras está publicado")
-                    return
                 st = os.stat(abs_path)
                 atime = st.st_atime  # conservamos atime
 
@@ -577,14 +569,22 @@ class HTMLOnlyRequestHandler(SimpleHTTPRequestHandler):
             rel_from_root = os.path.relpath(fullname, SERVE_DIR)
             if name.lower().endswith(".pdf"):
                 parts = []
-                if published:
-                    parts.append(f"<a href='#' class='dg-act' data-dg-act='unpublish' data-dg-path='{html.escape(rel_from_root)}'>Despublicar</a>")
+                if bumped:
+                    parts.append(
+                        f"<a href='#' class='dg-act' data-dg-act='unbump_now' data-dg-path='{html.escape(rel_from_root)}'>Unbump</a>"
+                    )
                 else:
-                    if bumped:
-                        parts.append(f"<a href='#' class='dg-act' data-dg-act='unbump_now' data-dg-path='{html.escape(rel_from_root)}'>Unbump</a>")
-                        parts.append(f"<a href='#' class='dg-act' data-dg-act='publish' data-dg-path='{html.escape(rel_from_root)}'>Publicar</a>")
-                    else:
-                        parts.append(f"<a href='#' class='dg-act' data-dg-act='bump' data-dg-path='{html.escape(rel_from_root)}'>Bump</a>")
+                    parts.append(
+                        f"<a href='#' class='dg-act' data-dg-act='bump' data-dg-path='{html.escape(rel_from_root)}'>Bump</a>"
+                    )
+                if published:
+                    parts.append(
+                        f"<a href='#' class='dg-act' data-dg-act='unpublish' data-dg-path='{html.escape(rel_from_root)}'>Despublicar</a>"
+                    )
+                elif bumped:
+                    parts.append(
+                        f"<a href='#' class='dg-act' data-dg-act='publish' data-dg-path='{html.escape(rel_from_root)}'>Publicar</a>"
+                    )
                 if parts:
                     actions_html = f"<span class='dg-actions'>{' '.join(parts)}</span>"
 
