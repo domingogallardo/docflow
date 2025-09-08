@@ -151,6 +151,7 @@ def add_margins_to_html_files(directory: Path, file_filter=None):
     from bs4 import BeautifulSoup
     
     margin_style = "body { margin-left: 6%; margin-right: 6%; }"
+    img_rule = "img { max-width: 300px; height: auto; }"
     
     html_files = []
     for dirpath, _, filenames in os.walk(directory):
@@ -176,7 +177,7 @@ def add_margins_to_html_files(directory: Path, file_filter=None):
                 # Si no existe, crear un <head> nuevo y añadir el estilo
                 head = soup.new_tag("head")
                 style_tag = soup.new_tag("style")
-                style_tag.string = margin_style
+                style_tag.string = margin_style + "\n" + img_rule
                 head.append(style_tag)
                 if soup.html:
                     soup.html.insert(0, head)
@@ -185,11 +186,17 @@ def add_margins_to_html_files(directory: Path, file_filter=None):
                 style_tag = head.find("style")
                 if style_tag:
                     # Si hay una etiqueta <style>, añadir el margen al final del contenido existente
-                    style_tag.string += "\n" + margin_style
+                    existing = style_tag.string or ""
+                    if margin_style not in existing:
+                        style_tag.string = (existing + ("\n" if existing else "") + margin_style)
+                        existing = style_tag.string
+                    # Añadir regla de imágenes si no está ya
+                    if img_rule not in (style_tag.string or ""):
+                        style_tag.string += "\n" + img_rule
                 else:
                     # Si no hay <style>, crear una nueva etiqueta <style> con el margen
                     style_tag = soup.new_tag("style")
-                    style_tag.string = margin_style
+                    style_tag.string = margin_style + "\n" + img_rule
                     head.append(style_tag)
             
             with open(html_file, 'w', encoding='utf-8') as f:
