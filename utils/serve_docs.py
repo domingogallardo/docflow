@@ -86,6 +86,7 @@ OVERLAY_JS = (
     "  let published = (script.dataset.published === '1');\n"
     "  let publishing = false;\n"
     "  let unpublishing = false;\n"
+    "  let processing = false;\n"
     "  const publicBase = script.dataset.publicBase || '';\n"
     "  function el(tag, attrs, text){\n"
     "    const e = document.createElement(tag);\n"
@@ -129,6 +130,20 @@ OVERLAY_JS = (
     "      toast('err', 'Error publicando');\n"
     "    }\n"
     "  }\n"
+    "  async function processed(){\n"
+    "    if(processing || !bumped || !published) return;\n"
+    "    processing = true; render(); msg.textContent = 'procesando…';\n"
+    "    const ok = await call('processed');\n"
+    "    msg.textContent = ok ? '✓ procesado' : '× error';\n"
+    "    msg.className = ok ? 'meta ok' : 'meta err';\n"
+    "    if(ok){\n"
+    "      bumped = false; processing = false; render();\n"
+    "      toast('ok', 'Procesado');\n"
+    "    } else {\n"
+    "      processing = false; render();\n"
+    "      toast('err', 'Error en procesado');\n"
+    "    }\n"
+    "  }\n"
     "  async function unpublish(){\n"
     "    if(unpublishing || !published) return;\n"
     "    unpublishing = true; render(); msg.textContent = '⏳ despublicando…'; msg.className = 'meta';\n"
@@ -166,6 +181,13 @@ OVERLAY_JS = (
     "      if(unpublishing){ unp.textContent = 'Despublicando…'; unp.setAttribute('disabled',''); }\n"
     "      unp.addEventListener('click', unpublish);\n"
     "      bar.appendChild(unp);\n"
+    "      if(bumped){\n"
+    "        const done = el('button', null, 'Procesado');\n"
+    "        done.title = 'Unbump + añadir a read_posts.md + desplegar';\n"
+    "        if(processing){ done.textContent = 'Procesando…'; done.setAttribute('disabled',''); }\n"
+    "        done.addEventListener('click', processed);\n"
+    "        bar.appendChild(done);\n"
+    "      }\n"
     "    }\n"
     "    const raw = el('a', {href:'?raw=1', title:'Ver sin overlay'}, 'raw');\n"
     "    bar.appendChild(raw); bar.appendChild(msg);\n"
@@ -185,6 +207,7 @@ OVERLAY_JS = (
     "    if(k==='l' && !e.metaKey && !e.ctrlKey && !e.altKey){ e.preventDefault(); goList(); }\n"
     "    if(k==='p' && bumped && !published && !publishing){ e.preventDefault(); publish(); }\n"
     "    if(k==='d' && published && !unpublishing){ e.preventDefault(); unpublish(); }\n"
+    "    if(k==='x' && bumped && published && !processing){ e.preventDefault(); processed(); }\n"
     "  });\n"
     "  document.addEventListener('DOMContentLoaded', ()=>{ document.body.appendChild(bar); render(); });\n"
     "})();\n"
@@ -366,6 +389,64 @@ class HTMLOnlyRequestHandler(SimpleHTTPRequestHandler):
                         mtime = st.st_mtime if st.st_mtime <= time.time() else time.time() - 60
 
                 os.utime(abs_path, (atime, mtime))
+                self._send_bytes(b'{"ok":true}', "application/json; charset=utf-8")
+                return
+
+            if action == "processed":
+                # Validaciones: debe estar publicado y bumped
+                name = os.path.basename(abs_path)
+                is_published = os.path.exists(os.path.join(PUBLIC_READS_DIR, name))
+                st = os.stat(abs_path)
+                if not is_published or not is_bumped(st.st_mtime):
+                    self.send_error(400, "Requiere 'bumped' y 'publicado'")
+                    return
+
+                # Unbump (como unbump_now)
+                atime = st.st_atime
+                cre = get_creation_epoch(abs_path)
+                if cre is not None:
+                    mtime = cre
+                else:
+                    mtime = st.st_mtime if st.st_mtime <= time.time() else time.time() - 60
+                os.utime(abs_path, (atime, int(mtime)))
+
+                # Añadir a read_posts.md (prepend idempotente)
+                try:
+                    md_path = os.path.join(PUBLIC_READS_DIR, "read_posts.md")
+                    # Cargar existentes normalizados (quitando viñetas)
+                    existing: list[str] = []
+                    if os.path.isfile(md_path):
+                        with open(md_path, "r", encoding="utf-8") as f:
+                            for raw in f:
+                                s = raw.strip()
+                                if not s or s.startswith('#'):
+                                    continue
+                                if s.startswith('- ') or s.startswith('* '):
+                                    s = s[2:].strip()
+                                existing.append(s)
+                    if name not in existing:
+                        tmp = md_path + ".tmp"
+                        os.makedirs(os.path.dirname(md_path), exist_ok=True)
+                        with open(tmp, "w", encoding="utf-8") as w:
+                            w.write(f"- {name}\n")
+                            if os.path.isfile(md_path):
+                                with open(md_path, "r", encoding="utf-8") as r:
+                                    w.write(r.read())
+                        os.replace(tmp, md_path)
+                except Exception as e:
+                    self.send_error(500, f"Error actualizando read_posts.md: {e}")
+                    return
+
+                # Desplegar para regenerar read.html en el servidor
+                if not os.path.isfile(DEPLOY_SCRIPT) or not os.access(DEPLOY_SCRIPT, os.X_OK):
+                    self.send_error(500, f"Deploy no disponible: {DEPLOY_SCRIPT}")
+                    return
+                try:
+                    subprocess.run([DEPLOY_SCRIPT], check=True)
+                except subprocess.CalledProcessError as e:
+                    self.send_error(500, f"Fallo en deploy ({e.returncode})")
+                    return
+
                 self._send_bytes(b'{"ok":true}', "application/json; charset=utf-8")
                 return
 

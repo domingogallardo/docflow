@@ -47,10 +47,54 @@ MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec
 def fmt_date(ts: float) -> str:
     t = time.localtime(ts); return f"{t.tm_year}-{MONTHS[t.tm_mon-1]}-{t.tm_mday:02d} {t.tm_hour:02d}:{t.tm_min:02d}"
 
-items = []
+def load_read_posts_md(base_dir: str) -> list[str]:
+    """Carga nombres de posts desde read_posts.md si existe.
+    Acepta líneas no vacías (ignora comentarios y viñetas '- ' o '* ').
+    Devuelve una lista en orden de aparición.
+    """
+    md_path = os.path.join(base_dir, 'read_posts.md')
+    if not os.path.isfile(md_path):
+        return []
+    picked: list[str] = []
+    with open(md_path, 'r', encoding='utf-8') as f:
+        for raw in f:
+            line = raw.strip()
+            if not line or line.startswith('#'):
+                continue
+            if line.startswith('- '):
+                line = line[2:].strip()
+            elif line.startswith('* '):
+                line = line[2:].strip()
+            # Mantener tal cual: nombres de archivo esperados (con extensión)
+            picked.append(line)
+    return picked
+
+# Construir listas: principales (no seleccionados) y destacados (desde read_posts.md)
+picked_names = load_read_posts_md(dir_path)
+picked_set = set(picked_names)
+
+items_main: list[str] = []
+items_picked: list[str] = []
+
+# Índice rápido de metadatos por nombre
+by_name = {name: mtime for (mtime, name) in entries}
+
 for mtime, name in entries:
     href = quote(name); esc = html.escape(name); d = fmt_date(mtime)
-    items.append(f'<li><a href="{href}" title="{esc}">{esc}</a> — {d}</li>')
+    li = f'<li><a href="{href}" title="{esc}">{esc}</a> — {d}</li>'
+    if name in picked_set:
+        # Evitar duplicados: se mostrará en la sección inferior
+        continue
+    items_main.append(li)
+
+# Añadir la sección destacada respetando el orden de read_posts.md
+for name in picked_names:
+    if name not in by_name:
+        # Ignorar entradas que no existan en el directorio
+        continue
+    mtime = by_name[name]
+    href = quote(name); esc = html.escape(name); d = fmt_date(mtime)
+    items_picked.append(f'<li><a href="{href}" title="{esc}">{esc}</a> — {d}</li>')
 
     # (el ASCII art se define fuera del bucle)
 
@@ -88,7 +132,9 @@ html_doc = (
 '<meta name="viewport" content="width=device-width">'
 f'<title>{html.escape(title)}</title></head><body>'
 f'<h1>{html.escape(title)}</h1>'
-'<ul>' + "\n".join(items) + '</ul>' + ascii_open +
+"<ul>" + "\n".join(items_main) + "</ul>" +
+ ("<hr/>" + "<ul>" + "\n".join(items_picked) + "</ul>" if items_picked else "") +
+ ascii_open +
 '</body></html>'
 )
 
