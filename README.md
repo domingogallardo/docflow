@@ -205,7 +205,7 @@ Acciones y atajos del overlay:
   - Este flujo aplica al overlay (HTML) y al índice (PDFs).
 
 Publicar/Despublicar:
-- Publicar copia el `.html` abierto o un `.pdf` (desde el índice) a `web/public/read/` preservando `mtime` y lanza `web/deploy.sh`.
+- Publicar copia el `.html` abierto o un `.pdf` (desde el índice) a `web/public/read/` preservando `mtime`, inyecta `article.js` para capturar citas y lanza `web/deploy.sh`.
 - Despublicar elimina ese archivo de `web/public/read/` y lanza `web/deploy.sh`.
 - Estados en la UI: “⏳ publicando…” / “⏳ despublicando…”, botón deshabilitado durante la operación, y confirmación con toast. Si defines `PUBLIC_READS_URL_BASE`, el toast incluye enlace “Ver”.
 - Visibilidad: “Publicar” aparece si el archivo está bumpeado y aún no existe en `web/public/read/`. “Despublicar” aparece si ya existe.
@@ -231,6 +231,11 @@ Listado estático en el deploy:
 Generación local del índice:
 - `python utils/build_read_index.py` (opcional para previsualizar sin desplegar)
 - Edita `web/public/read/read_posts.md` para mover entradas a la sección inferior (completados).
+
+Copiar citas en `/read`:
+- Las páginas publicadas inyectan un botón flotante **❝ Copiar cita**.
+- Selecciona un texto y usa el botón para copiar una cita en Markdown con enlace [Text Fragment](https://web.dev/text-fragments/).
+- El botón solo aparece con texto seleccionado e indica con un toast si la copia tuvo éxito.
 
 Solución de problemas:
 - “Publicar” no aparece: el archivo no está bumpeado o ya existe en `PUBLIC_READS_DIR`. Comprueba `mtime` y que el nombre no exista en destino.
