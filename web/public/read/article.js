@@ -4,72 +4,34 @@
  * - Quote capture helpers with Text Fragments and Markdown
  */
 (function () {
-  var version = '0.3.0';
+  var version = '0.4.0';
 
+  // -- Minimal helpers: fixed behavior (3 head words + 3 tail words) --
   function baseUrlWithoutHash() {
     try { return String(location.href).split('#')[0]; } catch (_) { return ''; }
   }
-
-  function normText(s) {
-    if (!s) return '';
-    // Collapse whitespace and trim
-    s = String(s).replace(/\s+/g, ' ').trim();
-    // Avoid very long fragments (practical reliability + URL length)
-    var MAX = 400;
-    if (s.length > MAX) s = s.slice(0, MAX) + '…';
-    return s;
-  }
-
-  function selectionText() {
+  function getSelectionText() {
     try {
       var sel = window.getSelection && window.getSelection();
       var t = sel && sel.toString ? sel.toString() : '';
-      return normText(t);
+      return String(t).replace(/\s+/g, ' ').trim();
     } catch (_) { return ''; }
   }
-
-  function buildTextFragmentFromText(text, mode, opts) {
-    // mode: 'simple' | 'range'
-    text = normText(text);
+  function buildFragment(text) {
+    text = String(text).replace(/\s+/g, ' ').trim();
     if (!text) return '';
-    mode = mode || 'range';
-    if (mode === 'range') {
-      opts = opts || {};
-      var hw = Math.max(1, opts.headWords || 3);
-      var tw = Math.max(1, opts.tailWords || 3);
-      var words = text.split(/\s+/);
-      if (words.length <= hw + tw) {
-        // Too short; fall back to simple
-        return '#:~:text=' + encodeURIComponent(text);
-      }
-      var head = words.slice(0, hw).join(' ').replace(/[\s\.,;:!\?\-–—]+$/,'');
-      var tail = words.slice(words.length - tw).join(' ').replace(/^[\s\.,;:!\?\-–—]+/,'');
-      return '#:~:text=' + encodeURIComponent(head) + ',' + encodeURIComponent(tail);
+    var words = text.split(/\s+/);
+    if (words.length <= 6) {
+      return '#:~:text=' + encodeURIComponent(text);
     }
-    // Simple full-text match
-    return '#:~:text=' + encodeURIComponent(text);
+    var head = words.slice(0, 3).join(' ').replace(/[\s\.,;:!\?\-–—]+$/, '');
+    var tail = words.slice(words.length - 3).join(' ').replace(/^[\s\.,;:!\?\-–—]+/, '');
+    return '#:~:text=' + encodeURIComponent(head) + ',' + encodeURIComponent(tail);
   }
-
-  function buildUrlWithFragment(text, opts) {
-    opts = opts || {};
-    var fragment = buildTextFragmentFromText(text, opts.mode || 'range', opts);
-    var base = baseUrlWithoutHash();
-    return { url: base + fragment, fragment: fragment };
+  function buildMarkdown(quote, url) {
+    var q = String(quote).replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    return '> ' + q + ' [link](' + url + ')';
   }
-
-  function mdEscape(s) {
-    // Minimal escaping for Markdown blockquote content
-    return String(s).replace(/</g, '&lt;').replace(/>/g, '&gt;');
-  }
-
-  function buildQuoteMarkdown(quote, url, opts) {
-    opts = opts || {};
-    var label = (opts.label || 'link');
-    var q = mdEscape(quote);
-    // Markdown inline link after the quote: "> cita [label](URL)"
-    return '> ' + q + ' [' + label + '](' + url + ')';
-  }
-
   function copyToClipboard(text) {
     return new Promise(function (resolve) {
       try {
@@ -89,41 +51,14 @@
       } catch (_) { resolve(false); }
     });
   }
-
-  function quoteFromSelection(opts) {
-    opts = opts || {};
-    var text = selectionText();
-    // Defaults biased towards Safari working highlights
-    if (!('mode' in opts)) opts.mode = 'range';
-    if (!('headWords' in opts)) opts.headWords = 3;
-    if (!('tailWords' in opts)) opts.tailWords = 3;
-    var built = buildUrlWithFragment(text, opts);
-    var md = buildQuoteMarkdown(text || document.title || '', built.url, opts);
-    return { text: text, url: built.url, fragment: built.fragment, markdown: md };
+  function copyQuote() {
+    var text = getSelectionText();
+    var url = baseUrlWithoutHash() + buildFragment(text);
+    var md = buildMarkdown(text || document.title || '', url);
+    return copyToClipboard(md).then(function(ok){ return { ok: ok, text: text, url: url, markdown: md }; });
   }
 
-  function copyQuoteLink(opts) {
-    var q = quoteFromSelection(opts || {});
-    return copyToClipboard(q.markdown).then(function(ok){
-      if (typeof console !== 'undefined') {
-        if (ok) console.log('✓ Copiado', q.markdown);
-        else console.warn('No se pudo copiar automáticamente. Resultado:', q.markdown);
-      }
-      return q;
-    });
-  }
-
-  var api = {
-    active: true,
-    version: version,
-    ping: function () { return 'ok'; },
-    // Quote helpers
-    selectionText: selectionText,
-    buildUrlWithFragment: buildUrlWithFragment,
-    buildQuoteMarkdown: buildQuoteMarkdown,
-    quoteFromSelection: quoteFromSelection,
-    copyQuoteLink: copyQuoteLink
-  };
+  var api = { active: true, version: version, copyQuote: copyQuote };
 
   // ---- Discreet overlay button to copy current selection as Markdown ----
   function ensureOverlay() {
@@ -195,7 +130,7 @@
     }
 
     function updateVisibility() {
-      var t = selectionText();
+      var t = getSelectionText();
       if (t && t.length >= 2) {
         btn.style.display = 'block';
         btn.style.opacity = '.95';
@@ -213,8 +148,8 @@
 
     btn.addEventListener('click', function(){
       btn.disabled = true;
-      copyQuoteLink({ label: 'link', style: 'requested' })
-        .then(function(res){ showToast('Copiado', true); })
+      copyQuote()
+        .then(function(res){ showToast(res.ok ? 'Copiado' : 'No se pudo copiar', !!res.ok); })
         .catch(function(){ showToast('No se pudo copiar', false); })
         .finally(function(){ btn.disabled = false; updateVisibility(); });
     });
@@ -225,16 +160,8 @@
     return btn;
   }
 
-  try {
-    Object.defineProperty(window, 'ArticleJS', {
-      value: api,
-      enumerable: true,
-      configurable: false,
-      writable: false
-    });
-  } catch (e) {
-    window.ArticleJS = api;
-  }
+  try { Object.defineProperty(window, 'ArticleJS', { value: api, enumerable: true }); }
+  catch (e) { window.ArticleJS = api; }
   if (typeof console !== 'undefined' && console.debug) {
     console.debug('[article-js] active', version);
   }
