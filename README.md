@@ -151,7 +151,7 @@ La carpeta `web/` contiene la infraestructura y el contenido estático que se pu
 
 - Contenido público: `web/public/`
   - Ruta pública: `/read/` (HTML + PDFs combinados).
-  - `read.html` se genera en cada deploy, ordenado por `mtime` desc; el directorio se sirve con el listado automático de nginx.
+  - `read.html` se genera en cada deploy, ordenado por `mtime` desc; además, si existe `web/public/read/read_posts.md`, se inserta un `<hr/>` y debajo se listan (en el orden del fichero) los elementos ahí indicados. Esos ficheros bajo el separador son los ya leídos/estudiados (completados). El directorio se sirve con el listado automático de nginx.
   - El overlay de `utils/serve_docs.py` publica/despublica copiando o borrando archivos en `web/public/read/` y ejecutando el deploy.
 - Deploy: `web/deploy.sh`
   - Requiere `REMOTE_USER` y `REMOTE_HOST` en el entorno.
@@ -191,12 +191,13 @@ Acciones y atajos del overlay:
 - Ir al listado (carpeta): `l`
 - Publicar: botón o `p` cuando el archivo está bumpeado y no publicado
 - Despublicar: botón o `d` cuando el archivo ya está publicado
+ - Procesado: botón o `x` cuando el archivo está bumpeado y publicado; realiza Unbump + añade el fichero a `web/public/read/read_posts.md` + despliegue.
 
 ### Flujo de estados (UI)
 
 - S0 — Unbumped + No publicado: solo muestra Bump.
 - S1 — Bumped + No publicado: muestra Unbump y Publicar.
-- S2 — Publicado: solo muestra Despublicar (Bump/Unbump ocultos y atajos `b`/`u` desactivados).
+- S2 — Publicado: muestra Despublicar y, si además está bumped, también Procesado.
 - Reglas de validación:
   - Publicar requiere que el archivo esté bumped y no publicado.
   - Mientras esté publicado, no se permite (ni se muestra) Bump/Unbump.
@@ -209,6 +210,10 @@ Publicar/Despublicar:
 - Estados en la UI: “⏳ publicando…” / “⏳ despublicando…”, botón deshabilitado durante la operación, y confirmación con toast. Si defines `PUBLIC_READS_URL_BASE`, el toast incluye enlace “Ver”.
 - Visibilidad: “Publicar” aparece si el archivo está bumpeado y aún no existe en `web/public/read/`. “Despublicar” aparece si ya existe.
 
+Procesado:
+- Disponible cuando el fichero está bumpeado y publicado.
+- Al pulsar, hace Unbump del fichero local, lo añade (idempotente, como primera línea) a `web/public/read/read_posts.md` y lanza el deploy. Así, en `/read/` dejará de aparecer arriba y pasará a la sección inferior (bajo `<hr/>`) como “completado”.
+
 Variables de entorno:
 - Básicas: `PORT` (8000), `SERVE_DIR` (ruta base), `BUMP_YEARS` (100)
 - Publicación (local):
@@ -219,7 +224,13 @@ Variables de entorno:
  - Deploy (opcional, gestión de BasicAuth): si defines `HTPASSWD_USER` y `HTPASSWD_PSS`, el deploy actualizará `/opt/web-domingo/nginx/.htpasswd` en el host generando un hash bcrypt (la contraseña viaja por `stdin`, no se muestra en `argv`).
 
 Listado estático en el deploy:
-- `web/deploy.sh` genera `read.html` para `/read/` (HTML/PDF) ordenado por `mtime` desc.
+- `web/deploy.sh` genera `read.html` para `/read/` (HTML/PDF) con dos zonas:
+  - Arriba: listado por `mtime` desc de todos los ficheros que no estén en `read_posts.md`.
+  - Separador `<hr/>` + abajo: los ficheros listados en `web/public/read/read_posts.md` (uno por línea; se permiten viñetas `- ` o `* ` y comentarios `#`). Esta sección representa artículos/PDFs ya leídos y estudiados (completados).
+
+Generación local del índice:
+- `python utils/build_read_index.py` (opcional para previsualizar sin desplegar)
+- Edita `web/public/read/read_posts.md` para mover entradas a la sección inferior (completados).
 
 Solución de problemas:
 - “Publicar” no aparece: el archivo no está bumpeado o ya existe en `PUBLIC_READS_DIR`. Comprueba `mtime` y que el nombre no exista en destino.
@@ -240,6 +251,7 @@ Solución de problemas:
 | `tweet_processor.py` | Procesa colecciones de tweets |
 | `pdf_processor.py` | Organiza PDFs |
 | `utils.py` | Utilidades comunes |
+| `utils/build_read_index.py` | Genera `web/public/read/read.html` usando `read_posts.md` |
 
 ### Utilidades adicionales
 - `utils/serve_docs.py` — ver sección “Servidor web local”.

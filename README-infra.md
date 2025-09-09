@@ -14,6 +14,7 @@ Production site: https://domingogallardo.com
 > - Names/paths used here: container name `web-domingo`, remote path `/opt/web-domingo` (match `web/deploy.sh`).
 > - Local compose mounts `/data` read‑only (safe default); the deploy script mounts `/data` read‑write on the server.
 > - The bundled `web/nginx.conf` serves `/read/` (HTML+PDF) with nginx's autoindex. A `read.html` listing is generated at deploy time. The container uses `server_name localhost`.
+> - The `read.html` listing includes a curated section: if `web/public/read/read_posts.md` exists, the deploy adds a `<hr/>` and lists those filenames below it (in file order). Items under the separator represent documents already read/studied (completed).
 > - Public assets under `web/public/` are not tracked in the public repo (ignored via `.gitignore`).
 
 ---
@@ -304,7 +305,7 @@ Use the included `web/deploy.sh`. It bundles the app, uploads it, and rebuilds/r
   - Optional BasicAuth update: set `HTPASSWD_USER` and `HTPASSWD_PSS` (see 6.1).
 
 - What it does (summary):
-  - Generates `read.html` for `/public/read` combining HTML and PDF, ordered by mtime desc.
+  - Generates `read.html` for `/public/read` (HTML+PDF). Top section is mtime‑desc for all files not in `read_posts.md`; below a `<hr/>`, it lists items from `web/public/read/read_posts.md` (if present) in their given order, representing completed items.
   - Packages `web/Dockerfile`, `web/nginx.conf`, and `web/public/` (excludes `.DS_Store` and AppleDouble files).
   - Ensures remote paths exist under `/opt/web-domingo` and uploads the bundle.
   - Cleans any previous `/opt/web-domingo/public` folder before extracting to avoid stale files.
@@ -352,6 +353,9 @@ sudo certbot renew --dry-run
 journalctl -u nginx --since today
 docker logs -n 200 web-domingo
 ```
+
+Curated "completed" section maintenance:
+- Edit `web/public/read/read_posts.md` in the repo to move finished items below the separator on the next deploy. One filename per line (extensions included). Lines may start with `- ` or `* ` and `#` comments are ignored.
 
 ---
 
