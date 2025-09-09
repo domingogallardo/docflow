@@ -410,6 +410,10 @@ def get_base_css() -> str:
         "hr { border: none; border-top: 1px solid #eee; margin: 30px 0; }\n"
     )
 
+def get_article_js_script_tag() -> str:
+    """Obsoleto: la inyección de JS se realiza al publicar en /read/."""
+    return ""
+
 
 def wrap_html(title: str, body: str, accent_color: str) -> str:
     """Envuelve contenido en un HTML mínimo con estilos base y color destacado."""
@@ -422,6 +426,7 @@ def wrap_html(title: str, body: str, accent_color: str) -> str:
         f"blockquote {{ border-left: 4px solid {accent_color}; }}\n"
         f"a {{ color: {accent_color}; }}\n"
         "</style>\n"
+        ""
         "</head>\n<body>\n"
         f"{body}\n"
         "</body>\n</html>\n"

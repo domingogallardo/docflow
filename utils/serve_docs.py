@@ -477,12 +477,26 @@ class HTMLOnlyRequestHandler(SimpleHTTPRequestHandler):
                 dst_path = os.path.join(dst_dir, os.path.basename(abs_path))
                 try:
                     src_stat = st_src
-                    with open(abs_path, 'rb') as src, open(dst_path, 'wb') as dst:
-                        while True:
-                            chunk = src.read(1024 * 1024)
-                            if not chunk:
-                                break
-                            dst.write(chunk)
+                    name_low = os.path.basename(abs_path).lower()
+                    if name_low.endswith((".html", ".htm")):
+                        # Inyectar script base de artículos antes de </head> si no está presente
+                        with open(abs_path, 'r', encoding='utf-8', errors='ignore') as src:
+                            text = src.read()
+                        if "/read/article.js" not in text:
+                            low = text.lower()
+                            idx = low.rfind("</head>")
+                            if idx != -1:
+                                text = text[:idx] + "<script src='/read/article.js' defer></script>" + text[idx:]
+                        with open(dst_path, 'w', encoding='utf-8') as dst:
+                            dst.write(text)
+                    else:
+                        # Copia binaria para otros tipos (p.ej. PDFs)
+                        with open(abs_path, 'rb') as src, open(dst_path, 'wb') as dst:
+                            while True:
+                                chunk = src.read(1024 * 1024)
+                                if not chunk:
+                                    break
+                                dst.write(chunk)
                     # Preservar tiempos (especialmente mtime para mantener bumps)
                     try:
                         os.utime(dst_path, (src_stat.st_atime, src_stat.st_mtime))

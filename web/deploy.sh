@@ -130,6 +130,7 @@ ascii_open = r'''<style>
 html_doc = (
 '<!DOCTYPE html><html><head><meta charset="utf-8">'
 '<meta name="viewport" content="width=device-width">'
+'<script src="/read/article.js" defer></script>'
 f'<title>{html.escape(title)}</title></head><body>'
 f'<h1>{html.escape(title)}</h1>'
 "<ul>" + "\n".join(items_main) + "</ul>" +

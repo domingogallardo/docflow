@@ -120,6 +120,7 @@ def build_html(dir_path: str, entries: List[Tuple[float, str]], picked_names: Li
     html_doc = (
         '<!DOCTYPE html><html><head><meta charset="utf-8">'
         '<meta name="viewport" content="width=device-width">'
+        '<script src="/read/article.js" defer></script>'
         '<title>Read</title></head><body>'
         '<h1>Read</h1>'
         + '<ul>' + "\n".join(items_main) + '</ul>'
@@ -156,4 +157,3 @@ def main(argv: list[str]) -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main(sys.argv))
-
