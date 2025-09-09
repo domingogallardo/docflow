@@ -58,10 +58,6 @@ export INSTAPAPER_USERNAME="tu_usuario"
 export INSTAPAPER_PASSWORD="tu_contraseña"
 export REMOTE_USER="usuario_en_host_web_pública"
 export REMOTE_HOST="IP_host_web_pública"
-# Opcional: actualizar credenciales BasicAuth del editor en el deploy
-# (se genera bcrypt en el host; no se guarda nada en Git)
-# export HTPASSWD_USER="editor"
-# export HTPASSWD_PSS="mi-contraseña-segura"
 ```
 
 Nota: `REMOTE_USER` y `REMOTE_HOST` solo son necesarios si vas a Publicar/Despublicar desde el overlay del “Servidor web local”.
@@ -156,15 +152,10 @@ La carpeta `web/` contiene la infraestructura y el contenido estático que se pu
 - Deploy: `web/deploy.sh`
   - Requiere `REMOTE_USER` y `REMOTE_HOST` en el entorno.
   - Empaqueta `web/Dockerfile`, `web/nginx.conf` y `web/public/`, los sube a `/opt/web-domingo` y levanta el contenedor `web-domingo` en el servidor (Nginx en host termina HTTPS y hace proxy al puerto 8080 del contenedor).
-  - Editor y credenciales:
-    - `/editor` es una página estática que edita `/data/nota.txt` mediante `PUT`.
-    - `/data/` exige BasicAuth. El contenedor lee `/etc/nginx/.htpasswd` montado desde el host en `/opt/web-domingo/nginx/.htpasswd` (ro).
-    - Permisos: el `.htpasswd` debe ser legible por Nginx; usa `chmod 644 /opt/web-domingo/nginx/.htpasswd` en el host.
-    - Deploy con credenciales: si defines `HTPASSWD_USER` y `HTPASSWD_PSS`, el deploy genera/actualiza el `.htpasswd` en el host con hash bcrypt (la contraseña se pasa por stdin; no se guarda en Git).
   - Verificación pública rápida:
     - `curl -I https://domingogallardo.com/read/`
     - `curl -s https://domingogallardo.com/read/ | head -n 40`
-- `/data/` en el contenedor mantiene PUT habilitado (estilo WebDAV); el listado sigue con `autoindex on;` (no se modifica desde este repo).
+
 
 Más detalles de Docker/Nginx y del proceso de despliegue en la sección “🌐 Infraestructura y despliegue (Docker/Nginx)”.
 
@@ -284,7 +275,7 @@ Sitio en producción: https://domingogallardo.com
 Este repo incluye una configuración opcional para servir tu contenido procesado en un servidor propio:
 
 - Directorio `web/` (infra):
-  - `Dockerfile` y `nginx.conf`: Imagen Nginx (Alpine) que sirve HTML/PDF y expone `/read/` con listado automático; `read.html` se genera en el deploy ordenado por fecha (mtime desc). Provee `/data/` para ediciones vía PUT protegido con BasicAuth.
+  - `Dockerfile` y `nginx.conf`: Imagen Nginx (Alpine) que sirve HTML/PDF y expone `/read/` con listado automático; `read.html` se genera en el deploy ordenado por fecha (mtime desc).
   - `docker-compose.yml` (solo local): monta `./public` y `./dynamic-data` en modo lectura (`:ro`) y expone `8080:80`.
   - `deploy.sh`: empaqueta y despliega al servidor remoto en `/opt/web-domingo` y levanta el contenedor `web-domingo`. Requiere `REMOTE_USER` y `REMOTE_HOST` (no se incluyen secretos en el repo).
   - `.dockerignore` para builds reproducibles.
