@@ -183,7 +183,7 @@ OVERLAY_JS = (
     "      bar.appendChild(unp);\n"
     "      if(bumped){\n"
     "        const done = el('button', null, 'Procesado');\n"
-    "        done.title = 'Unbump + añadir a read_posts.md + desplegar';\n"
+    "        done.title = 'Unbump (local y público) + añadir a read_posts.md + desplegar';\n"
     "        if(processing){ done.textContent = 'Procesando…'; done.setAttribute('disabled',''); }\n"
     "        done.addEventListener('click', processed);\n"
     "        bar.appendChild(done);\n"
@@ -409,6 +409,16 @@ class HTMLOnlyRequestHandler(SimpleHTTPRequestHandler):
                 else:
                     mtime = st.st_mtime if st.st_mtime <= time.time() else time.time() - 60
                 os.utime(abs_path, (atime, int(mtime)))
+
+                # Unbump también la copia pública si existe
+                try:
+                    pub_path = os.path.join(PUBLIC_READS_DIR, name)
+                    if os.path.exists(pub_path):
+                        st_pub = os.stat(pub_path)
+                        os.utime(pub_path, (st_pub.st_atime, int(mtime)))
+                except Exception as e:
+                    self.send_error(500, f"Error unbumping copia pública: {e}")
+                    return
 
                 # Añadir a read_posts.md (prepend idempotente)
                 try:
