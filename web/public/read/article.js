@@ -42,8 +42,17 @@
       } catch (_) {}
       try {
         var ta = document.createElement('textarea');
-        ta.value = text; ta.setAttribute('readonly',''); ta.style.position='fixed'; ta.style.opacity='0'; ta.style.top='-1000px';
-        document.body.appendChild(ta); ta.select();
+        ta.value = text;
+        ta.setAttribute('readonly','');
+        ta.style.position = 'fixed';
+        ta.style.opacity = '0';
+        ta.style.top = '-1000px';
+        ta.style.left = '-1000px';
+        document.body.appendChild(ta);
+        ta.focus();
+        ta.select();
+        // Safari iOS needs explicit range selection
+        try { ta.setSelectionRange(0, ta.value.length); } catch (_) {}
         var ok = false;
         try { ok = document.execCommand('copy'); } catch (_) { ok = false; }
         document.body.removeChild(ta);
