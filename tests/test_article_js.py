@@ -8,4 +8,5 @@ def test_build_read_index_includes_article_js():
     entries = [(0.0, 'doc1.html')]
     picked = []
     html = mod.build_html('web/public/read', entries, picked)
+    # Debe incluir el script estándar sin query params
     assert '<script src="/read/article.js" defer></script>' in html

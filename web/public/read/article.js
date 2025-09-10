@@ -4,7 +4,7 @@
  * - Quote capture helpers with Text Fragments and Markdown
  */
 (function () {
-  var version = '0.4.0';
+  var version = '1.0.0';
 
   // -- Minimal helpers: fixed behavior (3 head words + 3 tail words) --
   function baseUrlWithoutHash() {
@@ -32,36 +32,19 @@
     var q = String(quote).replace(/</g, '&lt;').replace(/>/g, '&gt;');
     return '> ' + q + ' [link](' + url + ')';
   }
+  // (UA checks eliminados para simplificar)
+
+
   function copyToClipboard(text) {
-    return new Promise(function (resolve) {
-      try {
-        if (navigator.clipboard && navigator.clipboard.writeText) {
-          navigator.clipboard.writeText(text).then(function(){ resolve(true); }, function(){ resolve(false); });
-          return;
-        }
-      } catch (_) {}
-      try {
-        var ta = document.createElement('textarea');
-        ta.value = text;
-        ta.setAttribute('readonly','');
-        ta.style.position = 'fixed';
-        ta.style.opacity = '0';
-        ta.style.top = '-1000px';
-        ta.style.left = '-1000px';
-        document.body.appendChild(ta);
-        ta.focus();
-        ta.select();
-        // Safari iOS needs explicit range selection
-        try { ta.setSelectionRange(0, ta.value.length); } catch (_) {}
-        var ok = false;
-        try { ok = document.execCommand('copy'); } catch (_) { ok = false; }
-        document.body.removeChild(ta);
-        resolve(!!ok);
-      } catch (_) { resolve(false); }
-    });
+    try {
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        return navigator.clipboard.writeText(text).then(function(){ return true; }, function(){ return false; });
+      }
+    } catch (_) {}
+    return Promise.resolve(false);
   }
-  function copyQuote() {
-    var text = getSelectionText();
+  function copyQuote(preCaptured) {
+    var text = (typeof preCaptured === 'string' && preCaptured) ? preCaptured : getSelectionText();
     var url = baseUrlWithoutHash() + buildFragment(text);
     var md = buildMarkdown(text || document.title || '', url);
     return copyToClipboard(md).then(function(ok){ return { ok: ok, text: text, url: url, markdown: md }; });
@@ -102,6 +85,10 @@
     ].join(';');
     document.documentElement.appendChild(btn);
 
+    // Track selection so iOS tap (which clears selection on focus change) still captures it
+    var lastSelection = '';
+    var pressedSelection = '';
+
     // Toast (reuses button as anchor for screen readers)
     var toast = document.createElement('div');
     toast.id = 'articlejs-toast';
@@ -140,25 +127,32 @@
 
     function updateVisibility() {
       var t = getSelectionText();
-      if (t && t.length >= 2) {
-        btn.style.display = 'block';
-        btn.style.opacity = '.95';
-        btn.style.transform = 'translateY(0)';
-      } else {
-        btn.style.opacity = '.92';
-        btn.style.transform = 'translateY(8px)';
-        btn.style.display = 'none';
-      }
+      if (t) lastSelection = t;
+      var visible = t && t.length >= 2;
+      btn.style.display = visible ? 'block' : 'none';
+      btn.style.opacity = visible ? '.95' : '.92';
+      btn.style.transform = visible ? 'translateY(0)' : 'translateY(8px)';
     }
 
     document.addEventListener('selectionchange', updateVisibility, { passive: true });
-    window.addEventListener('resize', updateVisibility, { passive: true });
-    document.addEventListener('visibilitychange', updateVisibility, { passive: true });
+    // (sin resize/visibilitychange): suficiente con selectionchange
+
+    // iOS: captura temprana de selección para usarla en el click (sin copiar aún)
+    btn.addEventListener('pointerdown', function(){ pressedSelection = getSelectionText() || lastSelection; }, { passive: true, capture: true });
+    // Pointer Events cubre tap/click en Safari/iOS modernos
 
     btn.addEventListener('click', function(){
       btn.disabled = true;
-      copyQuote()
-        .then(function(res){ showToast(res.ok ? 'Copiado' : 'No se pudo copiar', !!res.ok); })
+      var useText = pressedSelection || lastSelection || getSelectionText();
+      pressedSelection = '';
+      if (!useText || useText.length < 2) {
+        showToast('Selecciona un texto', false);
+        btn.disabled = false;
+        updateVisibility();
+        return;
+      }
+      copyQuote(useText)
+        .then(function(res){ showToast((res && res.ok) ? 'Copiado' : 'No se pudo copiar', !!(res && res.ok)); })
         .catch(function(){ showToast('No se pudo copiar', false); })
         .finally(function(){ btn.disabled = false; updateVisibility(); });
     });
@@ -182,4 +176,5 @@
       ensureOverlay();
     }
   }
+  // (sin fallback extra): delegamos el salto a fragmentos en el navegador
 })();

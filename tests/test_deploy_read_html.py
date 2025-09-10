@@ -2,24 +2,19 @@ from pathlib import Path
 import os
 import subprocess
 
-def _extract_python_snippet() -> str:
-    repo_root = Path(__file__).resolve().parents[1]
-    script = (repo_root / "web" / "deploy.sh").read_text(encoding="utf-8")
-    start = script.index("<< 'PY'\n") + len("<< 'PY'\n")
-    end = script.index("\nPY", start)
-    return script[start:end]
-
 def test_gen_index_creates_read_html(tmp_path):
-    snippet = _extract_python_snippet()
+    # Crear ficheros de prueba
     (tmp_path / "a.html").write_text("<p>A</p>", encoding="utf-8")
     (tmp_path / "b.pdf").write_bytes(b"%PDF-1.4\n")
-    env = os.environ.copy()
-    env.update({
-        "DIR_PATH": str(tmp_path),
-        "TITLE": "Read",
-        "EXT_FILTER": ".html,.pdf",
-    })
-    subprocess.run(["python3", "-"], input=snippet, text=True, env=env, check=True)
+
+    repo_root = Path(__file__).resolve().parents[1]
+    builder = repo_root / "utils" / "build_read_index.py"
+    assert builder.exists(), "utils/build_read_index.py no encontrado"
+
+    # Ejecutar generador
+    subprocess.run(["python3", str(builder), str(tmp_path)], check=True)
+
+    # Comprobar resultados
     read_file = tmp_path / "read.html"
     assert read_file.exists()
     assert not (tmp_path / "index.html").exists()
