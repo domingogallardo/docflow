@@ -78,3 +78,45 @@ def test_processed_action_unbumps_adds_to_md_and_deploys(tmp_path, monkeypatch):
     md = (public_reads / "read_posts.md").read_text(encoding="utf-8")
     assert md.splitlines()[0].strip().endswith("doc.html")
 
+
+def test_processed_action_unbumps_public_copy(tmp_path, monkeypatch):
+    sd = _load_serve_docs("serve_docs_processed_pub")
+
+    # Setup serve dir and public reads
+    serve_dir = tmp_path / "serve"
+    public_reads = tmp_path / "public_reads"
+    serve_dir.mkdir()
+    public_reads.mkdir()
+
+    # Create bumped HTML and a bumped public copy
+    html_file = serve_dir / "doc.html"
+    html_file.write_text("<html></html>", encoding="utf-8")
+    future = sd.base_epoch_cached() + 10
+    at = html_file.stat().st_atime
+    os.utime(str(html_file), (at, future))
+
+    pub_copy = public_reads / html_file.name
+    pub_copy.write_text("<html>pub</html>", encoding="utf-8")
+    at_pub = pub_copy.stat().st_atime
+    os.utime(str(pub_copy), (at_pub, future))
+
+    # Monkeypatch paths and deploy script
+    monkeypatch.setattr(sd, "SERVE_DIR", str(serve_dir), raising=False)
+    monkeypatch.setattr(sd, "PUBLIC_READS_DIR", str(public_reads), raising=False)
+    deploy = tmp_path / "deploy.sh"
+    deploy.write_text("#!/bin/sh\necho ok\n", encoding="utf-8")
+    os.chmod(deploy, 0o755)
+    monkeypatch.setattr(sd, "DEPLOY_SCRIPT", str(deploy), raising=False)
+
+    # POST processed
+    body = f"path={urllib.parse.quote(html_file.name)}&action=processed"
+    h = _make_post_handler(sd, body)
+    h.do_POST()
+
+    # Status OK
+    assert h._sent["status"] == 200
+    now = time.time()
+    # Local file unbumped
+    assert html_file.stat().st_mtime <= now
+    # Public copy also unbumped
+    assert pub_copy.stat().st_mtime <= now
