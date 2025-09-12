@@ -184,3 +184,48 @@ def test_unbump_published_file_via_post(tmp_path, monkeypatch):
     assert h._sent["status"] == 200
     assert html_file.stat().st_mtime <= time.time()
 
+
+def test_directory_index_pdf_processed_button(tmp_path, monkeypatch):
+    # Cargar módulo y preparar entorno
+    repo_root = Path(__file__).resolve().parents[1]
+    sd_path = repo_root / "utils" / "serve_docs.py"
+    spec = importlib.util.spec_from_file_location("serve_docs_pdf_proc", sd_path)
+    sd = importlib.util.module_from_spec(spec)  # type: ignore[arg-type]
+    assert spec and spec.loader
+    spec.loader.exec_module(sd)  # type: ignore[union-attr]
+
+    serve_dir = tmp_path / "serve"
+    serve_dir.mkdir()
+    pdf_pub = serve_dir / "proc_pub.pdf"
+    pdf_local = serve_dir / "proc_local.pdf"
+    pdf_pub.write_bytes(b"%PDF-1.4\n")
+    pdf_local.write_bytes(b"%PDF-1.4\n")
+
+    # Bump ambos (mtime futuro)
+    future = sd.base_epoch_cached() + 10
+    __import__("os").utime(str(pdf_pub), (pdf_pub.stat().st_atime, future))
+    __import__("os").utime(str(pdf_local), (pdf_local.stat().st_atime, future))
+
+    # Marcar publicado solo uno de ellos
+    public_reads = tmp_path / "public_reads"
+    public_reads.mkdir()
+    (public_reads / pdf_pub.name).write_bytes(b"%PDF-1.4\n")
+    monkeypatch.setattr(sd, "PUBLIC_READS_DIR", str(public_reads), raising=False)
+
+    # Generar índice
+    h = _make_dummy_handler(sd.HTMLOnlyRequestHandler)
+    h.path = "/"
+    h.list_directory(str(serve_dir))
+    out = h.wfile.getvalue().decode("utf-8")
+
+    # El publicado y bumped debe mostrar botón 'Procesado'
+    for line in out.splitlines():
+        if "proc_pub.pdf" in line:
+            assert "data-dg-act='processed'" in line
+            break
+
+    # El no publicado no debe mostrar 'Procesado'
+    for line in out.splitlines():
+        if "proc_local.pdf" in line:
+            assert "data-dg-act='processed'" not in line
+            break

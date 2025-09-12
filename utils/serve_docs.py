@@ -686,6 +686,11 @@ class HTMLOnlyRequestHandler(SimpleHTTPRequestHandler):
                     parts.append(
                         f"<a href='#' class='dg-act' data-dg-act='unpublish' data-dg-path='{html.escape(rel_from_root)}'>Despublicar</a>"
                     )
+                    # Si está publicado y bumped, permitimos marcar como Procesado
+                    if bumped:
+                        parts.append(
+                            f"<a href='#' class='dg-act' data-dg-act='processed' data-dg-path='{html.escape(rel_from_root)}'>Procesado</a>"
+                        )
                 elif bumped:
                     parts.append(
                         f"<a href='#' class='dg-act' data-dg-act='publish' data-dg-path='{html.escape(rel_from_root)}'>Publicar</a>"
