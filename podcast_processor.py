@@ -21,6 +21,8 @@ class PodcastProcessor:
         self.hr_pattern = re.compile(r"^\s*([\-*_]\s*){3,}$")    # ---  ***  ___
         self.summary_tag = re.compile(r"<summary>(.*?)</summary>", re.IGNORECASE | re.DOTALL)
         self.snip_link = re.compile(r"🎧\s*\[[^\]]*\]\((https://share\.snipd\.com/[^)]+)\)")
+        # Encabezados H1 para posibles múltiples episodios en un único archivo
+        self.h1_pattern = re.compile(r"^#\s+.+$", re.MULTILINE)
     
     def process_podcasts(self) -> List[Path]:
         """Ejecuta el pipeline completo de procesamiento de podcasts."""
@@ -32,6 +34,12 @@ class PodcastProcessor:
         print(f"📻 Procesando {len(podcasts)} archivo(s) de podcast...")
         
         try:
+            # 0. Dividir archivos con múltiples episodios (si los hay)
+            self._split_multi_episode_files()
+
+            # Recalcular el conjunto de podcasts tras el split
+            podcasts = U.list_podcast_files(self.incoming_dir)
+
             # 1. Limpiar archivos Snipd
             self._clean_snipd_files()
             
@@ -50,6 +58,57 @@ class PodcastProcessor:
         except Exception as e:
             print(f"❌ Error en el procesamiento de podcasts: {e}")
             return []
+
+    def _split_multi_episode_files(self):
+        """Divide archivos con múltiples episodios (varios H1) en archivos independientes.
+
+        Regla básica: cada episodio comienza con un encabezado de nivel 1 ('# Título').
+        Si se detectan 2+ H1 en un archivo que cumple el patrón de Snipd, se crean
+        nuevos .md (uno por episodio) y se elimina el archivo original.
+        """
+        md_files = list(self.incoming_dir.rglob("*.md"))
+        # Filtrar solo archivos de podcast
+        podcast_files = [f for f in md_files if U.is_podcast_file(f)]
+
+        for md_file in podcast_files:
+            try:
+                text = md_file.read_text(encoding="utf-8", errors="ignore")
+                # Buscar posiciones de los H1
+                matches = list(self.h1_pattern.finditer(text))
+                if len(matches) <= 1:
+                    continue  # nada que dividir
+
+                print(f"✂️  Detectados {len(matches)} episodios en: {md_file.name}. Dividiendo…")
+
+                # Calcular límites de cada bloque
+                starts = [m.start() for m in matches]
+                ends = starts[1:] + [len(text)]
+
+                new_files: list[Path] = []
+                for i, (s, e) in enumerate(zip(starts, ends), start=1):
+                    chunk = text[s:e].lstrip()  # limpiar encabezados previos en blanco
+                    # Nombre provisional basado en el original
+                    base_stem = md_file.stem
+                    provisional = md_file.parent / f"{base_stem} - part {i}.md"
+                    # Evitar colisiones
+                    counter = 1
+                    out_path = provisional
+                    while out_path.exists():
+                        out_path = md_file.parent / f"{base_stem} - part {i} ({counter}).md"
+                        counter += 1
+                    out_path.write_text(chunk, encoding="utf-8")
+                    new_files.append(out_path)
+
+                # Eliminar el archivo original tras crear todos los nuevos
+                try:
+                    md_file.unlink()
+                except Exception:
+                    pass  # no bloquear si falla el borrado
+
+                print(f"✂️  Dividido: {md_file.name} → {len(new_files)} archivos")
+
+            except Exception as e:
+                print(f"❌ Error dividiendo {md_file}: {e}")
     
     def _clean_snipd_files(self):
         """Limpia archivos Markdown exportados desde Snipd."""

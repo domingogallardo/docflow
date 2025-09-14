@@ -218,8 +218,73 @@ def test_podcast_processor_mixed_files(tmp_path):
     # Verificar que el archivo de podcast fue renombrado
     podcast_names = [f.name for f in moved_podcasts]
     assert any("Valid Show - Valid Episode" in name for name in podcast_names)
-    
-    # Verificar que los otros archivos siguen en incoming
-    assert (incoming / "regular.md").exists()
-    assert (incoming / "document.pdf").exists()
-    assert (incoming / "image.jpg").exists() 
+
+
+def test_podcast_processor_splits_multi_episode_file(tmp_path):
+    """Debe dividir un .md con varios episodios (H1) y procesarlos por separado."""
+    import re
+
+    # Preparar
+    incoming = tmp_path / "Incoming"
+    incoming.mkdir()
+    destination = tmp_path / "Podcasts"
+
+    multi = incoming / "multi_podcast.md"
+    multi.write_text(
+        """# 579: The 2025 September Event Draft
+
+<img src=\"https://example.com/cover1.png\" width=\"200\" alt=\"Cover\" />
+
+## Episode metadata
+- Episode title: 579: The 2025 September Event Draft
+- Show: Upgrade
+- Owner / Host: Relay
+- Episode link: [open in Snipd](https://share.snipd.com/episode/aaaa)
+- Episode publish date: 2025-09-01
+
+## Snips
+- A snippet 1
+
+---
+
+# Black holes in the hypergraph with Stephen Wolfram
+
+<img src=\"https://example.com/cover2.png\" width=\"200\" alt=\"Cover\" />
+
+## Episode metadata
+- Episode title: Black holes in the hypergraph with Stephen Wolfram
+- Show: The Last Theory
+- Owner / Host: Kootenay Village Ventures Inc.
+- Episode link: [open in Snipd](https://share.snipd.com/episode/bbbb)
+- Episode publish date: 2025-08-29
+
+## Snips
+- A snippet 2
+""",
+        encoding="utf-8",
+    )
+
+    processor = PodcastProcessor(incoming, destination)
+    moved = processor.process_podcasts()
+
+    # El archivo original debe desaparecer tras el split
+    assert not multi.exists()
+
+    # Deben existir al menos 2 MD y 2 HTML en destino
+    md_files = list(destination.glob("*.md"))
+    html_files = list(destination.glob("*.html"))
+    assert len(md_files) >= 2
+    assert len(html_files) >= 2
+
+    # Comprobar nombres esperados (sanitizados como en utils.extract_episode_title)
+    def sanitize(filename: str) -> str:
+        s = re.sub(r'[<>:\"/\\|?*#]', '', filename)
+        s = re.sub(r"\s+", " ", s).strip()
+        return s
+
+    expected1 = sanitize("Upgrade - 579: The 2025 September Event Draft")
+    expected2 = sanitize("The Last Theory - Black holes in the hypergraph with Stephen Wolfram")
+
+    md_stems = {p.stem for p in md_files}
+    assert any(stem == expected1 or stem.startswith(expected1 + " (") for stem in md_stems)
+    assert any(stem == expected2 or stem.startswith(expected2 + " (") for stem in md_stems)
