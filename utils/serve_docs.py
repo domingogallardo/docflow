@@ -52,7 +52,7 @@ BUMP_YEARS = int(os.getenv("BUMP_YEARS", "100"))
 
 # Contador de la sesión (equivale al "counter" del AppleScript en un run)
 _BUMP_COUNTER = 0
-_BASE_EPOCH: Optional[int] = None  # cacheado en primer uso
+_LAST_BASE_EPOCH: Optional[int] = None  # recuerda la última base para reiniciar el contador
 
 
 # --------- STATIC ASSETS (externos) ---------
@@ -278,10 +278,12 @@ def _apple_like_base_epoch() -> int:
 
 
 def base_epoch_cached() -> int:
-    global _BASE_EPOCH
-    if _BASE_EPOCH is None:
-        _BASE_EPOCH = _apple_like_base_epoch()
-    return _BASE_EPOCH
+    """Obtiene la base futura (ahora + BUMP_YEARS años).
+
+    Antes se cacheaba para toda la sesión, pero ahora se recalcula en
+    cada acceso para que el bump siempre parta del momento actual.
+    """
+    return _apple_like_base_epoch()
 
 
 def get_creation_epoch(abs_path: str) -> int | None:
@@ -317,15 +319,14 @@ def get_creation_epoch(abs_path: str) -> int | None:
 
 
 def compute_bump_mtime() -> int:
-    """
-    Emula el AppleScript:
-      baseEpoch = date -v+{BUMP_YEARS}y +%s (cacheado)
-      i = i + 1
-      mtime = baseEpoch + i
-    """
-    global _BUMP_COUNTER
+    """Calcula el mtime futuro sumando años respecto al momento del bump."""
+    global _BUMP_COUNTER, _LAST_BASE_EPOCH
+    base_epoch = base_epoch_cached()
+    if base_epoch != _LAST_BASE_EPOCH:
+        _LAST_BASE_EPOCH = base_epoch
+        _BUMP_COUNTER = 0
     _BUMP_COUNTER += 1
-    return base_epoch_cached() + _BUMP_COUNTER
+    return base_epoch + _BUMP_COUNTER
 
 
  
