@@ -24,6 +24,7 @@ from PIL import Image
 import random
 
 from config import INSTAPAPER_USERNAME, INSTAPAPER_PASSWORD, ANTHROPIC_KEY
+import utils as U
 
 
 class InstapaperProcessor:
@@ -250,36 +251,37 @@ class InstapaperProcessor:
         file_name = self._truncate_filename(safe, ".html")
         file_path = self.incoming_dir / file_name
 
-        # --- ESCRITURA DE HTML: usa SIEMPRE is_starred_final ---
-        if is_starred_final:
-            html_content = (
-                "<!DOCTYPE html>\n"
-                "<!-- instapaper_starred: true method=read_or_list -->\n"
-                '<html data-instapaper-starred="true">\n'
-                "<head>\n"
-                '<meta charset="UTF-8">\n'
-                '<meta name="instapaper-starred" content="true">\n'
-                f"<title>{title}</title>\n"
-                "</head>\n<body>\n"
-                f"<h1>{title}</h1>\n"
-                f"<div id='origin'>{origin} · {article_id}</div>\n"
-                f"{content}\n"
-                "</body>\n</html>"
-            )
-        else:
-            html_content = (
-                "<!DOCTYPE html>\n<html>\n<head>\n<meta charset=\"UTF-8\">\n"
-                f"<title>{title}</title>\n"
-                "</head>\n<body>\n"
-                f"<h1>{title}</h1>\n"
-                f"<div id='origin'>{origin} · {article_id}</div>\n"
-                f"{content}\n"
-                "</body>\n</html>"
-            )
+        origin_html = str(origin) if origin else ""
+        html_content = self._build_article_html(
+            title=title,
+            origin_html=origin_html,
+            article_id=article_id,
+            content=content,
+            starred=is_starred_final,
+        )
 
         file_path.write_text(html_content, encoding="utf-8")
         return file_path
-    
+
+    def _build_article_html(self, *, title: str, origin_html: str, article_id: str, content: str, starred: bool) -> str:
+        comment = "<!-- instapaper_starred: true method=read_or_list -->\n" if starred else ""
+        html_attrs = ' data-instapaper-starred="true"' if starred else ""
+        extra_meta = '<meta name="instapaper-starred" content="true">\n' if starred else ""
+        return (
+            "<!DOCTYPE html>\n"
+            f"{comment}"
+            f"<html{html_attrs}>\n"
+            "<head>\n"
+            '<meta charset="UTF-8">\n'
+            f"{extra_meta}"
+            f"<title>{title}</title>\n"
+            "</head>\n<body>\n"
+            f"<h1>{title}</h1>\n"
+            f"<div id='origin'>{origin_html} · {article_id}</div>\n"
+            f"{content}\n"
+            "</body>\n</html>"
+        )
+
     def _truncate_filename(self, name, extension, max_length=200):
         """Trunca nombres de archivo largos."""
         total_length = len(name) + len(extension) + 1
@@ -289,10 +291,10 @@ class InstapaperProcessor:
     
     def _convert_html_to_markdown(self):
         """Convierte archivos HTML a Markdown."""
-        html_files = list(self.incoming_dir.rglob('*.html'))
-        
-        # Filtrar archivos que ya tienen versión Markdown
-        html_files = [f for f in html_files if not f.with_suffix('.md').exists()]
+        html_files = [
+            path for path in U.iter_html_files(self.incoming_dir)
+            if not path.with_suffix('.md').exists()
+        ]
         
         if not html_files:
             print('📄 No hay archivos HTML pendientes de convertir a Markdown')
@@ -333,9 +335,8 @@ class InstapaperProcessor:
                     
     def _fix_html_encoding(self):
         """Corrige la codificación de archivos HTML."""
-        html_files = [f for f in self.incoming_dir.iterdir() 
-                     if f.is_file() and f.suffix.lower() in ['.html', '.htm']]
-        
+        html_files = list(U.iter_html_files(self.incoming_dir))
+
         if not html_files:
             print('🔧 No hay archivos HTML para procesar codificación')
             return
@@ -378,16 +379,12 @@ class InstapaperProcessor:
         no tocamos el elemento y confiamos en el CSS global
         `img { max-width: 300px; height: auto; }` que se inyecta en _add_margins().
         """
-        html_files = []
-        for dirpath, _, filenames in os.walk(self.incoming_dir):
-            for filename in filenames:
-                if filename.lower().endswith(('.html', '.htm')):
-                    html_files.append(Path(dirpath) / filename)
-        
+        html_files = list(U.iter_html_files(self.incoming_dir))
+
         if not html_files:
             print('🖼️  No hay archivos HTML para procesar imágenes')
             return
-        
+
         max_width = 300
         for html_file in html_files:
             try:
@@ -428,7 +425,6 @@ class InstapaperProcessor:
     
     def _add_margins(self):
         """Añade márgenes a los archivos HTML."""
-        import utils as U
         U.add_margins_to_html_files(self.incoming_dir)
     
     def _get_image_width(self, src):
