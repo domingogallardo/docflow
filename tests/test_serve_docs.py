@@ -5,6 +5,16 @@ import time
 import urllib.parse
 
 
+def _load_serve_docs(alias: str):
+    repo_root = Path(__file__).resolve().parents[1]
+    sd_path = repo_root / "utils" / "serve_docs.py"
+    spec = importlib.util.spec_from_file_location(alias, sd_path)
+    module = importlib.util.module_from_spec(spec)  # type: ignore[arg-type]
+    assert spec and spec.loader
+    spec.loader.exec_module(module)  # type: ignore[union-attr]
+    return module
+
+
 def _make_dummy_handler(handler_cls):
     """Create a minimal handler instance able to capture list_directory output."""
     class Dummy(handler_cls):
@@ -28,13 +38,7 @@ def _make_dummy_handler(handler_cls):
 
 
 def test_directory_index_marks_published_html(tmp_path, monkeypatch):
-    # Load utils/serve_docs.py as a module without requiring a package
-    repo_root = Path(__file__).resolve().parents[1]
-    sd_path = repo_root / "utils" / "serve_docs.py"
-    spec = importlib.util.spec_from_file_location("serve_docs", sd_path)
-    sd = importlib.util.module_from_spec(spec)  # type: ignore[arg-type]
-    assert spec and spec.loader
-    spec.loader.exec_module(sd)  # type: ignore[union-attr]
+    sd = _load_serve_docs("serve_docs")
 
     # Arrange: temp serve dir with files
     serve_dir = tmp_path / "serve"
@@ -75,13 +79,7 @@ def test_directory_index_marks_published_html(tmp_path, monkeypatch):
 
 
 def test_directory_index_pdf_actions_and_publish_detection(tmp_path, monkeypatch):
-    # Cargar módulo desde ruta
-    repo_root = Path(__file__).resolve().parents[1]
-    sd_path = repo_root / "utils" / "serve_docs.py"
-    spec = importlib.util.spec_from_file_location("serve_docs_pdf", sd_path)
-    sd = importlib.util.module_from_spec(spec)  # type: ignore[arg-type]
-    assert spec and spec.loader
-    spec.loader.exec_module(sd)  # type: ignore[union-attr]
+    sd = _load_serve_docs("serve_docs_pdf")
 
     # Estructura: un PDF bumped/no-pub y otro bumped+publicado
     serve_dir = tmp_path / "serve"
@@ -136,12 +134,7 @@ def test_directory_index_pdf_actions_and_publish_detection(tmp_path, monkeypatch
 
 
 def test_unbump_published_file_via_post(tmp_path, monkeypatch):
-    repo_root = Path(__file__).resolve().parents[1]
-    sd_path = repo_root / "utils" / "serve_docs.py"
-    spec = importlib.util.spec_from_file_location("serve_docs_post", sd_path)
-    sd = importlib.util.module_from_spec(spec)  # type: ignore[arg-type]
-    assert spec and spec.loader
-    spec.loader.exec_module(sd)  # type: ignore[union-attr]
+    sd = _load_serve_docs("serve_docs_post")
 
     serve_dir = tmp_path / "serve"
     serve_dir.mkdir()
@@ -186,13 +179,7 @@ def test_unbump_published_file_via_post(tmp_path, monkeypatch):
 
 
 def test_directory_index_pdf_processed_button(tmp_path, monkeypatch):
-    # Cargar módulo y preparar entorno
-    repo_root = Path(__file__).resolve().parents[1]
-    sd_path = repo_root / "utils" / "serve_docs.py"
-    spec = importlib.util.spec_from_file_location("serve_docs_pdf_proc", sd_path)
-    sd = importlib.util.module_from_spec(spec)  # type: ignore[arg-type]
-    assert spec and spec.loader
-    spec.loader.exec_module(sd)  # type: ignore[union-attr]
+    sd = _load_serve_docs("serve_docs_pdf_proc")
 
     serve_dir = tmp_path / "serve"
     serve_dir.mkdir()
@@ -232,12 +219,7 @@ def test_directory_index_pdf_processed_button(tmp_path, monkeypatch):
 
 
 def test_compute_bump_mtime_uses_current_base(monkeypatch):
-    repo_root = Path(__file__).resolve().parents[1]
-    sd_path = repo_root / "utils" / "serve_docs.py"
-    spec = importlib.util.spec_from_file_location("serve_docs_compute", sd_path)
-    sd = importlib.util.module_from_spec(spec)  # type: ignore[arg-type]
-    assert spec and spec.loader
-    spec.loader.exec_module(sd)  # type: ignore[union-attr]
+    sd = _load_serve_docs("serve_docs_compute")
 
     bases = [1_000_000_000, 1_000_010_000]
 

@@ -90,6 +90,16 @@ def move_files(files, dest):
     return moved
 
 
+def iter_html_files(directory: Path, file_filter=None):
+    """Iterador común de archivos HTML ('.html' o '.htm')."""
+    for dirpath, _, filenames in os.walk(directory):
+        for filename in filenames:
+            if filename.lower().endswith(('.html', '.htm')):
+                file_path = Path(dirpath) / filename
+                if file_filter is None or file_filter(file_path):
+                    yield file_path
+
+
 def _add_years(dt: datetime, years: int) -> datetime:
     """Suma años de calendario. Si cae en 29-feb y no es bisiesto, usa 28-feb."""
     try:
@@ -153,14 +163,9 @@ def add_margins_to_html_files(directory: Path, file_filter=None):
     margin_style = "body { margin-left: 6%; margin-right: 6%; }"
     img_rule = "img { max-width: 300px; height: auto; }"
     
-    html_files = []
-    for dirpath, _, filenames in os.walk(directory):
-        for filename in filenames:
-            if filename.lower().endswith(('.html', '.htm')):
-                file_path = Path(dirpath) / filename
-                # Aplicar filtro si se proporciona
-                if file_filter is None or file_filter(file_path):
-                    html_files.append(file_path)
+    html_files = [
+        file_path for file_path in iter_html_files(directory, file_filter)
+    ]
     
     if not html_files:
         print('📏 No hay archivos HTML para añadir márgenes')

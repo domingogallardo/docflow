@@ -29,6 +29,7 @@ import urllib.parse
 from datetime import datetime
 import subprocess
 import calendar as _cal
+import stat
 from typing import Optional
 
 # Paths relativos al repo (para publicar)
@@ -43,6 +44,7 @@ PUBLIC_READS_DIR = os.getenv(
     "PUBLIC_READS_DIR",
     os.path.join(REPO_ROOT, "web", "public", "read"),
 )
+STATIC_DIR = os.path.join(SCRIPT_DIR, "static")
 
 # --------- CONFIG ---------
 PORT = int(os.getenv("PORT", "8000"))
@@ -56,185 +58,16 @@ _LAST_BASE_EPOCH: Optional[int] = None  # recuerda la última base para reinicia
 
 
 # --------- STATIC ASSETS (externos) ---------
-OVERLAY_CSS = (
-    "#dg-overlay{position:fixed;z-index:2147483647;right:12px;bottom:12px;"
-    "background:#fff;border:1px solid #ddd;border-radius:12px;"
-    "box-shadow:0 4px 18px rgba(0,0,0,.1);padding:8px 10px;"
-    "font:13px -apple-system,system-ui,Segoe UI,Roboto,Helvetica,Arial;"
-    "display:flex;gap:8px;align-items:center}"
-    "#dg-overlay button{padding:6px 10px;border:1px solid #ccc;"
-    "border-radius:8px;background:#f9f9f9;cursor:pointer}"
-    "#dg-overlay button[disabled]{opacity:.6;cursor:default}"
-    "#dg-overlay .meta{color:#666;margin-left:6px}"
-    "#dg-overlay .ok{color:#0a0}#dg-overlay .err{color:#a00}"
-    "#dg-overlay a{text-decoration:none;color:#06c}"
-    "#dg-toast{position:fixed;z-index:2147483647;right:12px;bottom:60px;"
-    "background:#0a0;color:#fff;border-radius:10px;padding:8px 12px;"
-    "box-shadow:0 6px 20px rgba(0,0,0,.15);opacity:0;transform:translateY(8px);"
-    "transition:opacity .15s ease, transform .15s ease;"
-    "font:13px -apple-system,system-ui,Segoe UI,Roboto,Helvetica,Arial;}"
-    "#dg-toast.show{opacity:1;transform:translateY(0)}"
-    "#dg-toast.err{background:#a00}#dg-toast.ok{background:#0a0}"
-    "#dg-toast a{color:#fff;text-decoration:underline;margin-left:8px}"
-).encode("utf-8")
 
-OVERLAY_JS = (
-    "(function(){\n"
-    "  const script = document.currentScript;\n"
-    "  const rel = script.dataset.path || '';\n"
-    "  let bumped = (script.dataset.bumped === '1');\n"
-    "  let published = (script.dataset.published === '1');\n"
-    "  let publishing = false;\n"
-    "  let unpublishing = false;\n"
-    "  let processing = false;\n"
-    "  const publicBase = script.dataset.publicBase || '';\n"
-    "  function el(tag, attrs, text){\n"
-    "    const e = document.createElement(tag);\n"
-    "    if(attrs){ for(const k in attrs){ e.setAttribute(k, attrs[k]); } }\n"
-    "    if(text){ e.textContent = text; }\n"
-    "    return e;\n"
-    "  }\n"
-    "  function toast(kind, text, href){\n"
-    "    let t = document.getElementById('dg-toast');\n"
-    "    if(!t){ t = el('div', {id:'dg-toast'}, ''); document.body.appendChild(t); }\n"
-    "    t.className = kind ? kind + ' show' : 'show';\n"
-    "    t.textContent = text || '';\n"
-    "    if(href){ const a = el('a', {href, target:'_blank', rel:'noopener'}, 'Ver'); t.appendChild(a); }\n"
-    "    clearTimeout(window.__dg_toast_timer);\n"
-    "    window.__dg_toast_timer = setTimeout(()=>{ t.classList.remove('show'); }, 2200);\n"
-    "  }\n"
-    "  async function call(action){\n"
-    "    const body = new URLSearchParams({path: rel, action}).toString();\n"
-    "    const res = await fetch('/__bump', {method:'POST', headers:{'Content-Type':'application/x-www-form-urlencoded'}, body});\n"
-    "    return res.ok;\n"
-    "  }\n"
-    "  function goList(){\n"
-    "    const p = window.location.pathname;\n"
-    "    const parent = p.endsWith('/') ? p : p.substring(0, p.lastIndexOf('/') + 1);\n"
-    "    window.location.href = parent || '/';\n"
-    "  }\n"
-    "  async function publish(){\n"
-    "    if(publishing || !bumped || published) return;\n"
-    "    publishing = true; render(); msg.textContent = '⏳ publicando…'; msg.className = 'meta';\n"
-    "    const ok = await call('publish');\n"
-    "    msg.textContent = ok ? '✓ publicado' : '× error';\n"
-    "    msg.className = ok ? 'meta ok' : 'meta err';\n"
-    "    if(ok){\n"
-    "      published = true; render();\n"
-    "      const fname = rel.split('/').pop();\n"
-    "      const base = publicBase ? (publicBase.endsWith('/') ? publicBase : publicBase + '/') : '';\n"
-    "      const url = base ? (base + encodeURIComponent(fname)) : '';\n"
-    "      toast('ok', 'Publicado', url);\n"
-    "    } else {\n"
-    "      publishing = false; render();\n"
-    "      toast('err', 'Error publicando');\n"
-    "    }\n"
-    "  }\n"
-    "  async function processed(){\n"
-    "    if(processing || !bumped || !published) return;\n"
-    "    processing = true; render(); msg.textContent = 'procesando…';\n"
-    "    const ok = await call('processed');\n"
-    "    msg.textContent = ok ? '✓ procesado' : '× error';\n"
-    "    msg.className = ok ? 'meta ok' : 'meta err';\n"
-    "    if(ok){\n"
-    "      bumped = false; processing = false; render();\n"
-    "      toast('ok', 'Procesado');\n"
-    "    } else {\n"
-    "      processing = false; render();\n"
-    "      toast('err', 'Error en procesado');\n"
-    "    }\n"
-    "  }\n"
-    "  async function unpublish(){\n"
-    "    if(unpublishing || !published) return;\n"
-    "    unpublishing = true; render(); msg.textContent = '⏳ despublicando…'; msg.className = 'meta';\n"
-    "    const ok = await call('unpublish');\n"
-    "    msg.textContent = ok ? '✓ despublicado' : '× error';\n"
-    "    msg.className = ok ? 'meta ok' : 'meta err';\n"
-    "    if(ok){\n"
-    "      published = false; unpublishing = false; render();\n"
-    "      toast('ok', 'Despublicado');\n"
-    "    } else {\n"
-    "      unpublishing = false; render();\n"
-    "      toast('err', 'Error despublicando');\n"
-    "    }\n"
-    "  }\n"
-    "  function render(){\n"
-    "    bar.innerHTML = '';\n"
-    "    bar.appendChild(el('strong', null, '📄 ' + rel));\n"
-    "    const btn = el('button', null, bumped ? 'Unbump' : 'Bump');\n"
-    "    btn.addEventListener('click', async ()=>{\n"
-    "      const ok = await call(bumped ? 'unbump_now' : 'bump');\n"
-    "      msg.textContent = ok ? '✓ hecho' : '× error'; msg.className = ok ? 'meta ok' : 'meta err';\n"
-    "      if(ok){ bumped = !bumped; render(); }\n"
-    "    });\n"
-    "    bar.appendChild(btn);\n"
-    "    if(bumped && !published){\n"
-    "      const pub = el('button', null, 'Publicar');\n"
-    "      pub.title = 'Copiar a /web/public/read y desplegar';\n"
-    "      if(publishing){ pub.textContent = 'Publicando…'; pub.setAttribute('disabled',''); }\n"
-    "      pub.addEventListener('click', publish);\n"
-    "      bar.appendChild(pub);\n"
-    "    }\n"
-    "    if(published){\n"
-    "      const unp = el('button', null, 'Despublicar');\n"
-    "      unp.title = 'Eliminar de /web/public/read y desplegar';\n"
-    "      if(unpublishing){ unp.textContent = 'Despublicando…'; unp.setAttribute('disabled',''); }\n"
-    "      unp.addEventListener('click', unpublish);\n"
-    "      bar.appendChild(unp);\n"
-    "      if(bumped){\n"
-    "        const done = el('button', null, 'Procesado');\n"
-    "        done.title = 'Unbump (local y público) + añadir a read_posts.md + desplegar';\n"
-    "        if(processing){ done.textContent = 'Procesando…'; done.setAttribute('disabled',''); }\n"
-    "        done.addEventListener('click', processed);\n"
-    "        bar.appendChild(done);\n"
-    "      }\n"
-    "    }\n"
-    "    const raw = el('a', {href:'?raw=1', title:'Ver sin overlay'}, 'raw');\n"
-    "    bar.appendChild(raw); bar.appendChild(msg);\n"
-    "  }\n"
-    "  function isEditingTarget(t){ return t && (t.tagName==='INPUT' || t.tagName==='TEXTAREA' || t.isContentEditable); }\n"
-    "  const bar = el('div', {id:'dg-overlay'});\n"
-    "  const msg = el('span', {class:'meta', id:'dg-msg'}, '');\n"
-    "  document.addEventListener('keydown', async (e)=>{\n"
-    "    if(isEditingTarget(document.activeElement)) return;\n"
-    "    const k = (e.key || '').toLowerCase();\n"
-    "    if(k==='b'){\n"
-    "      e.preventDefault(); const ok = await call('bump'); if(ok){ bumped=true; render(); msg.textContent='✓ hecho'; msg.className='meta ok'; }\n"
-    "    }\n"
-    "    if(k==='u'){\n"
-    "      e.preventDefault(); const ok = await call('unbump_now'); if(ok){ bumped=false; render(); msg.textContent='✓ hecho'; msg.className='meta ok'; }\n"
-    "    }\n"
-    "    if(k==='l' && !e.metaKey && !e.ctrlKey && !e.altKey){ e.preventDefault(); goList(); }\n"
-    "    if(k==='p' && bumped && !published && !publishing){ e.preventDefault(); publish(); }\n"
-    "    if(k==='d' && published && !unpublishing){ e.preventDefault(); unpublish(); }\n"
-    "    if(k==='x' && bumped && published && !processing){ e.preventDefault(); processed(); }\n"
-    "  });\n"
-    "  document.addEventListener('DOMContentLoaded', ()=>{ document.body.appendChild(bar); render(); });\n"
-    "})();\n"
-).encode("utf-8")
+def _load_static_bytes(filename: str) -> bytes:
+    path = os.path.join(STATIC_DIR, filename)
+    with open(path, "rb") as fh:
+        return fh.read()
 
-# JS para acciones rápidas en el índice (PDFs: bump/publicar/despublicar)
-INDEX_JS = (
-    "(()=>{\n"
-    "  function send(action, rel, target){\n"
-    "    const params = {path: rel, action};\n"
-    "    if(target){ params.target = target; }\n"
-    "    const body = new URLSearchParams(params).toString();\n"
-    "    return fetch('/__bump', {method:'POST', headers:{'Content-Type':'application/x-www-form-urlencoded'}, body});\n"
-    "  }\n"
-    "  document.addEventListener('click', (e)=>{\n"
-    "    const a = e.target.closest('[data-dg-act]');\n"
-    "    if(!a) return;\n"
-    "    e.preventDefault();\n"
-    "    const action = a.getAttribute('data-dg-act');\n"
-    "    const rel = a.getAttribute('data-dg-path');\n"
-    "    const tgt = a.getAttribute('data-dg-target');\n"
-    "    if(!action || !rel) return;\n"
-    "    a.textContent = '…'; a.setAttribute('disabled','');\n"
-    "    send(action, rel, tgt).then(r=>{ if(r.ok){ location.reload(); } else { alert('Error'); a.removeAttribute('disabled'); } });\n"
-    "  });\n"
-    "})();\n"
-).encode("utf-8")
+
+OVERLAY_CSS = _load_static_bytes("overlay.css")
+OVERLAY_JS = _load_static_bytes("overlay.js")
+INDEX_JS = _load_static_bytes("index.js")
 
 
 # --------- HELPERS ---------
@@ -257,6 +90,78 @@ def fmt_ts(ts: float) -> str:
     t = time.localtime(ts)
     MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"]
     return f"{t.tm_year}-{MONTHS[t.tm_mon-1]}-{t.tm_mday:02d} {t.tm_hour:02d}:{t.tm_min:02d}"
+
+
+def _entry_classes(bumped: bool, published: bool) -> str:
+    classes: list[str] = []
+    if bumped:
+        classes.append("dg-bump")
+    if published:
+        classes.append("dg-pub")
+    return f" class=\"{' '.join(classes)}\"" if classes else ""
+
+
+def _is_published_filename(name: str) -> bool:
+    try:
+        if name.lower().endswith((".html", ".htm", ".pdf")):
+            return os.path.exists(os.path.join(PUBLIC_READS_DIR, name))
+    except Exception:
+        return False
+    return False
+
+
+def _pdf_actions_html(rel_from_root: str, bumped: bool, published: bool) -> str:
+    actions: list[str] = []
+    if bumped:
+        actions.append(
+            f"<a href='#' class='dg-act' data-dg-act='unbump_now' data-dg-path='{html.escape(rel_from_root)}'>Unbump</a>"
+        )
+    else:
+        actions.append(
+            f"<a href='#' class='dg-act' data-dg-act='bump' data-dg-path='{html.escape(rel_from_root)}'>Bump</a>"
+        )
+    if published:
+        actions.append(
+            f"<a href='#' class='dg-act' data-dg-act='unpublish' data-dg-path='{html.escape(rel_from_root)}'>Despublicar</a>"
+        )
+        if bumped:
+            actions.append(
+                f"<a href='#' class='dg-act' data-dg-act='processed' data-dg-path='{html.escape(rel_from_root)}'>Procesado</a>"
+            )
+    elif bumped:
+        actions.append(
+            f"<a href='#' class='dg-act' data-dg-act='publish' data-dg-path='{html.escape(rel_from_root)}'>Publicar</a>"
+        )
+    if not actions:
+        return ""
+    return f"<span class='dg-actions'>{' '.join(actions)}</span>"
+
+
+def _render_list_entry(entry: os.DirEntry[str], now: float, st: os.stat_result) -> str:
+    mtime = st.st_mtime
+    bumped = mtime > now
+    published = _is_published_filename(entry.name)
+    is_dir = stat.S_ISDIR(st.st_mode)
+    display_name = entry.name + ("/" if is_dir else "")
+    link = urllib.parse.quote(display_name)
+    rel_from_root = os.path.relpath(entry.path, SERVE_DIR)
+    type_icon = ""
+    if not is_dir:
+        lowered = entry.name.lower()
+        if lowered.endswith((".html", ".htm")):
+            type_icon = "📄 "
+        elif lowered.endswith(".pdf"):
+            type_icon = "📕 "
+
+    prefix = ("🔥 " if bumped else "") + ("🟢 " if published else "") + type_icon
+    date_html = f"<span class='dg-date'> — {fmt_ts(mtime)}</span>"
+    actions_html = ""
+    if entry.name.lower().endswith(".pdf"):
+        actions_html = _pdf_actions_html(rel_from_root, bumped, published)
+    cls_attr = _entry_classes(bumped, published)
+    return (
+        f"<li{cls_attr}><span>{prefix}<a href=\"{link}\">{html.escape(display_name)}</a>{date_html}</span>{actions_html}</li>"
+    )
 
 
 def _apple_like_base_epoch() -> int:
@@ -605,18 +510,22 @@ class HTMLOnlyRequestHandler(SimpleHTTPRequestHandler):
     # --------- DIRECTORY LISTING ----------
     def list_directory(self, path):
         try:
+            entries: list[tuple[float, os.DirEntry[str], os.stat_result]] = []
             with os.scandir(path) as it:
-                entries = [e for e in it]
+                for entry in it:
+                    try:
+                        st = entry.stat()
+                    except FileNotFoundError:
+                        continue
+                    entries.append((st.st_mtime, entry, st))
         except OSError:
             self.send_error(404, "No permission to list directory")
             return None
 
-        # Ordenar por mtime desc
-        entries.sort(key=lambda e: e.stat().st_mtime, reverse=True)
+        entries.sort(key=lambda item: item[0], reverse=True)
 
-        r = []
         displaypath = urllib.parse.unquote(self.path)
-        r.append(
+        head_html = (
             f"<html><head><meta charset='utf-8'><title>Index of {html.escape(displaypath)}</title>"
             "<style>"
             "body{margin:14px 18px;font:14px -apple-system,system-ui,Segoe UI,Roboto,Helvetica,Arial;color:#222}"
@@ -635,80 +544,20 @@ class HTMLOnlyRequestHandler(SimpleHTTPRequestHandler):
             "<script src='/__index.js' defer></script>"
             "</head><body>"
         )
-        r.append(f"<h2>Index of {html.escape(displaypath)}</h2>")
-        r.append("<div class='dg-legend'>🔥 bumped · 🟢 publicado</div><hr><ul class='dg-index'>")
+
+        rows: list[str] = [head_html, f"<h2>Index of {html.escape(displaypath)}</h2>"]
+        rows.append("<div class='dg-legend'>🔥 bumped · 🟢 publicado</div><hr><ul class='dg-index'>")
 
         if displaypath != "/":
             parent = os.path.dirname(displaypath.rstrip("/"))
-            r.append(f'<li><a href="{parent or "/"}">../</a></li>')
+            rows.append(f'<li><a href="{parent or "/"}">../</a></li>')
 
         now = time.time()
-        for e in entries:
-            name = e.name
-            fullname = e.path
-            try:
-                mtime = e.stat().st_mtime
-            except FileNotFoundError:
-                continue
-            bumped = (mtime > now)
-            # Consideramos publicado si existe en READS
-            published = False
-            try:
-                if name.lower().endswith((".html", ".htm", ".pdf")):
-                    if os.path.exists(os.path.join(PUBLIC_READS_DIR, name)):
-                        published = True
-            except Exception:
-                published = False
-            icon_pub = '🟢 ' if published else ''
-            prefix = ("🔥 " if bumped else "") + icon_pub
-            is_dir = e.is_dir()
-            disp = name + ("/" if is_dir else "")
-            link = urllib.parse.quote(name + ("/" if is_dir else ""))
-            li_classes = []
-            if bumped:
-                li_classes.append("dg-bump")
-            if published:
-                li_classes.append("dg-pub")
-            cls = f" class=\"{' '.join(li_classes)}\"" if li_classes else ""
-            # Acciones para PDFs (no podemos inyectar overlay en visor)
-            actions_html = ""
-            rel_from_root = os.path.relpath(fullname, SERVE_DIR)
-            if name.lower().endswith(".pdf"):
-                parts = []
-                if bumped:
-                    parts.append(
-                        f"<a href='#' class='dg-act' data-dg-act='unbump_now' data-dg-path='{html.escape(rel_from_root)}'>Unbump</a>"
-                    )
-                else:
-                    parts.append(
-                        f"<a href='#' class='dg-act' data-dg-act='bump' data-dg-path='{html.escape(rel_from_root)}'>Bump</a>"
-                    )
-                if published:
-                    parts.append(
-                        f"<a href='#' class='dg-act' data-dg-act='unpublish' data-dg-path='{html.escape(rel_from_root)}'>Despublicar</a>"
-                    )
-                    # Si está publicado y bumped, permitimos marcar como Procesado
-                    if bumped:
-                        parts.append(
-                            f"<a href='#' class='dg-act' data-dg-act='processed' data-dg-path='{html.escape(rel_from_root)}'>Procesado</a>"
-                        )
-                elif bumped:
-                    parts.append(
-                        f"<a href='#' class='dg-act' data-dg-act='publish' data-dg-path='{html.escape(rel_from_root)}'>Publicar</a>"
-                    )
-                if parts:
-                    actions_html = f"<span class='dg-actions'>{' '.join(parts)}</span>"
+        for _, entry, st in entries:
+            rows.append(_render_list_entry(entry, now, st))
 
-            date_html = f"<span class='dg-date'> — {fmt_ts(mtime)}</span>"
-            if is_dir:
-                r.append(f'<li{cls}><span>{prefix}<a href="{link}">{html.escape(disp)}</a>{date_html}</span>{actions_html}</li>')
-            elif name.lower().endswith(".html"):
-                r.append(f'<li{cls}><span>{prefix}📄 <a href="{link}">{html.escape(disp)}</a>{date_html}</span>{actions_html}</li>')
-            elif name.lower().endswith(".pdf"):
-                r.append(f'<li{cls}><span>{prefix}📕 <a href="{link}">{html.escape(disp)}</a>{date_html}</span>{actions_html}</li>')
-
-        r.append("</ul><hr></body></html>")
-        encoded = "\n".join(r).encode("utf-8", "surrogateescape")
+        rows.append("</ul><hr></body></html>")
+        encoded = "\n".join(rows).encode("utf-8", "surrogateescape")
         self._send_bytes(encoded, "text/html; charset=utf-8")
         return None
 
