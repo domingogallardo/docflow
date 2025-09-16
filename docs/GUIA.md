@@ -70,10 +70,11 @@ Todo esto lo orquesta `process_documents.py` y procesadores específicos `*_proc
 
 4) **Leer localmente y gestionar estado → `utils/serve_docs.py`**  
 Arranca el servidor local de lectura:  
-```bash
+ ```bash
 PORT=8000 SERVE_DIR="/ruta/a/⭐️ Documentación" python utils/serve_docs.py
 ```
 - Overlay en páginas **HTML** con botones **Bump / Unbump / Publicar / Despublicar / Procesado** y **atajos de teclado**.  
+- El listado solo muestra carpetas, HTML y PDFs (los `.md` se ocultan) ordenados por **mtime desc**.  
 - Reglas de estado:  
   - **S0** Unbumped + No publicado → muestra *Bump*.  
   - **S1** Bumped + No publicado → muestra *Unbump* y *Publicar*.  

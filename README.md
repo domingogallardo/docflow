@@ -46,7 +46,7 @@ python process_documents.py tweets pdfs
 PORT=8000 SERVE_DIR="/ruta/a/⭐️ Documentación" python utils/serve_docs.py
 ```
 - Bump/Unbump, Publicar/Despublicar, Procesado (atajos: `b`, `u`, `p`, `d`, `x`).
-- Listado por **mtime desc**; los bumpeados se marcan 🔥.
+- Listado por **mtime desc** mostrando solo HTML/PDF; los bumpeados se marcan 🔥.
 - ⭐ en **Instapaper** ⇒ **bump automático** del HTML procesado.
 
 ### 3) Publicar a la web pública (`/read/`)
