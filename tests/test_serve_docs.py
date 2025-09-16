@@ -229,3 +229,25 @@ def test_directory_index_pdf_processed_button(tmp_path, monkeypatch):
         if "proc_local.pdf" in line:
             assert "data-dg-act='processed'" not in line
             break
+
+
+def test_compute_bump_mtime_uses_current_base(monkeypatch):
+    repo_root = Path(__file__).resolve().parents[1]
+    sd_path = repo_root / "utils" / "serve_docs.py"
+    spec = importlib.util.spec_from_file_location("serve_docs_compute", sd_path)
+    sd = importlib.util.module_from_spec(spec)  # type: ignore[arg-type]
+    assert spec and spec.loader
+    spec.loader.exec_module(sd)  # type: ignore[union-attr]
+
+    bases = [1_000_000_000, 1_000_010_000]
+
+    def fake_base():
+        return bases.pop(0)
+
+    monkeypatch.setattr(sd, "_apple_like_base_epoch", fake_base, raising=True)
+
+    first = sd.compute_bump_mtime()
+    second = sd.compute_bump_mtime()
+
+    assert first == 1_000_000_000 + 1
+    assert second == 1_000_010_000 + 1
