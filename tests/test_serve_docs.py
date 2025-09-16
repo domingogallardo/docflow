@@ -46,9 +46,11 @@ def test_directory_index_marks_published_html(tmp_path, monkeypatch):
     html_pub = serve_dir / "articulo_publicado.html"
     html_unpub = serve_dir / "articulo_local.html"
     pdf_file = serve_dir / "doc.pdf"
+    md_file = serve_dir / "nota.md"
     html_pub.write_text("<html><body>Publicado</body></html>", encoding="utf-8")
     html_unpub.write_text("<html><body>Local</body></html>", encoding="utf-8")
     pdf_file.write_bytes(b"%PDF-1.4\n%...\n")
+    md_file.write_text("md", encoding="utf-8")
 
     # Arrange: temp public reads dir with same-name file to mark as published
     public_reads = tmp_path / "public_reads"
@@ -76,6 +78,9 @@ def test_directory_index_marks_published_html(tmp_path, monkeypatch):
         if "articulo_local.html" in line:
             assert "🟢" not in line and "dg-pub" not in line
             break
+
+    # Los ficheros .md no deben mostrarse
+    assert "nota.md" not in data
 
 
 def test_directory_index_pdf_actions_and_publish_detection(tmp_path, monkeypatch):

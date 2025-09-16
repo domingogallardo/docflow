@@ -137,7 +137,7 @@ def _pdf_actions_html(rel_from_root: str, bumped: bool, published: bool) -> str:
     return f"<span class='dg-actions'>{' '.join(actions)}</span>"
 
 
-def _render_list_entry(entry: os.DirEntry[str], now: float, st: os.stat_result) -> str:
+def _render_list_entry(entry: os.DirEntry[str], now: float, st: os.stat_result) -> str | None:
     mtime = st.st_mtime
     bumped = mtime > now
     published = _is_published_filename(entry.name)
@@ -152,6 +152,8 @@ def _render_list_entry(entry: os.DirEntry[str], now: float, st: os.stat_result) 
             type_icon = "📄 "
         elif lowered.endswith(".pdf"):
             type_icon = "📕 "
+        else:
+            return None  # ignoramos ficheros que no sean HTML/PDF
 
     prefix = ("🔥 " if bumped else "") + ("🟢 " if published else "") + type_icon
     date_html = f"<span class='dg-date'> — {fmt_ts(mtime)}</span>"
@@ -159,9 +161,7 @@ def _render_list_entry(entry: os.DirEntry[str], now: float, st: os.stat_result) 
     if entry.name.lower().endswith(".pdf"):
         actions_html = _pdf_actions_html(rel_from_root, bumped, published)
     cls_attr = _entry_classes(bumped, published)
-    return (
-        f"<li{cls_attr}><span>{prefix}<a href=\"{link}\">{html.escape(display_name)}</a>{date_html}</span>{actions_html}</li>"
-    )
+    return f"<li{cls_attr}><span>{prefix}<a href=\"{link}\">{html.escape(display_name)}</a>{date_html}</span>{actions_html}</li>"
 
 
 def _apple_like_base_epoch() -> int:
@@ -554,7 +554,9 @@ class HTMLOnlyRequestHandler(SimpleHTTPRequestHandler):
 
         now = time.time()
         for _, entry, st in entries:
-            rows.append(_render_list_entry(entry, now, st))
+            rendered = _render_list_entry(entry, now, st)
+            if rendered:
+                rows.append(rendered)
 
         rows.append("</ul><hr></body></html>")
         encoded = "\n".join(rows).encode("utf-8", "surrogateescape")
