@@ -10,6 +10,7 @@ from pdf_processor import PDFProcessor
 from instapaper_processor import InstapaperProcessor
 from podcast_processor import PodcastProcessor
 from tweet_processor import TweetProcessor
+from image_processor import ImageProcessor
 
 
 class DocumentProcessorConfig:
@@ -23,6 +24,7 @@ class DocumentProcessorConfig:
         self.pdfs_dest = base_dir / "Pdfs" / f"Pdfs {year}"
         self.podcasts_dest = base_dir / "Podcasts" / f"Podcasts {year}"
         self.tweets_dest = base_dir / "Tweets" / f"Tweets {year}"
+        self.images_dest = base_dir / "Images" / f"Images {year}"
         self.historial = base_dir / "Historial.txt"
 
 
@@ -35,10 +37,12 @@ class DocumentProcessor:
         self.instapaper_processor = InstapaperProcessor(self.config.incoming, self.config.posts_dest)
         self.podcast_processor = PodcastProcessor(self.config.incoming, self.config.podcasts_dest)
         self.tweet_processor = TweetProcessor(self.config.incoming, self.config.tweets_dest)
+        self.image_processor = ImageProcessor(self.config.incoming, self.config.images_dest)
         self.moved_podcasts: List[Path] = []
         self.moved_posts: List[Path] = []
         self.moved_pdfs: List[Path] = []
         self.moved_tweets: List[Path] = []
+        self.moved_images: List[Path] = []
 
     def process_podcasts(self) -> List[Path]:
         """Procesa archivos de podcast con procesador unificado."""
@@ -83,10 +87,22 @@ class DocumentProcessor:
         moved_tweets = self.tweet_processor.process_tweets()
         self.moved_tweets = moved_tweets
         return moved_tweets
+
+    def process_images(self) -> List[Path]:
+        """Procesa imágenes moviéndolas y generando la galería anual."""
+        moved_images = self.image_processor.process_images()
+        self.moved_images = moved_images
+        return moved_images
     
     def register_all_files(self) -> None:
         """Registra todos los archivos procesados en el historial."""
-        all_files = self.moved_posts + self.moved_pdfs + self.moved_podcasts + self.moved_tweets
+        all_files = (
+            self.moved_posts
+            + self.moved_pdfs
+            + self.moved_podcasts
+            + self.moved_tweets
+            + self.moved_images
+        )
         if all_files:
             U.register_paths(all_files, base_dir=self.config.base_dir, historial_path=self.config.historial)
     
@@ -104,8 +120,11 @@ class DocumentProcessor:
             
             # Fase 4: Procesar PDFs (solo mover, sin pipeline)
             self.process_pdfs()
-            
-            # Fase 5: Registrar todo en historial
+
+            # Fase 5: Procesar imágenes (mover y actualizar galería)
+            self.process_images()
+
+            # Fase 6: Registrar todo en historial
             self.register_all_files()
             
             print("Pipeline completado ✅")

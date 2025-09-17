@@ -50,18 +50,20 @@ pip install requests beautifulsoup4 markdownify anthropic pillow pytest markdown
 ## Flujo de trabajo detallado
 
 1) **Recolectar → Estructura base**  
-Guarda tus fuentes en `⭐️ Documentación/Incoming/` (o en sus carpetas de origen) y el pipeline las ordenará en carpetas por año: `Posts/Posts <AÑO>/`, `Podcasts/Podcasts <AÑO>/`, `Tweets/Tweets <AÑO>/`, `Pdfs/Pdfs <AÑO>/`.
+Guarda tus fuentes en `⭐️ Documentación/Incoming/` (o en sus carpetas de origen) y el pipeline las ordenará en carpetas por año: `Posts/Posts <AÑO>/`, `Podcasts/Podcasts <AÑO>/`, `Tweets/Tweets <AÑO>/`, `Pdfs/Pdfs <AÑO>/`, `Images/Images <AÑO>/`.
 
 2) **Procesar → Pipeline**  
 ```bash
 python process_documents.py all --year 2025
 # o selectivo:
 python process_documents.py tweets pdfs
+python process_documents.py images
 ```
 - Instapaper (HTML + MD limpios, título con IA, márgenes, metadatos y nombres de archivo sanos).  
 - Podcasts Snipd (MD → HTML limpio, tipografía del sistema, botones de audio).  
 - Tweets (MD → HTML estilizado).  
 - PDFs (organización anual).  
+- Imágenes (copia anual + galería `gallery.html` con JPG/PNG/WebP/TIFF/GIF/BMP).  
 Todo esto lo orquesta `process_documents.py` y procesadores específicos `*_processor.py`.
 
 3) **Priorizar para leer → Bump/Unbump**  

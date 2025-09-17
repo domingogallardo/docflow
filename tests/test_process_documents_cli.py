@@ -32,6 +32,10 @@ def run_main(monkeypatch, tmp_path, args):
             calls.append("pdfs")
             return []
 
+        def process_images(self):
+            calls.append("images")
+            return []
+
         def register_all_files(self):
             calls.append("register")
 
@@ -65,3 +69,7 @@ def test_all_processing(monkeypatch, tmp_path):
     calls = run_main(monkeypatch, tmp_path, ["all"])
     assert calls == ["all"]
 
+
+def test_process_images(monkeypatch, tmp_path):
+    calls = run_main(monkeypatch, tmp_path, ["images"])
+    assert calls == ["images", "register"]
