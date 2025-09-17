@@ -38,6 +38,10 @@ def test_document_processor_integration(tmp_path):
     # HTML de post regular (simulando Instapaper)
     html_file = incoming / "test_post.html"
     html_file.write_text("<html><head><title>Test Post</title></head><body>Content</body></html>", encoding="utf-8")
+
+    # Imagen de prueba
+    image_file = incoming / "sample.png"
+    image_file.write_bytes(b"\x89PNG\r\n\x1a\n")
     
     # 3. Crear configuración de test
     config = DocumentProcessorConfig(base_dir=tmp_path, year=2025)
@@ -53,6 +57,11 @@ def test_document_processor_integration(tmp_path):
     assert (tmp_path / "Podcasts" / "Podcasts 2025" / "Test Show - Test Episode.md").exists()
     assert (tmp_path / "Posts" / "Posts 2025").exists()
     assert (tmp_path / "Pdfs" / "Pdfs 2025" / "test.pdf").exists()
+    images_dir = tmp_path / "Images" / "Images 2025"
+    assert (images_dir / "sample.png").exists()
+    gallery_file = images_dir / "gallery.html"
+    assert gallery_file.exists()
+    assert "sample.png" in gallery_file.read_text(encoding="utf-8")
 
 
 def test_process_podcasts_only(tmp_path):

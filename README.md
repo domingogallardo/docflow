@@ -35,11 +35,13 @@ python process_documents.py all [--year 2025]
 
 # Selectivo
 python process_documents.py tweets pdfs
+python process_documents.py images
 ```
 - Instapaper → HTML/MD limpios (título con IA, márgenes, metadatos, nombres saneados).  
 - Snipd → HTML limpio con tipografía del sistema y botones de audio.  
 - Tweets → HTML estilizado.  
-- PDFs → organización anual.
+- PDFs → organización anual.  
+- Imágenes → copia anual + `gallery.html` scrolleable por año (JPG/PNG/WebP/TIFF/GIF/BMP).
 
 ### 2) Servidor web local (overlay con acciones)
 ```bash
@@ -68,6 +70,7 @@ PORT=8000 SERVE_DIR="/ruta/a/⭐️ Documentación" python utils/serve_docs.py
 ├── Podcasts/Podcasts <AÑO>/
 ├── Tweets/Tweets <AÑO>/
 ├── Pdfs/Pdfs <AÑO>/
+├── Images/Images <AÑO>/
 └── Historial.txt
 ```
 
