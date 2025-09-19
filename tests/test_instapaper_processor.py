@@ -274,6 +274,7 @@ It contains interesting information about the latest developments in the field.
 The content is written in English and discusses various technical topics.
 """
     md_file.write_text(md_content)
+    (incoming / "original_title.html").write_text("<html><div id='origin'>demo</div></html>", encoding="utf-8")
     
     # Crear procesador
     processor = InstapaperProcessor(incoming, destination)
