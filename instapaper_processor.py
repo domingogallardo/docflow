@@ -21,10 +21,10 @@ from typing import List
 from bs4 import BeautifulSoup
 from markdownify import markdownify as md
 from PIL import Image
-import random
 
 from config import INSTAPAPER_USERNAME, INSTAPAPER_PASSWORD, ANTHROPIC_KEY
 import utils as U
+from title_ai import TitleAIUpdater, rename_markdown_pair
 
 
 class InstapaperProcessor:
@@ -36,11 +36,7 @@ class InstapaperProcessor:
         self.session = None
         self.done_file = incoming_dir / ".titles_done.txt"
         self.anthropic_client = anthropic.Anthropic(api_key=ANTHROPIC_KEY)
-        
-        # Configuración para títulos
-        self.max_title_len = 250
-        self.num_words = 500
-        self.max_bytes_md = 1600
+        self.title_updater = TitleAIUpdater(self.anthropic_client, self.done_file)
 
 
     def process_instapaper_posts(self) -> List[Path]:
@@ -443,170 +439,45 @@ class InstapaperProcessor:
 
     def _update_titles_with_ai(self):
         """Genera títulos atractivos usando IA para archivos Markdown."""
-        done = self._load_done_titles()
-        md_files = [p for p in self.incoming_dir.rglob("*.md") if str(p) not in done]
-        
-        if not md_files:
-            print("🤖 No hay Markdown nuevos para generar títulos")
-            return
-        
-        print(f"🤖 Generando títulos para {len(md_files)} archivos...")
-        
-        for md_file in md_files:
-            try:
-                old_title, snippet = self._extract_content(md_file)
-                lang = self._detect_language(" ".join(snippet.split()[:20]))
-                new_title = self._generate_title(snippet, lang)
-                print(f"📄 {old_title} → {new_title} [{lang}]")
-                
-                md_final = self._rename_file_pair(md_file, new_title)
-                self._mark_title_done(md_final)
-                time.sleep(1)  # Evitar rate limiting de la API
-                
-            except Exception as e:
-                print(f"❌ Error generando título para {md_file}: {e}")
-        
-        print("🤖 Títulos actualizados ✅")
+        md_files = [
+            p for p in self.incoming_dir.rglob("*.md")
+            if self._is_instapaper_markdown(p)
+        ]
+        self.title_updater.update_titles(md_files, rename_markdown_pair)
 
-    
-    def _load_done_titles(self) -> set[str]:
-        """Carga archivos ya procesados para títulos."""
-        if self.done_file.exists():
-            return set(self.done_file.read_text(encoding="utf-8").splitlines())
-        return set()
-    
-    def _mark_title_done(self, path: Path) -> None:
-        """Marca un archivo como procesado para títulos."""
-        with self.done_file.open("a", encoding="utf-8") as f:
-            f.write(str(path) + "\n")
-    
-    def _extract_content(self, path: Path) -> tuple[str, str]:
-        """Extrae título actual y contenido inicial."""
-        raw_name = path.stem[:self.max_title_len]
-        words = []
-        for line in path.read_text(encoding="utf-8").splitlines():
-            if line.strip():
-                words.extend(line.strip().split())
-                if len(words) >= self.num_words:
-                    break
-        snippet = " ".join(words[:self.num_words]).encode("utf-8")[:self.max_bytes_md].decode("utf-8", "ignore")
-        return raw_name, snippet
-        
-    # Helper común para llamar a Anthropic con reintentos
-    def _anthropic_text(self, *, system: str, prompt: str, max_tokens: int, retries: int = 6) -> str:
-        delay = 1.0
-        last_err = None
-        for attempt in range(1, retries + 1):
-            try:
-                resp = self.anthropic_client.messages.create(
-                    model="claude-3-5-haiku-20241022",
-                    max_tokens=max_tokens,
-                    system=system,
-                    messages=[{"role": "user", "content": prompt}],
-                    timeout=30,  # por si hay cuelgues de red
-                )
-                # Extraer todo el texto de los bloques
-                parts = []
-                for block in getattr(resp, "content", []) or []:
-                    # SDK nuevo: objetos con .type/.text; SDK antiguo: dicts; tests: Mocks con .text
-                    if getattr(block, "type", None) == "text":
-                        parts.append(getattr(block, "text", "") or "")
-                    elif hasattr(block, "text"):
-                        parts.append(getattr(block, "text", "") or "")
-                    elif isinstance(block, dict) and block.get("type") == "text":
-                        parts.append(block.get("text", ""))
-                text = "".join(parts).strip()
-                # Fallback ultra-compatible (por si el SDK devuelve un único bloque)
-                if not text:
-                    content = getattr(resp, "content", None)
-                    if content:
-                        first = content[0]
-                        t = getattr(first, "text", None)
-                        if t:
-                            text = str(t).strip()
-                if not text:
-                    raise RuntimeError("Respuesta vacía de Anthropic")
-                return text
-            except Exception as e:
-                last_err = e
-                # Clasificar errores transitorios por código/status si está disponible
-                status = getattr(e, "status_code", None) or getattr(getattr(e, "response", None), "status_code", None)
-                msg = str(e).lower()
-                transient = (
-                    (isinstance(status, int) and status in (429, 500, 502, 503, 504, 529)) or
-                    "overloaded" in msg or "timeout" in msg or "temporarily unavailable" in msg
-                )
-                if attempt < retries and transient:
-                    time.sleep(delay + random.uniform(0, 0.5))
-                    delay = min(delay * 2, 20)
-                    continue
-                raise  # no transitorio o agotamos reintentos
-        # por si acaso
-        raise last_err
+    def _is_instapaper_markdown(self, path: Path) -> bool:
+        """Determina si un Markdown proviene de una conversión de Instapaper."""
+        return path.with_suffix(".html").exists()
 
-    def _detect_language(self, text20: str) -> str:
-        """
-        Detecta si el texto está en español o inglés.
-        1) Pregunta al modelo (reintentando con backoff).
-        2) Si la respuesta no es clara, usa una heurística simple.
-        """
-        system = "Responde EXACTAMENTE una palabra: 'español' o 'inglés'. Sin comillas, sin puntuación."
-        prompt = f"Indica el idioma del siguiente texto (español o inglés):\n\n{text20}\n\nIdioma:"
+    def _is_instapaper_html(self, path: Path) -> bool:
+        """Determina si un HTML pertenece a la exportación de Instapaper."""
         try:
-            resp = self._anthropic_text(system=system, prompt=prompt, max_tokens=3)
-            t = resp.strip().lower()
-            if "español" in t or "espanol" in t:
-                return "español"
-            if "inglés" in t or "ingles" in t or "english" in t:
-                return "inglés"
+            content = path.read_text(encoding="utf-8", errors="ignore")
         except Exception:
-            pass  # caer al fallback
-
-        # Fallback heurístico muy simple
-        if re.search(r"[áéíóúñ¿¡]", text20, re.I):
-            return "español"
-        return "inglés"
-
-    def _generate_title(self, snippet: str, lang: str) -> str:
-        """
-        Genera un título en el idioma indicado (lang ∈ {'español','inglés'}).
-        Usa el helper con reintentos.
-        """
-        system = (
-            f"Devuelve SOLO un título en una línea y nada más. "
-            f"Escríbelo en {lang}. "
-            "Si detectas el nombre de la newsletter, del autor o del repositorio/sitio, "
-            "ponlo al inicio y sepáralo con un guion. "
-            f"Máx {self.max_title_len} caracteres."
-        )
-        prompt = (
-            "Genera un título atractivo para el siguiente contenido.\n\n"
-            f"Contenido:\n{snippet}\n\nTítulo:"
-        )
-        resp = self._anthropic_text(system=system, prompt=prompt, max_tokens=64)
-        # Limpieza
-        title = resp.replace('"', '').replace('#', '').strip()
-        for bad in [":", ".", "/"]:
-            title = title.replace(bad, "-")
-        return re.sub(r"\s+", " ", title)[:self.max_title_len]
-
+            return False
+        return "<div id='origin'>" in content or '<div id="origin"' in content
     
-    def _rename_file_pair(self, md_path: Path, new_title: str) -> Path:
-        """Renombra archivos .md y .html asociados."""
-        new_base = md_path.with_stem(new_title)
-        md_new = new_base.with_suffix(".md")
-        html_old = md_path.with_suffix(".html")
-        html_new = new_base.with_suffix(".html")
-        
-        md_path.rename(md_new)
-        if html_old.exists():
-            html_old.rename(html_new)
-        return md_new
-    
+
+    # Nota: la generación de títulos usa title_ai.TitleAIUpdater
+
     def _list_processed_files(self) -> List[Path]:
         """Lista archivos procesados (HTML y Markdown)."""
-        exts = ['.html', '.htm', '.md']
-        return [f for f in self.incoming_dir.rglob("*") if f.is_file() and f.suffix.lower() in exts]
+        exts = {'.html', '.htm', '.md'}
+        processed: List[Path] = []
+
+        for file_path in self.incoming_dir.rglob("*"):
+            if not file_path.is_file() or file_path.suffix.lower() not in exts:
+                continue
+
+            suffix = file_path.suffix.lower()
+            if suffix == '.md' and not self._is_instapaper_markdown(file_path):
+                continue
+            if suffix in {'.html', '.htm'} and not self._is_instapaper_html(file_path):
+                continue
+
+            processed.append(file_path)
+
+        return processed
     
     def _move_files_to_destination(self, files: List[Path]) -> List[Path]:
         """Mueve archivos al destino final."""

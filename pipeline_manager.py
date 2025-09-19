@@ -11,6 +11,7 @@ from instapaper_processor import InstapaperProcessor
 from podcast_processor import PodcastProcessor
 from tweet_processor import TweetProcessor
 from image_processor import ImageProcessor
+from markdown_processor import MarkdownProcessor
 
 
 class DocumentProcessorConfig:
@@ -38,11 +39,13 @@ class DocumentProcessor:
         self.podcast_processor = PodcastProcessor(self.config.incoming, self.config.podcasts_dest)
         self.tweet_processor = TweetProcessor(self.config.incoming, self.config.tweets_dest)
         self.image_processor = ImageProcessor(self.config.incoming, self.config.images_dest)
+        self.markdown_processor = MarkdownProcessor(self.config.incoming, self.config.posts_dest)
         self.moved_podcasts: List[Path] = []
         self.moved_posts: List[Path] = []
         self.moved_pdfs: List[Path] = []
         self.moved_tweets: List[Path] = []
         self.moved_images: List[Path] = []
+        self.moved_markdown: List[Path] = []
 
     def process_podcasts(self) -> List[Path]:
         """Procesa archivos de podcast con procesador unificado."""
@@ -93,6 +96,12 @@ class DocumentProcessor:
         moved_images = self.image_processor.process_images()
         self.moved_images = moved_images
         return moved_images
+
+    def process_markdown(self) -> List[Path]:
+        """Procesa archivos Markdown genéricos."""
+        moved_markdown = self.markdown_processor.process_markdown()
+        self.moved_markdown = moved_markdown
+        return moved_markdown
     
     def register_all_files(self) -> None:
         """Registra todos los archivos procesados en el historial."""
@@ -102,6 +111,7 @@ class DocumentProcessor:
             + self.moved_podcasts
             + self.moved_tweets
             + self.moved_images
+            + self.moved_markdown
         )
         if all_files:
             U.register_paths(all_files, base_dir=self.config.base_dir, historial_path=self.config.historial)
@@ -117,14 +127,17 @@ class DocumentProcessor:
             
             # Fase 3: Procesar posts de Instapaper (con pipeline completo)
             self.process_instapaper_posts()
-            
+
             # Fase 4: Procesar PDFs (solo mover, sin pipeline)
             self.process_pdfs()
 
             # Fase 5: Procesar imágenes (mover y actualizar galería)
             self.process_images()
 
-            # Fase 6: Registrar todo en historial
+            # Fase 6: Procesar Markdown genérico
+            self.process_markdown()
+
+            # Fase 7: Registrar todo en historial
             self.register_all_files()
             
             print("Pipeline completado ✅")

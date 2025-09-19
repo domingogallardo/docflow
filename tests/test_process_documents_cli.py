@@ -36,6 +36,10 @@ def run_main(monkeypatch, tmp_path, args):
             calls.append("images")
             return []
 
+        def process_markdown(self):
+            calls.append("md")
+            return []
+
         def register_all_files(self):
             calls.append("register")
 
@@ -61,8 +65,8 @@ def test_no_args_shows_help_and_exits(monkeypatch, tmp_path, capsys):
 
 
 def test_selective_processing(monkeypatch, tmp_path):
-    calls = run_main(monkeypatch, tmp_path, ["tweets", "pdfs"])
-    assert calls == ["tweets", "pdfs", "register"]
+    calls = run_main(monkeypatch, tmp_path, ["tweets", "pdfs", "md"])
+    assert calls == ["tweets", "pdfs", "md", "register"]
 
 
 def test_all_processing(monkeypatch, tmp_path):

@@ -1,6 +1,7 @@
 from pathlib import Path
 from config import BASE_DIR, INCOMING, HISTORIAL
 from datetime import datetime, timedelta
+from typing import Iterable, List
 import os, shutil, re
 
 
@@ -87,6 +88,24 @@ def move_files(files, dest):
         new_path = dest / f.name
         shutil.move(str(f), new_path)
         moved.append(new_path)
+    return moved
+
+
+def move_files_with_replacement(files: Iterable[Path], dest: Path) -> List[Path]:
+    """Mueve archivos reemplazando versiones anteriores si existen."""
+    dest.mkdir(parents=True, exist_ok=True)
+    moved: List[Path] = []
+
+    for src in files:
+        if not src.exists():
+            continue
+        new_path = dest / src.name
+        if new_path.exists():
+            print(f"🔄 Reemplazando archivo existente: {new_path.name}")
+            new_path.unlink()
+        shutil.move(str(src), new_path)
+        moved.append(new_path)
+
     return moved
 
 

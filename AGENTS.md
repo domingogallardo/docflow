@@ -12,6 +12,7 @@ This repository automates collecting and organizing personal documents (Instapap
 - Install deps: `pip install requests beautifulsoup4 markdownify anthropic pillow pytest markdown`
 - Run pipeline: `python process_documents.py all --year 2025`
 - Selective run: `python process_documents.py tweets pdfs`
+- Markdown run: `python process_documents.py md` (titula con IA y guarda los `.md/.html` junto a Instapaper en `Posts/Posts <AÑO>/`)
 - MD → HTML (Incoming): `python md_to_html.py`
 - Tests (verbose): `pytest -v`
 - Targeted tests: `pytest tests/test_podcast_processor.py -q`
