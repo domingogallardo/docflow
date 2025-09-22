@@ -126,7 +126,50 @@ def test_podcast_processor_clean_snipd_features(tmp_path):
     assert "🎧 [Play snip]" not in content  # Enlaces de audio reemplazados
     assert "🎧 Reproducir fragmento de audio" in content  # Nuevo botón
     assert "br/>" not in content  # Line breaks procesados
+    assert "Click to expand" not in content
 
+
+def test_podcast_processor_show_notes_promoted(tmp_path):
+    """Los bloques de show notes se elevan a títulos H2 y mantienen metadatos."""
+
+    incoming = tmp_path / "Incoming"
+    incoming.mkdir()
+    destination = tmp_path / "Podcasts"
+
+    md = incoming / "show_notes.md"
+    md.write_text(
+        """# Podcast
+
+## Episode metadata
+- Episode title: Human ChatGPT: putting Tyler Cowen to the test
+- Show: Money Talks
+- Owner / Host: The Economist
+- Episode link: [open in Snipd](https://example.com/episode)
+- Episode publish date: 2025-09-11
+<details>
+<summary>Show notes</summary>
+> Line 1<br/>> Line 2
+</details>
+
+- Show notes link: [open website](https://example.com/notes)
+- Export date: 2025-09-22T12:42
+
+## Snips
+- Snip content
+""",
+        encoding="utf-8",
+    )
+
+    processor = PodcastProcessor(incoming, destination)
+    moved = processor.process_podcasts()
+
+    processed_md = next(p for p in moved if p.suffix == ".md")
+    content = processed_md.read_text(encoding="utf-8")
+
+    assert "<details>" not in content
+    assert "## Show notes" in content
+    assert "- Show notes link" in content
+    assert "> Line 1" in content and "> Line 2" in content
 
 def test_podcast_processor_markdown_to_html_conversion(tmp_path):
     """Test que verifica la conversión de Markdown a HTML."""
