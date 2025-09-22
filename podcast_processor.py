@@ -125,7 +125,8 @@ class PodcastProcessor:
         
         for md_file in podcast_files:
             try:
-                text = md_file.read_text(encoding="utf-8", errors="ignore")
+                original_text = md_file.read_text(encoding="utf-8", errors="ignore")
+                text = original_text
                 
                 # Reemplazar saltos de línea HTML <br/> y <br/>> para quoted text
                 text = re.sub(r"<br\s*/?>\s*>\s*", "\n> ", text)  # <br/>>  → nueva línea con "> "
@@ -134,11 +135,13 @@ class PodcastProcessor:
                 # Reemplazar enlaces de audio
                 text = self.snip_link.sub(self._replace_snip_link, text)
                 
-                original_lines = text.splitlines(keepends=True)
-                new_lines = self._clean_lines(original_lines)
-                
-                if new_lines != original_lines:
-                    md_file.write_text("".join(new_lines), encoding="utf-8")
+                text = self._lift_show_notes_section(text)
+                lines_after = text.splitlines(keepends=True)
+                cleaned_lines = self._clean_lines(lines_after)
+                final_text = "".join(cleaned_lines)
+
+                if final_text != original_text:
+                    md_file.write_text(final_text, encoding="utf-8")
                     print(f"🧹 Limpiado: {md_file}")
                     
             except Exception as e:
@@ -165,6 +168,10 @@ class PodcastProcessor:
         cleaned: list[str] = []
         for line in lines:
             lower = line.lower()
+            stripped = line.strip()
+
+            if 'click to expand' in stripped.lower():
+                continue
             
             # Eliminar etiquetas <details> y </details> pero mantener su contenido
             if '<details' in lower:
@@ -186,6 +193,34 @@ class PodcastProcessor:
             
             cleaned.append(line)
         return cleaned
+
+    def _lift_show_notes_section(self, text: str) -> str:
+        """Convierte bloques <details> en secciones H2 y mueve metadatos posteriores."""
+        details_re = re.compile(
+            r"<details>\s*<summary>(?P<title>.*?)</summary>(?P<body>.*?)</details>"
+            r"(?P<trailing>(?:\s*\n- [^\n]+)*)",
+            re.IGNORECASE | re.DOTALL,
+        )
+
+        def _repl(match: re.Match[str]) -> str:
+            raw_title = match.group("title") or ""
+            title = self.summary_tag.sub(r"\1", raw_title).strip()
+            if not title:
+                title = "Show notes"
+
+            body = (match.group("body") or "").strip()
+            trailing = (match.group("trailing") or "").strip()
+
+            parts: list[str] = []
+            if trailing:
+                parts.append(trailing)
+
+            heading = f"## {title}\n\n{body}\n\n" if body else f"## {title}\n\n"
+            parts.append(heading)
+
+            return "\n\n".join(parts)
+
+        return details_re.sub(_repl, text)
     
     def _convert_markdown_to_html(self):
         """Convierte archivos Markdown de podcast a HTML."""
