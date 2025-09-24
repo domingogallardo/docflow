@@ -35,13 +35,90 @@
   // (UA checks eliminados para simplificar)
 
 
+  function fallbackCopyUsingExecCommand(text) {
+    var doc = document;
+    if (!doc) return false;
+    var root = doc.body || doc.documentElement;
+    if (!root) return false;
+
+    var textarea = doc.createElement('textarea');
+    textarea.value = text;
+    textarea.setAttribute('readonly', '');
+    textarea.style.cssText = [
+      'position:fixed',
+      'top:-9999px',
+      'opacity:0',
+      'pointer-events:none'
+    ].join(';');
+
+    var selection = null;
+    var ranges = [];
+    try {
+      selection = doc.getSelection && doc.getSelection();
+      if (selection && selection.rangeCount) {
+        for (var i = 0; i < selection.rangeCount; i++) {
+          try { ranges.push(selection.getRangeAt(i)); } catch (_) {}
+        }
+      }
+    } catch (_) {
+      selection = null;
+      ranges = [];
+    }
+
+    var active = null;
+    try { active = doc.activeElement || null; }
+    catch (_) { active = null; }
+
+    root.appendChild(textarea);
+
+    var ok = false;
+    try {
+      textarea.focus();
+      textarea.select();
+      try {
+        ok = !!(doc.execCommand && doc.execCommand('copy'));
+      } catch (_) {
+        ok = false;
+      }
+    } catch (_) {
+      ok = false;
+    }
+
+    if (selection && selection.removeAllRanges) {
+      try {
+        selection.removeAllRanges();
+        for (var j = 0; j < ranges.length; j++) {
+          try { selection.addRange(ranges[j]); } catch (_) {}
+        }
+      } catch (_) {}
+    }
+
+    if (active && typeof active.focus === 'function' && active !== textarea) {
+      try { active.focus(); } catch (_) {}
+    }
+
+    if (typeof textarea.remove === 'function') textarea.remove();
+    else if (textarea.parentNode) textarea.parentNode.removeChild(textarea);
+
+    return ok;
+  }
+
   function copyToClipboard(text) {
+    text = String(text || '');
+    if (!text) return Promise.resolve(false);
+
+    function fallback() {
+      return Promise.resolve(fallbackCopyUsingExecCommand(text));
+    }
+
     try {
       if (navigator.clipboard && navigator.clipboard.writeText) {
-        return navigator.clipboard.writeText(text).then(function(){ return true; }, function(){ return false; });
+        return navigator.clipboard.writeText(text)
+          .then(function(){ return true; })
+          .catch(function(){ return fallback(); });
       }
     } catch (_) {}
-    return Promise.resolve(false);
+    return fallback();
   }
   function copyQuote(preCaptured) {
     var text = (typeof preCaptured === 'string' && preCaptured) ? preCaptured : getSelectionText();
