@@ -45,6 +45,13 @@ python process_documents.py md
 - PDFs → organización anual.  
 - Imágenes → copia anual + `gallery.html` scrolleable por año (JPG/PNG/WebP/TIFF/GIF/BMP).
 
+### 1bis) Limpiar HTML copiado antes de pegar en Obsidian
+- Copia el fragmento desde el navegador.
+- Ejecuta `mdclip` (o `python utils/clipboard_cleaner.py`).
+- Vuelve a pegar en Obsidian: obtendrás listas compactas (sin saltos extra) y el portapapeles ya trae Markdown limpio.
+
+> **Tip**: añade `$(git rev-parse --show-toplevel)/bin` a tu `PATH` para llamar a `mdclip` desde cualquier repo.
+
 ### 2) Servidor web local (overlay con acciones)
 ```bash
 PORT=8000 SERVE_DIR="/ruta/a/⭐️ Documentación" python utils/serve_docs.py
