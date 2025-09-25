@@ -2,4 +2,14 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-exec python "$ROOT_DIR/utils/clipboard_cleaner.py" "$@"
+PYTHON_BIN="/opt/homebrew/opt/python@3.11/libexec/bin/python"
+if [[ ! -x "$PYTHON_BIN" ]]; then
+  PYTHON_BIN="$(command -v python 2>/dev/null || command -v python3 2>/dev/null)"
+fi
+
+if [[ -z "${PYTHON_BIN}" ]]; then
+  echo "python no encontrado" >&2
+  exit 1
+fi
+
+exec "$PYTHON_BIN" "$ROOT_DIR/utils/clipboard_cleaner.py" "$@"
