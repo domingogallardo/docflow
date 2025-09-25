@@ -6,7 +6,7 @@
 (function () {
   var version = '1.0.0';
 
-  // -- Minimal helpers: fixed behavior (3 head words + 3 tail words) --
+  // -- Minimal helpers: longer head/tail slices to scope text fragments better --
   function baseUrlWithoutHash() {
     try { return String(location.href).split('#')[0]; } catch (_) { return ''; }
   }
@@ -21,11 +21,18 @@
     text = String(text).replace(/\s+/g, ' ').trim();
     if (!text) return '';
     var words = text.split(/\s+/);
-    if (words.length <= 6) {
+    if (words.length <= 10) {
       return '#:~:text=' + encodeURIComponent(text);
     }
-    var head = words.slice(0, 3).join(' ').replace(/[\s\.,;:!\?\-–—]+$/, '');
-    var tail = words.slice(words.length - 3).join(' ').replace(/^[\s\.,;:!\?\-–—]+/, '');
+    var snippetSize = Math.max(4, Math.min(8, Math.ceil(words.length / 4)));
+    if (words.length <= snippetSize * 2) {
+      return '#:~:text=' + encodeURIComponent(text);
+    }
+    var head = words.slice(0, snippetSize).join(' ').replace(/[\s\.,;:!\?\-–—]+$/, '');
+    var tail = words.slice(words.length - snippetSize).join(' ').replace(/^[\s\.,;:!\?\-–—]+/, '');
+    if (!head || !tail) {
+      return '#:~:text=' + encodeURIComponent(text);
+    }
     return '#:~:text=' + encodeURIComponent(head) + ',' + encodeURIComponent(tail);
   }
   function buildMarkdown(quote, url) {
