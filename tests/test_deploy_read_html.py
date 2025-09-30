@@ -20,3 +20,5 @@ def test_gen_index_creates_read_html(tmp_path):
     assert not (tmp_path / "index.html").exists()
     content = read_file.read_text(encoding="utf-8")
     assert "read.html" not in content
+    assert '<span class="file-icon html-icon" aria-hidden="true">📄</span> <a href="a.html" title="a.html">a.html</a> — ' in content
+    assert '<span class="file-icon pdf-icon" aria-hidden="true">📕</span> <a href="b.pdf" title="b.pdf">b.pdf</a> — ' in content
