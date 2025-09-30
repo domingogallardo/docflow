@@ -64,6 +64,23 @@ def load_read_posts_md(base_dir: str) -> List[str]:
     return picked
 
 
+def _icon_for(name: str) -> str:
+    lower = name.lower()
+    if lower.endswith(".pdf"):
+        return '<span class="file-icon pdf-icon" aria-hidden="true">📕</span> '
+    if lower.endswith((".html", ".htm")):
+        return '<span class="file-icon html-icon" aria-hidden="true">📄</span> '
+    return ""
+
+
+def _render_list_item(name: str, mtime: float) -> str:
+    href = quote(name)
+    esc = html.escape(name)
+    icon = _icon_for(name)
+    d = fmt_date(mtime)
+    return f'<li>{icon}<a href="{href}" title="{esc}">{esc}</a> — {d}</li>'
+
+
 def build_html(dir_path: str, entries: List[Tuple[float, str]], picked_names: List[str]) -> str:
     picked_set = set(picked_names)
     by_name = {name: mtime for (mtime, name) in entries}
@@ -74,19 +91,13 @@ def build_html(dir_path: str, entries: List[Tuple[float, str]], picked_names: Li
     for mtime, name in entries:
         if name in picked_set:
             continue
-        href = quote(name)
-        esc = html.escape(name)
-        d = fmt_date(mtime)
-        items_main.append(f'<li><a href="{href}" title="{esc}">{esc}</a> — {d}</li>')
+        items_main.append(_render_list_item(name, mtime))
 
     for name in picked_names:
         if name not in by_name:
             continue
         mtime = by_name[name]
-        href = quote(name)
-        esc = html.escape(name)
-        d = fmt_date(mtime)
-        items_picked.append(f'<li><a href="{href}" title="{esc}">{esc}</a> — {d}</li>')
+        items_picked.append(_render_list_item(name, mtime))
 
     ascii_open = r'''<style>
   .ascii-head { margin-top: 28px; color: #666; font-size: 14px; }
@@ -97,6 +108,12 @@ def build_html(dir_path: str, entries: List[Tuple[float, str]], picked_names: Li
     font-size: 12px;
     font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
     white-space: pre;
+  }
+  .file-icon {
+    font-size: 0.85em;
+    vertical-align: baseline;
+    display: inline-block;
+    transform: translateY(-0.05em);
   }
 </style>
 <div class="ascii-head"><a href="https://github.com/domingogallardo/docflow" target="_blank" rel="noopener">Docflow</a></div>
