@@ -90,7 +90,7 @@ PORT=8000 SERVE_DIR="/ruta/a/⭐️ Documentación" python utils/serve_docs.py
 1. Recolecta en `Incoming/` (o carpetas fuente) y ejecuta el pipeline.  
 2. Marca con **⭐ en Instapaper** para **bump** automático del HTML procesado.  
 3. Lee en el **servidor local** y usa el overlay para *Publicar/Despublicar*.  
-4. Captura citas en `/read/` con el botón **❝ Copiar cita** (usa **Text Fragments**).  
+4. Captura citas en `/read/` con el botón **❝ Copiar cita** (usa **Text Fragments** y conserva los enlaces en Markdown).  
 5. Cuando termines, pulsa **Procesado** → unbump + añade a `read_posts.md` + deploy.
 
 ---
