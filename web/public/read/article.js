@@ -130,12 +130,16 @@
     }
     return null;
   }
+  function stripEdgePunctuation(value) {
+    return String(value || '').replace(/^[\s\.,;:!\?\-–—]+/, '').replace(/[\s\.,;:!\?\-–—]+$/, '');
+  }
+
   function buildFragment(text) {
-    text = String(text).replace(/\s+/g, ' ').trim();
+    text = stripEdgePunctuation(String(text).replace(/\s+/g, ' ').trim());
     if (!text) return '';
     var words = text.split(/\s+/);
     if (words.length <= 10) {
-      return '#:~:text=' + encodeURIComponent(text);
+      return '#:~:text=' + encodeURIComponent(stripEdgePunctuation(text));
     }
     var snippetSize = Math.max(4, Math.min(8, Math.ceil(words.length / 4)));
     if (words.length <= snippetSize * 2) {
@@ -150,7 +154,11 @@
   }
   function buildMarkdown(displayText, inlineMarkdown, url) {
     var quoteMd = inlineMarkdown && inlineMarkdown.length ? inlineMarkdown : escapeMarkdownText(displayText || '');
-    return '> ' + quoteMd + ' [link](' + url + ')';
+    var linkUrl = String(url || '');
+    if (linkUrl && (linkUrl.indexOf('(') !== -1 || linkUrl.indexOf(')') !== -1)) {
+      linkUrl = linkUrl.replace(/\(/g, '%28').replace(/\)/g, '%29');
+    }
+    return '> ' + quoteMd + ' [link](<' + linkUrl + '>)';
   }
   // (UA checks eliminados para simplificar)
 
