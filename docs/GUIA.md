@@ -136,6 +136,7 @@ curl -s https://<tu_dominio>/read/ | head -n 40
 
 - Las páginas en `/read/` inyectan un botón **❝ Copiar cita** (`article.js`).  
 - Selecciona un texto y copia una cita en **Markdown** con un enlace que incluye `#:~:text=` para saltar a la posición exacta.  
+- Conserva enlaces y énfasis del fragmento seleccionado, convirtiéndolos a Markdown antes de copiar.  
 - El botón solo aparece si hay texto seleccionado y muestra *toast* de éxito/error.
 - iOS/iPadOS: se captura tempranamente la selección para evitar que se pierda al tocar el botón. Si el portapapeles falla (p. ej., navegación privada), verás un toast de error; el salto con `#:~:text=` lo gestiona el navegador.
 
