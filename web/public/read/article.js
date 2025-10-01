@@ -10,12 +10,125 @@
   function baseUrlWithoutHash() {
     try { return String(location.href).split('#')[0]; } catch (_) { return ''; }
   }
+  function normalizeWhitespace(value) {
+    return String(value || '').replace(/\s+/g, ' ').trim();
+  }
+
   function getSelectionText() {
     try {
       var sel = window.getSelection && window.getSelection();
       var t = sel && sel.toString ? sel.toString() : '';
-      return String(t).replace(/\s+/g, ' ').trim();
+      return normalizeWhitespace(t);
     } catch (_) { return ''; }
+  }
+
+  function escapeMarkdownText(value) {
+    return String(value || '')
+      .replace(/[\\`*_{}\[\]]/g, '\\$&')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;');
+  }
+
+  function toAbsoluteUrl(href) {
+    if (!href) return '';
+    try {
+      return new URL(String(href), baseUrlWithoutHash()).toString();
+    } catch (_) {
+      return String(href);
+    }
+  }
+
+  function markdownFromChildren(node) {
+    var out = '';
+    if (!node) return out;
+    for (var child = node.firstChild; child; child = child.nextSibling) {
+      out += markdownFromNode(child);
+    }
+    return out;
+  }
+
+  function markdownFromNode(node) {
+    if (!node) return '';
+    if (node.nodeType === 3) {
+      return escapeMarkdownText(node.nodeValue || '');
+    }
+    if (node.nodeType !== 1) {
+      return '';
+    }
+    var tag = (node.nodeName || '').toLowerCase();
+    if (tag === 'a') {
+      var inner = markdownFromChildren(node);
+      if (!inner) inner = escapeMarkdownText(node.textContent || '');
+      var href = node.getAttribute('href') || '';
+      if (!href) return inner;
+      var abs = toAbsoluteUrl(href);
+      return '[' + inner + '](' + abs + ')';
+    }
+    if (tag === 'br') {
+      return '\n';
+    }
+    if (tag === 'code') {
+      return '`' + markdownFromChildren(node) + '`';
+    }
+    if (tag === 'em' || tag === 'i') {
+      return '*' + markdownFromChildren(node) + '*';
+    }
+    if (tag === 'strong' || tag === 'b') {
+      return '**' + markdownFromChildren(node) + '**';
+    }
+    return markdownFromChildren(node);
+  }
+
+  function fragmentToMarkdown(fragmentRoot) {
+    if (!fragmentRoot) return '';
+    return markdownFromChildren(fragmentRoot);
+  }
+
+  function snapshotFromText(text) {
+    var normalized = normalizeWhitespace(text);
+    if (!normalized) return null;
+    var escaped = escapeMarkdownText(normalized);
+    return { text: normalized, markdown: normalizeWhitespace(escaped) };
+  }
+
+  function captureSelectionSnapshot() {
+    try {
+      var sel = window.getSelection && window.getSelection();
+      if (!sel || !sel.rangeCount) return null;
+      var container = document.createElement('div');
+      var hasContent = false;
+      for (var i = 0; i < sel.rangeCount; i++) {
+        var range = sel.getRangeAt(i);
+        if (!range || range.collapsed) continue;
+        hasContent = true;
+        container.appendChild(range.cloneContents());
+      }
+      if (!hasContent) return null;
+      var text = normalizeWhitespace(container.textContent || '');
+      if (!text) return null;
+      var markdown = fragmentToMarkdown(container);
+      markdown = normalizeWhitespace(markdown || '');
+      if (!markdown) markdown = normalizeWhitespace(escapeMarkdownText(text));
+      return { text: text, markdown: markdown };
+    } catch (_) {
+      return null;
+    }
+  }
+
+  function ensureSnapshot(value) {
+    if (!value) return null;
+    if (typeof value === 'string') return snapshotFromText(value);
+    if (typeof value === 'object' && typeof value.text === 'string') {
+      var normalized = normalizeWhitespace(value.text);
+      if (!normalized) return null;
+      var markdown = (typeof value.markdown === 'string') ? value.markdown : '';
+      if (!markdown) markdown = escapeMarkdownText(normalized);
+      return {
+        text: normalized,
+        markdown: normalizeWhitespace(markdown)
+      };
+    }
+    return null;
   }
   function buildFragment(text) {
     text = String(text).replace(/\s+/g, ' ').trim();
@@ -35,9 +148,9 @@
     }
     return '#:~:text=' + encodeURIComponent(head) + ',' + encodeURIComponent(tail);
   }
-  function buildMarkdown(quote, url) {
-    var q = String(quote).replace(/</g, '&lt;').replace(/>/g, '&gt;');
-    return '> ' + q + ' [link](' + url + ')';
+  function buildMarkdown(displayText, inlineMarkdown, url) {
+    var quoteMd = inlineMarkdown && inlineMarkdown.length ? inlineMarkdown : escapeMarkdownText(displayText || '');
+    return '> ' + quoteMd + ' [link](' + url + ')';
   }
   // (UA checks eliminados para simplificar)
 
@@ -128,10 +241,17 @@
     return fallback();
   }
   function copyQuote(preCaptured) {
-    var text = (typeof preCaptured === 'string' && preCaptured) ? preCaptured : getSelectionText();
-    var url = baseUrlWithoutHash() + buildFragment(text);
-    var md = buildMarkdown(text || document.title || '', url);
-    return copyToClipboard(md).then(function(ok){ return { ok: ok, text: text, url: url, markdown: md }; });
+    var snapshot = ensureSnapshot(preCaptured) || captureSelectionSnapshot() || null;
+    var selectionText = snapshot ? snapshot.text : '';
+    var displayText = selectionText || normalizeWhitespace(document.title || '');
+    if (!displayText) displayText = '';
+    var inlineMarkdown = snapshot ? snapshot.markdown : '';
+    if (!inlineMarkdown) inlineMarkdown = normalizeWhitespace(escapeMarkdownText(displayText));
+    var url = baseUrlWithoutHash() + buildFragment(selectionText);
+    var md = buildMarkdown(displayText, inlineMarkdown, url);
+    return copyToClipboard(md).then(function(ok){
+      return { ok: ok, text: selectionText || displayText, url: url, markdown: md };
+    });
   }
 
   var api = { active: true, version: version, copyQuote: copyQuote };
@@ -170,8 +290,8 @@
     document.documentElement.appendChild(btn);
 
     // Track selection so iOS tap (which clears selection on focus change) still captures it
-    var lastSelection = '';
-    var pressedSelection = '';
+    var lastSnapshot = null;
+    var pressedSnapshot = null;
 
     // Toast (reuses button as anchor for screen readers)
     var toast = document.createElement('div');
@@ -211,7 +331,14 @@
 
     function updateVisibility() {
       var t = getSelectionText();
-      if (t) lastSelection = t;
+      if (t) {
+        var snap = captureSelectionSnapshot();
+        if (snap) {
+          lastSnapshot = snap;
+        } else if (!lastSnapshot || lastSnapshot.text !== t) {
+          lastSnapshot = snapshotFromText(t);
+        }
+      }
       var visible = t && t.length >= 2;
       btn.style.display = visible ? 'block' : 'none';
       btn.style.opacity = visible ? '.95' : '.92';
@@ -222,20 +349,20 @@
     // (sin resize/visibilitychange): suficiente con selectionchange
 
     // iOS: captura temprana de selección para usarla en el click (sin copiar aún)
-    btn.addEventListener('pointerdown', function(){ pressedSelection = getSelectionText() || lastSelection; }, { passive: true, capture: true });
+    btn.addEventListener('pointerdown', function(){ pressedSnapshot = captureSelectionSnapshot() || lastSnapshot; }, { passive: true, capture: true });
     // Pointer Events cubre tap/click en Safari/iOS modernos
 
     btn.addEventListener('click', function(){
       btn.disabled = true;
-      var useText = pressedSelection || lastSelection || getSelectionText();
-      pressedSelection = '';
-      if (!useText || useText.length < 2) {
+      var useSnapshot = pressedSnapshot || captureSelectionSnapshot() || lastSnapshot;
+      pressedSnapshot = null;
+      if (!useSnapshot || !useSnapshot.text || useSnapshot.text.length < 2) {
         showToast('Selecciona un texto', false);
         btn.disabled = false;
         updateVisibility();
         return;
       }
-      copyQuote(useText)
+      copyQuote(useSnapshot)
         .then(function(res){ showToast((res && res.ok) ? 'Copiado' : 'No se pudo copiar', !!(res && res.ok)); })
         .catch(function(){ showToast('No se pudo copiar', false); })
         .finally(function(){ btn.disabled = false; updateVisibility(); });
