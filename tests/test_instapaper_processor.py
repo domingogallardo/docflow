@@ -6,7 +6,7 @@ import pytest
 from pathlib import Path
 from unittest.mock import Mock, patch
 
-from instapaper_processor import InstapaperProcessor
+from instapaper_processor import InstapaperDownloadRegistry, InstapaperProcessor
 
 
 def test_star_prefix_stripping_variants():
@@ -56,7 +56,8 @@ def test_instapaper_star_detection_and_propagation_from_read_html(tmp_path):
     processor.session.get.return_value = mock_resp
 
     # Descargar y escribir el HTML del artículo
-    html_path = processor._download_article("12345")
+    html_path, is_starred = processor._download_article("12345")
+    assert is_starred is True
     html_text = html_path.read_text(encoding="utf-8")
 
     # Debe contener la marca de estrella y atributo en <html>
@@ -106,7 +107,8 @@ def test_instapaper_processor_no_star_no_meta(tmp_path):
     processor.session.get.return_value = mock_resp
 
     # Descargar y escribir el HTML del artículo
-    html_path = processor._download_article("99999")
+    html_path, is_starred = processor._download_article("99999")
+    assert is_starred is False
     html_text = html_path.read_text(encoding="utf-8")
 
     # No debe contener marcadores de starred
@@ -123,6 +125,50 @@ def test_instapaper_processor_no_star_no_meta(tmp_path):
     md_text = md_path.read_text(encoding="utf-8")
     assert not md_text.startswith("---\ninstapaper_starred: true\n---\n")
     assert "instapaper_starred:" not in md_text
+
+
+def test_download_registry_persistence(tmp_path):
+    registry_path = tmp_path / ".instapaper_downloads.txt"
+    registry = InstapaperDownloadRegistry(registry_path)
+
+    assert registry.should_skip("abc", True) is False
+
+    registry.mark_downloaded("abc", True)
+    assert registry.should_skip("abc", True) is True
+    assert registry.should_skip("abc", False) is False
+
+    # Reinstanciar para verificar persistencia
+    registry_again = InstapaperDownloadRegistry(registry_path)
+    assert registry_again.should_skip("abc", True) is True
+
+
+def test_download_skips_articles_on_registry(tmp_path, monkeypatch):
+    incoming = tmp_path / "Incoming"
+    destination = tmp_path / "Posts"
+    incoming.mkdir()
+    destination.mkdir()
+
+    processor = InstapaperProcessor(incoming, destination)
+    processor.download_registry.mark_downloaded("123", False)
+
+    with patch('instapaper_processor.INSTAPAPER_USERNAME', 'user'), \
+         patch('instapaper_processor.INSTAPAPER_PASSWORD', 'pass'):
+
+        mock_session = Mock()
+        mock_login_response = Mock()
+        mock_login_response.status_code = 200
+        mock_login_response.url = "https://www.instapaper.com/u/1"
+        mock_login_response.text = "<html><body><div>ok</div></body></html>"
+        mock_session.post.return_value = mock_login_response
+
+        monkeypatch.setattr('instapaper_processor.requests.Session', lambda: mock_session)
+
+        processor._get_article_ids = Mock(return_value=([("123", False)], False))
+        processor._download_article = Mock()
+
+        assert processor._download_from_instapaper() is True
+
+    processor._download_article.assert_not_called()
 
 
 def test_instapaper_processor_with_existing_html(tmp_path):
