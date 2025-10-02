@@ -16,8 +16,9 @@ import re
 import time
 import requests
 import anthropic
+from datetime import datetime
 from pathlib import Path
-from typing import List
+from typing import Dict, List, Optional, Tuple
 from bs4 import BeautifulSoup
 from markdownify import markdownify as md
 from PIL import Image
@@ -25,6 +26,74 @@ from PIL import Image
 from config import INSTAPAPER_USERNAME, INSTAPAPER_PASSWORD, ANTHROPIC_KEY
 import utils as U
 from title_ai import TitleAIUpdater, rename_markdown_pair
+
+
+class InstapaperDownloadRegistry:
+    """Registro persistente para evitar descargas repetidas de Instapaper."""
+
+    def __init__(self, path: Path):
+        self.path = path
+        self.entries: Dict[str, Dict[str, object]] = {}
+        self._load()
+
+    def _load(self) -> None:
+        if not self.path.exists():
+            return
+
+        try:
+            content = self.path.read_text(encoding="utf-8")
+        except Exception:
+            return
+
+        for line in content.splitlines():
+            line = line.strip()
+            if not line or line.startswith("#"):
+                continue
+
+            parts = line.split("\t")
+            if len(parts) < 2:
+                continue
+
+            article_id = parts[0].strip()
+            starred_flag = parts[1].strip()
+            timestamp = parts[2].strip() if len(parts) > 2 else ""
+
+            if not article_id:
+                continue
+
+            self.entries[article_id] = {
+                "starred": starred_flag == "1",
+                "timestamp": timestamp,
+            }
+
+    def should_skip(self, article_id: str, starred_hint: Optional[bool]) -> bool:
+        entry = self.entries.get(article_id)
+        if not entry:
+            return False
+
+        if starred_hint is None:
+            return True
+
+        return bool(entry.get("starred")) == starred_hint
+
+    def mark_downloaded(self, article_id: str, starred: bool) -> None:
+        timestamp = datetime.utcnow().isoformat(timespec="seconds") + "Z"
+        self.entries[article_id] = {
+            "starred": starred,
+            "timestamp": timestamp,
+        }
+        self._persist()
+
+    def _persist(self) -> None:
+        self.path.parent.mkdir(parents=True, exist_ok=True)
+        lines = []
+        for article_id, data in self.entries.items():
+            starred_flag = "1" if data.get("starred") else "0"
+            timestamp = str(data.get("timestamp") or "")
+            lines.append(f"{article_id}\t{starred_flag}\t{timestamp}")
+
+        payload = "\n".join(lines) + ("\n" if lines else "")
+        self.path.write_text(payload, encoding="utf-8")
 
 
 class InstapaperProcessor:
@@ -37,6 +106,9 @@ class InstapaperProcessor:
         self.done_file = incoming_dir / ".titles_done.txt"
         self.anthropic_client = anthropic.Anthropic(api_key=ANTHROPIC_KEY)
         self.title_updater = TitleAIUpdater(self.anthropic_client, self.done_file)
+        self.download_registry = InstapaperDownloadRegistry(
+            self.incoming_dir / ".instapaper_downloads.txt"
+        )
 
 
     def process_instapaper_posts(self) -> List[Path]:
@@ -127,8 +199,8 @@ class InstapaperProcessor:
             print("✅ Login en Instapaper exitoso")
             
             # Verificar si hay artículos para descargar
-            first_ids, has_more = self._get_article_ids(1)
-            if not first_ids:
+            first_articles, has_more = self._get_article_ids(1)
+            if not first_articles:
                 print("📚 No hay artículos nuevos en Instapaper para descargar")
                 return True  # No es error, simplemente no hay nada
             
@@ -141,15 +213,20 @@ class InstapaperProcessor:
             while has_more or page == 1:
                 print(f"Page {page}")
                 if page == 1:
-                    ids = first_ids
+                    articles = first_articles
                 else:
-                    ids, has_more = self._get_article_ids(page)
+                    articles, has_more = self._get_article_ids(page)
                 
-                for article_id in ids:
+                for article_id, starred_hint in articles:
+                    if self.download_registry.should_skip(article_id, starred_hint):
+                        print(f"  {article_id}: ⏭️  ya descargado (sin cambios)")
+                        continue
+
                     print(f"  {article_id}: ", end="")
                     start = time.time()
                     try:
-                        self._download_article(article_id)
+                        file_path, is_starred = self._download_article(article_id)
+                        self.download_registry.mark_downloaded(article_id, is_starred)
                         duration = time.time() - start
                         print(f"{round(duration, 2)} seconds")
                     except Exception as e:
@@ -195,8 +272,8 @@ class InstapaperProcessor:
         except Exception:
             return False
 
-    def _get_article_ids(self, page=1):
-        """Obtiene IDs de artículos de una página (sin detectar estrella aquí)."""
+    def _get_article_ids(self, page: int = 1) -> Tuple[List[Tuple[str, Optional[bool]]], bool]:
+        """Obtiene IDs de artículos de una página con indicación de estrella."""
         url = f"https://www.instapaper.com/u/{page}"
         r = self.session.get(url)
 
@@ -207,17 +284,37 @@ class InstapaperProcessor:
 
         articles = container.find_all("article")
 
-        ids = []
+        items: List[Tuple[str, Optional[bool]]] = []
         for art in articles:
             aid = (art.get("id") or "").replace("article_", "")
-            if aid:
-                ids.append(aid)
+            if not aid:
+                continue
+            items.append((aid, self._is_article_starred_in_list(art)))
 
         has_more = soup.find(class_="paginate_older") is not None
-        return ids, has_more
+        return items, has_more
+
+    def _is_article_starred_in_list(self, article_tag) -> Optional[bool]:
+        """Detecta si un artículo aparece marcado con estrella en la lista."""
+        classes = article_tag.get("class") or []
+        if isinstance(classes, str):
+            classes = [classes]
+        classes = [cls.strip().lower() for cls in classes if cls]
+        if "starred" in classes:
+            return True
+
+        data_starred = article_tag.get("data-starred")
+        if isinstance(data_starred, str):
+            normalized = data_starred.strip().lower()
+            if normalized in {"1", "true", "yes"}:
+                return True
+            if normalized in {"0", "false", "no"}:
+                return False
+
+        return None
 
     
-    def _download_article(self, article_id):
+    def _download_article(self, article_id: str) -> Tuple[Path, bool]:
         """Descarga un artículo específico.
 
         Solo se persiste el HTML devuelto por Instapaper. Las etiquetas
@@ -257,7 +354,7 @@ class InstapaperProcessor:
         )
 
         file_path.write_text(html_content, encoding="utf-8")
-        return file_path
+        return file_path, is_starred_final
 
     def _build_article_html(self, *, title: str, origin_html: str, article_id: str, content: str, starred: bool) -> str:
         comment = "<!-- instapaper_starred: true method=read_or_list -->\n" if starred else ""
