@@ -42,7 +42,7 @@ PORT=8000 SERVE_DIR="/ruta/a/⭐️ Documentación" python utils/serve_docs.py
 
 Dependencias recomendadas:
 ```bash
-pip install requests beautifulsoup4 markdownify anthropic pillow pytest markdown
+pip install requests beautifulsoup4 markdownify openai pillow pytest markdown
 ```
 
 ---
@@ -146,7 +146,7 @@ curl -s https://<tu_dominio>/read/ | head -n 40
 
 ```bash
 # Integraciones
-ANTHROPIC_API_KEY=...          # títulos Instapaper (opcional)
+OPENAI_API_KEY=...             # títulos Instapaper (opcional)
 INSTAPAPER_USERNAME=...        # opcional
 INSTAPAPER_PASSWORD=...        # opcional
 

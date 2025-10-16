@@ -13,11 +13,11 @@ docflow automatiza **recolectar → procesar → priorizar (bump) → leer → p
 - **Python 3.10+**  
 - Instala dependencias básicas:
   ```bash
-  pip install requests beautifulsoup4 markdownify anthropic pillow pytest markdown
+  pip install requests beautifulsoup4 markdownify openai pillow pytest markdown
   ```
 - Variables de entorno si usas funciones externas / deploy:
   ```bash
-  export ANTHROPIC_API_KEY="..."           # títulos Instapaper (opcional)
+  export OPENAI_API_KEY="..."              # títulos Instapaper (opcional)
   export INSTAPAPER_USERNAME="..."         # opcional
   export INSTAPAPER_PASSWORD="..."         # opcional
   export REMOTE_USER="root"                # para publicar/desplegar
