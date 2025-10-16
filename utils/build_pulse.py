@@ -83,8 +83,21 @@ def _original_filename(url: str) -> str:
     if not name:
         return "(Sin título)"
     if name.lower().endswith(".html"):
-        return Path(name).with_suffix(".md").name
+        stripped = Path(name).with_suffix("").name
+        return stripped or Path(name).stem
     return name
+
+
+def _extract_year_from_url(url: str) -> str | None:
+    if not url:
+        return None
+    parsed = urlparse(url)
+    decoded = unquote(parsed.path or "")
+    for segment in Path(decoded).parts:
+        match = re.search(r"(\d{4})", segment)
+        if match:
+            return match.group(1)
+    return None
 
 
 def _collect_openai_output(resp) -> str:
@@ -460,10 +473,16 @@ def _build_entry(md_path: Path) -> Iterable[str]:
     title = _original_filename(url)
     if title == "(Sin título)":
         title = md_path.name
+    year = _extract_year_from_url(url)
+    if year is None:
+        try:
+            year = str(datetime.fromtimestamp(md_path.stat().st_mtime).year)
+        except FileNotFoundError:
+            year = str(datetime.now().year)
     display_url = url or "(URL no disponible)"
     summary_lines, sections = _summarize_markdown(md_path, title)
 
-    yield f"# {title}"
+    yield f"# {title} - {year}"
     yield ""
     yield f"URL: {display_url}"
     yield ""
@@ -480,10 +499,12 @@ def build_pulse_digest() -> Path | None:
         return None
 
     PULSE_DIR.mkdir(parents=True, exist_ok=True)
-    today = datetime.now().strftime("%Y%m%d")
-    output_path = PULSE_DIR / f"pulse-{today}.md"
+    now = datetime.now()
+    today_stamp = now.strftime("%Y%m%d")
+    today_title = now.strftime("%d-%m-%Y")
+    output_path = PULSE_DIR / f"pulse-{today_stamp}.md"
 
-    lines: list[str] = [f"# Resumen Pulse {today}", ""]
+    lines: list[str] = [f"# Resumen Pulse {today_title}", ""]
     for index, md_path in enumerate(md_files):
         print(f"⏳ Resumiendo {md_path.name} ({index + 1}/{len(md_files)})...")
         lines.extend(_build_entry(md_path))
