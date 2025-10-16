@@ -20,7 +20,7 @@ class MarkdownProcessor:
         self.destination_dir = destination_dir
         self.title_updater = TitleAIUpdater(
             anthropic.Anthropic(api_key=cfg.ANTHROPIC_KEY),
-            incoming_dir / ".titles_done_markdown.txt",
+            incoming_dir / "titles_done_markdown.txt",
         )
 
     def process_markdown(self) -> List[Path]:

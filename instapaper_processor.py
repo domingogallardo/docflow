@@ -103,7 +103,7 @@ class InstapaperProcessor:
         self.incoming_dir = incoming_dir
         self.destination_dir = destination_dir
         self.session = None
-        self.done_file = incoming_dir / ".titles_done_instapaper.txt"
+        self.done_file = incoming_dir / "titles_done_instapaper.txt"
         self.anthropic_client = anthropic.Anthropic(api_key=ANTHROPIC_KEY)
         self.title_updater = TitleAIUpdater(self.anthropic_client, self.done_file)
         self.download_registry = InstapaperDownloadRegistry(

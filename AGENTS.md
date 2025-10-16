@@ -5,7 +5,7 @@ This repository automates collecting and organizing personal documents (Instapap
 ## Project Structure & Modules
 - Source: top-level Python modules (e.g., `process_documents.py`, `pipeline_manager.py`, `utils.py`, `*_processor.py`).
 - Tests: `tests/` with `pytest` suites and fixtures in `tests/fixtures/`.
-- Utilities: `utils/` for helper scripts (e.g., `serve_html.py`, `rebuild_historial.py`).
+- Utilities: `utils/` for helper scripts (e.g., `serve_html.py`, `rebuild_processed_history.py`).
 - Configuration: `config.py` (paths, env vars). Destinations use `BASE_DIR` with year-based folders like `Posts/Posts <AÑO>/`.
 
 ## Build, Test, and Dev Commands
