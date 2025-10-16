@@ -22,10 +22,7 @@ class MarkdownProcessor:
             openai_client = OpenAI(api_key=cfg.OPENAI_KEY) if cfg.OPENAI_KEY else OpenAI()
         except Exception:
             openai_client = None
-        self.title_updater = TitleAIUpdater(
-            openai_client,
-            incoming_dir / "titles_done_markdown.txt",
-        )
+        self.title_updater = TitleAIUpdater(openai_client)
 
     def process_markdown(self) -> List[Path]:
         """Convierte Markdown a HTML, aplica márgenes y mueve ambos archivos al destino anual."""

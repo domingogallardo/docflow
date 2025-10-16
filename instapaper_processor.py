@@ -103,12 +103,11 @@ class InstapaperProcessor:
         self.incoming_dir = incoming_dir
         self.destination_dir = destination_dir
         self.session = None
-        self.done_file = incoming_dir / "titles_done_instapaper.txt"
         try:
             self.openai_client = OpenAI(api_key=OPENAI_KEY) if OPENAI_KEY else OpenAI()
         except Exception:
             self.openai_client = None
-        self.title_updater = TitleAIUpdater(self.openai_client, self.done_file)
+        self.title_updater = TitleAIUpdater(self.openai_client)
         self.download_registry = InstapaperDownloadRegistry(
             self.incoming_dir / ".instapaper_downloads.txt"
         )
