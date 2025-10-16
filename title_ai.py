@@ -76,6 +76,7 @@ class TitleAIUpdater:
         return set()
 
     def _mark_title_done(self, path: Path) -> None:
+        self.done_file.parent.mkdir(parents=True, exist_ok=True)
         with self.done_file.open("a", encoding="utf-8") as fh:
             fh.write(str(path) + "\n")
 
@@ -90,74 +91,80 @@ class TitleAIUpdater:
         snippet = " ".join(words[: self.num_words]).encode("utf-8")[: self.max_bytes_md].decode("utf-8", "ignore")
         return raw_name, snippet
 
-    def _ai_text(self, *, system: str, prompt: str, max_tokens: int, retries: int = 6) -> str:
+    def _ai_text(
+        self,
+        *,
+        system: str,
+        prompt: str,
+        max_tokens: int,
+        retries: int = 6,
+    ) -> str:
         delay = 1.0
         last_err: Optional[Exception] = None
-
-        response_limit = max(max_tokens, 256)
 
         for attempt in range(1, retries + 1):
             try:
                 if self.client is None:
                     raise RuntimeError("Cliente IA no configurado")
-                resp = self.client.responses.create(
+
+                client = self.client
+                if hasattr(client, "with_options"):
+                    client = client.with_options(timeout=30)
+                resp = client.responses.create(
                     model=self.model,
-                    input=[
-                        {"role": "system", "content": system},
-                        {"role": "user", "content": prompt},
-                    ],
-                    max_output_tokens=response_limit,
-                    timeout=30,
+                    instructions=system,
+                    input=prompt,
+                    max_output_tokens=max_tokens,
                     reasoning={"effort": "minimal"},
                     text={"verbosity": "low"},
                 )
 
-                def _collect_text(value: object) -> str:
+                text = (getattr(resp, "output_text", "") or "").strip()
+                if text:
+                    return text
+
+                outputs = getattr(resp, "output", None) or getattr(resp, "content", None)
+
+                def _collect(value: object) -> str:
                     if value is None:
                         return ""
                     if isinstance(value, str):
                         return value
                     if isinstance(value, list):
-                        return "".join(_collect_text(item) for item in value)
+                        return "".join(_collect(item) for item in value)
                     if isinstance(value, dict):
-                        text_parts: List[str] = []
-                        if "text" in value:
-                            text_parts.append(str(value["text"]))
-                        if "content" in value:
-                            text_parts.append(_collect_text(value["content"]))
-                        if "output_text" in value:
-                            text_parts.append(str(value["output_text"]))
-                        return "".join(text_parts)
+                        return "".join(
+                            [
+                                str(value.get("text", "")),
+                                _collect(value.get("content")),
+                                str(value.get("output_text", "")),
+                            ]
+                        )
                     if hasattr(value, "text"):
                         return str(getattr(value, "text", ""))
                     if hasattr(value, "content"):
-                        return _collect_text(getattr(value, "content"))
+                        return _collect(getattr(value, "content"))
                     if hasattr(value, "output_text"):
                         return str(getattr(value, "output_text", ""))
                     return str(value)
 
-                text = ""
-                if hasattr(resp, "output_text"):
-                    text = str(resp.output_text or "").strip()
-                if not text:
-                    outputs = getattr(resp, "output", None) or getattr(resp, "content", None)
-                    if outputs:
-                        text = _collect_text(outputs).strip()
-                if not text:
-                    messages = getattr(resp, "messages", None)
-                    if messages:
-                        text = _collect_text(messages).strip()
-                if not text:
-                    try:
-                        if hasattr(resp, "model_dump"):
-                            debug_payload = resp.model_dump()
-                        else:
-                            debug_payload = repr(resp)
-                        print(f"🛠️ DEBUG respuesta OpenAI vacía: {debug_payload}")
-                    except Exception as debug_exc:
-                        print(f"🛠️ DEBUG no se pudo volcar la respuesta: {debug_exc!r}")
-                    raise RuntimeError("Respuesta vacía de OpenAI")
-                return text
+                if outputs:
+                    text = _collect(outputs).strip()
+                    if text:
+                        return text
+
+                messages = getattr(resp, "messages", None)
+                if messages:
+                    text = _collect(messages).strip()
+                    if text:
+                        return text
+
+                try:
+                    debug_payload = resp.model_dump() if hasattr(resp, "model_dump") else repr(resp)
+                    print(f"🛠️ DEBUG respuesta OpenAI vacía: {debug_payload}")
+                except Exception as debug_exc:
+                    print(f"🛠️ DEBUG no se pudo volcar la respuesta: {debug_exc!r}")
+                raise RuntimeError("Respuesta vacía de OpenAI")
             except Exception as err:  # pragma: no cover - depende de red
                 last_err = err
                 status = (
@@ -187,7 +194,7 @@ class TitleAIUpdater:
         system = "Responde EXACTAMENTE una palabra: 'español' o 'inglés'. Sin comillas, sin puntuación."
         prompt = f"Indica el idioma del siguiente texto (español o inglés):\n\n{text20}\n\nIdioma:"
         try:
-            resp = self._ai_text(system=system, prompt=prompt, max_tokens=3)
+            resp = self._ai_text(system=system, prompt=prompt, max_tokens=8)
             lowered = resp.strip().lower()
             if "español" in lowered or "espanol" in lowered:
                 return "español"
@@ -204,7 +211,7 @@ class TitleAIUpdater:
         system = (
             f"Devuelve SOLO un título en una línea y nada más. "
             f"Escríbelo en {lang}. "
-            "Si detectas el nombre de la newsletter, del autor o del repositorio/sitio, "
+            "Si detectas el nombre del autor, de la newsletter, o del repositorio/sitio, "
             "ponlo al inicio y sepáralo con un guion. "
             f"Máx {self.max_title_len} caracteres."
         )
@@ -213,7 +220,15 @@ class TitleAIUpdater:
             f"Contenido:\n{snippet}\n\nTítulo:"
         )
         resp = self._ai_text(system=system, prompt=prompt, max_tokens=64)
-        title = resp.replace('"', '').replace('#', '').strip()
+        title = (
+            resp.replace('"', "")
+            .replace("#", "")
+            .replace("“", "")
+            .replace("”", "")
+            .replace("‘", "")
+            .replace("’", "")
+            .strip()
+        )
         for bad in [":", ".", "/"]:
             title = title.replace(bad, "-")
         return re.sub(r"\s+", " ", title)[: self.max_title_len]
@@ -234,8 +249,9 @@ def rename_markdown_pair(md_path: Path, new_title: str) -> Path:
         html_new = parent / f"{base} ({counter}).html"
         counter += 1
 
-    md_path.rename(md_new)
-    if html_old.exists():
+    if md_new != md_path:
+        md_path.rename(md_new)
+    if html_old.exists() and html_new != html_old:
         html_old.rename(html_new)
 
     return md_new
