@@ -366,6 +366,41 @@ class HTMLOnlyRequestHandler(SimpleHTTPRequestHandler):
                 self._send_bytes(b'{"ok":true}', "application/json; charset=utf-8")
                 return
 
+            if action == "delete":
+                if os.path.isdir(abs_path):
+                    self.send_error(400, "No se pueden borrar directorios")
+                    return
+                try:
+                    os.remove(abs_path)
+                except FileNotFoundError:
+                    self.send_error(404, "File not found")
+                    return
+                except Exception as e:
+                    self.send_error(500, f"No se pudo borrar: {e}")
+                    return
+
+                # Borrar Markdown asociado (mismo nombre)
+                try:
+                    stem, _ = os.path.splitext(abs_path)
+                    md_path = f"{stem}.md"
+                    if os.path.isfile(md_path):
+                        os.remove(md_path)
+                except Exception as e:
+                    self.send_error(500, f"No se pudo borrar Markdown asociado: {e}")
+                    return
+
+                # También eliminar copia publicada si existe
+                try:
+                    pub_path = os.path.join(PUBLIC_READS_DIR, os.path.basename(abs_path))
+                    if os.path.isfile(pub_path):
+                        os.remove(pub_path)
+                except Exception as e:
+                    self.send_error(500, f"No se pudo borrar copia pública: {e}")
+                    return
+
+                self._send_bytes(b'{"ok":true}', "application/json; charset=utf-8")
+                return
+
             if action == "publish":
                 # Requiere que el fichero esté bumped (defensa extra)
                 try:
