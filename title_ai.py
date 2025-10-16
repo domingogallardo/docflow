@@ -18,7 +18,6 @@ class TitleAIUpdater:
     def __init__(
         self,
         ai_client,
-        done_file: Path,
         *,
         max_title_len: int = 250,
         num_words: int = 500,
@@ -27,7 +26,6 @@ class TitleAIUpdater:
         model: str = "gpt-5-mini",
     ) -> None:
         self.client = ai_client
-        self.done_file = done_file
         self.max_title_len = max_title_len
         self.num_words = num_words
         self.max_bytes_md = max_bytes_md
@@ -41,10 +39,9 @@ class TitleAIUpdater:
             print("🤖 Cliente de IA no configurado; se omite la generación de títulos")
             return
 
-        done = self._load_done_titles()
         md_files = [
             Path(p) for p in candidates
-            if p.suffix.lower() == ".md" and str(p) not in done
+            if Path(p).suffix.lower() == ".md"
         ]
 
         if not md_files:
@@ -61,7 +58,6 @@ class TitleAIUpdater:
                 print(f"📄 {old_title} → {new_title} [{lang}]")
 
                 md_final = rename_pair(md_file, new_title)
-                self._mark_title_done(md_final)
                 time.sleep(self.delay_seconds)
 
             except Exception as exc:  # pragma: no cover - logs para seguimiento manual
@@ -70,16 +66,6 @@ class TitleAIUpdater:
         print("🤖 Títulos actualizados ✅")
 
     # -------- internals --------
-    def _load_done_titles(self) -> set[str]:
-        if self.done_file.exists():
-            return set(self.done_file.read_text(encoding="utf-8").splitlines())
-        return set()
-
-    def _mark_title_done(self, path: Path) -> None:
-        self.done_file.parent.mkdir(parents=True, exist_ok=True)
-        with self.done_file.open("a", encoding="utf-8") as fh:
-            fh.write(str(path) + "\n")
-
     def _extract_content(self, path: Path) -> tuple[str, str]:
         raw_name = path.stem[: self.max_title_len]
         words: List[str] = []

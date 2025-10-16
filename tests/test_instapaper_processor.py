@@ -328,7 +328,6 @@ The content is written in English and discusses various technical topics.
     renamed_files = list(incoming.glob("AI and Machine Learning - Latest Developments*"))
     assert len(renamed_files) >= 1
     
-    # Verificar que se marcó como procesado
-    assert processor.done_file.exists()
-    done_content = processor.done_file.read_text()
-    assert "AI and Machine Learning - Latest Developments" in done_content 
+    # Ya no se registra en un fichero de control; sólo debe existir el renombrado
+    done_file = incoming / "titles_done_instapaper.txt"
+    assert not done_file.exists()
