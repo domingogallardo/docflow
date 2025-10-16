@@ -1,5 +1,5 @@
 from pathlib import Path
-from config import BASE_DIR, INCOMING, HISTORIAL
+from config import BASE_DIR, INCOMING, PROCESSED_HISTORY
 from datetime import datetime, timedelta
 from typing import Iterable, List
 import os, shutil, re
@@ -148,7 +148,7 @@ def bump_files(files, years: int = 100):
         os.utime(f, (ts, ts))  # atime, mtime
 
 def register_paths(paths, base_dir: Path = None, historial_path: Path = None):
-    """Registra rutas en el historial. Acepta base_dir y historial_path configurables para tests."""
+    """Registra rutas procesadas en el log principal. Parámetros overridable para tests."""
     if not paths:
         return
     
@@ -156,7 +156,7 @@ def register_paths(paths, base_dir: Path = None, historial_path: Path = None):
     if base_dir is None:
         base_dir = BASE_DIR
     if historial_path is None:
-        historial_path = HISTORIAL
+        historial_path = PROCESSED_HISTORY
     
     # Agregar fecha y hora al final de cada línea
     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")

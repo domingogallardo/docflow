@@ -75,12 +75,15 @@ PORT=8000 SERVE_DIR="/ruta/a/⭐️ Documentación" python utils/serve_docs.py
 ```
 ⭐️ Documentación/
 ├── Incoming/
+│   ├── processed_history.txt
+│   ├── titles_done_instapaper.txt
+│   └── titles_done_markdown.txt
 ├── Posts/Posts <AÑO>/
 ├── Podcasts/Podcasts <AÑO>/
 ├── Tweets/Tweets <AÑO>/
 ├── Pdfs/Pdfs <AÑO>/
 ├── Images/Images <AÑO>/
-└── Historial.txt
+└── ...
 ```
 
 ---

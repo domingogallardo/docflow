@@ -26,7 +26,7 @@ class DocumentProcessorConfig:
         self.podcasts_dest = base_dir / "Podcasts" / f"Podcasts {year}"
         self.tweets_dest = base_dir / "Tweets" / f"Tweets {year}"
         self.images_dest = base_dir / "Images" / f"Images {year}"
-        self.historial = base_dir / "Historial.txt"
+        self.processed_history = self.incoming / "processed_history.txt"
 
 
 class DocumentProcessor:
@@ -114,7 +114,11 @@ class DocumentProcessor:
             + self.moved_markdown
         )
         if all_files:
-            U.register_paths(all_files, base_dir=self.config.base_dir, historial_path=self.config.historial)
+            U.register_paths(
+                all_files,
+                base_dir=self.config.base_dir,
+                historial_path=self.config.processed_history,
+            )
     
     def process_all(self) -> bool:
         """Ejecuta el pipeline completo."""
