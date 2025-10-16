@@ -6,6 +6,7 @@
   let publishing = false;
   let unpublishing = false;
   let processing = false;
+  let deleting = false;
   const publicBase = script.dataset.publicBase || '';
   function el(tag, attrs, text){
     const e = document.createElement(tag);
@@ -33,7 +34,7 @@
     window.location.href = parent || '/';
   }
   async function publish(){
-    if(publishing || !bumped || published) return;
+    if(deleting || publishing || !bumped || published) return;
     publishing = true; render(); msg.textContent = '⏳ publicando…'; msg.className = 'meta';
     const ok = await call('publish');
     msg.textContent = ok ? '✓ publicado' : '× error';
@@ -50,7 +51,7 @@
     }
   }
   async function processed(){
-    if(processing || !bumped || !published) return;
+    if(deleting || processing || !bumped || !published) return;
     processing = true; render(); msg.textContent = 'procesando…';
     const ok = await call('processed');
     msg.textContent = ok ? '✓ procesado' : '× error';
@@ -64,7 +65,7 @@
     }
   }
   async function unpublish(){
-    if(unpublishing || !published) return;
+    if(deleting || unpublishing || !published) return;
     unpublishing = true; render(); msg.textContent = '⏳ despublicando…'; msg.className = 'meta';
     const ok = await call('unpublish');
     msg.textContent = ok ? '✓ despublicado' : '× error';
@@ -77,20 +78,43 @@
       toast('err', 'Error despublicando');
     }
   }
+  async function removeFile(){
+    if(deleting) return;
+    const fname = rel.split('/').pop() || rel || 'este archivo';
+    const question = `¿Seguro que quieres borrar "${fname}"?`;
+    if(!window.confirm(question)) return;
+    deleting = true;
+    render();
+    msg.textContent = '⏳ borrando…'; msg.className = 'meta';
+    const ok = await call('delete');
+    msg.textContent = ok ? '✓ borrado' : '× error';
+    msg.className = ok ? 'meta ok' : 'meta err';
+    deleting = false;
+    if(ok){
+      toast('ok', 'Borrado');
+      setTimeout(()=>{ goList(); }, 350);
+    } else {
+      render();
+      toast('err', 'Error borrando');
+    }
+  }
   function render(){
     bar.innerHTML = '';
     bar.appendChild(el('strong', null, '📄 ' + rel));
     const btn = el('button', null, bumped ? 'Unbump' : 'Bump');
     btn.addEventListener('click', async ()=>{
+      if(deleting) return;
       const ok = await call(bumped ? 'unbump_now' : 'bump');
       msg.textContent = ok ? '✓ hecho' : '× error'; msg.className = ok ? 'meta ok' : 'meta err';
       if(ok){ bumped = !bumped; render(); }
     });
+    if(deleting){ btn.setAttribute('disabled',''); }
     bar.appendChild(btn);
     if(bumped && !published){
       const pub = el('button', null, 'Publicar');
       pub.title = 'Copiar a /web/public/read y desplegar';
       if(publishing){ pub.textContent = 'Publicando…'; pub.setAttribute('disabled',''); }
+      if(deleting){ pub.setAttribute('disabled',''); }
       pub.addEventListener('click', publish);
       bar.appendChild(pub);
     }
@@ -98,16 +122,26 @@
       const unp = el('button', null, 'Despublicar');
       unp.title = 'Eliminar de /web/public/read y desplegar';
       if(unpublishing){ unp.textContent = 'Despublicando…'; unp.setAttribute('disabled',''); }
+      if(deleting){ unp.setAttribute('disabled',''); }
       unp.addEventListener('click', unpublish);
       bar.appendChild(unp);
       if(bumped){
         const done = el('button', null, 'Procesado');
         done.title = 'Unbump (local y público) + añadir a read_posts.md + desplegar';
         if(processing){ done.textContent = 'Procesando…'; done.setAttribute('disabled',''); }
+        if(deleting){ done.setAttribute('disabled',''); }
         done.addEventListener('click', processed);
         bar.appendChild(done);
       }
     }
+    const del = el('button', null, deleting ? 'Eliminando…' : 'Eliminar');
+    del.title = 'Borrar el archivo y volver al listado';
+    if(deleting){
+      del.setAttribute('disabled','');
+    } else {
+      del.addEventListener('click', removeFile);
+    }
+    bar.appendChild(del);
     const raw = el('a', {href:'?raw=1', title:'Ver sin overlay'}, 'raw');
     bar.appendChild(raw); bar.appendChild(msg);
   }
@@ -116,6 +150,7 @@
   const msg = el('span', {class:'meta', id:'dg-msg'}, '');
   document.addEventListener('keydown', async (e)=>{
     if(isEditingTarget(document.activeElement)) return;
+    if(deleting) return;
     const k = (e.key || '').toLowerCase();
     if(k==='b'){
       e.preventDefault(); const ok = await call('bump'); if(ok){ bumped=true; render(); msg.textContent='✓ hecho'; msg.className='meta ok'; }
