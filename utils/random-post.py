@@ -3,12 +3,13 @@
 
 from __future__ import annotations
 
+import os
 import random
 import shutil
+import sys
 from datetime import datetime
 from pathlib import Path
-
-import sys
+from urllib.parse import quote
 
 ROOT_DIR = Path(__file__).resolve().parent.parent
 if str(ROOT_DIR) not in sys.path:
@@ -18,11 +19,22 @@ from config import BASE_DIR
 
 POSTS_ROOT = BASE_DIR / "Posts"
 PULSE_DIR = BASE_DIR / "Pulse"
-def _rel(path: Path) -> str:
+PULSE_INCOMING_DIR = PULSE_DIR / "Incoming"
+
+_SERVE_DOCS_BASE_URL = os.getenv("SERVE_DOCS_BASE_URL")
+_SERVE_DOCS_PORT = os.getenv("PORT", "8000")
+_FALLBACK_BASE = f"http://localhost:{_SERVE_DOCS_PORT}".rstrip("/")
+
+
+def _serve_docs_url(path: Path) -> str:
     try:
-        return "./" + path.relative_to(BASE_DIR).as_posix()
+        rel_path = path.relative_to(BASE_DIR).as_posix()
     except ValueError:
-        return str(path)
+        return path.as_uri()
+
+    encoded_rel = quote(rel_path, safe="/")
+    base = (_SERVE_DOCS_BASE_URL or _FALLBACK_BASE).rstrip("/")
+    return f"{base}/{encoded_rel}"
 
 
 def _sanitize_for_dir(name: str) -> str:
@@ -52,15 +64,15 @@ def _unique_name(base: Path, stem: str, suffix: str) -> Path:
 
 
 def _copy_selection(html_path: Path, md_path: Path) -> Path:
-    PULSE_DIR.mkdir(parents=True, exist_ok=True)
+    PULSE_INCOMING_DIR.mkdir(parents=True, exist_ok=True)
     safe_stem = _sanitize_for_dir(md_path.stem[:80])
 
-    destination = _unique_name(PULSE_DIR, safe_stem, md_path.suffix)
+    destination = _unique_name(PULSE_INCOMING_DIR, safe_stem, md_path.suffix)
     shutil.copy2(md_path, destination)
 
-    url_stub = _unique_name(PULSE_DIR, safe_stem, ".url")
+    url_stub = _unique_name(PULSE_INCOMING_DIR, safe_stem, ".url")
     url_stub.write_text(
-        f"{_rel(md_path)}\n",
+        f"{_serve_docs_url(html_path)}\n",
         encoding="utf-8",
     )
 
