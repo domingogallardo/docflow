@@ -77,7 +77,7 @@ def main() -> None:
         return
 
     html_path, md_path = random.choice(candidates)
-    print(f"🎯 Seleccionado: {html_path.name}")
+    print(f"🎯 Seleccionado: {md_path.name}")
     _copy_selection(html_path, md_path)
 
 
