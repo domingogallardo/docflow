@@ -32,11 +32,11 @@ def _sanitize_for_dir(name: str) -> str:
 
 
 def _load_candidates() -> list[tuple[Path, Path]]:
-    html_files = list(POSTS_ROOT.rglob("*.html"))
+    md_files = list(POSTS_ROOT.rglob("*.md"))
     candidates: list[tuple[Path, Path]] = []
-    for html_path in html_files:
-        md_path = html_path.with_suffix(".md")
-        if md_path.exists():
+    for md_path in md_files:
+        html_path = md_path.with_suffix(".html")
+        if html_path.exists():
             candidates.append((html_path, md_path))
     return candidates
 
