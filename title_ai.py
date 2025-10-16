@@ -95,7 +95,7 @@ class TitleAIUpdater:
         for attempt in range(1, retries + 1):
             try:
                 resp = self.client.messages.create(
-                    model="claude-3-5-haiku-20241022",
+                    model="claude-haiku-4-5-20251001",
                     max_tokens=max_tokens,
                     system=system,
                     messages=[{"role": "user", "content": prompt}],
@@ -202,4 +202,3 @@ def _safe_filename(name: str) -> str:
     cleaned = re.sub(r"\s+", " ", cleaned)
     cleaned = cleaned[:240] or "markdown"
     return cleaned
-
