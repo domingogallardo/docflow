@@ -13,6 +13,6 @@ PODCASTS_DEST = BASE_DIR / "Podcasts" / f"Podcasts {YEAR}"
 TWEETS_DEST = BASE_DIR / "Tweets" / f"Tweets {YEAR}"
 PROCESSED_HISTORY = INCOMING / "processed_history.txt"
 
-ANTHROPIC_KEY = os.getenv("ANTHROPIC_API_KEY")
+OPENAI_KEY = os.getenv("OPENAI_API_KEY")
 INSTAPAPER_USERNAME = os.environ.get("INSTAPAPER_USERNAME")
 INSTAPAPER_PASSWORD = os.environ.get("INSTAPAPER_PASSWORD")

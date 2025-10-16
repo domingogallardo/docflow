@@ -15,7 +15,7 @@ import os
 import re
 import time
 import requests
-import anthropic
+from openai import OpenAI
 from datetime import datetime
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
@@ -23,7 +23,7 @@ from bs4 import BeautifulSoup
 from markdownify import markdownify as md
 from PIL import Image
 
-from config import INSTAPAPER_USERNAME, INSTAPAPER_PASSWORD, ANTHROPIC_KEY
+from config import INSTAPAPER_USERNAME, INSTAPAPER_PASSWORD, OPENAI_KEY
 import utils as U
 from title_ai import TitleAIUpdater, rename_markdown_pair
 
@@ -104,8 +104,11 @@ class InstapaperProcessor:
         self.destination_dir = destination_dir
         self.session = None
         self.done_file = incoming_dir / "titles_done_instapaper.txt"
-        self.anthropic_client = anthropic.Anthropic(api_key=ANTHROPIC_KEY)
-        self.title_updater = TitleAIUpdater(self.anthropic_client, self.done_file)
+        try:
+            self.openai_client = OpenAI(api_key=OPENAI_KEY) if OPENAI_KEY else OpenAI()
+        except Exception:
+            self.openai_client = None
+        self.title_updater = TitleAIUpdater(self.openai_client, self.done_file)
         self.download_registry = InstapaperDownloadRegistry(
             self.incoming_dir / ".instapaper_downloads.txt"
         )

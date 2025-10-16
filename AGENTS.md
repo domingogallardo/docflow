@@ -9,7 +9,7 @@ This repository automates collecting and organizing personal documents (Instapap
 - Configuration: `config.py` (paths, env vars). Destinations use `BASE_DIR` with year-based folders like `Posts/Posts <AÑO>/`.
 
 ## Build, Test, and Dev Commands
-- Install deps: `pip install requests beautifulsoup4 markdownify anthropic pillow pytest markdown`
+- Install deps: `pip install requests beautifulsoup4 markdownify openai pillow pytest markdown`
 - Run pipeline: `python process_documents.py all --year 2025`
 - Selective run: `python process_documents.py tweets pdfs`
 - Markdown run: `python process_documents.py md` (titula con IA y guarda los `.md/.html` junto a Instapaper en `Posts/Posts <AÑO>/`)
@@ -77,5 +77,5 @@ Notes for agents
 - If behavior or CLI changes, update `README.md` and this guide as needed.
 
 ## Security & Config Tips
-- Do not commit secrets. Configure via env vars: `ANTHROPIC_API_KEY`, `INSTAPAPER_USERNAME`, `INSTAPAPER_PASSWORD`, optional `DOCPIPE_YEAR`.
+- Do not commit secrets. Configure via env vars: `OPENAI_API_KEY`, `INSTAPAPER_USERNAME`, `INSTAPAPER_PASSWORD`, optional `DOCPIPE_YEAR`.
 - Adjust `BASE_DIR` in `config.py` for your system (path contains Unicode); keep year-derived subfolders consistent.

@@ -195,19 +195,9 @@ def test_instapaper_processor_with_existing_html(tmp_path):
     # Crear procesador con mocks para APIs externas
     processor = InstapaperProcessor(incoming, destination)
     
-    # Mock para evitar llamadas reales a Anthropic API
-    with patch.object(processor.anthropic_client, 'messages') as mock_anthropic:
-        # Mock respuesta de detección de idioma
-        mock_lang_response = Mock()
-        mock_lang_response.content = [Mock(text="inglés")]
-        
-        # Mock respuesta de generación de título
-        mock_title_response = Mock()
-        mock_title_response.content = [Mock(text="Amazing Test Article")]
-        
-        mock_anthropic.create.side_effect = [mock_lang_response, mock_title_response]
-        
-        # Ejecutar procesamiento
+    processor.title_updater.client = object()
+    # Mock para evitar llamadas reales a OpenAI
+    with patch.object(processor.title_updater, '_ai_text', side_effect=["inglés", "Amazing Test Article"]):
         moved_posts = processor.process_instapaper_posts()
     
     # Verificar
@@ -325,19 +315,13 @@ The content is written in English and discusses various technical topics.
     # Crear procesador
     processor = InstapaperProcessor(incoming, destination)
     
-    # Mock para Anthropic API
-    with patch.object(processor.anthropic_client, 'messages') as mock_anthropic:
-        # Mock respuesta de detección de idioma
-        mock_lang_response = Mock()
-        mock_lang_response.content = [Mock(text="inglés")]
-        
-        # Mock respuesta de generación de título
-        mock_title_response = Mock()
-        mock_title_response.content = [Mock(text="AI and Machine Learning - Latest Developments")]
-        
-        mock_anthropic.create.side_effect = [mock_lang_response, mock_title_response]
-        
-        # Ejecutar generación de títulos
+    processor.title_updater.client = object()
+    # Mock para evitar llamadas reales a OpenAI
+    with patch.object(
+        processor.title_updater,
+        '_ai_text',
+        side_effect=["inglés", "AI and Machine Learning - Latest Developments"],
+    ):
         processor._update_titles_with_ai()
     
     # Verificar que el archivo fue renombrado

@@ -5,7 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Iterable, List
 
-import anthropic
+from openai import OpenAI
 
 import config as cfg
 import utils as U
@@ -18,8 +18,12 @@ class MarkdownProcessor:
     def __init__(self, incoming_dir: Path, destination_dir: Path):
         self.incoming_dir = incoming_dir
         self.destination_dir = destination_dir
+        try:
+            openai_client = OpenAI(api_key=cfg.OPENAI_KEY) if cfg.OPENAI_KEY else OpenAI()
+        except Exception:
+            openai_client = None
         self.title_updater = TitleAIUpdater(
-            anthropic.Anthropic(api_key=cfg.ANTHROPIC_KEY),
+            openai_client,
             incoming_dir / "titles_done_markdown.txt",
         )
 
