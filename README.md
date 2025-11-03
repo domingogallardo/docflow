@@ -37,7 +37,7 @@ python process_documents.py all [--year 2025]
 python process_documents.py images
 python process_documents.py md
 ```
-- Instapaper → HTML/MD limpios (título con IA, márgenes, metadatos, nombres saneados).  
+- Instapaper → HTML/MD limpios (título con IA, márgenes, metadatos, nombres saneados). Incluye los tweets guardados en Instapaper y mantiene la palabra `Tweet` en los nombres generados.  
 - Snipd → HTML limpio con tipografía del sistema y botones de audio.  
 - Markdown → conversión a HTML con márgenes + título IA (si hay API) + archivado en `Posts/Posts <AÑO>/`.  
 - PDFs → organización anual.  

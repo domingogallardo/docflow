@@ -59,7 +59,7 @@ python process_documents.py all --year 2025
 python process_documents.py pdfs md
 python process_documents.py images
 ```
-- Instapaper (HTML + MD limpios, título con IA, márgenes, metadatos y nombres de archivo sanos).  
+- Instapaper (HTML + MD limpios, título con IA, márgenes, metadatos y nombres de archivo sanos). Incluye los tweets que guardes en Instapaper y conserva la palabra `Tweet` en los nombres generados.  
 - Podcasts Snipd (MD → HTML limpio, tipografía del sistema, botones de audio).  
 - PDFs (organización anual).  
 - Imágenes (copia anual + galería `gallery.html` con JPG/PNG/WebP/TIFF/GIF/BMP).  

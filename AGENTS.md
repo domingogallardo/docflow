@@ -1,6 +1,6 @@
 # Repository Guidelines
 
-This repository automates collecting and organizing personal documents (Instapaper posts, Snipd podcasts, Markdown notes, PDFs). Keep changes small, tested, and aligned with the current modular design.
+This repository automates collecting and organizing personal documents (Instapaper posts—including tweets saved there—, Snipd podcasts, Markdown notes, PDFs). Keep changes small, tested, and aligned with the current modular design.
 
 ## Project Structure & Modules
 - Source: top-level Python modules (e.g., `process_documents.py`, `pipeline_manager.py`, `utils.py`, `*_processor.py`).
