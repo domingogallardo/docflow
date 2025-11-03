@@ -86,8 +86,6 @@ class MarkdownProcessor:
             return False
         if U.is_podcast_file(path):
             return False
-        if path.name.startswith("Tweets"):
-            return False
         return True
 
     def _collect_move_candidates(self, markdown_files: Iterable[Path]) -> List[Path]:

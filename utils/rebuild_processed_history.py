@@ -5,7 +5,6 @@ Rebuild Incoming/processed_history.txt from scratch.
 • Incluye todos los .md en   Posts/Posts <año>/
 • Incluye todos los .pdf en  Pdfs/Pdfs  <año>/
 • Incluye todos los .md en   Podcasts/Podcasts <año>/
-• Incluye todos los .md en   Tweets/Tweets <año>/
 • Orden: más nuevo arriba, según fecha de creación (st_ctime)
 • Sobrescribe Incoming/processed_history.txt (hace copia .bak por seguridad)
 """
@@ -34,10 +33,6 @@ def collect_files():
 
     # Podcasts
     for year_dir in (cfg.BASE_DIR / "Podcasts").glob("Podcasts *"):
-        files.extend(year_dir.glob("*.md"))
-
-    # Tweets
-    for year_dir in (cfg.BASE_DIR / "Tweets").glob("Tweets *"):
         files.extend(year_dir.glob("*.md"))
 
     return files

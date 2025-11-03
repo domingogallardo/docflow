@@ -20,10 +20,6 @@ def run_main(monkeypatch, tmp_path, args):
             calls.append("podcasts")
             return []
 
-        def process_tweets(self):
-            calls.append("tweets")
-            return []
-
         def process_instapaper_posts(self):
             calls.append("posts")
             return []
@@ -65,8 +61,8 @@ def test_no_args_shows_help_and_exits(monkeypatch, tmp_path, capsys):
 
 
 def test_selective_processing(monkeypatch, tmp_path):
-    calls = run_main(monkeypatch, tmp_path, ["tweets", "pdfs", "md"])
-    assert calls == ["tweets", "pdfs", "md", "register"]
+    calls = run_main(monkeypatch, tmp_path, ["pdfs", "md"])
+    assert calls == ["pdfs", "md", "register"]
 
 
 def test_all_processing(monkeypatch, tmp_path):

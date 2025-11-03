@@ -9,7 +9,6 @@ import utils as U
 from pdf_processor import PDFProcessor
 from instapaper_processor import InstapaperProcessor
 from podcast_processor import PodcastProcessor
-from tweet_processor import TweetProcessor
 from image_processor import ImageProcessor
 from markdown_processor import MarkdownProcessor
 
@@ -24,7 +23,6 @@ class DocumentProcessorConfig:
         self.posts_dest = base_dir / "Posts" / f"Posts {year}"
         self.pdfs_dest = base_dir / "Pdfs" / f"Pdfs {year}"
         self.podcasts_dest = base_dir / "Podcasts" / f"Podcasts {year}"
-        self.tweets_dest = base_dir / "Tweets" / f"Tweets {year}"
         self.images_dest = base_dir / "Images" / f"Images {year}"
         self.processed_history = self.incoming / "processed_history.txt"
 
@@ -37,13 +35,11 @@ class DocumentProcessor:
         self.pdf_processor = PDFProcessor(self.config.incoming, self.config.pdfs_dest)
         self.instapaper_processor = InstapaperProcessor(self.config.incoming, self.config.posts_dest)
         self.podcast_processor = PodcastProcessor(self.config.incoming, self.config.podcasts_dest)
-        self.tweet_processor = TweetProcessor(self.config.incoming, self.config.tweets_dest)
         self.image_processor = ImageProcessor(self.config.incoming, self.config.images_dest)
         self.markdown_processor = MarkdownProcessor(self.config.incoming, self.config.posts_dest)
         self.moved_podcasts: List[Path] = []
         self.moved_posts: List[Path] = []
         self.moved_pdfs: List[Path] = []
-        self.moved_tweets: List[Path] = []
         self.moved_images: List[Path] = []
         self.moved_markdown: List[Path] = []
 
@@ -85,12 +81,6 @@ class DocumentProcessor:
         self.moved_pdfs = moved_pdfs
         return moved_pdfs
     
-    def process_tweets(self) -> List[Path]:
-        """Procesa archivos de tweets usando el procesador especializado."""
-        moved_tweets = self.tweet_processor.process_tweets()
-        self.moved_tweets = moved_tweets
-        return moved_tweets
-
     def process_images(self) -> List[Path]:
         """Procesa imágenes moviéndolas y generando la galería anual."""
         moved_images = self.image_processor.process_images()
@@ -109,7 +99,6 @@ class DocumentProcessor:
             self.moved_posts
             + self.moved_pdfs
             + self.moved_podcasts
-            + self.moved_tweets
             + self.moved_images
             + self.moved_markdown
         )
@@ -125,23 +114,20 @@ class DocumentProcessor:
         try:
             # Fase 1: Procesar podcasts primero
             self.process_podcasts()
-            
-            # Fase 2: Procesar tweets (convertir MD a HTML y mover) - ANTES que Instapaper
-            self.process_tweets()
-            
-            # Fase 3: Procesar posts de Instapaper (con pipeline completo)
+
+            # Fase 2: Procesar posts de Instapaper (con pipeline completo)
             self.process_instapaper_posts()
 
-            # Fase 4: Procesar PDFs (solo mover, sin pipeline)
+            # Fase 3: Procesar PDFs (solo mover, sin pipeline)
             self.process_pdfs()
 
-            # Fase 5: Procesar imágenes (mover y actualizar galería)
+            # Fase 4: Procesar imágenes (mover y actualizar galería)
             self.process_images()
 
-            # Fase 6: Procesar Markdown genérico
+            # Fase 5: Procesar Markdown genérico
             self.process_markdown()
 
-            # Fase 7: Registrar todo en historial
+            # Fase 6: Registrar todo en historial
             self.register_all_files()
             
             print("Pipeline completado ✅")

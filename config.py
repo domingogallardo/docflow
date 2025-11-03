@@ -10,7 +10,6 @@ INCOMING = BASE_DIR / "Incoming"
 POSTS_DEST = BASE_DIR / "Posts" / f"Posts {YEAR}"
 PDFS_DEST = BASE_DIR / "Pdfs" / f"Pdfs {YEAR}"
 PODCASTS_DEST = BASE_DIR / "Podcasts" / f"Podcasts {YEAR}"
-TWEETS_DEST = BASE_DIR / "Tweets" / f"Tweets {YEAR}"
 PROCESSED_HISTORY = INCOMING / "processed_history.txt"
 
 OPENAI_KEY = os.getenv("OPENAI_API_KEY")
