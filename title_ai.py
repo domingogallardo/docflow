@@ -203,9 +203,7 @@ class TitleAIUpdater:
         )
         prompt = (
             "Genera un título atractivo para el siguiente contenido.\n\n"
-            f"Título original del archivo: {original_title}\n"
-            "Si el título original contiene la palabra exacta 'Tweet', "
-            "asegúrate de que el nuevo título también la incluya.\n\n"
+            f"Título original del archivo: {original_title}\n\n"
             f"Contenido:\n{snippet}\n\nTítulo:"
         )
         resp = self._ai_text(system=system, prompt=prompt, max_tokens=64)
@@ -220,7 +218,12 @@ class TitleAIUpdater:
         )
         for bad in [":", ".", "/"]:
             title = title.replace(bad, "-")
-        return re.sub(r"\s+", " ", title)[: self.max_title_len]
+        title = re.sub(r"\s+", " ", title).strip()
+
+        if "Tweet" in original_title and "Tweet" not in title:
+            title = f"Tweet - {title}" if title else "Tweet -"
+
+        return title[: self.max_title_len]
 
 
 def rename_markdown_pair(md_path: Path, new_title: str) -> Path:
