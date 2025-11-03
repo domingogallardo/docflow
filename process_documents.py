@@ -3,7 +3,7 @@
 Procesa el pipeline de documentos.
 
 Uso:
-    python process_documents.py [--year 2026] [tweets|pdfs|podcasts|posts|images|md|all]
+    python process_documents.py [--year 2026] [pdfs|podcasts|posts|images|md|all]
 
 Notas:
 - Los artículos HTML de Instapaper marcados como destacados se bumpean automáticamente
@@ -21,7 +21,7 @@ import config as cfg
 def parse_args():
     p = argparse.ArgumentParser(
         description=(
-            "Pipeline de documentos: podcasts, tweets, Instapaper, PDFs, imágenes y Markdown. "
+            "Pipeline de documentos: podcasts, Instapaper, PDFs, imágenes y Markdown. "
             "Los HTML de Instapaper destacados se bumpean automáticamente."
         ),
         epilog=(
@@ -35,7 +35,7 @@ def parse_args():
     p.add_argument(
         "targets",
         nargs="+",
-        choices=["tweets", "pdfs", "podcasts", "posts", "images", "md", "all"],
+        choices=["pdfs", "podcasts", "posts", "images", "md", "all"],
         help="Procesa solo los tipos indicados",
     )
     return p.parse_args()
@@ -63,7 +63,6 @@ def main():
     else:
         mapping = {
             "podcasts": processor.process_podcasts,
-            "tweets": processor.process_tweets,
             "posts": processor.process_instapaper_posts,
             "pdfs": processor.process_pdfs,
             "images": processor.process_images,

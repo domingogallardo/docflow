@@ -54,7 +54,7 @@ class TitleAIUpdater:
             try:
                 old_title, snippet = self._extract_content(md_file)
                 lang = self._detect_language(" ".join(snippet.split()[:20]))
-                new_title = self._generate_title(snippet, lang)
+                new_title = self._generate_title(snippet, lang, old_title)
                 print(f"📄 {old_title} → {new_title} [{lang}]")
 
                 md_final = rename_pair(md_file, new_title)
@@ -193,7 +193,7 @@ class TitleAIUpdater:
             return "español"
         return "inglés"
 
-    def _generate_title(self, snippet: str, lang: str) -> str:
+    def _generate_title(self, snippet: str, lang: str, original_title: str) -> str:
         system = (
             f"Devuelve SOLO un título en una línea y nada más. "
             f"Escríbelo en {lang}. "
@@ -203,6 +203,9 @@ class TitleAIUpdater:
         )
         prompt = (
             "Genera un título atractivo para el siguiente contenido.\n\n"
+            f"Título original del archivo: {original_title}\n"
+            "Si el título original contiene la palabra exacta 'Tweet', "
+            "asegúrate de que el nuevo título también la incluya.\n\n"
             f"Contenido:\n{snippet}\n\nTítulo:"
         )
         resp = self._ai_text(system=system, prompt=prompt, max_tokens=64)

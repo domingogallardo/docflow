@@ -1,6 +1,6 @@
 # 📚 docflow — Pipeline de Documentación Personal (versión resumida)
 
-docflow automatiza **recolectar → procesar → priorizar (bump) → leer → publicar → marcar como completado** tus documentos (artículos, podcasts, tweets, Markdown y PDFs) en una estructura por años.
+docflow automatiza **recolectar → procesar → priorizar (bump) → leer → publicar → marcar como completado** tus documentos (artículos, podcasts, Markdown y PDFs) en una estructura por años.
 
 - 🚀 **Rápido de arrancar**: un par de comandos y estás procesando.
 - 🧭 **Flujo claro**: bump/unbump para priorizar; overlay web local para acciones; deploy a `/read/` en tu web pública.
@@ -34,13 +34,11 @@ docflow automatiza **recolectar → procesar → priorizar (bump) → leer → p
 python process_documents.py all [--year 2025]
 
 # Selectivo
-python process_documents.py tweets pdfs
 python process_documents.py images
 python process_documents.py md
 ```
 - Instapaper → HTML/MD limpios (título con IA, márgenes, metadatos, nombres saneados).  
 - Snipd → HTML limpio con tipografía del sistema y botones de audio.  
-- Tweets → HTML estilizado.  
 - Markdown → conversión a HTML con márgenes + título IA (si hay API) + archivado en `Posts/Posts <AÑO>/`.  
 - PDFs → organización anual.  
 - Imágenes → copia anual + `gallery.html` scrolleable por año (JPG/PNG/WebP/TIFF/GIF/BMP).
@@ -79,7 +77,6 @@ PORT=8000 SERVE_DIR="/ruta/a/⭐️ Documentación" python utils/serve_docs.py
 │   └── ...
 ├── Posts/Posts <AÑO>/
 ├── Podcasts/Podcasts <AÑO>/
-├── Tweets/Tweets <AÑO>/
 ├── Pdfs/Pdfs <AÑO>/
 ├── Images/Images <AÑO>/
 └── ...

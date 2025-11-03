@@ -31,7 +31,7 @@
 ```bash
 # Pipeline completo o por tipos
 python process_documents.py all [--year AAAA]
-python process_documents.py instapaper podcasts tweets pdfs
+python process_documents.py posts podcasts pdfs
 
 # Convertir Markdown a HTML
 python md_to_html.py
@@ -50,18 +50,17 @@ pip install requests beautifulsoup4 markdownify openai pillow pytest markdown
 ## Flujo de trabajo detallado
 
 1) **Recolectar → Estructura base**  
-Guarda tus fuentes en `⭐️ Documentación/Incoming/` (o en sus carpetas de origen) y el pipeline las ordenará en carpetas por año: `Posts/Posts <AÑO>/`, `Podcasts/Podcasts <AÑO>/`, `Tweets/Tweets <AÑO>/`, `Pdfs/Pdfs <AÑO>/`, `Images/Images <AÑO>/`.
+Guarda tus fuentes en `⭐️ Documentación/Incoming/` (o en sus carpetas de origen) y el pipeline las ordenará en carpetas por año: `Posts/Posts <AÑO>/`, `Podcasts/Podcasts <AÑO>/`, `Pdfs/Pdfs <AÑO>/`, `Images/Images <AÑO>/`.
 
 2) **Procesar → Pipeline**  
 ```bash
 python process_documents.py all --year 2025
 # o selectivo:
-python process_documents.py tweets pdfs
+python process_documents.py pdfs md
 python process_documents.py images
 ```
 - Instapaper (HTML + MD limpios, título con IA, márgenes, metadatos y nombres de archivo sanos).  
 - Podcasts Snipd (MD → HTML limpio, tipografía del sistema, botones de audio).  
-- Tweets (MD → HTML estilizado).  
 - PDFs (organización anual).  
 - Imágenes (copia anual + galería `gallery.html` con JPG/PNG/WebP/TIFF/GIF/BMP).  
 Todo esto lo orquesta `process_documents.py` y procesadores específicos `*_processor.py`.
@@ -169,7 +168,7 @@ HTPASSWD_PSS='contraseña'
 
 ## Resumen de scripts por fase
 
-- **Procesar**: `process_documents.py`, `instapaper_processor.py`, `podcast_processor.py`, `tweet_processor.py`, `pdf_processor.py`.  
+- **Procesar**: `process_documents.py`, `instapaper_processor.py`, `podcast_processor.py`, `pdf_processor.py`.  
 - **Leer/priorizar/publicar (local)**: `utils/serve_docs.py` (overlay + acciones), `utils/bump.applescript`, `utils/un-bump.applescript`.  
 - **Publicar (remoto)**: `web/deploy.sh` (genera `read.html` por mtime desc y respeta `read_posts.md` para la zona de completados).  
 - **Capturar citas en `/read/`**: `article.js` (botón **❝ Copiar cita**, Markdown + `#:~:text=`).  

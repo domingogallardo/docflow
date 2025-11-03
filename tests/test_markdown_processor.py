@@ -17,9 +17,6 @@ def test_markdown_processor_converts_and_moves_files(tmp_path):
     podcast_md = incoming / "snipd_ep.md"
     podcast_md.write_text("""# Episodio\n\n## Episode metadata\n- Episode title: Test\n- Show: Demo\n\n## Snips\n- Contenido""", encoding="utf-8")
 
-    tweet_md = incoming / "Tweets 2025-01-01.md"
-    tweet_md.write_text("# Tweets", encoding="utf-8")
-
     processor = MarkdownProcessor(incoming, destination)
     processor.title_updater.update_titles = lambda files, renamer: None
     moved = processor.process_markdown()
@@ -34,7 +31,6 @@ def test_markdown_processor_converts_and_moves_files(tmp_path):
 
     # Los archivos ignorados deben permanecer en Incoming
     assert podcast_md.exists()
-    assert tweet_md.exists()
 
 
 def test_markdown_processor_moves_existing_html(tmp_path):
