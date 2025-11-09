@@ -44,6 +44,11 @@ Dependencias recomendadas:
 ```bash
 pip install requests beautifulsoup4 markdownify openai pillow pytest markdown
 ```
+Para capturar tweets directamente:
+```bash
+pip install playwright
+playwright install chromium
+```
 
 ---
 
@@ -64,6 +69,8 @@ python process_documents.py images
 - PDFs (organización anual).  
 - Imágenes (copia anual + galería `gallery.html` con JPG/PNG/WebP/TIFF/GIF/BMP).  
 Todo esto lo orquesta `process_documents.py` y procesadores específicos `*_processor.py`.
+
+> **Atajo para tweets**: `python utils/tweet_to_markdown.py https://x.com/...` descarga el tweet con Playwright y lo guarda como `.md` (texto + imágenes) directamente en `Incoming/`.
 
 3) **Priorizar para leer → Bump/Unbump**  
 - **Marca con ⭐ en Instapaper**: si añades una estrella al **título** del artículo en Instapaper, el pipeline **propaga** ese “destacado” a HTML/MD y **bumpea automáticamente** el HTML (ajusta su `mtime` al futuro) para que quede arriba en listados por fecha.  

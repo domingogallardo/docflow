@@ -196,8 +196,9 @@ def test_instapaper_processor_with_existing_html(tmp_path):
     processor = InstapaperProcessor(incoming, destination)
     
     processor.title_updater.client = object()
-    # Mock para evitar llamadas reales a OpenAI
-    with patch.object(processor.title_updater, '_ai_text', side_effect=["inglés", "Amazing Test Article"]):
+    # Mockear descarga y generación de títulos para evitar dependencias externas
+    with patch.object(processor, "_download_from_instapaper", return_value=False), \
+         patch.object(processor.title_updater, '_ai_text', side_effect=["inglés", "Amazing Test Article"]):
         moved_posts = processor.process_instapaper_posts()
     
     # Verificar
