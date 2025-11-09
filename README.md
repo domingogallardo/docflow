@@ -15,6 +15,11 @@ docflow automatiza **recolectar → procesar → priorizar (bump) → leer → p
   ```bash
   pip install requests beautifulsoup4 markdownify openai pillow pytest markdown
   ```
+- Para capturar tweets directamente:
+  ```bash
+  pip install playwright
+  playwright install chromium
+  ```
 - Variables de entorno si usas funciones externas / deploy:
   ```bash
   export OPENAI_API_KEY="..."              # títulos Instapaper (opcional)
@@ -42,6 +47,15 @@ python process_documents.py md
 - Markdown → conversión a HTML con márgenes + título IA (si hay API) + archivado en `Posts/Posts <AÑO>/`.  
 - PDFs → organización anual.  
 - Imágenes → copia anual + `gallery.html` scrolleable por año (JPG/PNG/WebP/TIFF/GIF/BMP).
+
+### 1ter) Capturar tweets individuales
+Si quieres archivar un tweet sin pasar por Instapaper, genera un Markdown listo para `Incoming/`:
+```bash
+python utils/tweet_to_markdown.py https://x.com/usuario/status/123456789
+# Opcional: elegir carpeta o nombre
+python utils/tweet_to_markdown.py <URL> --output-dir ~/Documentos/Incoming --filename "Tweet - demo.md"
+```
+El script usa Playwright (Chromium headless) y guarda un `.md` con el texto, enlace original e imágenes del post.
 
 ### 1bis) Limpiar HTML copiado antes de pegar en Obsidian
 - Copia el fragmento desde el navegador.
