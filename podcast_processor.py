@@ -4,10 +4,14 @@ PodcastProcessor - Módulo unificado para el procesamiento completo de podcasts 
 """
 from __future__ import annotations
 import re
+import unicodedata
 from pathlib import Path
 from typing import List, Iterable
 
 import utils as U
+
+
+SNIP_INDEX_MARKER = "<!-- snip-index -->"
 
 
 class PodcastProcessor:
@@ -139,6 +143,7 @@ class PodcastProcessor:
                 lines_after = text.splitlines(keepends=True)
                 cleaned_lines = self._clean_lines(lines_after)
                 final_text = "".join(cleaned_lines)
+                final_text = self._add_snip_index(final_text)
 
                 if final_text != original_text:
                     md_file.write_text(final_text, encoding="utf-8")
@@ -193,6 +198,86 @@ class PodcastProcessor:
             
             cleaned.append(line)
         return cleaned
+
+    def _add_snip_index(self, text: str) -> str:
+        """Inserta un índice con enlaces a cada snip y añade anchors a sus títulos."""
+        match = re.search(r"(##\s+Snips\s*(?:\r?\n)*)", text, flags=re.IGNORECASE)
+        if not match:
+            return text
+
+        prefix = text[: match.end()]
+        rest = text[match.end() :]
+
+        next_section = re.search(r"\n##\s+", rest)
+        snip_block = rest[: next_section.start()] if next_section else rest
+        suffix = rest[next_section.start() :] if next_section else ""
+
+        if SNIP_INDEX_MARKER in snip_block:
+            return text
+
+        heading_pattern = re.compile(
+            r"^(?P<prefix>###\s+)(?P<title>.+?)(?P<attrs>\s*\{[^}]*\})?\s*$",
+            re.MULTILINE,
+        )
+
+        headings: list[tuple[str, str]] = []
+
+        def replace_heading(match: re.Match[str]) -> str:
+            title = match.group("title").strip()
+            if not title:
+                return match.group(0)
+
+            attr_text = match.group("attrs") or ""
+            anchor = self._extract_anchor_id(attr_text)
+
+            if not anchor:
+                anchor = self._build_snip_anchor(title, len(headings) + 1)
+                if attr_text:
+                    inner = attr_text.strip()[1:-1].strip()
+                    inner = f"{inner} " if inner else ""
+                    attr_text = f" {{{inner}#{anchor}}}"
+                else:
+                    attr_text = f" {{#{anchor}}}"
+
+            headings.append((title, anchor))
+            return f"{match.group('prefix')}{title}{attr_text}"
+
+        updated_block = heading_pattern.sub(replace_heading, snip_block)
+
+        if not headings:
+            return text
+
+        index_lines = [
+            f"- [{title}](#{anchor})"
+            for title, anchor in headings
+            if anchor
+        ]
+        if not index_lines:
+            return text
+
+        index_block = f"{SNIP_INDEX_MARKER}\n" + "\n".join(index_lines) + "\n\n"
+        return prefix + index_block + updated_block + suffix
+
+    def _extract_anchor_id(self, attr_text: str | None) -> str | None:
+        """Extrae el identificador #id de un bloque de atributos de Markdown."""
+        if not attr_text:
+            return None
+        match = re.search(r"#([A-Za-z0-9_-]+)", attr_text)
+        return match.group(1) if match else None
+
+    def _build_snip_anchor(self, title: str, index: int) -> str:
+        """Genera anchors predecibles para los títulos de los snips."""
+        slug = self._slugify(title)
+        prefix = f"snip-{index:02d}"
+        return f"{prefix}-{slug}" if slug else prefix
+
+    def _slugify(self, text: str) -> str:
+        """Normaliza títulos a slugs URL-safe."""
+        normalized = unicodedata.normalize("NFKD", text)
+        ascii_text = "".join(ch for ch in normalized if not unicodedata.combining(ch))
+        ascii_text = ascii_text.lower()
+        ascii_text = re.sub(r"[^a-z0-9]+", "-", ascii_text)
+        return ascii_text.strip("-")
 
     def _lift_show_notes_section(self, text: str) -> str:
         """Convierte bloques <details> en secciones H2 y mueve metadatos posteriores."""

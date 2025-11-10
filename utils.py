@@ -388,6 +388,7 @@ def markdown_to_html(md_text: str, title: str = None) -> str:
                 "fenced_code",
                 "tables", 
                 "toc",
+                "attr_list",
             ],
             output_format="html5",
         )

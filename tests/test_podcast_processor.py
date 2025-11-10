@@ -331,3 +331,47 @@ def test_podcast_processor_splits_multi_episode_file(tmp_path):
     md_stems = {p.stem for p in md_files}
     assert any(stem == expected1 or stem.startswith(expected1 + " (") for stem in md_stems)
     assert any(stem == expected2 or stem.startswith(expected2 + " (") for stem in md_stems)
+
+
+def test_podcast_processor_builds_snip_index(tmp_path):
+    """Debe añadir un índice con enlaces a cada snip y anchors en los títulos."""
+
+    incoming = tmp_path / "Incoming"
+    incoming.mkdir()
+    destination = tmp_path / "Podcasts"
+    processor = PodcastProcessor(incoming, destination)
+
+    md = incoming / "snip_index.md"
+    md.write_text(
+        """# Snip Index Episode
+
+## Episode metadata
+- Episode title: Snip Index Episode
+- Show: Index Show
+
+## Snips
+
+### [00:01] Primer snip
+- Punto destacado
+
+### [10:00] Segundo snip
+- Otro punto
+""",
+        encoding="utf-8",
+    )
+
+    moved = processor.process_podcasts()
+
+    processed_md = next(p for p in moved if p.suffix == ".md")
+    md_content = processed_md.read_text(encoding="utf-8")
+
+    assert "<!-- snip-index -->" in md_content
+    assert "- [[00:01] Primer snip](#snip-01-00-01-primer-snip)" in md_content
+    assert "- [[10:00] Segundo snip](#snip-02-10-00-segundo-snip)" in md_content
+    assert "### [00:01] Primer snip {#snip-01-00-01-primer-snip}" in md_content
+    assert "### [10:00] Segundo snip {#snip-02-10-00-segundo-snip}" in md_content
+
+    processed_html = next(p for p in moved if p.suffix == ".html")
+    html_content = processed_html.read_text(encoding="utf-8")
+    assert 'id="snip-01-00-01-primer-snip"' in html_content
+    assert 'href="#snip-02-10-00-segundo-snip"' in html_content
