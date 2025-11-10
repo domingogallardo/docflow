@@ -49,14 +49,16 @@ python process_documents.py md
 - PDFs → organización anual.  
 - Imágenes → copia anual + `gallery.html` scrolleable por año (JPG/PNG/WebP/TIFF/GIF/BMP).
 
-### 1ter) Cola de tweets (`Incoming/tweets.txt`)
-Guarda URLs (una por línea, `#` para comentarios) en `⭐️ Documentación/Incoming/tweets.txt` y ejecútalas cuando quieras:
+### 1ter) Cola de tweets (editor remoto)
+Abre `https://domingogallardo.com/editor`, pega una URL por línea (puedes usar `#` para comentarios) y guarda. Después ejecuta:
 ```bash
 python process_documents.py tweets
 # o dentro del pipeline completo (se ejecuta al inicio de `all`)
 python process_documents.py all
 ```
-Cada URL se convierte en un `.md` con título, enlace, foto de perfil (antes del cuerpo) e imágenes dentro de `Incoming/`. Las métricas del tweet (views, likes, etc.) se descartan y luego se ejecuta automáticamente el flujo Markdown completo: se genera el `.html`, se actualiza el título con IA (si procede) y se mueve el par `.md/.html` a `Posts/Posts <AÑO>/`. La cola se limpia de los elementos procesados (los fallidos permanecen) y `Incoming/tweets.txt` queda listo para volver a usarse aunque se quede vacío.
+El pipeline descarga `https://domingogallardo.com/data/nota.txt`, convierte cada URL en un `.md` con título, enlace, foto de perfil e imágenes, descarta las estadísticas (views/likes), genera el `.html`, aplica título con IA y mueve el par `.md/.html` a `Posts/Posts <AÑO>/`. El fichero remoto no se vacía: sigue disponible para revisarlo o reutilizarlo cuando quieras.
+
+> Si tu editor remoto está protegido con BasicAuth, define `TWEET_EDITOR_USER` y `TWEET_EDITOR_PASS` antes de ejecutar el comando (por ejemplo en tu shell o `.env` local). El script ya apunta a `https://domingogallardo.com/data/nota.txt` por defecto.
 
 ### 1qu) Capturar tweets individuales
 Si quieres archivar un tweet sin pasar por Instapaper, genera un Markdown listo para `Incoming/`:

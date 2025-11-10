@@ -3,9 +3,13 @@
 DocumentProcessor - Clase principal para el procesamiento de documentos
 """
 from pathlib import Path
-from typing import List
+from typing import List, Optional
+
+import requests
+from requests.auth import HTTPBasicAuth
 
 import utils as U
+import config as cfg
 from pdf_processor import PDFProcessor
 from instapaper_processor import InstapaperProcessor
 from podcast_processor import PodcastProcessor
@@ -26,7 +30,6 @@ class DocumentProcessorConfig:
         self.podcasts_dest = base_dir / "Podcasts" / f"Podcasts {year}"
         self.images_dest = base_dir / "Images" / f"Images {year}"
         self.processed_history = self.incoming / "processed_history.txt"
-        self.tweets_queue = self.incoming / "tweets.txt"
 
 
 class DocumentProcessor:
@@ -46,31 +49,30 @@ class DocumentProcessor:
         self.moved_markdown: List[Path] = []
         self.generated_tweets: List[Path] = []
     def process_tweet_urls(self) -> List[Path]:
-        """Procesa la cola Incoming/tweets.txt generando Markdown para cada URL."""
-        queue_path = self.config.tweets_queue
-        if not queue_path.exists():
-            print("🐦 No se encontró Incoming/tweets.txt; nada que procesar")
+        """Lee las URLs del editor remoto y genera Markdown en Incoming/."""
+        try:
+            lines = self._fetch_editor_lines()
+        except Exception as exc:
+            print(f"🐦 No se pudieron leer las URLs del editor: {exc}")
             return []
 
-        lines = queue_path.read_text(encoding="utf-8").splitlines()
-        if not lines:
-            print("🐦 tweets.txt está vacío")
+        urls = [
+            line.strip()
+            for line in lines
+            if line.strip() and not line.strip().startswith("#")
+        ]
+
+        if not urls:
+            print("🐦 El editor remoto no contiene URLs pendientes")
             return []
 
         generated: List[Path] = []
-        remaining_lines: List[str] = []
 
-        for line in lines:
-            stripped = line.strip()
-            if not stripped or stripped.startswith("#"):
-                remaining_lines.append(line)
-                continue
-
+        for url in urls:
             try:
-                markdown, filename = fetch_tweet_markdown(stripped)
+                markdown, filename = fetch_tweet_markdown(url)
             except Exception as exc:
-                print(f"❌ Error procesando {stripped}: {exc}")
-                remaining_lines.append(line)
+                print(f"❌ Error procesando {url}: {exc}")
                 continue
 
             destination = self._unique_destination(self.config.incoming / filename)
@@ -78,7 +80,6 @@ class DocumentProcessor:
             generated.append(destination)
             print(f"🐦 Tweet guardado como {destination.name}")
 
-        self._update_queue_file(queue_path, remaining_lines)
         self.generated_tweets = generated
         return generated
 
@@ -96,13 +97,19 @@ class DocumentProcessor:
                 return candidate
             counter += 1
 
-    def _update_queue_file(self, queue_path: Path, remaining_lines: List[str]) -> None:
-        """Actualiza tweets.txt eliminando URLs ya procesadas (manteniendo el archivo)."""
-        content = "\n".join(remaining_lines).strip("\n")
-        queue_path.write_text(
-            (content + "\n") if content else "",
-            encoding="utf-8",
+    def _fetch_editor_lines(self) -> List[str]:
+        if not cfg.TWEET_EDITOR_URL:
+            raise RuntimeError("TWEET_EDITOR_URL no está configurado")
+        auth: Optional[HTTPBasicAuth] = None
+        if cfg.TWEET_EDITOR_USER and cfg.TWEET_EDITOR_PASS:
+            auth = HTTPBasicAuth(cfg.TWEET_EDITOR_USER, cfg.TWEET_EDITOR_PASS)
+        response = requests.get(
+            cfg.TWEET_EDITOR_URL,
+            auth=auth,
+            timeout=cfg.TWEET_EDITOR_TIMEOUT,
         )
+        response.raise_for_status()
+        return response.text.splitlines()
 
     def process_podcasts(self) -> List[Path]:
         """Procesa archivos de podcast con procesador unificado."""

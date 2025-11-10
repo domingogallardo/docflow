@@ -1,9 +1,21 @@
 #!/usr/bin/env python3
-"""Tests para el procesamiento de la cola Incoming/tweets.txt."""
+"""Tests para la recolección de tweets vía editor remoto."""
 from pathlib import Path
 from unittest.mock import patch
 
+import requests
+
 from pipeline_manager import DocumentProcessor, DocumentProcessorConfig
+
+
+class DummyResponse:
+    def __init__(self, text: str, status_code: int = 200):
+        self.text = text
+        self.status_code = status_code
+
+    def raise_for_status(self):
+        if self.status_code >= 400:
+            raise requests.HTTPError(f"status {self.status_code}")
 
 
 def prepare_processor(tmp_path):
@@ -11,22 +23,28 @@ def prepare_processor(tmp_path):
     incoming.mkdir()
     config = DocumentProcessorConfig(base_dir=tmp_path, year=2025)
     processor = DocumentProcessor(config)
-    return processor, incoming, config.tweets_queue
+    return processor, incoming
 
 
-def test_process_tweet_urls_creates_files_and_cleans_queue(tmp_path):
-    processor, incoming, queue_path = prepare_processor(tmp_path)
-    queue_path.write_text(
+def mock_editor(monkeypatch, text: str, status_code: int = 200):
+    monkeypatch.setattr(
+        "pipeline_manager.requests.get",
+        lambda url, auth=None, timeout=None: DummyResponse(text, status_code),
+    )
+
+
+def test_process_tweet_urls_creates_files_from_editor(tmp_path, monkeypatch):
+    processor, incoming = prepare_processor(tmp_path)
+    mock_editor(
+        monkeypatch,
         "\n".join(
             [
-                "# Tweet backlog",
-                "https://x.com/user/status/1",
+                "# comentarios",
                 "",
+                "https://x.com/user/status/1",
                 "https://x.com/user/status/2",
             ]
-        )
-        + "\n",
-        encoding="utf-8",
+        ),
     )
 
     responses = [
@@ -40,32 +58,27 @@ def test_process_tweet_urls_creates_files_and_cleans_queue(tmp_path):
     assert len(created) == 2
     assert (incoming / "Tweet - user-1.md").exists()
     assert (incoming / "Tweet - user-2.md").exists()
-    # Solo queda el comentario (se preserva el contexto)
-    assert queue_path.read_text(encoding="utf-8") == "# Tweet backlog\n"
 
 
-def test_process_tweet_urls_keeps_failed_entries(tmp_path):
-    processor, incoming, queue_path = prepare_processor(tmp_path)
-    queue_path.write_text("https://x.com/user/status/404\n", encoding="utf-8")
+def test_process_tweet_urls_handles_editor_error(tmp_path, monkeypatch):
+    processor, _ = prepare_processor(tmp_path)
 
-    with patch(
-        "pipeline_manager.fetch_tweet_markdown",
-        side_effect=RuntimeError("fail"),
-    ):
-        created = processor.process_tweet_urls()
+    def failing_get(*args, **kwargs):
+        raise requests.RequestException("boom")
 
+    monkeypatch.setattr("pipeline_manager.requests.get", failing_get)
+    created = processor.process_tweet_urls()
     assert created == []
-    assert queue_path.exists()
-    assert "https://x.com/user/status/404" in queue_path.read_text(encoding="utf-8")
 
 
 def test_process_tweets_pipeline_runs_markdown_subset(tmp_path, monkeypatch):
-    processor, incoming, queue_path = prepare_processor(tmp_path)
-    queue_path.write_text("https://x.com/user/status/1\n", encoding="utf-8")
+    processor, _ = prepare_processor(tmp_path)
+    mock_editor(monkeypatch, "https://x.com/user/status/1")
 
-    responses = ("# T1\n\n[Ver en X](https://x.com/1)\n", "Tweet - user-1.md")
-
-    with patch("pipeline_manager.fetch_tweet_markdown", return_value=responses):
+    with patch(
+        "pipeline_manager.fetch_tweet_markdown",
+        return_value=("# T1\n\n[Ver en X](https://x.com/1)\n", "Tweet - user-1.md"),
+    ):
         captured = {}
 
         def fake_subset(files):
@@ -80,17 +93,16 @@ def test_process_tweets_pipeline_runs_markdown_subset(tmp_path, monkeypatch):
 
         moved = processor.process_tweets_pipeline()
 
-    assert queue_path.read_text(encoding="utf-8") == ""
     assert captured["files"][0].name.startswith("Tweet - user-1")
     assert moved == [processor.config.posts_dest / "Tweet - processed.md"]
 
 
-def test_process_tweets_pipeline_skips_when_no_new(tmp_path, monkeypatch):
-    processor, incoming, queue_path = prepare_processor(tmp_path)
-    queue_path.write_text("", encoding="utf-8")
+def test_process_tweets_pipeline_skips_when_editor_empty(tmp_path, monkeypatch):
+    processor, _ = prepare_processor(tmp_path)
+    mock_editor(monkeypatch, "# sin urls")
 
     def fail_subset(_):
-        raise AssertionError("process_markdown_subset should not be called")
+        raise AssertionError("process_markdown_subset debe omitirse")
 
     monkeypatch.setattr(
         processor.markdown_processor,
@@ -100,17 +112,3 @@ def test_process_tweets_pipeline_skips_when_no_new(tmp_path, monkeypatch):
 
     moved = processor.process_tweets_pipeline()
     assert moved == []
-
-
-def test_process_tweet_urls_preserves_empty_queue_file(tmp_path):
-    processor, incoming, queue_path = prepare_processor(tmp_path)
-    queue_path.write_text("https://x.com/user/status/1\n", encoding="utf-8")
-
-    with patch(
-        "pipeline_manager.fetch_tweet_markdown",
-        return_value=("# T1\n\n[Ver en X](https://x.com/1)\n", "Tweet - user-1.md"),
-    ):
-        processor.process_tweet_urls()
-
-    assert queue_path.exists()
-    assert queue_path.read_text(encoding="utf-8") == ""
