@@ -11,6 +11,7 @@ from instapaper_processor import InstapaperProcessor
 from podcast_processor import PodcastProcessor
 from image_processor import ImageProcessor
 from markdown_processor import MarkdownProcessor
+from utils.tweet_to_markdown import fetch_tweet_markdown
 
 
 class DocumentProcessorConfig:
@@ -25,6 +26,7 @@ class DocumentProcessorConfig:
         self.podcasts_dest = base_dir / "Podcasts" / f"Podcasts {year}"
         self.images_dest = base_dir / "Images" / f"Images {year}"
         self.processed_history = self.incoming / "processed_history.txt"
+        self.tweets_queue = self.incoming / "tweets.txt"
 
 
 class DocumentProcessor:
@@ -42,6 +44,65 @@ class DocumentProcessor:
         self.moved_pdfs: List[Path] = []
         self.moved_images: List[Path] = []
         self.moved_markdown: List[Path] = []
+        self.generated_tweets: List[Path] = []
+    def process_tweet_urls(self) -> List[Path]:
+        """Procesa la cola Incoming/tweets.txt generando Markdown para cada URL."""
+        queue_path = self.config.tweets_queue
+        if not queue_path.exists():
+            print("🐦 No se encontró Incoming/tweets.txt; nada que procesar")
+            return []
+
+        lines = queue_path.read_text(encoding="utf-8").splitlines()
+        if not lines:
+            print("🐦 tweets.txt está vacío")
+            return []
+
+        generated: List[Path] = []
+        remaining_lines: List[str] = []
+
+        for line in lines:
+            stripped = line.strip()
+            if not stripped or stripped.startswith("#"):
+                remaining_lines.append(line)
+                continue
+
+            try:
+                markdown, filename = fetch_tweet_markdown(stripped)
+            except Exception as exc:
+                print(f"❌ Error procesando {stripped}: {exc}")
+                remaining_lines.append(line)
+                continue
+
+            destination = self._unique_destination(self.config.incoming / filename)
+            destination.write_text(markdown, encoding="utf-8")
+            generated.append(destination)
+            print(f"🐦 Tweet guardado como {destination.name}")
+
+        self._update_queue_file(queue_path, remaining_lines)
+        self.generated_tweets = generated
+        return generated
+
+    def _unique_destination(self, target: Path) -> Path:
+        """Genera un nombre único evitando sobrescribir archivos existentes."""
+        if not target.exists():
+            return target
+
+        base = target.stem
+        suffix = target.suffix
+        counter = 1
+        while True:
+            candidate = target.with_name(f"{base} ({counter}){suffix}")
+            if not candidate.exists():
+                return candidate
+            counter += 1
+
+    def _update_queue_file(self, queue_path: Path, remaining_lines: List[str]) -> None:
+        """Actualiza tweets.txt eliminando URLs ya procesadas."""
+        content = "\n".join(remaining_lines).strip("\n")
+        if content:
+            queue_path.write_text(content + "\n", encoding="utf-8")
+        else:
+            queue_path.unlink(missing_ok=True)
 
     def process_podcasts(self) -> List[Path]:
         """Procesa archivos de podcast con procesador unificado."""
@@ -112,6 +173,9 @@ class DocumentProcessor:
     def process_all(self) -> bool:
         """Ejecuta el pipeline completo."""
         try:
+            # Fase 0: Descargar tweets pendientes para convertirlos en Markdown
+            self.process_tweet_urls()
+
             # Fase 1: Procesar podcasts primero
             self.process_podcasts()
 
