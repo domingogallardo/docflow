@@ -63,7 +63,7 @@ def main():
     else:
         mapping = {
             "podcasts": processor.process_podcasts,
-            "tweets": processor.process_tweet_urls,
+            "tweets": processor.process_tweets_pipeline,
             "posts": processor.process_instapaper_posts,
             "pdfs": processor.process_pdfs,
             "images": processor.process_images,

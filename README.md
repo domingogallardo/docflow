@@ -56,7 +56,7 @@ python process_documents.py tweets
 # o dentro del pipeline completo (se ejecuta al inicio de `all`)
 python process_documents.py all
 ```
-Cada URL se convierte en un `.md` con texto, enlace e imágenes dentro de `Incoming/` y la cola se limpia de los elementos procesados (los fallidos permanecen).
+Cada URL se convierte en un `.md` con título, enlace, foto de perfil (antes del cuerpo) e imágenes dentro de `Incoming/`. Las métricas del tweet (views, likes, etc.) se descartan y luego se ejecuta automáticamente el flujo Markdown completo: se genera el `.html`, se actualiza el título con IA (si procede) y se mueve el par `.md/.html` a `Posts/Posts <AÑO>/`. La cola se limpia de los elementos procesados (los fallidos permanecen) y `Incoming/tweets.txt` queda listo para volver a usarse aunque se quede vacío.
 
 ### 1qu) Capturar tweets individuales
 Si quieres archivar un tweet sin pasar por Instapaper, genera un Markdown listo para `Incoming/`:
@@ -65,7 +65,7 @@ python utils/tweet_to_markdown.py https://x.com/usuario/status/123456789
 # Opcional: elegir carpeta o nombre
 python utils/tweet_to_markdown.py <URL> --output-dir ~/Documentos/Incoming --filename "Tweet - demo.md"
 ```
-El script usa Playwright (Chromium headless) y guarda un `.md` con el texto, enlace original e imágenes del post.
+El script usa Playwright (Chromium headless) y guarda un `.md` con título, enlace, foto de perfil y cuerpo sin estadísticas (views/likes), seguido de las imágenes adjuntas del post. Luego ejecuta `process_documents.py tweets` para que el pipeline los convierta a HTML y los archive en `Posts/`.
 
 ### 1bis) Limpiar HTML copiado antes de pegar en Obsidian
 - Copia el fragmento desde el navegador.
