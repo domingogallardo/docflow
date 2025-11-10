@@ -172,6 +172,14 @@ def _split_image_urls(image_urls: List[str]) -> Tuple[Optional[str], List[str]]:
     return avatar, media
 
 
+def _media_markdown_lines(media_urls: List[str]) -> List[str]:
+    lines: List[str] = []
+    for idx, image_url in enumerate(media_urls, start=1):
+        lines.append(f"![image {idx}]({image_url})")
+        lines.append(f"[Enlace original {idx}]({image_url})")
+    return lines
+
+
 def fetch_tweet_markdown(
     url: str,
     *,
@@ -242,8 +250,7 @@ def fetch_tweet_markdown(
 
         if media_urls:
             md_lines.append("")
-            for idx, image_url in enumerate(media_urls, start=1):
-                md_lines.append(f"![image {idx}]({image_url})")
+            md_lines.extend(_media_markdown_lines(media_urls))
             md_lines.append("")
 
         markdown = "\n".join(md_lines).strip() + "\n"

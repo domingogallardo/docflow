@@ -1,6 +1,10 @@
 #!/usr/bin/env python3
 """Tests para utilidades de tweet_to_markdown."""
-from utils.tweet_to_markdown import rebuild_urls_from_lines, strip_tweet_stats
+from utils.tweet_to_markdown import (
+    rebuild_urls_from_lines,
+    strip_tweet_stats,
+    _media_markdown_lines,
+)
 
 
 def test_rebuild_urls_from_lines_merges_wrapped_urls():
@@ -76,3 +80,16 @@ def test_strip_tweet_stats_removes_timestamp_and_counts_block():
     assert "Contenido válido." in result
     for snippet in ("Nov 10", "18.3K", "Views", "175"):
         assert snippet not in result
+
+
+def test_media_markdown_lines_include_direct_links():
+    lines = _media_markdown_lines(
+        [
+            "https://pbs.twimg.com/media/img1?format=jpg",
+            "https://pbs.twimg.com/media/img2?format=jpg",
+        ]
+    )
+    assert lines[0] == "![image 1](https://pbs.twimg.com/media/img1?format=jpg)"
+    assert lines[1] == "[Enlace original 1](https://pbs.twimg.com/media/img1?format=jpg)"
+    assert lines[2] == "![image 2](https://pbs.twimg.com/media/img2?format=jpg)"
+    assert lines[3] == "[Enlace original 2](https://pbs.twimg.com/media/img2?format=jpg)"
