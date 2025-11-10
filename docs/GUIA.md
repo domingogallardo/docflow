@@ -101,10 +101,17 @@ Desde el overlay, **Publicar** copia el `.html` o `.pdf` a `web/public/read/` y 
 6) **Capturar citas en páginas publicadas (Text Fragments)**  
 En `/read/`, se inyecta un botón flotante **❝ Copiar cita** que, al seleccionar texto, copia una cita en **Markdown** con enlace que incluye **Text Fragments** (`#:~:text=`). Esto facilita pegar citas directamente en Obsidian manteniendo el salto a la posición exacta del texto. (*Script*: `article.js`).
 
-7) **Cosechar / Marcar como “completado”**  
+7) **Editor simple protegido (`/editor`)**  
+`web/public/editor.html` se publica como `https://<tu_dominio>/editor` y apunta a `/data/nota.txt` (en el host: `/opt/web-domingo/dynamic-data/nota.txt`).  
+- Both GET y PUT usan la URL absoluta `https://<tu_dominio>/data/nota.txt` y `credentials: 'include'` para que el navegador reenvíe la **BasicAuth** almacenada.  
+- Al abrir `/editor`, deja que el prompt estándar de BasicAuth se encargue de las credenciales (no incrustes `usuario:contraseña@` en la URL porque rompe `fetch`).  
+- Muestra el estado “Cargando…/Guardando…” y cualquier error HTTP (incluido `401` si la sesión expiró).  
+- Ideal para retoques rápidos/automatizados del bloc `nota.txt` sin depender de WebDAV completo.
+
+8) **Cosechar / Marcar como “completado”**  
 Cuando termines de estudiar un documento publicado y (opcionalmente) bumped, usa **Procesado** en el overlay: hace **Unbump**, añade el nombre del fichero a `web/public/read/read_posts.md` y despliega. En el índice público `/read/` aparecerá **bajo un `<hr/>`** en la sección de “completados”, respetando el orden del fichero `read_posts.md`.
 
-8) **Infra y verificación**  
+9) **Infra y verificación**  
 El despliegue usa **doble Nginx**: proxy con TLS en el **host** y Nginx **dentro del contenedor** sirviendo estáticos; `/data/` permite PUT con BasicAuth (host-montado). Verifica `/read/` con `curl` tras el deploy (ver comandos más abajo).
 
 > Tip: si quieres previsualizar el índice sin desplegar, usa `python utils/build_read_index.py`; en deploy se regenerará automáticamente.

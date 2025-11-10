@@ -42,6 +42,7 @@ web/*
 # Allow base article script under /web/public/read/
 !web/public/
 web/public/*
+!web/public/editor.html
 !web/public/read/
 web/public/read/*
 !web/public/read/article.js
