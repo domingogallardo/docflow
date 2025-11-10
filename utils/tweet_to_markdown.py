@@ -175,8 +175,7 @@ def _split_image_urls(image_urls: List[str]) -> Tuple[Optional[str], List[str]]:
 def _media_markdown_lines(media_urls: List[str]) -> List[str]:
     lines: List[str] = []
     for idx, image_url in enumerate(media_urls, start=1):
-        lines.append(f"![image {idx}]({image_url})")
-        lines.append(f"[Enlace original {idx}]({image_url})")
+        lines.append(f"[![image {idx}]({image_url})]({image_url})")
     return lines
 
 

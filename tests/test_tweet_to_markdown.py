@@ -89,7 +89,5 @@ def test_media_markdown_lines_include_direct_links():
             "https://pbs.twimg.com/media/img2?format=jpg",
         ]
     )
-    assert lines[0] == "![image 1](https://pbs.twimg.com/media/img1?format=jpg)"
-    assert lines[1] == "[Enlace original 1](https://pbs.twimg.com/media/img1?format=jpg)"
-    assert lines[2] == "![image 2](https://pbs.twimg.com/media/img2?format=jpg)"
-    assert lines[3] == "[Enlace original 2](https://pbs.twimg.com/media/img2?format=jpg)"
+    assert lines[0] == "[![image 1](https://pbs.twimg.com/media/img1?format=jpg)](https://pbs.twimg.com/media/img1?format=jpg)"
+    assert lines[1] == "[![image 2](https://pbs.twimg.com/media/img2?format=jpg)](https://pbs.twimg.com/media/img2?format=jpg)"
