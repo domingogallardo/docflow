@@ -12,7 +12,7 @@ This repository automates collecting and organizing personal documents (Instapap
 - Install deps: `pip install requests beautifulsoup4 markdownify openai pillow pytest markdown`
 - Tweet capture deps: `pip install playwright && playwright install chromium`
 - Run pipeline: `python process_documents.py all --year 2025`
-- Tweets queue: `python process_documents.py tweets` lee las URLs del editor remoto (`https://domingogallardo.com/data/nota.txt`) y completa el pipeline Markdown/HTML
+- Tweets queue: `python process_documents.py tweets` lee las URLs del editor remoto (`https://domingogallardo.com/data/nota.txt`), evita duplicados usando `Incoming/tweets_processed.txt` y completa el pipeline Markdown/HTML
 - Selective run: `python process_documents.py pdfs md`
 - Markdown run: `python process_documents.py md` (titula con IA y guarda los `.md/.html` junto a Instapaper en `Posts/Posts <AÑO>/`)
 - Tweet → Markdown helper: `python utils/tweet_to_markdown.py https://x.com/...` (guarda en `Incoming/` por defecto)

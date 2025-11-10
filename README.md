@@ -56,7 +56,7 @@ python process_documents.py tweets
 # o dentro del pipeline completo (se ejecuta al inicio de `all`)
 python process_documents.py all
 ```
-El pipeline descarga `https://domingogallardo.com/data/nota.txt`, convierte cada URL en un `.md` con título, enlace, foto de perfil e imágenes, descarta las estadísticas (views/likes), genera el `.html`, aplica título con IA y mueve el par `.md/.html` a `Posts/Posts <AÑO>/`. El fichero remoto no se vacía: sigue disponible para revisarlo o reutilizarlo cuando quieras.
+El pipeline descarga `https://domingogallardo.com/data/nota.txt`, convierte cada URL en un `.md` con título, enlace, foto de perfil e imágenes, descarta las estadísticas (views/likes), genera el `.html`, aplica título con IA y mueve el par `.md/.html` a `Posts/Posts <AÑO>/`. El fichero remoto no se vacía: sigue disponible para revisarlo o reutilizarlo cuando quieras. Para evitar duplicados, se lleva un historial local en `Incoming/tweets_processed.txt`; cualquier URL ya presente allí se omite automáticamente.
 
 > Si tu editor remoto está protegido con BasicAuth, define `TWEET_EDITOR_USER` y `TWEET_EDITOR_PASS` antes de ejecutar el comando (por ejemplo en tu shell o `.env` local). El script ya apunta a `https://domingogallardo.com/data/nota.txt` por defecto.
 

@@ -23,7 +23,7 @@ def prepare_processor(tmp_path):
     incoming.mkdir()
     config = DocumentProcessorConfig(base_dir=tmp_path, year=2025)
     processor = DocumentProcessor(config)
-    return processor, incoming
+    return processor, incoming, config
 
 
 def mock_editor(monkeypatch, text: str, status_code: int = 200):
@@ -34,7 +34,7 @@ def mock_editor(monkeypatch, text: str, status_code: int = 200):
 
 
 def test_process_tweet_urls_creates_files_from_editor(tmp_path, monkeypatch):
-    processor, incoming = prepare_processor(tmp_path)
+    processor, incoming, _ = prepare_processor(tmp_path)
     mock_editor(
         monkeypatch,
         "\n".join(
@@ -61,7 +61,7 @@ def test_process_tweet_urls_creates_files_from_editor(tmp_path, monkeypatch):
 
 
 def test_process_tweet_urls_handles_editor_error(tmp_path, monkeypatch):
-    processor, _ = prepare_processor(tmp_path)
+    processor, _, _ = prepare_processor(tmp_path)
 
     def failing_get(*args, **kwargs):
         raise requests.RequestException("boom")
@@ -72,7 +72,7 @@ def test_process_tweet_urls_handles_editor_error(tmp_path, monkeypatch):
 
 
 def test_process_tweets_pipeline_runs_markdown_subset(tmp_path, monkeypatch):
-    processor, _ = prepare_processor(tmp_path)
+    processor, _, _ = prepare_processor(tmp_path)
     mock_editor(monkeypatch, "https://x.com/user/status/1")
 
     with patch(
@@ -98,7 +98,7 @@ def test_process_tweets_pipeline_runs_markdown_subset(tmp_path, monkeypatch):
 
 
 def test_process_tweets_pipeline_skips_when_editor_empty(tmp_path, monkeypatch):
-    processor, _ = prepare_processor(tmp_path)
+    processor, _, _ = prepare_processor(tmp_path)
     mock_editor(monkeypatch, "# sin urls")
 
     def fail_subset(_):
@@ -112,3 +112,46 @@ def test_process_tweets_pipeline_skips_when_editor_empty(tmp_path, monkeypatch):
 
     moved = processor.process_tweets_pipeline()
     assert moved == []
+
+
+def test_process_tweet_urls_skips_already_processed(tmp_path, monkeypatch):
+    processor, incoming, config = prepare_processor(tmp_path)
+    existing_url = "https://x.com/user/status/1"
+    config.tweets_processed.write_text(existing_url + "\n", encoding="utf-8")
+
+    mock_editor(
+        monkeypatch,
+        "\n".join(
+            [
+                existing_url,
+                "https://x.com/user/status/2",
+            ]
+        ),
+    )
+
+    with patch(
+        "pipeline_manager.fetch_tweet_markdown",
+        return_value=("# T2\n\n[Ver en X](https://x.com/2)\n", "Tweet - user-2.md"),
+    ) as mocked:
+        created = processor.process_tweet_urls()
+
+    assert len(created) == 1
+    assert mocked.call_count == 1
+    assert (incoming / "Tweet - user-2.md").exists()
+    processed_lines = config.tweets_processed.read_text(encoding="utf-8").splitlines()
+    assert processed_lines == [existing_url, "https://x.com/user/status/2"]
+
+
+def test_process_tweet_urls_appends_processed_file(tmp_path, monkeypatch):
+    processor, _, config = prepare_processor(tmp_path)
+    url = "https://x.com/user/status/42"
+    mock_editor(monkeypatch, url)
+
+    with patch(
+        "pipeline_manager.fetch_tweet_markdown",
+        return_value=("# T\n\n[Ver en X](https://x.com/42)\n", "Tweet - user-42.md"),
+    ):
+        processor.process_tweet_urls()
+
+    assert config.tweets_processed.exists()
+    assert config.tweets_processed.read_text(encoding="utf-8") == url + "\n"

@@ -53,7 +53,7 @@ class TitleAIUpdater:
         for md_file in md_files:
             try:
                 old_title, snippet = self._extract_content(md_file)
-                lang = self._detect_language(" ".join(snippet.split()[:20]))
+                lang = self._detect_language(" ".join(snippet.split()[:50]))
                 new_title = self._generate_title(snippet, lang, old_title)
                 print(f"📄 {old_title} → {new_title} [{lang}]")
 
@@ -176,9 +176,12 @@ class TitleAIUpdater:
             raise last_err
         raise RuntimeError("Fallo desconocido en la generación de títulos")
 
-    def _detect_language(self, text20: str) -> str:
+    def _detect_language(self, sample_text: str) -> str:
         system = "Responde EXACTAMENTE una palabra: 'español' o 'inglés'. Sin comillas, sin puntuación."
-        prompt = f"Indica el idioma del siguiente texto (español o inglés):\n\n{text20}\n\nIdioma:"
+        prompt = (
+            "Indica el idioma del siguiente texto (español o inglés):\n\n"
+            f"{sample_text}\n\nIdioma:"
+        )
         try:
             resp = self._ai_text(system=system, prompt=prompt, max_tokens=8)
             lowered = resp.strip().lower()
@@ -189,7 +192,7 @@ class TitleAIUpdater:
         except Exception:
             pass
 
-        if re.search(r"[áéíóúñ¿¡]", text20, re.I):
+        if re.search(r"[áéíóúñ¿¡]", sample_text, re.I):
             return "español"
         return "inglés"
 
