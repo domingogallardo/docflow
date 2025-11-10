@@ -32,6 +32,7 @@
 # Pipeline completo o por tipos
 python process_documents.py all [--year AAAA]
 python process_documents.py posts podcasts pdfs
+python process_documents.py tweets
 
 # Convertir Markdown a HTML
 python md_to_html.py
@@ -71,6 +72,8 @@ python process_documents.py images
 Todo esto lo orquesta `process_documents.py` y procesadores específicos `*_processor.py`.
 
 > **Atajo para tweets**: `python utils/tweet_to_markdown.py https://x.com/...` descarga el tweet con Playwright y lo guarda como `.md` (texto + imágenes) directamente en `Incoming/`.
+
+> **Cola de tweets**: añade URLs (una por línea, puedes usar comentarios con `#`) en `Incoming/tweets.txt`. Ejecuta `python process_documents.py tweets` o el pipeline completo para convertirlos automáticamente a Markdown e ir limpiando la lista.
 
 3) **Priorizar para leer → Bump/Unbump**  
 - **Marca con ⭐ en Instapaper**: si añades una estrella al **título** del artículo en Instapaper, el pipeline **propaga** ese “destacado” a HTML/MD y **bumpea automáticamente** el HTML (ajusta su `mtime` al futuro) para que quede arriba en listados por fecha.  

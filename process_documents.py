@@ -35,7 +35,7 @@ def parse_args():
     p.add_argument(
         "targets",
         nargs="+",
-        choices=["pdfs", "podcasts", "posts", "images", "md", "all"],
+        choices=["tweets", "pdfs", "podcasts", "posts", "images", "md", "all"],
         help="Procesa solo los tipos indicados",
     )
     return p.parse_args()
@@ -63,6 +63,7 @@ def main():
     else:
         mapping = {
             "podcasts": processor.process_podcasts,
+            "tweets": processor.process_tweet_urls,
             "posts": processor.process_instapaper_posts,
             "pdfs": processor.process_pdfs,
             "images": processor.process_images,

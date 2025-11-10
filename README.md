@@ -39,6 +39,7 @@ docflow automatiza **recolectar → procesar → priorizar (bump) → leer → p
 python process_documents.py all [--year 2025]
 
 # Selectivo
+python process_documents.py tweets
 python process_documents.py images
 python process_documents.py md
 ```
@@ -48,7 +49,16 @@ python process_documents.py md
 - PDFs → organización anual.  
 - Imágenes → copia anual + `gallery.html` scrolleable por año (JPG/PNG/WebP/TIFF/GIF/BMP).
 
-### 1ter) Capturar tweets individuales
+### 1ter) Cola de tweets (`Incoming/tweets.txt`)
+Guarda URLs (una por línea, `#` para comentarios) en `⭐️ Documentación/Incoming/tweets.txt` y ejecútalas cuando quieras:
+```bash
+python process_documents.py tweets
+# o dentro del pipeline completo (se ejecuta al inicio de `all`)
+python process_documents.py all
+```
+Cada URL se convierte en un `.md` con texto, enlace e imágenes dentro de `Incoming/` y la cola se limpia de los elementos procesados (los fallidos permanecen).
+
+### 1qu) Capturar tweets individuales
 Si quieres archivar un tweet sin pasar por Instapaper, genera un Markdown listo para `Incoming/`:
 ```bash
 python utils/tweet_to_markdown.py https://x.com/usuario/status/123456789
