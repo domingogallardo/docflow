@@ -3,7 +3,7 @@
 DocumentProcessor - Clase principal para el procesamiento de documentos
 """
 from pathlib import Path
-from typing import List, Optional
+from typing import List, Optional, Set
 
 import requests
 from requests.auth import HTTPBasicAuth
@@ -30,6 +30,7 @@ class DocumentProcessorConfig:
         self.podcasts_dest = base_dir / "Podcasts" / f"Podcasts {year}"
         self.images_dest = base_dir / "Images" / f"Images {year}"
         self.processed_history = self.incoming / "processed_history.txt"
+        self.tweets_processed = self.incoming / "tweets_processed.txt"
 
 
 class DocumentProcessor:
@@ -67,8 +68,13 @@ class DocumentProcessor:
             return []
 
         generated: List[Path] = []
+        processed_urls = self._load_processed_urls()
+        written_urls: List[str] = []
 
         for url in urls:
+            if url in processed_urls:
+                print(f"⏭️  Saltando (ya procesado): {url}")
+                continue
             try:
                 markdown, filename = fetch_tweet_markdown(url)
             except Exception as exc:
@@ -78,7 +84,11 @@ class DocumentProcessor:
             destination = self._unique_destination(self.config.incoming / filename)
             destination.write_text(markdown, encoding="utf-8")
             generated.append(destination)
+            written_urls.append(url)
             print(f"🐦 Tweet guardado como {destination.name}")
+
+        if written_urls:
+            self._append_processed_urls(written_urls)
 
         self.generated_tweets = generated
         return generated
@@ -110,6 +120,20 @@ class DocumentProcessor:
         )
         response.raise_for_status()
         return response.text.splitlines()
+
+    def _load_processed_urls(self) -> Set[str]:
+        path = self.config.tweets_processed
+        if not path.exists():
+            return set()
+        lines = [line.strip() for line in path.read_text(encoding="utf-8").splitlines()]
+        return {line for line in lines if line}
+
+    def _append_processed_urls(self, urls: List[str]) -> None:
+        path = self.config.tweets_processed
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with path.open("a", encoding="utf-8") as handle:
+            for url in urls:
+                handle.write(url + "\n")
 
     def process_podcasts(self) -> List[Path]:
         """Procesa archivos de podcast con procesador unificado."""
