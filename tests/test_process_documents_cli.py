@@ -20,7 +20,7 @@ def run_main(monkeypatch, tmp_path, args):
             calls.append("podcasts")
             return []
 
-        def process_tweet_urls(self):
+        def process_tweets_pipeline(self):
             calls.append("tweets")
             return []
         def process_instapaper_posts(self):

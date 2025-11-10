@@ -57,3 +57,60 @@ def test_process_tweet_urls_keeps_failed_entries(tmp_path):
     assert created == []
     assert queue_path.exists()
     assert "https://x.com/user/status/404" in queue_path.read_text(encoding="utf-8")
+
+
+def test_process_tweets_pipeline_runs_markdown_subset(tmp_path, monkeypatch):
+    processor, incoming, queue_path = prepare_processor(tmp_path)
+    queue_path.write_text("https://x.com/user/status/1\n", encoding="utf-8")
+
+    responses = ("# T1\n\n[Ver en X](https://x.com/1)\n", "Tweet - user-1.md")
+
+    with patch("pipeline_manager.fetch_tweet_markdown", return_value=responses):
+        captured = {}
+
+        def fake_subset(files):
+            captured["files"] = list(files)
+            return [processor.config.posts_dest / "Tweet - processed.md"]
+
+        monkeypatch.setattr(
+            processor.markdown_processor,
+            "process_markdown_subset",
+            fake_subset,
+        )
+
+        moved = processor.process_tweets_pipeline()
+
+    assert queue_path.read_text(encoding="utf-8") == ""
+    assert captured["files"][0].name.startswith("Tweet - user-1")
+    assert moved == [processor.config.posts_dest / "Tweet - processed.md"]
+
+
+def test_process_tweets_pipeline_skips_when_no_new(tmp_path, monkeypatch):
+    processor, incoming, queue_path = prepare_processor(tmp_path)
+    queue_path.write_text("", encoding="utf-8")
+
+    def fail_subset(_):
+        raise AssertionError("process_markdown_subset should not be called")
+
+    monkeypatch.setattr(
+        processor.markdown_processor,
+        "process_markdown_subset",
+        fail_subset,
+    )
+
+    moved = processor.process_tweets_pipeline()
+    assert moved == []
+
+
+def test_process_tweet_urls_preserves_empty_queue_file(tmp_path):
+    processor, incoming, queue_path = prepare_processor(tmp_path)
+    queue_path.write_text("https://x.com/user/status/1\n", encoding="utf-8")
+
+    with patch(
+        "pipeline_manager.fetch_tweet_markdown",
+        return_value=("# T1\n\n[Ver en X](https://x.com/1)\n", "Tweet - user-1.md"),
+    ):
+        processor.process_tweet_urls()
+
+    assert queue_path.exists()
+    assert queue_path.read_text(encoding="utf-8") == ""

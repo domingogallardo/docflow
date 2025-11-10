@@ -26,8 +26,6 @@ class MarkdownProcessor:
 
     def process_markdown(self) -> List[Path]:
         """Convierte Markdown a HTML, aplica márgenes y mueve ambos archivos al destino anual."""
-        print("📝 Procesando archivos Markdown...")
-
         markdown_files = [
             path
             for path in self.incoming_dir.glob("*.md")
@@ -37,6 +35,36 @@ class MarkdownProcessor:
         if not markdown_files:
             print("📝 No se encontraron archivos Markdown para procesar")
             return []
+
+        return self._process_markdown_batch(
+            markdown_files,
+            context="📝 Procesando archivos Markdown...",
+        )
+
+    def process_markdown_subset(self, markdown_files: Iterable[Path]) -> List[Path]:
+        """Procesa un subconjunto específico de Markdown (por ejemplo, tweets recién descargados)."""
+        selected: List[Path] = []
+        for raw_path in markdown_files:
+            path = Path(raw_path)
+            if self._is_generic_markdown(path):
+                selected.append(path)
+
+        if not selected:
+            print("📝 No hay archivos Markdown válidos para procesar")
+            return []
+
+        return self._process_markdown_batch(
+            selected,
+            context=f"📝 Procesando {len(selected)} archivo(s) Markdown seleccionados...",
+        )
+
+    def _process_markdown_batch(
+        self,
+        markdown_files: List[Path],
+        *,
+        context: str,
+    ) -> List[Path]:
+        print(context)
 
         generated_html: List[Path] = []
         for md_file in markdown_files:
@@ -63,14 +91,19 @@ class MarkdownProcessor:
 
             U.add_margins_to_html_files(self.incoming_dir, file_filter=_filter)
 
-        self.title_updater.update_titles(markdown_files, rename_markdown_pair)
+        tracked_paths: List[Path] = []
 
-        # Recalcular tras posibles renombrados por IA
-        markdown_files = [
-            path
-            for path in self.incoming_dir.glob("*.md")
-            if self._is_generic_markdown(path)
-        ]
+        def _rename(md_path: Path, new_title: str) -> Path:
+            new_path = rename_markdown_pair(md_path, new_title)
+            tracked_paths.append(new_path)
+            return new_path
+
+        self.title_updater.update_titles(markdown_files, _rename)
+
+        if tracked_paths:
+            markdown_files = tracked_paths
+        else:
+            markdown_files = [path for path in markdown_files if path.exists()]
 
         files_to_move = self._collect_move_candidates(markdown_files)
         moved_files = U.move_files_with_replacement(files_to_move, self.destination_dir)

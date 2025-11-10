@@ -97,12 +97,12 @@ class DocumentProcessor:
             counter += 1
 
     def _update_queue_file(self, queue_path: Path, remaining_lines: List[str]) -> None:
-        """Actualiza tweets.txt eliminando URLs ya procesadas."""
+        """Actualiza tweets.txt eliminando URLs ya procesadas (manteniendo el archivo)."""
         content = "\n".join(remaining_lines).strip("\n")
-        if content:
-            queue_path.write_text(content + "\n", encoding="utf-8")
-        else:
-            queue_path.unlink(missing_ok=True)
+        queue_path.write_text(
+            (content + "\n") if content else "",
+            encoding="utf-8",
+        )
 
     def process_podcasts(self) -> List[Path]:
         """Procesa archivos de podcast con procesador unificado."""
@@ -151,6 +151,16 @@ class DocumentProcessor:
     def process_markdown(self) -> List[Path]:
         """Procesa archivos Markdown genéricos."""
         moved_markdown = self.markdown_processor.process_markdown()
+        self.moved_markdown = moved_markdown
+        return moved_markdown
+    
+    def process_tweets_pipeline(self) -> List[Path]:
+        """Procesa la cola de tweets y completa el flujo Markdown para moverlos a Posts."""
+        generated = self.process_tweet_urls()
+        if not generated:
+            print("🐦 No hay nuevos tweets para convertir en HTML")
+            return []
+        moved_markdown = self.markdown_processor.process_markdown_subset(generated)
         self.moved_markdown = moved_markdown
         return moved_markdown
     

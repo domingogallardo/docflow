@@ -3,9 +3,10 @@
 from __future__ import annotations
 
 import argparse
+import re
 from pathlib import Path
 from urllib.parse import urlparse
-from typing import List
+from typing import List, Optional, Tuple
 
 try:  # pragma: no cover - import opcional
     from playwright.sync_api import TimeoutError as PlaywrightTimeoutError, sync_playwright
@@ -19,6 +20,34 @@ USER_AGENT = (
     "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
     "AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Safari/605.1.15"
 )
+
+
+STAT_KEYWORDS = (
+    "retweet",
+    "retuits",
+    "retuit",
+    "repost",
+    "republicaciones",
+    "quotes",
+    "citas",
+    "likes",
+    "me gusta",
+    "favoritos",
+    "bookmarks",
+    "marcadores",
+    "views",
+    "visualizaciones",
+    "impresiones",
+    "replies",
+    "respuestas",
+    "shares",
+    "compartidos",
+    "guardados",
+    "read repl",
+    "leer resp",
+)
+STAT_NUMBER_RE = re.compile(r"^\d[\d.,]*(?:\s?[kmbKMB])?$")
+TIME_RE = re.compile(r"\b\d{1,2}:\d{2}\b")
 
 
 def rebuild_urls_from_lines(text: str) -> str:
@@ -75,6 +104,74 @@ def _build_filename(url: str, author_handle: str | None) -> str:
     return f"{_safe_filename(base)}.md"
 
 
+def _is_timestamp_line(line: str) -> bool:
+    lower = line.lower()
+    return bool(TIME_RE.search(line) and ("am" in lower or "pm" in lower))
+
+
+def _is_keyword_stat(line: str) -> bool:
+    lower = line.lower()
+    return any(keyword in lower for keyword in STAT_KEYWORDS)
+
+
+def _is_numeric_stat(line: str) -> bool:
+    if line == "·":
+        return True
+    if STAT_NUMBER_RE.match(line):
+        return True
+    if line.lower().startswith("read ") and "repl" in line.lower():
+        return True
+    return False
+
+
+def _collapse_blank_lines(lines: List[str]) -> List[str]:
+    collapsed: List[str] = []
+    previous_blank = True
+    for line in lines:
+        if not line:
+            if previous_blank:
+                continue
+            collapsed.append("")
+            previous_blank = True
+            continue
+        collapsed.append(line)
+        previous_blank = False
+    if collapsed and not collapsed[-1]:
+        collapsed.pop()
+    return collapsed
+
+
+def strip_tweet_stats(text: str) -> str:
+    """Elimina bloques finales con métricas (views, likes, hora, etc.)."""
+    lines = [line.strip() for line in text.splitlines()]
+    lines = _collapse_blank_lines(lines)
+
+    while lines and not lines[-1]:
+        lines.pop()
+
+    while lines and (
+        _is_timestamp_line(lines[-1])
+        or _is_keyword_stat(lines[-1])
+        or _is_numeric_stat(lines[-1])
+    ):
+        lines.pop()
+        while lines and not lines[-1]:
+            lines.pop()
+
+    return "\n".join(lines).strip()
+
+
+def _split_image_urls(image_urls: List[str]) -> Tuple[Optional[str], List[str]]:
+    avatar = None
+    media: List[str] = []
+    for url in image_urls:
+        if avatar is None and "profile_images" in url:
+            avatar = url
+            continue
+        media.append(url)
+    return avatar, media
+
+
 def fetch_tweet_markdown(
     url: str,
     *,
@@ -111,7 +208,7 @@ def fetch_tweet_markdown(
                 author_name = text
 
         raw_text = article.inner_text()
-        body_text = rebuild_urls_from_lines(raw_text).strip()
+        body_text = strip_tweet_stats(rebuild_urls_from_lines(raw_text).strip())
 
         image_urls: List[str] = []
         seen: set[str] = set()
@@ -133,14 +230,20 @@ def fetch_tweet_markdown(
         title = _build_title(author_name, author_handle)
         filename = _build_filename(url, author_handle)
 
+        avatar_url, media_urls = _split_image_urls(image_urls)
+
         md_lines = [f"# {title}", "", f"[Ver en X]({url})"]
 
-        if body_text:
-            md_lines.extend(["", body_text, ""])
+        if avatar_url:
+            md_lines.extend(["", f"![avatar]({avatar_url})"])
 
-        for idx, image_url in enumerate(image_urls, start=1):
-            md_lines.append(f"![image {idx}]({image_url})")
-        if image_urls:
+        if body_text:
+            md_lines.extend(["", body_text])
+
+        if media_urls:
+            md_lines.append("")
+            for idx, image_url in enumerate(media_urls, start=1):
+                md_lines.append(f"![image {idx}]({image_url})")
             md_lines.append("")
 
         markdown = "\n".join(md_lines).strip() + "\n"

@@ -71,9 +71,9 @@ python process_documents.py images
 - Imágenes (copia anual + galería `gallery.html` con JPG/PNG/WebP/TIFF/GIF/BMP).  
 Todo esto lo orquesta `process_documents.py` y procesadores específicos `*_processor.py`.
 
-> **Atajo para tweets**: `python utils/tweet_to_markdown.py https://x.com/...` descarga el tweet con Playwright y lo guarda como `.md` (texto + imágenes) directamente en `Incoming/`.
+> **Atajo para tweets**: `python utils/tweet_to_markdown.py https://x.com/...` descarga el tweet con Playwright y lo guarda como `.md` con título, enlace, foto de perfil y cuerpo sin métricas (views/likes), seguido de las imágenes adjuntas.
 
-> **Cola de tweets**: añade URLs (una por línea, puedes usar comentarios con `#`) en `Incoming/tweets.txt`. Ejecuta `python process_documents.py tweets` o el pipeline completo para convertirlos automáticamente a Markdown e ir limpiando la lista.
+> **Cola de tweets**: añade URLs (una por línea, puedes usar comentarios con `#`) en `Incoming/tweets.txt`. Ejecuta `python process_documents.py tweets` (o el pipeline completo) para generar el `.md`, convertirlo a `.html`, aplicar título/estilos y mover ambos a `Posts/Posts <AÑO>/` en un solo paso. El fichero `tweets.txt` permanece aunque quede vacío.
 
 3) **Priorizar para leer → Bump/Unbump**  
 - **Marca con ⭐ en Instapaper**: si añades una estrella al **título** del artículo en Instapaper, el pipeline **propaga** ese “destacado” a HTML/MD y **bumpea automáticamente** el HTML (ajusta su `mtime` al futuro) para que quede arriba en listados por fecha.  
