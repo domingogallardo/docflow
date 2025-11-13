@@ -56,7 +56,7 @@ playwright install chromium
 ## Flujo de trabajo detallado
 
 1) **Recolectar → Estructura base**  
-Guarda tus fuentes en `⭐️ Documentación/Incoming/` (o en sus carpetas de origen) y el pipeline las ordenará en carpetas por año: `Posts/Posts <AÑO>/`, `Podcasts/Podcasts <AÑO>/`, `Pdfs/Pdfs <AÑO>/`, `Images/Images <AÑO>/`.
+Guarda tus fuentes en `⭐️ Documentación/Incoming/` (o en sus carpetas de origen) y el pipeline las ordenará en carpetas por año: `Posts/Posts <AÑO>/`, `Podcasts/Podcasts <AÑO>/`, `Pdfs/Pdfs <AÑO>/`, `Images/Images <AÑO>/`, `Tweets/Tweets <AÑO>/`.
 
 2) **Procesar → Pipeline**  
 ```bash
@@ -65,7 +65,7 @@ python process_documents.py all --year 2025
 python process_documents.py pdfs md
 python process_documents.py images
 ```
-- Instapaper (HTML + MD limpios, título con IA, márgenes, metadatos y nombres de archivo sanos). Incluye los tweets que guardes en Instapaper y conserva la palabra `Tweet` en los nombres generados.  
+- Instapaper (HTML + MD limpios, título con IA, márgenes, metadatos y nombres de archivo sanos).  
 - Podcasts Snipd (MD → HTML limpio, tipografía del sistema, botones de audio).  
 - PDFs (organización anual).  
 - Imágenes (copia anual + galería `gallery.html` con JPG/PNG/WebP/TIFF/GIF/BMP).  
@@ -73,7 +73,7 @@ Todo esto lo orquesta `process_documents.py` y procesadores específicos `*_proc
 
 > **Atajo para tweets**: `python utils/tweet_to_markdown.py https://x.com/...` descarga el tweet con Playwright y lo guarda como `.md` con título, enlace, foto de perfil y cuerpo sin métricas (views/likes), seguido de las imágenes adjuntas.
 
-> **Cola de tweets**: añade URLs (una por línea, puedes usar comentarios con `#`) en `https://domingogallardo.com/editor`. El pipeline lee `https://domingogallardo.com/data/nota.txt` directamente, así que basta con ejecutar `python process_documents.py tweets` (o el pipeline completo) para generar el `.md`, convertirlo a `.html`, aplicar título/estilos y mover ambos a `Posts/Posts <AÑO>/` en un solo paso. El contenido remoto nunca se borra automáticamente y, para evitar duplicados, se lleva un historial en `Incoming/tweets_processed.txt`.
+> **Cola de tweets**: añade URLs (una por línea, puedes usar comentarios con `#`) en `https://domingogallardo.com/editor`. El pipeline lee `https://domingogallardo.com/data/nota.txt` directamente, así que basta con ejecutar `python process_documents.py tweets` (o el pipeline completo) para generar el `.md`, convertirlo a `.html`, aplicar título/estilos y mover ambos a `Tweets/Tweets <AÑO>/` en un solo paso. El contenido remoto nunca se borra automáticamente y, para evitar duplicados, se lleva un historial en `Incoming/tweets_processed.txt`.
 
 3) **Priorizar para leer → Bump/Unbump**  
 - **Marca con ⭐ en Instapaper**: si añades una estrella al **título** del artículo en Instapaper, el pipeline **propaga** ese “destacado” a HTML/MD y **bumpea automáticamente** el HTML (ajusta su `mtime` al futuro) para que quede arriba en listados por fecha.  

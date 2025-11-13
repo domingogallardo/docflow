@@ -3,7 +3,7 @@
 DocumentProcessor - Clase principal para el procesamiento de documentos
 """
 from pathlib import Path
-from typing import List, Optional, Set
+from typing import Iterable, List, Optional, Set
 
 import requests
 from requests.auth import HTTPBasicAuth
@@ -29,6 +29,7 @@ class DocumentProcessorConfig:
         self.pdfs_dest = base_dir / "Pdfs" / f"Pdfs {year}"
         self.podcasts_dest = base_dir / "Podcasts" / f"Podcasts {year}"
         self.images_dest = base_dir / "Images" / f"Images {year}"
+        self.tweets_dest = base_dir / "Tweets" / f"Tweets {year}"
         self.processed_history = self.incoming / "processed_history.txt"
         self.tweets_processed = self.incoming / "tweets_processed.txt"
 
@@ -43,11 +44,13 @@ class DocumentProcessor:
         self.podcast_processor = PodcastProcessor(self.config.incoming, self.config.podcasts_dest)
         self.image_processor = ImageProcessor(self.config.incoming, self.config.images_dest)
         self.markdown_processor = MarkdownProcessor(self.config.incoming, self.config.posts_dest)
+        self.tweet_processor = MarkdownProcessor(self.config.incoming, self.config.tweets_dest)
         self.moved_podcasts: List[Path] = []
         self.moved_posts: List[Path] = []
         self.moved_pdfs: List[Path] = []
         self.moved_images: List[Path] = []
         self.moved_markdown: List[Path] = []
+        self.moved_tweets: List[Path] = []
         self.generated_tweets: List[Path] = []
     def process_tweet_urls(self) -> List[Path]:
         """Lee las URLs del editor remoto y genera Markdown en Incoming/."""
@@ -186,14 +189,19 @@ class DocumentProcessor:
         return moved_markdown
     
     def process_tweets_pipeline(self) -> List[Path]:
-        """Procesa la cola de tweets y completa el flujo Markdown para moverlos a Posts."""
+        """Procesa la cola de tweets y mueve los resultados a la carpeta anual de Tweets."""
         generated = self.process_tweet_urls()
-        if not generated:
+        return self._process_tweet_markdown_subset(generated)
+
+    def _process_tweet_markdown_subset(self, markdown_files: Iterable[Path]) -> List[Path]:
+        files = [Path(path) for path in markdown_files if Path(path).exists()]
+        if not files:
             print("🐦 No hay nuevos tweets para convertir en HTML")
+            self.moved_tweets = []
             return []
-        moved_markdown = self.markdown_processor.process_markdown_subset(generated)
-        self.moved_markdown = moved_markdown
-        return moved_markdown
+        moved = self.tweet_processor.process_markdown_subset(files)
+        self.moved_tweets = moved
+        return moved
     
     def register_all_files(self) -> None:
         """Registra todos los archivos procesados en el historial."""
@@ -203,6 +211,7 @@ class DocumentProcessor:
             + self.moved_podcasts
             + self.moved_images
             + self.moved_markdown
+            + self.moved_tweets
         )
         if all_files:
             U.register_paths(
@@ -215,7 +224,9 @@ class DocumentProcessor:
         """Ejecuta el pipeline completo."""
         try:
             # Fase 0: Descargar tweets pendientes para convertirlos en Markdown
-            self.process_tweet_urls()
+            tweet_sources = self.process_tweet_urls()
+            if tweet_sources:
+                self._process_tweet_markdown_subset(tweet_sources)
 
             # Fase 1: Procesar podcasts primero
             self.process_podcasts()

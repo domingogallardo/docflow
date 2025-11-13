@@ -17,14 +17,14 @@ Este documento describe cómo entra, se procesa y se publica cada tipo de conten
 
 | Entrada | Origen | Qué llega | Procesamiento |
 | --- | --- | --- | --- |
-| **A. Instapaper** | Artículos, newsletters y **tweets guardados en Instapaper** | Markdown/HTML exportado | `python process_documents.py posts` → `InstapaperProcessor` |
+| **A. Instapaper** | Artículos y newsletters guardados en Instapaper | Markdown/HTML exportado | `python process_documents.py posts` → `InstapaperProcessor` |
 | **B. Snipd** | Snips de podcasts con transcripción | Markdown export Snipd | `python process_documents.py podcasts` → `PodcastProcessor` |
 | **C. Incoming local** | PDFs, `.md` u otros ficheros que guardas en `⭐️ Documentación/Incoming` | `.pdf`, `.md`, imágenes | `python process_documents.py pdfs/md/images` → procesadores específicos |
-| **D. Editor remoto de tweets** | URLs en `https://domingogallardo.com/data/nota.txt` (una por línea, `#` para comentarios) | Tweets individuales | `python process_documents.py tweets` → `process_tweets_pipeline()` → `MarkdownProcessor.process_markdown_subset()` |
+| **D. Editor remoto de tweets** | URLs en `https://domingogallardo.com/data/nota.txt` (una por línea, `#` para comentarios) | Tweets individuales | `python process_documents.py tweets` → `process_tweets_pipeline()` → `MarkdownProcessor.process_markdown_subset()` → `Tweets/Tweets <AÑO>/` |
 
 Notas importantes del punto D:
 - El pipeline de tweets descarga la lista remota, evita duplicados con `Incoming/tweets_processed.txt` y convierte cada tweet en Markdown usando `utils/tweet_to_markdown.fetch_tweet_markdown`.
-- Los tweets que ya van a Instapaper entran por A, así que este editor remoto es **una entrada adicional**, no un duplicado.
+- Los tweets se gestionan exclusivamente mediante el editor remoto o herramientas dedicadas; Instapaper ya no se usa para capturarlos.
 
 ---
 
@@ -39,13 +39,13 @@ python process_documents.py [targets] [--year 2025]
 - `posts` → Instapaper
 - `podcasts` → Snipd
 - `pdfs`, `md`, `images` → Incoming
-- `tweets` → editor remoto de tweets
+- `tweets` → editor remoto de tweets (envía el resultado a `Tweets/Tweets <AÑO>/`)
 - `all` → ejecuta todos y registra rutas
 
 Cada procesador:
 1. limpia/convierten el contenido,
 2. genera HTML si aplica,
-3. lo mueve a su carpeta anual (`Posts/Posts 2025/`, `Podcasts/Podcasts 2025/`, `Pdfs/Pdfs 2025/`, etc.) dentro de `BASE_DIR`.
+3. lo mueve a su carpeta anual (`Posts/Posts 2025/`, `Podcasts/Podcasts 2025/`, `Pdfs/Pdfs 2025/`, `Tweets/Tweets 2025/`, etc.) dentro de `BASE_DIR`.
 
 ---
 
@@ -111,7 +111,7 @@ En Obsidian:
    Esto:
    - descarga la lista,
    - salta los que ya estén en `Incoming/tweets_processed.txt`,
-   - convierte el nuevo tweet a Markdown y lo mete en la carpeta anual.
+   - convierte el nuevo tweet a Markdown/HTML y lo mueve a `Tweets/Tweets 2025/`.
 3. Abres el servidor local (`serve_docs.py`), ves el tweet como página.
 4. Pulsas **Publicar**.
 5. Ejecutas `web/deploy.sh`.
