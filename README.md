@@ -43,7 +43,7 @@ python process_documents.py tweets
 python process_documents.py images
 python process_documents.py md
 ```
-- Instapaper → HTML/MD limpios (título con IA, márgenes, metadatos, nombres saneados). Incluye los tweets guardados en Instapaper y mantiene la palabra `Tweet` en los nombres generados.  
+- Instapaper → HTML/MD limpios (título con IA, márgenes, metadatos, nombres saneados).
 - Snipd → HTML limpio con tipografía del sistema y botones de audio.  
 - Markdown → conversión a HTML con márgenes + título IA (si hay API) + archivado en `Posts/Posts <AÑO>/`.  
 - PDFs → organización anual.  
@@ -56,7 +56,7 @@ python process_documents.py tweets
 # o dentro del pipeline completo (se ejecuta al inicio de `all`)
 python process_documents.py all
 ```
-El pipeline descarga `https://domingogallardo.com/data/nota.txt`, convierte cada URL en un `.md` con título, enlace, foto de perfil e imágenes, descarta las estadísticas (views/likes), genera el `.html`, aplica título con IA y mueve el par `.md/.html` a `Posts/Posts <AÑO>/`. El fichero remoto no se vacía: sigue disponible para revisarlo o reutilizarlo cuando quieras. Para evitar duplicados, se lleva un historial local en `Incoming/tweets_processed.txt`; cualquier URL ya presente allí se omite automáticamente.
+El pipeline descarga `https://domingogallardo.com/data/nota.txt`, convierte cada URL en un `.md` con título, enlace, foto de perfil e imágenes, descarta las estadísticas (views/likes), genera el `.html`, aplica título con IA y mueve el par `.md/.html` a `Tweets/Tweets <AÑO>/`. El fichero remoto no se vacía: sigue disponible para revisarlo o reutilizarlo cuando quieras. Para evitar duplicados, se lleva un historial local en `Incoming/tweets_processed.txt`; cualquier URL ya presente allí se omite automáticamente.
 
 > Si tu editor remoto está protegido con BasicAuth, define `TWEET_EDITOR_USER` y `TWEET_EDITOR_PASS` antes de ejecutar el comando (por ejemplo en tu shell o `.env` local). El script ya apunta a `https://domingogallardo.com/data/nota.txt` por defecto.
 
@@ -67,7 +67,7 @@ python utils/tweet_to_markdown.py https://x.com/usuario/status/123456789
 # Opcional: elegir carpeta o nombre
 python utils/tweet_to_markdown.py <URL> --output-dir ~/Documentos/Incoming --filename "Tweet - demo.md"
 ```
-El script usa Playwright (Chromium headless) y guarda un `.md` con título, enlace, foto de perfil y cuerpo sin estadísticas (views/likes), seguido de las imágenes adjuntas del post. Luego ejecuta `process_documents.py tweets` para que el pipeline los convierta a HTML y los archive en `Posts/`.
+El script usa Playwright (Chromium headless) y guarda un `.md` con título, enlace, foto de perfil y cuerpo sin estadísticas (views/likes), seguido de las imágenes adjuntas del post. Luego ejecuta `process_documents.py tweets` para que el pipeline los convierta a HTML y los archive en `Tweets/`.
 
 ### 1bis) Limpiar HTML copiado antes de pegar en Obsidian
 - Copia el fragmento desde el navegador.
@@ -102,6 +102,7 @@ PORT=8000 SERVE_DIR="/ruta/a/⭐️ Documentación" python utils/serve_docs.py
 │   ├── processed_history.txt
 │   └── ...
 ├── Posts/Posts <AÑO>/
+├── Tweets/Tweets <AÑO>/
 ├── Podcasts/Podcasts <AÑO>/
 ├── Pdfs/Pdfs <AÑO>/
 ├── Images/Images <AÑO>/

@@ -83,10 +83,10 @@ def test_process_tweets_pipeline_runs_markdown_subset(tmp_path, monkeypatch):
 
         def fake_subset(files):
             captured["files"] = list(files)
-            return [processor.config.posts_dest / "Tweet - processed.md"]
+            return [processor.config.tweets_dest / "Tweet - processed.md"]
 
         monkeypatch.setattr(
-            processor.markdown_processor,
+            processor.tweet_processor,
             "process_markdown_subset",
             fake_subset,
         )
@@ -94,7 +94,7 @@ def test_process_tweets_pipeline_runs_markdown_subset(tmp_path, monkeypatch):
         moved = processor.process_tweets_pipeline()
 
     assert captured["files"][0].name.startswith("Tweet - user-1")
-    assert moved == [processor.config.posts_dest / "Tweet - processed.md"]
+    assert moved == [processor.config.tweets_dest / "Tweet - processed.md"]
 
 
 def test_process_tweets_pipeline_skips_when_editor_empty(tmp_path, monkeypatch):
@@ -105,7 +105,7 @@ def test_process_tweets_pipeline_skips_when_editor_empty(tmp_path, monkeypatch):
         raise AssertionError("process_markdown_subset debe omitirse")
 
     monkeypatch.setattr(
-        processor.markdown_processor,
+        processor.tweet_processor,
         "process_markdown_subset",
         fail_subset,
     )
