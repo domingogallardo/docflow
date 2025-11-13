@@ -1,6 +1,6 @@
 # docflow — Guía ampliada
 
-> Este documento amplía el README resumido. Mantiene los detalles operativos para trabajar a diario con docflow. La guía de infra y TLS está en **README-infra.md**.
+> Este documento amplía el readme resumido. Mantiene los detalles operativos para trabajar a diario con docflow. La guía de infra y TLS está en **readme-infra.md**.
 
 ## Índice
 1. [Conceptos clave](#conceptos-clave)
@@ -138,7 +138,7 @@ El despliegue usa **doble Nginx**: proxy con TLS en el **host** y Nginx **dentro
 - El deploy **genera** `read.html` con **dos zonas**:
   - **Arriba**: todo lo **no** listado en `read_posts.md` (orden **mtime desc**).
   - **Abajo**: elementos listados en `web/public/read/read_posts.md` (uno por línea; admite `- ` o `* ` y comentarios `#`).  
-- Servido por Nginx del contenedor con *autoindex* activo (ver **README-infra.md**).
+- Servido por Nginx del contenedor con *autoindex* activo (ver **readme-infra.md**).
 
 Verificación rápida:
 ```bash
@@ -205,7 +205,7 @@ HTPASSWD_PSS='contraseña'
 
 ## Infra y verificación
 
-La **infra** usa doble Nginx (TLS en host + Nginx en contenedor) y BasicAuth para PUT en `/data` con `.htpasswd` montado en host. Para detalles y hardening, consulta **README-infra.md**.
+La **infra** usa doble Nginx (TLS en host + Nginx en contenedor) y BasicAuth para PUT en `/data` con `.htpasswd` montado en host. Para detalles y hardening, consulta **readme-infra.md**.
 
 Verificación con `curl` y logs:
 ```bash

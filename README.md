@@ -4,7 +4,7 @@ docflow automatiza **recolectar → procesar → priorizar (bump) → leer → p
 
 - 🚀 **Rápido de arrancar**: un par de comandos y estás procesando.
 - 🧭 **Flujo claro**: bump/unbump para priorizar; overlay web local para acciones; deploy a `/read/` en tu web pública.
-- 🌐 **Infra separada**: la guía de despliegue vive en **README-infra.md** (doble Nginx host+contenedor, TLS, BasicAuth para PUT en `/data`).
+- 🌐 **Infra separada**: la guía de despliegue vive en **readme-infra.md** (doble Nginx host+contenedor, TLS, BasicAuth para PUT en `/data`).
 
 ---
 
@@ -90,7 +90,7 @@ PORT=8000 SERVE_DIR="/ruta/a/⭐️ Documentación" python utils/serve_docs.py
   - **Arriba**: no completados (orden mtime desc).
   - **Abajo** (bajo `<hr/>`): los listados en `web/public/read/read_posts.md` (completados).
 
-> La **infra** (Nginx host + contenedor) y TLS están documentadas en **README-infra.md**.
+> La **infra** (Nginx host + contenedor) y TLS están documentadas en **readme-infra.md**.
 
 ---
 
@@ -123,8 +123,8 @@ PORT=8000 SERVE_DIR="/ruta/a/⭐️ Documentación" python utils/serve_docs.py
 
 ## 🔗 Documentación ampliada
 
-- **Guía completa del flujo y comandos** → `docs/GUIA.md`  
-- **Infra y despliegue (Docker/Nginx, TLS, BasicAuth)** → `docs/README-infra.md`
+- **Guía completa del flujo y comandos** → `docs/guia.md`  
+- **Infra y despliegue (Docker/Nginx, TLS, BasicAuth)** → `docs/readme-infra.md`
 
 ---
 
