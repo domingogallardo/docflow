@@ -1,139 +1,74 @@
 # 📚 docflow — Pipeline de Documentación Personal (versión resumida)
 
-docflow automatiza **recolectar → procesar → priorizar (bump) → leer → publicar → marcar como completado** tus documentos (artículos, podcasts, Markdown y PDFs) en una estructura por años.
+docflow automatiza **recolectar → procesar → priorizar (bump) → leer → publicar → marcar como completado** tus documentos (artículos, podcasts, Markdown, PDFs y tweets) en una estructura anual.
 
-- 🚀 **Rápido de arrancar**: un par de comandos y estás procesando.
-- 🧭 **Flujo claro**: bump/unbump para priorizar; overlay web local para acciones; deploy a `/read/` en tu web pública.
-- 🌐 **Infra separada**: la guía de despliegue vive en **readme-infra.md** (doble Nginx host+contenedor, TLS, BasicAuth para PUT en `/data`).
+## ✨ Características
+- Pipeline único para Instapaper, Snipd, PDFs, imágenes, Markdown y tweets (editor remoto + `Tweets/Tweets <AÑO>/`).
+- Bump/unbump automático (⭐ en Instapaper) y overlay local (`utils/serve_docs.py`) para publicar, despublicar y marcar procesados.
+- Deploy reproducible a `/read/` mediante `web/deploy.sh` (índice estático ordenado por `mtime` + soporte de `read_posts.md`).
+- Registro histórico (`Incoming/processed_history.txt`) y utilidades para convertir títulos con IA, limpiar Markdown y copiar citas con Text Fragments.
 
----
-
-## 🔧 Requisitos mínimos
-
-- **Python 3.10+**  
-- Instala dependencias básicas:
+## 🔧 Requisitos rápidos
+- **Python 3.10+**.
+- Dependencias base:
   ```bash
   pip install requests beautifulsoup4 markdownify openai pillow pytest markdown
   ```
-- Para capturar tweets directamente:
+- Para capturar tweets directamente (opcional):
   ```bash
   pip install playwright
   playwright install chromium
   ```
-- Variables de entorno si usas funciones externas / deploy:
-  ```bash
-  export OPENAI_API_KEY="..."              # títulos Instapaper (opcional)
-  export INSTAPAPER_USERNAME="..."         # opcional
-  export INSTAPAPER_PASSWORD="..."         # opcional
-  export REMOTE_USER="root"                # para publicar/desplegar
-  export REMOTE_HOST="1.2.3.4"             # para publicar/desplegar
-  ```
 
----
+## 🚀 Arranque rápido
+1. Configura variables si usas servicios externos:
+   ```bash
+   export OPENAI_API_KEY=...     # opcional (títulos IA)
+   export INSTAPAPER_USERNAME=...  # opcional
+   export INSTAPAPER_PASSWORD=...  # opcional
+   ```
+2. Ejecuta el pipeline completo (puedes pasar `--year`):
+   ```bash
+   python process_documents.py all --year 2025
+   ```
+3. Para la cola remota de tweets:
+   ```bash
+   python process_documents.py tweets
+   ```
+4. Sirve el overlay local y revisa los documentos:
+   ```bash
+   PORT=8000 SERVE_DIR="/ruta/a/⭐️ Documentación" python utils/serve_docs.py
+   ```
+5. Despliega a `/read/` cuando tengas contenido listo:
+   ```bash
+   (cd web && ./deploy.sh)
+   ```
+6. Tests rápidos:
+   ```bash
+   pytest -q
+   ```
 
-## ⚙️ Uso básico
+## 📚 Documentación
+- `docs/guia.md` — guía operativa completa (comandos, overlay, citas, troubleshooting).
+- `docs/flujo.md` — flujo de extremo a extremo (entradas, pipeline, publicación y Obsidian).
+- `docs/readme-infra.md` — despliegue y hardening (Docker/Nginx, TLS, BasicAuth).
+- `docs/ops-playbook.md` — tareas operativas y checklists.
 
-### 1) Procesar contenido
-```bash
-# Pipeline completo (año opcional)
-python process_documents.py all [--year 2025]
-
-# Selectivo
-python process_documents.py tweets
-python process_documents.py images
-python process_documents.py md
-```
-- Instapaper → HTML/MD limpios (título con IA, márgenes, metadatos, nombres saneados).
-- Snipd → HTML limpio con tipografía del sistema y botones de audio.  
-- Markdown → conversión a HTML con márgenes + título IA (si hay API) + archivado en `Posts/Posts <AÑO>/`.  
-- PDFs → organización anual.  
-- Imágenes → copia anual + `gallery.html` scrolleable por año (JPG/PNG/WebP/TIFF/GIF/BMP).
-
-### 1ter) Cola de tweets (editor remoto)
-Abre `https://domingogallardo.com/editor`, pega una URL por línea (puedes usar `#` para comentarios) y guarda. Después ejecuta:
-```bash
-python process_documents.py tweets
-# o dentro del pipeline completo (se ejecuta al inicio de `all`)
-python process_documents.py all
-```
-El pipeline descarga `https://domingogallardo.com/data/nota.txt`, convierte cada URL en un `.md` con título, enlace, foto de perfil e imágenes, descarta las estadísticas (views/likes), genera el `.html`, aplica título con IA y mueve el par `.md/.html` a `Tweets/Tweets <AÑO>/`. El fichero remoto no se vacía: sigue disponible para revisarlo o reutilizarlo cuando quieras. Para evitar duplicados, se lleva un historial local en `Incoming/tweets_processed.txt`; cualquier URL ya presente allí se omite automáticamente.
-
-> Si tu editor remoto está protegido con BasicAuth, define `TWEET_EDITOR_USER` y `TWEET_EDITOR_PASS` antes de ejecutar el comando (por ejemplo en tu shell o `.env` local). El script ya apunta a `https://domingogallardo.com/data/nota.txt` por defecto.
-
-### 1qu) Capturar tweets individuales
-Si quieres archivar un tweet sin pasar por Instapaper, genera un Markdown listo para `Incoming/`:
-```bash
-python utils/tweet_to_markdown.py https://x.com/usuario/status/123456789
-# Opcional: elegir carpeta o nombre
-python utils/tweet_to_markdown.py <URL> --output-dir ~/Documentos/Incoming --filename "Tweet - demo.md"
-```
-El script usa Playwright (Chromium headless) y guarda un `.md` con título, enlace, foto de perfil y cuerpo sin estadísticas (views/likes), seguido de las imágenes adjuntas del post. Luego ejecuta `process_documents.py tweets` para que el pipeline los convierta a HTML y los archive en `Tweets/`.
-
-### 1bis) Limpiar HTML copiado antes de pegar en Obsidian
-- Copia el fragmento desde el navegador.
-- Ejecuta `mdclip` (o `python utils/clipboard_cleaner.py`).
-- Vuelve a pegar en Obsidian: obtendrás listas compactas (sin saltos extra) y el portapapeles ya trae Markdown limpio.
-
-> **Tip**: añade `$(git rev-parse --show-toplevel)/bin` a tu `PATH` para llamar a `mdclip` desde cualquier repo.
-
-### 2) Servidor web local (overlay con acciones)
-```bash
-PORT=8000 SERVE_DIR="/ruta/a/⭐️ Documentación" python utils/serve_docs.py
-```
-- Bump/Unbump, Publicar/Despublicar, Procesado (atajos: `b`, `u`, `p`, `d`, `x`).
-- Listado por **mtime desc** mostrando solo HTML/PDF; los bumpeados se marcan 🔥.
-- ⭐ en **Instapaper** ⇒ **bump automático** del HTML procesado.
-
-### 3) Publicar a la web pública (`/read/`)
-- Desde el overlay: **Publicar** copia a `web/public/read/` e invoca `web/deploy.sh`.
-- El deploy genera `read.html` con:
-  - **Arriba**: no completados (orden mtime desc).
-  - **Abajo** (bajo `<hr/>`): los listados en `web/public/read/read_posts.md` (completados).
-
-> La **infra** (Nginx host + contenedor) y TLS están documentadas en **readme-infra.md**.
-
----
-
-## 📂 Estructura de directorios (simplificada)
-
+## 📂 Estructura base
 ```
 ⭐️ Documentación/
 ├── Incoming/
-│   ├── processed_history.txt
-│   └── ...
 ├── Posts/Posts <AÑO>/
 ├── Tweets/Tweets <AÑO>/
 ├── Podcasts/Podcasts <AÑO>/
 ├── Pdfs/Pdfs <AÑO>/
 ├── Images/Images <AÑO>/
-└── ...
+└── web/ (deploy estático)
 ```
 
----
-
-## 🧭 Flujo de trabajo (en 5 líneas)
-
-1. Recolecta en `Incoming/` (o carpetas fuente) y ejecuta el pipeline.  
-2. Marca con **⭐ en Instapaper** para **bump** automático del HTML procesado.  
-3. Lee en el **servidor local** y usa el overlay para *Publicar/Despublicar*.  
-4. Captura citas en `/read/` con el botón **❝ Copiar cita** (usa **Text Fragments** y conserva los enlaces en Markdown).  
-5. Cuando termines, pulsa **Procesado** → unbump + añade a `read_posts.md` + deploy.
-
----
-
-## 🔗 Documentación ampliada
-
-- **Guía completa del flujo y comandos** → `docs/guia.md`  
-- **Infra y despliegue (Docker/Nginx, TLS, BasicAuth)** → `docs/readme-infra.md`
-
----
-
-## 🧪 Tests rápidos
-
-```bash
-pytest tests/ -v
-```
-
----
+## 🤝 Contribuir
+- Sigue el estilo del repo (Python 3.10+, tipado moderado, mensajes en español con emoji).
+- Asegúrate de actualizar la documentación relevante (`docs/guia.md`, `docs/flujo.md`, etc.) cuando cambies el comportamiento.
+- Ejecuta `pytest` antes de abrir un PR.
 
 © 2025 Domingo Gallardo López
