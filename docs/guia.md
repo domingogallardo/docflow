@@ -1,6 +1,6 @@
 # docflow — Guía ampliada
 
-> Este documento amplía el readme resumido. Mantiene los detalles operativos para trabajar a diario con docflow. La guía de infra y TLS está en **readme-infra.md**.
+> Este documento amplía el README resumido. Mantiene los detalles operativos para trabajar a diario con docflow. La guía de infra y TLS está en **readme-infra.md**.
 
 ## Índice
 1. [Conceptos clave](#conceptos-clave)
