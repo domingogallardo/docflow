@@ -66,9 +66,4 @@ docflow automatiza **recolectar → procesar → priorizar (bump) → leer → p
 └── web/ (deploy estático)
 ```
 
-## 🤝 Contribuir
-- Sigue el estilo del repo (Python 3.10+, tipado moderado, mensajes en español con emoji).
-- Asegúrate de actualizar la documentación relevante (`docs/guia.md`, `docs/flujo.md`, etc.) cuando cambies el comportamiento.
-- Ejecuta `pytest` antes de abrir un PR.
-
 © 2025 Domingo Gallardo López
