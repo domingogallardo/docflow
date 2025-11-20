@@ -16,40 +16,28 @@ from utils.tweet_to_markdown import fetch_tweet_markdown
 from utils.x_likes_fetcher import fetch_likes_with_state
 
 
-class DocumentProcessorConfig:
-    """Configuración para el procesador de documentos."""
-
-    def __init__(self, base_dir: Path, year: int):
-        self.base_dir = base_dir
-        self.year = year
-        self.incoming = base_dir / "Incoming"
-        self.posts_dest = base_dir / "Posts" / f"Posts {year}"
-        self.pdfs_dest = base_dir / "Pdfs" / f"Pdfs {year}"
-        self.podcasts_dest = base_dir / "Podcasts" / f"Podcasts {year}"
-        self.images_dest = base_dir / "Images" / f"Images {year}"
-        self.tweets_dest = base_dir / "Tweets" / f"Tweets {year}"
-        self.processed_history = self.incoming / "processed_history.txt"
-        self.tweets_processed = self.incoming / "tweets_processed.txt"
-
-
 class DocumentProcessor:
     """Procesador principal de documentos con lógica modular y configurable."""
     
-    def __init__(self, config: DocumentProcessorConfig):
-        self.config = config
-        self.pdf_processor = PDFProcessor(self.config.incoming, self.config.pdfs_dest)
-        self.instapaper_processor = InstapaperProcessor(self.config.incoming, self.config.posts_dest)
-        self.podcast_processor = PodcastProcessor(self.config.incoming, self.config.podcasts_dest)
-        self.image_processor = ImageProcessor(self.config.incoming, self.config.images_dest)
-        self.markdown_processor = MarkdownProcessor(self.config.incoming, self.config.posts_dest)
-        self.tweet_processor = MarkdownProcessor(self.config.incoming, self.config.tweets_dest)
-        self.moved_podcasts: List[Path] = []
-        self.moved_posts: List[Path] = []
-        self.moved_pdfs: List[Path] = []
-        self.moved_images: List[Path] = []
-        self.moved_markdown: List[Path] = []
-        self.moved_tweets: List[Path] = []
-        self.generated_tweets: List[Path] = []
+    def __init__(self, base_dir: Path, year: int):
+        self.base_dir = Path(base_dir)
+        self.year = year
+        self.incoming = self.base_dir / "Incoming"
+        self.posts_dest = self.base_dir / "Posts" / f"Posts {year}"
+        self.pdfs_dest = self.base_dir / "Pdfs" / f"Pdfs {year}"
+        self.podcasts_dest = self.base_dir / "Podcasts" / f"Podcasts {year}"
+        self.images_dest = self.base_dir / "Images" / f"Images {year}"
+        self.tweets_dest = self.base_dir / "Tweets" / f"Tweets {year}"
+        self.processed_history = self.incoming / "processed_history.txt"
+        self.tweets_processed = self.incoming / "tweets_processed.txt"
+
+        self.pdf_processor = PDFProcessor(self.incoming, self.pdfs_dest)
+        self.instapaper_processor = InstapaperProcessor(self.incoming, self.posts_dest)
+        self.podcast_processor = PodcastProcessor(self.incoming, self.podcasts_dest)
+        self.image_processor = ImageProcessor(self.incoming, self.images_dest)
+        self.markdown_processor = MarkdownProcessor(self.incoming, self.posts_dest)
+        self.tweet_processor = MarkdownProcessor(self.incoming, self.tweets_dest)
+        self._history: List[Path] = []
     def process_tweet_urls(self) -> List[Path]:
         """Obtiene los likes recientes desde X y genera Markdown en Incoming/."""
         try:
@@ -80,7 +68,7 @@ class DocumentProcessor:
                 print(f"❌ Error procesando {url}: {exc}")
                 continue
 
-            destination = self._unique_destination(self.config.incoming / filename)
+            destination = self._unique_destination(self.incoming / filename)
             destination.write_text(markdown, encoding="utf-8")
             generated.append(destination)
             written_urls.append(url)
@@ -89,7 +77,6 @@ class DocumentProcessor:
         if written_urls:
             self._append_processed_urls(written_urls)
 
-        self.generated_tweets = generated
         return generated
 
     def _unique_destination(self, target: Path) -> Path:
@@ -132,14 +119,14 @@ class DocumentProcessor:
         return next(iter(lines))
 
     def _load_processed_urls(self) -> Set[str]:
-        path = self.config.tweets_processed
+        path = self.tweets_processed
         if not path.exists():
             return set()
         lines = [line.strip() for line in path.read_text(encoding="utf-8").splitlines()]
         return {line for line in lines if line}
 
     def _append_processed_urls(self, urls: List[str]) -> None:
-        path = self.config.tweets_processed
+        path = self.tweets_processed
         path.parent.mkdir(parents=True, exist_ok=True)
         with path.open("a", encoding="utf-8") as handle:
             for url in urls:
@@ -149,8 +136,7 @@ class DocumentProcessor:
         """Procesa archivos de podcast con procesador unificado."""
         # Usar el procesador unificado para todo el pipeline de podcasts
         moved_podcasts = self.podcast_processor.process_podcasts()
-
-        self.moved_podcasts = moved_podcasts
+        self._remember(moved_podcasts)
         return moved_podcasts
     
     def process_instapaper_posts(self) -> List[Path]:
@@ -174,25 +160,25 @@ class DocumentProcessor:
             # No bloquear el pipeline si falla la detección
             pass
 
-        self.moved_posts = moved_posts
+        self._remember(moved_posts)
         return moved_posts
     
     def process_pdfs(self) -> List[Path]:
         """Procesa PDFs usando el procesador especializado."""
         moved_pdfs = self.pdf_processor.process_pdfs()
-        self.moved_pdfs = moved_pdfs
+        self._remember(moved_pdfs)
         return moved_pdfs
     
     def process_images(self) -> List[Path]:
         """Procesa imágenes moviéndolas y generando la galería anual."""
         moved_images = self.image_processor.process_images()
-        self.moved_images = moved_images
+        self._remember(moved_images)
         return moved_images
 
     def process_markdown(self) -> List[Path]:
         """Procesa archivos Markdown genéricos."""
         moved_markdown = self.markdown_processor.process_markdown()
-        self.moved_markdown = moved_markdown
+        self._remember(moved_markdown)
         return moved_markdown
     
     def process_tweets_pipeline(self) -> List[Path]:
@@ -204,28 +190,20 @@ class DocumentProcessor:
         files = [Path(path) for path in markdown_files if Path(path).exists()]
         if not files:
             print("🐦 No hay nuevos tweets para convertir en HTML")
-            self.moved_tweets = []
             return []
         moved = self.tweet_processor.process_markdown_subset(files)
-        self.moved_tweets = moved
+        self._remember(moved)
         return moved
     
     def register_all_files(self) -> None:
         """Registra todos los archivos procesados en el historial."""
-        all_files = (
-            self.moved_posts
-            + self.moved_pdfs
-            + self.moved_podcasts
-            + self.moved_images
-            + self.moved_markdown
-            + self.moved_tweets
-        )
-        if all_files:
+        if self._history:
             U.register_paths(
-                all_files,
-                base_dir=self.config.base_dir,
-                historial_path=self.config.processed_history,
+                self._history,
+                base_dir=self.base_dir,
+                historial_path=self.processed_history,
             )
+            self._history = []
     
     def process_all(self) -> bool:
         """Ejecuta el pipeline completo."""
@@ -259,3 +237,6 @@ class DocumentProcessor:
         except Exception as e:
             print(f"❌ Error en el pipeline: {e}")
             return False 
+
+    def _remember(self, paths: List[Path]) -> None:
+        self._history.extend(paths)

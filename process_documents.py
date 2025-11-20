@@ -14,7 +14,7 @@ import argparse
 from datetime import datetime
 import os
 
-from pipeline_manager import DocumentProcessor, DocumentProcessorConfig
+from pipeline_manager import DocumentProcessor
 import config as cfg
 
 
@@ -52,11 +52,8 @@ def main():
     args = parse_args()
     year = get_year_from_args_and_env(args)
     
-    # Crear configuración del procesador
-    config = DocumentProcessorConfig(base_dir=cfg.BASE_DIR, year=year)
-    
     # Crear procesador
-    processor = DocumentProcessor(config)
+    processor = DocumentProcessor(cfg.BASE_DIR, year)
 
     if "all" in args.targets:
         success = processor.process_all()
