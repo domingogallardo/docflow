@@ -172,30 +172,15 @@ def _split_image_urls(image_urls: List[str]) -> Tuple[Optional[str], List[str]]:
     return avatar, media
 
 
-def _force_orig_media(url: str) -> str:
+def _strip_media_params(url: str) -> str:
     if "pbs.twimg.com/media" not in url:
         return url
     parsed = urlparse(url)
     params = [
         (k, v)
         for k, v in parse_qsl(parsed.query, keep_blank_values=True)
-        if k.lower() != "name"
+        if k.lower() == "format"
     ]
-    params.append(("name", "orig"))
-    clean_query = urlencode(params, doseq=True)
-    return urlunparse(parsed._replace(query=clean_query))
-
-
-def _preview_media_url(url: str) -> str:
-    if "pbs.twimg.com/media" not in url:
-        return url
-    parsed = urlparse(url)
-    params = [
-        (k, v)
-        for k, v in parse_qsl(parsed.query, keep_blank_values=True)
-        if k.lower() != "name"
-    ]
-    params.append(("name", "small"))
     clean_query = urlencode(params, doseq=True)
     return urlunparse(parsed._replace(query=clean_query))
 
@@ -209,9 +194,8 @@ def _media_markdown_lines(media_urls: List[str]) -> List[str]:
                 'style="width:32px;height:auto;vertical-align:middle;" />'
             )
         else:
-            full_url = _force_orig_media(image_url)
-            preview_url = _preview_media_url(full_url)
-            lines.append(f"[![image {idx}]({preview_url})]({full_url})")
+            clean_url = _strip_media_params(image_url)
+            lines.append(f"[![image {idx}]({clean_url})]({clean_url})")
     return lines
 
 
