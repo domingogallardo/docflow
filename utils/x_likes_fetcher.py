@@ -45,17 +45,16 @@ def _normalize_stop_url(url: str | None) -> str | None:
 def _extract_tweet_urls(page, seen: Set[str]) -> List[str]:
     urls: List[str] = []
     for article in page.locator("article").element_handles():
-        link = article.query_selector("a[href*='/status/']")
-        if not link:
-            continue
-        href = link.get_attribute("href")
-        if not _is_status_href(href):
-            continue
-        absolute = _absolute_url(href)
-        if absolute in seen:
-            continue
-        seen.add(absolute)
-        urls.append(absolute)
+        links = article.query_selector_all("a[href*='/status/']")
+        for link in links:
+            href = link.get_attribute("href")
+            if not _is_status_href(href):
+                continue
+            absolute = _absolute_url(href)
+            if absolute in seen:
+                continue
+            seen.add(absolute)
+            urls.append(absolute)
     return urls
 
 
