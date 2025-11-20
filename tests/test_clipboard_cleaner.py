@@ -100,3 +100,8 @@ def test_email_like_html_flattens_and_keeps_contents():
         "Texto con [enlace](https://example.com) y espacio."
     )
     assert cleaner.html_to_compact_markdown(html) == expected
+
+
+def test_removes_zero_width_paragraphs():
+    html = "<p>- Uno</p><p>\u200c</p><p>- Dos</p>"
+    assert cleaner.html_to_compact_markdown(html) == "- Uno\n- Dos"
