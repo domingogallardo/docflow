@@ -6,7 +6,7 @@ import pytest
 from pathlib import Path
 import time
 
-from pipeline_manager import DocumentProcessor, DocumentProcessorConfig
+from pipeline_manager import DocumentProcessor
 
 
 def test_document_processor_integration(tmp_path):
@@ -47,11 +47,8 @@ def test_document_processor_integration(tmp_path):
     image_file = incoming / "sample.png"
     image_file.write_bytes(b"\x89PNG\r\n\x1a\n")
     
-    # 3. Crear configuración de test
-    config = DocumentProcessorConfig(base_dir=tmp_path, year=2025)
-    
     # 4. Crear y ejecutar procesador
-    processor = DocumentProcessor(config)
+    processor = DocumentProcessor(tmp_path, 2025)
     processor.markdown_processor.title_updater.update_titles = lambda files, renamer: None
     success = processor.process_all()
     
@@ -92,8 +89,7 @@ def test_process_podcasts_only(tmp_path):
 """
     podcast_file.write_text(podcast_content, encoding="utf-8")
     
-    config = DocumentProcessorConfig(base_dir=tmp_path, year=2025)
-    processor = DocumentProcessor(config)
+    processor = DocumentProcessor(tmp_path, 2025)
     
     # Ejecutar solo fase de podcasts
     moved_podcasts = processor.process_podcasts()
@@ -127,13 +123,12 @@ def test_bump_starred_instapaper_html(tmp_path):
         encoding="utf-8",
     )
 
-    config = DocumentProcessorConfig(base_dir=tmp_path, year=2025)
-    processor = DocumentProcessor(config)
+    processor = DocumentProcessor(tmp_path, 2025)
 
     # Evitar ejecutar el pipeline real de Instapaper: simulamos el movimiento
     def fake_process_instapaper_posts():
-        config.posts_dest.mkdir(parents=True, exist_ok=True)
-        dest = config.posts_dest / starred_html.name
+        processor.posts_dest.mkdir(parents=True, exist_ok=True)
+        dest = processor.posts_dest / starred_html.name
         dest.write_text(starred_html.read_text(encoding="utf-8"), encoding="utf-8")
         return [dest]
 
@@ -141,7 +136,7 @@ def test_bump_starred_instapaper_html(tmp_path):
 
     processor.process_instapaper_posts()
 
-    moved = config.posts_dest / "sample.html"
+    moved = processor.posts_dest / "sample.html"
     assert moved.exists()
 
     # Debe tener un mtime muy en el futuro (aprox. > 90 años)

@@ -3,15 +3,14 @@
 from pathlib import Path
 from unittest.mock import patch
 
-from pipeline_manager import DocumentProcessor, DocumentProcessorConfig
+from pipeline_manager import DocumentProcessor
 
 
 def prepare_processor(tmp_path):
     incoming = tmp_path / "Incoming"
     incoming.mkdir()
-    config = DocumentProcessorConfig(base_dir=tmp_path, year=2025)
-    processor = DocumentProcessor(config)
-    return processor, incoming, config
+    processor = DocumentProcessor(tmp_path, 2025)
+    return processor, incoming
 
 
 def mock_likes(monkeypatch, urls, stop_found=True):
@@ -22,7 +21,7 @@ def mock_likes(monkeypatch, urls, stop_found=True):
 
 
 def test_process_tweet_urls_creates_files_from_likes(tmp_path, monkeypatch):
-    processor, incoming, _ = prepare_processor(tmp_path)
+    processor, incoming = prepare_processor(tmp_path)
     mock_likes(
         monkeypatch,
         [
@@ -45,7 +44,7 @@ def test_process_tweet_urls_creates_files_from_likes(tmp_path, monkeypatch):
 
 
 def test_process_tweet_urls_handles_fetch_error(tmp_path, monkeypatch):
-    processor, _, _ = prepare_processor(tmp_path)
+    processor, _ = prepare_processor(tmp_path)
 
     def failing_fetch(*args, **kwargs):
         raise RuntimeError("boom")
@@ -56,7 +55,7 @@ def test_process_tweet_urls_handles_fetch_error(tmp_path, monkeypatch):
 
 
 def test_process_tweets_pipeline_runs_markdown_subset(tmp_path, monkeypatch):
-    processor, _, _ = prepare_processor(tmp_path)
+    processor, _ = prepare_processor(tmp_path)
     mock_likes(monkeypatch, ["https://x.com/user/status/1"])
 
     with patch(
@@ -67,7 +66,7 @@ def test_process_tweets_pipeline_runs_markdown_subset(tmp_path, monkeypatch):
 
         def fake_subset(files):
             captured["files"] = list(files)
-            return [processor.config.tweets_dest / "Tweet - processed.md"]
+            return [processor.tweets_dest / "Tweet - processed.md"]
 
         monkeypatch.setattr(
             processor.tweet_processor,
@@ -78,11 +77,11 @@ def test_process_tweets_pipeline_runs_markdown_subset(tmp_path, monkeypatch):
         moved = processor.process_tweets_pipeline()
 
     assert captured["files"][0].name.startswith("Tweet - user-1")
-    assert moved == [processor.config.tweets_dest / "Tweet - processed.md"]
+    assert moved == [processor.tweets_dest / "Tweet - processed.md"]
 
 
 def test_process_tweets_pipeline_skips_when_likes_empty(tmp_path, monkeypatch):
-    processor, _, _ = prepare_processor(tmp_path)
+    processor, _ = prepare_processor(tmp_path)
     mock_likes(monkeypatch, [])
 
     def fail_subset(_):
@@ -99,9 +98,9 @@ def test_process_tweets_pipeline_skips_when_likes_empty(tmp_path, monkeypatch):
 
 
 def test_process_tweet_urls_skips_already_processed(tmp_path, monkeypatch):
-    processor, incoming, config = prepare_processor(tmp_path)
+    processor, incoming = prepare_processor(tmp_path)
     existing_url = "https://x.com/user/status/1"
-    config.tweets_processed.write_text(existing_url + "\n", encoding="utf-8")
+    processor.tweets_processed.write_text(existing_url + "\n", encoding="utf-8")
 
     mock_likes(
         monkeypatch,
@@ -120,12 +119,12 @@ def test_process_tweet_urls_skips_already_processed(tmp_path, monkeypatch):
     assert len(created) == 1
     assert mocked.call_count == 1
     assert (incoming / "Tweet - user-2.md").exists()
-    processed_lines = config.tweets_processed.read_text(encoding="utf-8").splitlines()
+    processed_lines = processor.tweets_processed.read_text(encoding="utf-8").splitlines()
     assert processed_lines == [existing_url, "https://x.com/user/status/2"]
 
 
 def test_process_tweet_urls_appends_processed_file(tmp_path, monkeypatch):
-    processor, _, config = prepare_processor(tmp_path)
+    processor, _ = prepare_processor(tmp_path)
     url = "https://x.com/user/status/42"
     mock_likes(monkeypatch, [url])
 
@@ -135,12 +134,12 @@ def test_process_tweet_urls_appends_processed_file(tmp_path, monkeypatch):
     ):
         processor.process_tweet_urls()
 
-    assert config.tweets_processed.exists()
-    assert config.tweets_processed.read_text(encoding="utf-8") == url + "\n"
+    assert processor.tweets_processed.exists()
+    assert processor.tweets_processed.read_text(encoding="utf-8") == url + "\n"
 
 
 def test_process_tweet_urls_respects_batch_limit(tmp_path, monkeypatch):
-    processor, incoming, _ = prepare_processor(tmp_path)
+    processor, incoming = prepare_processor(tmp_path)
     urls = [f"https://x.com/user/status/{idx}" for idx in range(1, 6)]
     mock_likes(monkeypatch, urls)
 

@@ -9,7 +9,7 @@ def run_main(monkeypatch, tmp_path, args):
     calls = []
 
     class DummyProcessor:
-        def __init__(self, config):
+        def __init__(self, base_dir, year):
             pass
 
         def process_all(self):
