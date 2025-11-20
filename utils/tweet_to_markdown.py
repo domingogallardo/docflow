@@ -5,7 +5,7 @@ from __future__ import annotations
 import argparse
 import re
 from pathlib import Path
-from urllib.parse import urlparse
+from urllib.parse import urlparse, parse_qsl, urlencode, urlunparse
 from typing import List, Optional, Tuple
 
 try:  # pragma: no cover - import opcional
@@ -172,10 +172,46 @@ def _split_image_urls(image_urls: List[str]) -> Tuple[Optional[str], List[str]]:
     return avatar, media
 
 
+def _force_orig_media(url: str) -> str:
+    if "pbs.twimg.com/media" not in url:
+        return url
+    parsed = urlparse(url)
+    params = [
+        (k, v)
+        for k, v in parse_qsl(parsed.query, keep_blank_values=True)
+        if k.lower() != "name"
+    ]
+    params.append(("name", "orig"))
+    clean_query = urlencode(params, doseq=True)
+    return urlunparse(parsed._replace(query=clean_query))
+
+
+def _preview_media_url(url: str) -> str:
+    if "pbs.twimg.com/media" not in url:
+        return url
+    parsed = urlparse(url)
+    params = [
+        (k, v)
+        for k, v in parse_qsl(parsed.query, keep_blank_values=True)
+        if k.lower() != "name"
+    ]
+    params.append(("name", "small"))
+    clean_query = urlencode(params, doseq=True)
+    return urlunparse(parsed._replace(query=clean_query))
+
+
 def _media_markdown_lines(media_urls: List[str]) -> List[str]:
     lines: List[str] = []
     for idx, image_url in enumerate(media_urls, start=1):
-        lines.append(f"[![image {idx}]({image_url})]({image_url})")
+        if "abs-0.twimg.com/emoji" in image_url:
+            lines.append(
+                f'<img src="{image_url}" alt="emoji {idx}" '
+                'style="width:32px;height:auto;vertical-align:middle;" />'
+            )
+        else:
+            full_url = _force_orig_media(image_url)
+            preview_url = _preview_media_url(full_url)
+            lines.append(f"[![image {idx}]({preview_url})]({full_url})")
     return lines
 
 
