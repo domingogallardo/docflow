@@ -5,9 +5,6 @@ DocumentProcessor - Clase principal para el procesamiento de documentos
 from pathlib import Path
 from typing import Iterable, List, Optional, Set
 
-import requests
-from requests.auth import HTTPBasicAuth
-
 import utils as U
 import config as cfg
 from pdf_processor import PDFProcessor
@@ -16,6 +13,7 @@ from podcast_processor import PodcastProcessor
 from image_processor import ImageProcessor
 from markdown_processor import MarkdownProcessor
 from utils.tweet_to_markdown import fetch_tweet_markdown
+from utils.x_likes_fetcher import fetch_likes_with_state
 
 
 class DocumentProcessorConfig:
@@ -53,31 +51,29 @@ class DocumentProcessor:
         self.moved_tweets: List[Path] = []
         self.generated_tweets: List[Path] = []
     def process_tweet_urls(self) -> List[Path]:
-        """Lee las URLs del editor remoto y genera Markdown en Incoming/."""
+        """Obtiene los likes recientes desde X y genera Markdown en Incoming/."""
         try:
-            lines = self._fetch_editor_lines()
+            urls = self._fetch_like_urls()
         except Exception as exc:
-            print(f"🐦 No se pudieron leer las URLs del editor: {exc}")
+            print(f"🐦 No se pudieron leer los likes de X: {exc}")
             return []
 
-        urls = [
-            line.strip()
-            for line in lines
-            if line.strip() and not line.strip().startswith("#")
-        ]
-
         if not urls:
-            print("🐦 El editor remoto no contiene URLs pendientes")
+            print("🐦 No hay nuevos tweets en tus likes")
+            return []
+
+        processed_urls = self._load_processed_urls()
+        fresh_urls = [url for url in urls if url not in processed_urls]
+
+        if not fresh_urls:
+            print("🐦 No hay nuevos likes pendientes (todo está ya procesado).")
+            self.generated_tweets = []
             return []
 
         generated: List[Path] = []
-        processed_urls = self._load_processed_urls()
         written_urls: List[str] = []
 
-        for url in urls:
-            if url in processed_urls:
-                print(f"⏭️  Saltando (ya procesado): {url}")
-                continue
+        for url in fresh_urls:
             try:
                 markdown, filename = fetch_tweet_markdown(url)
             except Exception as exc:
@@ -110,19 +106,30 @@ class DocumentProcessor:
                 return candidate
             counter += 1
 
-    def _fetch_editor_lines(self) -> List[str]:
-        if not cfg.TWEET_EDITOR_URL:
-            raise RuntimeError("TWEET_EDITOR_URL no está configurado")
-        auth: Optional[HTTPBasicAuth] = None
-        if cfg.TWEET_EDITOR_USER and cfg.TWEET_EDITOR_PASS:
-            auth = HTTPBasicAuth(cfg.TWEET_EDITOR_USER, cfg.TWEET_EDITOR_PASS)
-        response = requests.get(
-            cfg.TWEET_EDITOR_URL,
-            auth=auth,
-            timeout=cfg.TWEET_EDITOR_TIMEOUT,
+    def _fetch_like_urls(self) -> List[str]:
+        if not cfg.TWEET_LIKES_STATE:
+            raise RuntimeError("Configura TWEET_LIKES_STATE con el storage_state exportado de X.")
+        last_processed = self._last_processed_tweet_url()
+        urls, stop_found, _ = fetch_likes_with_state(
+            cfg.TWEET_LIKES_STATE,
+            likes_url=cfg.TWEET_LIKES_URL,
+            max_tweets=cfg.TWEET_LIKES_MAX,
+            stop_at_url=last_processed,
+            headless=True,
         )
-        response.raise_for_status()
-        return response.text.splitlines()
+        if last_processed and not stop_found:
+            print("⚠️  No se encontró la última URL procesada en los likes; revisa el límite TWEET_LIKES_MAX.")
+        batch = cfg.TWEET_LIKES_BATCH
+        if batch and len(urls) > batch:
+            print(f"ℹ️  Limite diario de likes: tomando solo los {batch} más recientes.")
+            urls = urls[:batch]
+        return urls
+
+    def _last_processed_tweet_url(self) -> Optional[str]:
+        lines = self._load_processed_urls()
+        if not lines:
+            return None
+        return next(iter(lines))
 
     def _load_processed_urls(self) -> Set[str]:
         path = self.config.tweets_processed

@@ -73,7 +73,7 @@ Todo esto lo orquesta `process_documents.py` y procesadores específicos `*_proc
 
 > **Atajo para tweets**: `python utils/tweet_to_markdown.py https://x.com/...` descarga el tweet con Playwright y lo guarda como `.md` con título, enlace, foto de perfil y cuerpo sin métricas (views/likes), seguido de las imágenes adjuntas.
 
-> **Cola de tweets**: añade URLs (una por línea, puedes usar comentarios con `#`) en `https://domingogallardo.com/editor`. El pipeline lee `https://domingogallardo.com/data/nota.txt` directamente, así que basta con ejecutar `python process_documents.py tweets` (o el pipeline completo) para generar el `.md`, convertirlo a `.html`, aplicar título/estilos y mover ambos a `Tweets/Tweets <AÑO>/` en un solo paso. El contenido remoto nunca se borra automáticamente y, para evitar duplicados, se lleva un historial en `Incoming/tweets_processed.txt`.
+> **Cola de tweets**: marca con "Me gusta" en X los tweets que quieras procesar. Ejecuta una vez `python utils/login_x.py --export-state x_state.json` para iniciar sesión manualmente y guardar tu `storage_state` (puedes cambiar la ruta con `--export-state` y apuntar `TWEET_LIKES_STATE` a ese archivo). A partir de ahí `python process_documents.py tweets` abre tu feed de likes (`TWEET_LIKES_URL`, por defecto `https://x.com/domingogallardo/likes`) con Playwright, extrae los enlaces más recientes hasta encontrar el último tweet procesado (usando `Incoming/tweets_processed.txt` como referencia) o hasta el límite `TWEET_LIKES_MAX` (100 por defecto). Para no saturar, fija `TWEET_LIKES_BATCH` (por defecto 10) y solo se procesarán esa cantidad de likes nuevos en cada ejecución.
 
 3) **Priorizar para leer → Bump/Unbump**  
 - **Marca con ⭐ en Instapaper**: si añades una estrella al **título** del artículo en Instapaper, el pipeline **propaga** ese “destacado” a HTML/MD y **bumpea automáticamente** el HTML (ajusta su `mtime` al futuro) para que quede arriba en listados por fecha.  
@@ -101,17 +101,10 @@ Desde el overlay, **Publicar** copia el `.html` o `.pdf` a `web/public/read/` y 
 6) **Capturar citas en páginas publicadas (Text Fragments)**  
 En `/read/`, se inyecta un botón flotante **❝ Copiar cita** que, al seleccionar texto, copia una cita en **Markdown** con enlace que incluye **Text Fragments** (`#:~:text=`). Esto facilita pegar citas directamente en Obsidian manteniendo el salto a la posición exacta del texto. (*Script*: `article.js`).
 
-7) **Editor simple protegido (`/editor`)**  
-`web/public/editor.html` se publica como `https://<tu_dominio>/editor` y apunta a `/data/nota.txt` (en el host: `/opt/web-domingo/dynamic-data/nota.txt`).  
-- Both GET y PUT usan la URL absoluta `https://<tu_dominio>/data/nota.txt` y `credentials: 'include'` para que el navegador reenvíe la **BasicAuth** almacenada.  
-- Al abrir `/editor`, deja que el prompt estándar de BasicAuth se encargue de las credenciales (no incrustes `usuario:contraseña@` en la URL porque rompe `fetch`).  
-- Muestra el estado “Cargando…/Guardando…” y cualquier error HTTP (incluido `401` si la sesión expiró).  
-- Ideal para retoques rápidos/automatizados del bloc `nota.txt` sin depender de WebDAV completo.
-
-8) **Cosechar / Marcar como “completado”**  
+7) **Cosechar / Marcar como “completado”**  
 Cuando termines de estudiar un documento publicado y (opcionalmente) bumped, usa **Procesado** en el overlay: hace **Unbump**, añade el nombre del fichero a `web/public/read/read_posts.md` y despliega. En el índice público `/read/` aparecerá **bajo un `<hr/>`** en la sección de “completados”, respetando el orden del fichero `read_posts.md`.
 
-9) **Infra y verificación**  
+8) **Infra y verificación**  
 El despliegue usa **doble Nginx**: proxy con TLS en el **host** y Nginx **dentro del contenedor** sirviendo estáticos; `/data/` permite PUT con BasicAuth (host-montado). Verifica `/read/` con `curl` tras el deploy (ver comandos más abajo).
 
 > Tip: si quieres previsualizar el índice sin desplegar, usa `python utils/build_read_index.py`; en deploy se regenerará automáticamente.

@@ -15,6 +15,9 @@ __pycache__/
 failed.txt
 procesados.txt
 Misc/
+.playwright/
+x_state.json
+*_state.json
 
 # Env and secrets (never commit)
 .env
@@ -42,7 +45,6 @@ web/*
 # Allow base article script under /web/public/read/
 !web/public/
 web/public/*
-!web/public/editor.html
 !web/public/read/
 web/public/read/*
 !web/public/read/article.js

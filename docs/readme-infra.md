@@ -15,7 +15,7 @@ Sitio en producción: https://domingogallardo.com
 > - En `docker-compose` local, `/data` se monta **solo lectura** (seguro por defecto); el script de deploy monta `/data` **lectura‑escritura** en el servidor.
 > - El `web/nginx.conf` incluido sirve `/read/` (HTML+PDF) usando el **autoindex** de nginx por defecto. El índice estático `read.html` se genera en el despliegue y queda accesible en `/read/read.html`. Si prefieres que `/read/` muestre ese índice estático por defecto, añade `index read.html;` dentro de la `location /read/` del Nginx del contenedor. El contenedor usa `server_name localhost`.
 > - El listado `read.html` incluye una sección curada: si existe `web/public/read/read_posts.md`, el deploy añade un `<hr/>` y lista esos nombres de fichero debajo (en el orden del archivo). Los elementos bajo el separador representan documentos ya leídos/estudiados (completados).
-- Los assets públicos bajo `web/public/` **no** se versionan en el repo público (ignorados vía `.gitignore`), salvo utilidades mínimas imprescindibles como `web/public/read/article.js` (botón de citas) y `web/public/editor.html` (editor de `/data/nota.txt`).
+- Los assets públicos bajo `web/public/` **no** se versionan en el repo público (ignorados vía `.gitignore`), salvo utilidades mínimas imprescindibles como `web/public/read/article.js` (botón de citas).
 
 ---
 
@@ -230,11 +230,6 @@ http {
 
         root /usr/share/nginx/html;
 
-        # Editor page (static)
-        location = /editor {
-            try_files /editor.html =404;   # serves public/editor.html
-        }
-
         # Host-mounted data (PUT via DAV)
         location /data/ {
             alias /data/;
@@ -292,15 +287,6 @@ services:
       - ./nginx.conf:/etc/nginx/nginx.conf:ro
       - ./dynamic-data:/data:ro
 ```
-
----
-
-### 5.5 Editor estático `/editor` (cliente WebDAV mínimo)
-
-- El archivo `web/public/editor.html` forma parte del repo y se sirve como `https://<YOUR_DOMAIN>/editor`.  
-- Carga/guarda `nota.txt` haciendo `fetch` contra `https://<YOUR_DOMAIN>/data/nota.txt` con `credentials: 'include'`, por lo que reutiliza la sesión de BasicAuth (no uses `usuario:contraseña@` en la URL).  
-- Muestra estados “Cargando…” / “Guardando…” y propaga los errores HTTP (401, 403, etc.) para que el usuario renueve la autenticación si es necesario.  
-- Ideal para automatizaciones o retoques rápidos sobre `/opt/web-domingo/dynamic-data/nota.txt` sin exponer un editor más complejo; los permisos siguen gobernados por `/data/` en `nginx.conf`.
 
 ---
 

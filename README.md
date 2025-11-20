@@ -3,7 +3,7 @@
 docflow automatiza **recolectar → procesar → priorizar (bump) → leer → publicar → marcar como completado** tus documentos (artículos, podcasts, Markdown, PDFs y tweets) en una estructura anual.
 
 ## ✨ Características
-- Pipeline único para Instapaper, Snipd, PDFs, imágenes, Markdown y tweets (editor remoto + `Tweets/Tweets <AÑO>/`).
+- Pipeline único para Instapaper, Snipd, PDFs, imágenes, Markdown y tweets (likes de X + `Tweets/Tweets <AÑO>/`).
 - Bump/unbump automático (⭐ en Instapaper) y overlay local (`utils/serve_docs.py`) para publicar, despublicar y marcar procesados.
 - Deploy reproducible a `/read/` mediante `web/deploy.sh` (índice estático ordenado por `mtime` + soporte de `read_posts.md`).
 - Registro histórico (`Incoming/processed_history.txt`) y utilidades para convertir títulos con IA, limpiar Markdown y copiar citas con Text Fragments.
@@ -67,3 +67,4 @@ docflow automatiza **recolectar → procesar → priorizar (bump) → leer → p
 ```
 
 © 2025 Domingo Gallardo López
+- Likes de X: define `TWEET_LIKES_STATE` apuntando al `storage_state` generado por `python utils/login_x.py --export-state x_state.json`. Ajusta `TWEET_LIKES_MAX` para el scroll máximo (por defecto 100) y `TWEET_LIKES_BATCH` para limitar cuántos likes se procesan por ejecución (por defecto 10).
