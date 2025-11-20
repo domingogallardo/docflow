@@ -14,6 +14,7 @@ from bs4 import BeautifulSoup, NavigableString
 from markdownify import markdownify
 
 _TABLE_LIKE_TAGS = ("table", "thead", "tbody", "tfoot", "tr", "td", "th")
+_ZERO_WIDTH_CHARS = ("\u200b", "\u200c", "\u200d", "\ufeff", "\u2060")
 _LIST_ITEM_PATTERN = re.compile(r"^\s*(?:[-*+]|\d+\.)\s+")
 _MACOS_HTML_SNIFF = re.compile(r"<[a-zA-Z!/][^>]*>")
 
@@ -28,6 +29,33 @@ def _normalize_structure(soup: BeautifulSoup) -> None:
 
     for span in soup.find_all("span", class_="Apple-converted-space"):
         span.replace_with(" ")
+
+    _clean_text_nodes(soup)
+    _prune_empty_paragraphs(soup)
+
+
+def _clean_text_nodes(soup: BeautifulSoup) -> None:
+    """Limpia caracteres invisibles y normaliza espacios en texto."""
+    for text_node in soup.find_all(string=True):
+        new_text = _normalize_text(str(text_node))
+        if new_text != text_node:
+            text_node.replace_with(new_text)
+
+
+def _normalize_text(text: str) -> str:
+    if not text:
+        return text
+    cleaned = text.replace("\u00a0", " ")
+    for char in _ZERO_WIDTH_CHARS:
+        cleaned = cleaned.replace(char, "")
+    return cleaned
+
+
+def _prune_empty_paragraphs(soup: BeautifulSoup) -> None:
+    """Elimina párrafos vacíos tras limpiar texto."""
+    for p in soup.find_all("p"):
+        if not p.get_text(strip=True):
+            p.decompose()
 
 
 def html_to_compact_markdown(html: str) -> str:
