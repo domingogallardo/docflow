@@ -13,8 +13,21 @@ from typing import Iterable, Optional
 from bs4 import BeautifulSoup, NavigableString
 from markdownify import markdownify
 
+_TABLE_LIKE_TAGS = ("table", "thead", "tbody", "tfoot", "tr", "td", "th")
 _LIST_ITEM_PATTERN = re.compile(r"^\s*(?:[-*+]|\d+\.)\s+")
 _MACOS_HTML_SNIFF = re.compile(r"<[a-zA-Z!/][^>]*>")
+
+
+def _normalize_structure(soup: BeautifulSoup) -> None:
+    """Elimina ruido de emails (tablas) y caracteres especiales de macOS."""
+    for head in soup.find_all("head"):
+        head.decompose()
+
+    for tag in soup.find_all(_TABLE_LIKE_TAGS):
+        tag.unwrap()
+
+    for span in soup.find_all("span", class_="Apple-converted-space"):
+        span.replace_with(" ")
 
 
 def html_to_compact_markdown(html: str) -> str:
@@ -28,6 +41,7 @@ def html_to_compact_markdown(html: str) -> str:
         return ""
 
     soup = BeautifulSoup(html, "html.parser")
+    _normalize_structure(soup)
 
     # Desenvuelve <p> cuando es el único elemento significativo del <li>.
     for li in soup.find_all("li"):
