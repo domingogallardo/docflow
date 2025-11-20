@@ -1,21 +1,9 @@
 #!/usr/bin/env python3
-"""Tests para la recolección de tweets vía editor remoto."""
+"""Tests para la recolección de tweets vía likes de X."""
 from pathlib import Path
 from unittest.mock import patch
 
-import requests
-
 from pipeline_manager import DocumentProcessor, DocumentProcessorConfig
-
-
-class DummyResponse:
-    def __init__(self, text: str, status_code: int = 200):
-        self.text = text
-        self.status_code = status_code
-
-    def raise_for_status(self):
-        if self.status_code >= 400:
-            raise requests.HTTPError(f"status {self.status_code}")
 
 
 def prepare_processor(tmp_path):
@@ -26,25 +14,21 @@ def prepare_processor(tmp_path):
     return processor, incoming, config
 
 
-def mock_editor(monkeypatch, text: str, status_code: int = 200):
-    monkeypatch.setattr(
-        "pipeline_manager.requests.get",
-        lambda url, auth=None, timeout=None: DummyResponse(text, status_code),
-    )
+def mock_likes(monkeypatch, urls, stop_found=True):
+    def fake_fetch(*args, **kwargs):
+        return list(urls), stop_found, len(urls)
+
+    monkeypatch.setattr("pipeline_manager.fetch_likes_with_state", fake_fetch)
 
 
-def test_process_tweet_urls_creates_files_from_editor(tmp_path, monkeypatch):
+def test_process_tweet_urls_creates_files_from_likes(tmp_path, monkeypatch):
     processor, incoming, _ = prepare_processor(tmp_path)
-    mock_editor(
+    mock_likes(
         monkeypatch,
-        "\n".join(
-            [
-                "# comentarios",
-                "",
-                "https://x.com/user/status/1",
-                "https://x.com/user/status/2",
-            ]
-        ),
+        [
+            "https://x.com/user/status/1",
+            "https://x.com/user/status/2",
+        ],
     )
 
     responses = [
@@ -60,20 +44,20 @@ def test_process_tweet_urls_creates_files_from_editor(tmp_path, monkeypatch):
     assert (incoming / "Tweet - user-2.md").exists()
 
 
-def test_process_tweet_urls_handles_editor_error(tmp_path, monkeypatch):
+def test_process_tweet_urls_handles_fetch_error(tmp_path, monkeypatch):
     processor, _, _ = prepare_processor(tmp_path)
 
-    def failing_get(*args, **kwargs):
-        raise requests.RequestException("boom")
+    def failing_fetch(*args, **kwargs):
+        raise RuntimeError("boom")
 
-    monkeypatch.setattr("pipeline_manager.requests.get", failing_get)
+    monkeypatch.setattr("pipeline_manager.fetch_likes_with_state", failing_fetch)
     created = processor.process_tweet_urls()
     assert created == []
 
 
 def test_process_tweets_pipeline_runs_markdown_subset(tmp_path, monkeypatch):
     processor, _, _ = prepare_processor(tmp_path)
-    mock_editor(monkeypatch, "https://x.com/user/status/1")
+    mock_likes(monkeypatch, ["https://x.com/user/status/1"])
 
     with patch(
         "pipeline_manager.fetch_tweet_markdown",
@@ -97,9 +81,9 @@ def test_process_tweets_pipeline_runs_markdown_subset(tmp_path, monkeypatch):
     assert moved == [processor.config.tweets_dest / "Tweet - processed.md"]
 
 
-def test_process_tweets_pipeline_skips_when_editor_empty(tmp_path, monkeypatch):
+def test_process_tweets_pipeline_skips_when_likes_empty(tmp_path, monkeypatch):
     processor, _, _ = prepare_processor(tmp_path)
-    mock_editor(monkeypatch, "# sin urls")
+    mock_likes(monkeypatch, [])
 
     def fail_subset(_):
         raise AssertionError("process_markdown_subset debe omitirse")
@@ -119,14 +103,12 @@ def test_process_tweet_urls_skips_already_processed(tmp_path, monkeypatch):
     existing_url = "https://x.com/user/status/1"
     config.tweets_processed.write_text(existing_url + "\n", encoding="utf-8")
 
-    mock_editor(
+    mock_likes(
         monkeypatch,
-        "\n".join(
-            [
-                existing_url,
-                "https://x.com/user/status/2",
-            ]
-        ),
+        [
+            existing_url,
+            "https://x.com/user/status/2",
+        ],
     )
 
     with patch(
@@ -145,7 +127,7 @@ def test_process_tweet_urls_skips_already_processed(tmp_path, monkeypatch):
 def test_process_tweet_urls_appends_processed_file(tmp_path, monkeypatch):
     processor, _, config = prepare_processor(tmp_path)
     url = "https://x.com/user/status/42"
-    mock_editor(monkeypatch, url)
+    mock_likes(monkeypatch, [url])
 
     with patch(
         "pipeline_manager.fetch_tweet_markdown",
@@ -155,3 +137,23 @@ def test_process_tweet_urls_appends_processed_file(tmp_path, monkeypatch):
 
     assert config.tweets_processed.exists()
     assert config.tweets_processed.read_text(encoding="utf-8") == url + "\n"
+
+
+def test_process_tweet_urls_respects_batch_limit(tmp_path, monkeypatch):
+    processor, incoming, _ = prepare_processor(tmp_path)
+    urls = [f"https://x.com/user/status/{idx}" for idx in range(1, 6)]
+    mock_likes(monkeypatch, urls)
+
+    import pipeline_manager as pm
+    monkeypatch.setattr(pm.cfg, "TWEET_LIKES_BATCH", 2, raising=False)
+
+    with patch(
+        "pipeline_manager.fetch_tweet_markdown",
+        side_effect=[
+            ("# T1\n\n[Ver en X](https://x.com/1)\n", "Tweet - user-1.md"),
+            ("# T2\n\n[Ver en X](https://x.com/2)\n", "Tweet - user-2.md"),
+        ],
+    ):
+        created = processor.process_tweet_urls()
+
+    assert len(created) == 2

@@ -91,6 +91,4 @@ rm -f "$SCRIPT_DIR/deploy.tar.gz"
 
 echo "✅ Despliegue completo. El contenedor sirve por http://localhost:8080 en el servidor."
 echo "🌐 Nginx del host termina HTTPS y hace proxy a este puerto."
-echo "📝 Edición en /editor → PUT sobre /data/nota.txt (BasicAuth)."
-
 :
