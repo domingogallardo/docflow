@@ -51,7 +51,8 @@ class DocumentProcessor:
             return []
 
         processed_urls = self._load_processed_urls()
-        fresh_urls = [url for url in urls if url not in processed_urls]
+        processed_set = set(processed_urls)
+        fresh_urls = [url for url in urls if url not in processed_set]
 
         if not fresh_urls:
             print("🐦 No hay nuevos likes pendientes (todo está ya procesado).")
@@ -106,31 +107,28 @@ class DocumentProcessor:
         )
         if last_processed and not stop_found:
             print("⚠️  No se encontró la última URL procesada en los likes; revisa el límite TWEET_LIKES_MAX.")
-        batch = cfg.TWEET_LIKES_BATCH
-        if batch and len(urls) > batch:
-            print(f"ℹ️  Limite diario de likes: tomando solo los {batch} más recientes.")
-            urls = urls[:batch]
         return urls
 
     def _last_processed_tweet_url(self) -> Optional[str]:
         lines = self._load_processed_urls()
         if not lines:
             return None
-        return next(iter(lines))
+        return lines[0]
 
-    def _load_processed_urls(self) -> Set[str]:
+    def _load_processed_urls(self) -> List[str]:
         path = self.tweets_processed
         if not path.exists():
-            return set()
+            return []
         lines = [line.strip() for line in path.read_text(encoding="utf-8").splitlines()]
-        return {line for line in lines if line}
+        return [line for line in lines if line]
 
     def _append_processed_urls(self, urls: List[str]) -> None:
         path = self.tweets_processed
         path.parent.mkdir(parents=True, exist_ok=True)
-        with path.open("a", encoding="utf-8") as handle:
-            for url in urls:
-                handle.write(url + "\n")
+        existing = self._load_processed_urls()
+        # Prepend nuevos URLs (más recientes al inicio)
+        all_urls = list(urls) + [u for u in existing if u not in urls]
+        path.write_text("\n".join(all_urls) + "\n", encoding="utf-8")
 
     def process_podcasts(self) -> List[Path]:
         """Procesa archivos de podcast con procesador unificado."""

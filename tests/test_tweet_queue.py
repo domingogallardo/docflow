@@ -120,7 +120,7 @@ def test_process_tweet_urls_skips_already_processed(tmp_path, monkeypatch):
     assert mocked.call_count == 1
     assert (incoming / "Tweet - user-2.md").exists()
     processed_lines = processor.tweets_processed.read_text(encoding="utf-8").splitlines()
-    assert processed_lines == [existing_url, "https://x.com/user/status/2"]
+    assert processed_lines == ["https://x.com/user/status/2", existing_url]
 
 
 def test_process_tweet_urls_appends_processed_file(tmp_path, monkeypatch):
@@ -138,21 +138,44 @@ def test_process_tweet_urls_appends_processed_file(tmp_path, monkeypatch):
     assert processor.tweets_processed.read_text(encoding="utf-8") == url + "\n"
 
 
-def test_process_tweet_urls_respects_batch_limit(tmp_path, monkeypatch):
+def test_last_processed_uses_first_line(tmp_path, monkeypatch):
+    processor, _ = prepare_processor(tmp_path)
+    urls = [
+        "https://x.com/user/status/1",
+        "https://x.com/user/status/2",
+        "https://x.com/user/status/3",
+    ]
+    # Guardados más recientes primero
+    processor.tweets_processed.write_text("\n".join(reversed(urls)) + "\n", encoding="utf-8")
+
+    assert processor._last_processed_tweet_url() == urls[-1]
+
+    mock_likes(monkeypatch, ["https://x.com/user/status/4"])
+    with patch(
+        "pipeline_manager.fetch_tweet_markdown",
+        return_value=("# T4\n\n[Ver en X](https://x.com/4)\n", "Tweet - user-4.md"),
+    ):
+        processor.process_tweet_urls()
+
+    lines = processor.tweets_processed.read_text(encoding="utf-8").splitlines()
+    assert lines[0] == "https://x.com/user/status/4"
+
+
+def test_process_tweet_urls_processes_all_when_no_stop(tmp_path, monkeypatch):
     processor, incoming = prepare_processor(tmp_path)
     urls = [f"https://x.com/user/status/{idx}" for idx in range(1, 6)]
-    mock_likes(monkeypatch, urls)
-
-    import pipeline_manager as pm
-    monkeypatch.setattr(pm.cfg, "TWEET_LIKES_BATCH", 2, raising=False)
+    mock_likes(monkeypatch, urls, stop_found=False)
 
     with patch(
         "pipeline_manager.fetch_tweet_markdown",
         side_effect=[
             ("# T1\n\n[Ver en X](https://x.com/1)\n", "Tweet - user-1.md"),
             ("# T2\n\n[Ver en X](https://x.com/2)\n", "Tweet - user-2.md"),
+            ("# T3\n\n[Ver en X](https://x.com/3)\n", "Tweet - user-3.md"),
+            ("# T4\n\n[Ver en X](https://x.com/4)\n", "Tweet - user-4.md"),
+            ("# T5\n\n[Ver en X](https://x.com/5)\n", "Tweet - user-5.md"),
         ],
     ):
         created = processor.process_tweet_urls()
 
-    assert len(created) == 2
+    assert len(created) == 5
