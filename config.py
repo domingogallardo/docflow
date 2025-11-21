@@ -18,5 +18,4 @@ INSTAPAPER_PASSWORD = os.environ.get("INSTAPAPER_PASSWORD")
 
 TWEET_LIKES_STATE = Path(os.getenv("TWEET_LIKES_STATE", "x_state.json")).expanduser()
 TWEET_LIKES_URL = os.getenv("TWEET_LIKES_URL", "https://x.com/domingogallardo/likes")
-TWEET_LIKES_MAX = int(os.getenv("TWEET_LIKES_MAX", "100"))
-TWEET_LIKES_BATCH = int(os.getenv("TWEET_LIKES_BATCH", "10"))
+TWEET_LIKES_MAX = int(os.getenv("TWEET_LIKES_MAX", "50"))

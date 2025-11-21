@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 from typing import List, Set, Tuple
-from urllib.parse import urljoin
+from urllib.parse import urljoin, urlparse
 
 from playwright.sync_api import TimeoutError as PlaywrightTimeoutError, sync_playwright
 
@@ -30,6 +30,22 @@ def _is_status_href(href: str | None) -> bool:
     return bool(href and "/status/" in href)
 
 
+def _canonical_status_url(href: str | None) -> str | None:
+    """Normaliza una URL de tweet descartando sufijos (/photo, /analytics...)."""
+    if not href or "/status/" not in href:
+        return None
+    absolute = _absolute_url(href)
+    parsed = urlparse(absolute)
+    segments = [seg for seg in parsed.path.split("/") if seg]
+    if len(segments) < 3 or segments[1] != "status":
+        return None
+    user = segments[0]
+    status_id = segments[2]
+    if not user or not status_id:
+        return None
+    return f"https://x.com/{user}/status/{status_id}"
+
+
 def _absolute_url(href: str) -> str:
     if href.startswith(("http://", "https://")):
         return href
@@ -39,7 +55,7 @@ def _absolute_url(href: str) -> str:
 def _normalize_stop_url(url: str | None) -> str | None:
     if not url:
         return None
-    return _absolute_url(url.strip())
+    return _canonical_status_url(url.strip())
 
 
 def _extract_tweet_urls(page, seen: Set[str]) -> List[str]:
@@ -48,13 +64,13 @@ def _extract_tweet_urls(page, seen: Set[str]) -> List[str]:
         links = article.query_selector_all("a[href*='/status/']")
         for link in links:
             href = link.get_attribute("href")
-            if not _is_status_href(href):
+            canonical = _canonical_status_url(href)
+            if not canonical:
                 continue
-            absolute = _absolute_url(href)
-            if absolute in seen:
+            if canonical in seen:
                 continue
-            seen.add(absolute)
-            urls.append(absolute)
+            seen.add(canonical)
+            urls.append(canonical)
     return urls
 
 
