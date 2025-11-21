@@ -26,6 +26,8 @@ docflow automatiza **recolectar → procesar → priorizar (bump) → leer → p
    export OPENAI_API_KEY=...     # opcional (títulos IA)
    export INSTAPAPER_USERNAME=...  # opcional
    export INSTAPAPER_PASSWORD=...  # opcional
+   export TWEET_LIKES_STATE=/ruta/a/x_state.json  # obligatorio si procesas likes de X
+   export TWEET_LIKES_MAX=50                      # opcional, límite de scroll
    ```
 2. Ejecuta el pipeline completo (puedes pasar `--year`):
    ```bash
@@ -48,6 +50,15 @@ docflow automatiza **recolectar → procesar → priorizar (bump) → leer → p
    pytest -q
    ```
 
+## 🌐 Publicación en tu dominio (`/read/`)
+- Ejecuta `web/deploy.sh` (desde `web/`) para generar un índice estático ordenado por `mtime` y subirlo al contenedor web en tu servidor (ruta `/read/`, con `read_posts.md` opcional para marcar leído).
+- Usa BasicAuth en el host si quieres acceso privado (configurable con variables de entorno en el propio `deploy.sh`).
+- Comprueba tras el deploy:
+  ```bash
+  curl -I https://tu-dominio.com/read/
+  curl -s https://tu-dominio.com/read/ | head -n 20
+  ```
+
 ## 📚 Documentación
 - `docs/guia.md` — guía operativa completa (comandos, overlay, citas, troubleshooting).
 - `docs/flujo.md` — flujo de extremo a extremo (entradas, pipeline, publicación y Obsidian).
@@ -67,4 +78,3 @@ docflow automatiza **recolectar → procesar → priorizar (bump) → leer → p
 ```
 
 © 2025 Domingo Gallardo López
-- Likes de X: define `TWEET_LIKES_STATE` apuntando al `storage_state` generado por `python utils/login_x.py --export-state x_state.json`. Ajusta `TWEET_LIKES_MAX` para el scroll máximo (por defecto 100) y `TWEET_LIKES_BATCH` para limitar cuántos likes se procesan por ejecución (por defecto 10).
