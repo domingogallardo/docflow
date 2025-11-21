@@ -5,7 +5,7 @@ docflow automatiza **recolectar → procesar → priorizar (bump) → leer → p
 ## ✨ Características
 - Pipeline único para Instapaper, Snipd, PDFs, imágenes, Markdown y tweets (likes de X + `Tweets/Tweets <AÑO>/`).
 - Bump/unbump automático (⭐ en Instapaper) y overlay local (`utils/serve_docs.py`) para publicar, despublicar y marcar procesados.
-- Deploy reproducible a `/read/` mediante `web/deploy.sh` (índice estático ordenado por `mtime` + soporte de `read_posts.md`).
+- Despliegue a tu dominio vía `web/deploy.sh`: genera un índice estático en `/read/` (orden por `mtime`, opcional `read_posts.md` para marcados) para leer online y copiar citas fácilmente.
 - Registro histórico (`Incoming/processed_history.txt`) y utilidades para convertir títulos con IA, limpiar Markdown y copiar citas con Text Fragments.
 
 ## 🔧 Requisitos rápidos
