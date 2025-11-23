@@ -124,10 +124,6 @@ def _pdf_actions_html(rel_from_root: str, bumped: bool, published: bool) -> str:
         actions.append(
             f"<a href='#' class='dg-act' data-dg-act='unpublish' data-dg-path='{html.escape(rel_from_root)}'>Despublicar</a>"
         )
-        if bumped:
-            actions.append(
-                f"<a href='#' class='dg-act' data-dg-act='processed' data-dg-path='{html.escape(rel_from_root)}'>Procesado</a>"
-            )
     elif bumped:
         actions.append(
             f"<a href='#' class='dg-act' data-dg-act='publish' data-dg-path='{html.escape(rel_from_root)}'>Publicar</a>"
@@ -295,74 +291,6 @@ class HTMLOnlyRequestHandler(SimpleHTTPRequestHandler):
                         mtime = st.st_mtime if st.st_mtime <= time.time() else time.time() - 60
 
                 os.utime(abs_path, (atime, mtime))
-                self._send_bytes(b'{"ok":true}', "application/json; charset=utf-8")
-                return
-
-            if action == "processed":
-                # Validaciones: debe estar publicado y bumped
-                name = os.path.basename(abs_path)
-                is_published = os.path.exists(os.path.join(PUBLIC_READS_DIR, name))
-                st = os.stat(abs_path)
-                if not is_published or not is_bumped(st.st_mtime):
-                    self.send_error(400, "Requiere 'bumped' y 'publicado'")
-                    return
-
-                # Unbump (como unbump_now)
-                atime = st.st_atime
-                cre = get_creation_epoch(abs_path)
-                if cre is not None:
-                    mtime = cre
-                else:
-                    mtime = st.st_mtime if st.st_mtime <= time.time() else time.time() - 60
-                os.utime(abs_path, (atime, int(mtime)))
-
-                # Unbump también la copia pública si existe
-                try:
-                    pub_path = os.path.join(PUBLIC_READS_DIR, name)
-                    if os.path.exists(pub_path):
-                        st_pub = os.stat(pub_path)
-                        os.utime(pub_path, (st_pub.st_atime, int(mtime)))
-                except Exception as e:
-                    self.send_error(500, f"Error unbumping copia pública: {e}")
-                    return
-
-                # Añadir a read_posts.md (prepend idempotente)
-                try:
-                    md_path = os.path.join(PUBLIC_READS_DIR, "read_posts.md")
-                    # Cargar existentes normalizados (quitando viñetas)
-                    existing: list[str] = []
-                    if os.path.isfile(md_path):
-                        with open(md_path, "r", encoding="utf-8") as f:
-                            for raw in f:
-                                s = raw.strip()
-                                if not s or s.startswith('#'):
-                                    continue
-                                if s.startswith('- ') or s.startswith('* '):
-                                    s = s[2:].strip()
-                                existing.append(s)
-                    if name not in existing:
-                        tmp = md_path + ".tmp"
-                        os.makedirs(os.path.dirname(md_path), exist_ok=True)
-                        with open(tmp, "w", encoding="utf-8") as w:
-                            w.write(f"- {name}\n")
-                            if os.path.isfile(md_path):
-                                with open(md_path, "r", encoding="utf-8") as r:
-                                    w.write(r.read())
-                        os.replace(tmp, md_path)
-                except Exception as e:
-                    self.send_error(500, f"Error actualizando read_posts.md: {e}")
-                    return
-
-                # Desplegar para regenerar read.html en el servidor
-                if not os.path.isfile(DEPLOY_SCRIPT) or not os.access(DEPLOY_SCRIPT, os.X_OK):
-                    self.send_error(500, f"Deploy no disponible: {DEPLOY_SCRIPT}")
-                    return
-                try:
-                    subprocess.run([DEPLOY_SCRIPT], check=True)
-                except subprocess.CalledProcessError as e:
-                    self.send_error(500, f"Fallo en deploy ({e.returncode})")
-                    return
-
                 self._send_bytes(b'{"ok":true}', "application/json; charset=utf-8")
                 return
 

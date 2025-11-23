@@ -1,9 +1,7 @@
-"""Genera el índice estático web/public/read/read.html.
+"""Genera el índice estático web/public/read/read.html con un único listado.
 
-- Lista arriba los ficheros (HTML/PDF) ordenados por mtime desc.
-- Inserta un separador <hr/> y debajo los ficheros listados en
-  web/public/read/read_posts.md (si existe), en el orden del fichero.
-  Útil para marcar artículos ya leídos/estudiados (completados).
+- Lista los ficheros (HTML/PDF) ordenados por mtime desc.
+- Sin zonas separadas ni curadas: todo vive en el mismo bloque <ul>.
 
 Uso:
     python utils/build_read_index.py [DIRECTORIO]
@@ -48,22 +46,6 @@ def load_entries(dir_path: str, allowed_exts: Iterable[str]) -> List[Tuple[float
     return entries
 
 
-def load_read_posts_md(base_dir: str) -> List[str]:
-    md_path = os.path.join(base_dir, "read_posts.md")
-    if not os.path.isfile(md_path):
-        return []
-    picked: List[str] = []
-    with open(md_path, "r", encoding="utf-8") as f:
-        for raw in f:
-            line = raw.strip()
-            if not line or line.startswith('#'):
-                continue
-            if line.startswith('- ') or line.startswith('* '):
-                line = line[2:].strip()
-            picked.append(line)
-    return picked
-
-
 def _icon_for(name: str) -> str:
     lower = name.lower()
     if lower.endswith(".pdf"):
@@ -81,23 +63,8 @@ def _render_list_item(name: str, mtime: float) -> str:
     return f'<li>{icon}<a href="{href}" title="{esc}">{esc}</a> — {d}</li>'
 
 
-def build_html(dir_path: str, entries: List[Tuple[float, str]], picked_names: List[str]) -> str:
-    picked_set = set(picked_names)
-    by_name = {name: mtime for (mtime, name) in entries}
-
-    items_main: List[str] = []
-    items_picked: List[str] = []
-
-    for mtime, name in entries:
-        if name in picked_set:
-            continue
-        items_main.append(_render_list_item(name, mtime))
-
-    for name in picked_names:
-        if name not in by_name:
-            continue
-        mtime = by_name[name]
-        items_picked.append(_render_list_item(name, mtime))
+def build_html(dir_path: str, entries: List[Tuple[float, str]]) -> str:
+    items: List[str] = [_render_list_item(name, mtime) for mtime, name in entries]
 
     ascii_open = r'''<style>
   .ascii-head { margin-top: 28px; color: #666; font-size: 14px; }
@@ -140,8 +107,7 @@ def build_html(dir_path: str, entries: List[Tuple[float, str]], picked_names: Li
         '<script src="/read/article.js" defer></script>'
         '<title>Read</title></head><body>'
         '<h1>Read</h1>'
-        + '<ul>' + "\n".join(items_main) + '</ul>'
-        + ("<hr/>" + '<ul>' + "\n".join(items_picked) + '</ul>' if items_picked else '')
+        + '<ul>' + "\n".join(items) + '</ul>'
         + ascii_open
         + '</body></html>'
     )
@@ -159,16 +125,11 @@ def main(argv: list[str]) -> int:
 
     print("🧾 Generando web/public/read/read.html…")
     entries = load_entries(dir_path, allowed_exts=(".html", ".htm", ".pdf"))
-    picked = load_read_posts_md(dir_path)
-    html_doc = build_html(dir_path, entries, picked)
+    html_doc = build_html(dir_path, entries)
     out_path = os.path.join(dir_path, "read.html")
     with open(out_path, "w", encoding="utf-8") as f:
         f.write(html_doc)
     print(f"✓ Generado {out_path}")
-    if picked:
-        print(f"ℹ️  {len(picked)} elemento(s) marcados como 'completados' debajo del separador <hr/>.")
-    else:
-        print("ℹ️  Sin sección de 'completados' (read_posts.md vacío o ausente).")
     return 0
 
 

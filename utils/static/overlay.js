@@ -5,7 +5,6 @@
   let published = (script.dataset.published === '1');
   let publishing = false;
   let unpublishing = false;
-  let processing = false;
   let deleting = false;
   const publicBase = script.dataset.publicBase || '';
   function el(tag, attrs, text){
@@ -48,20 +47,6 @@
     } else {
       publishing = false; render();
       toast('err', 'Error publicando');
-    }
-  }
-  async function processed(){
-    if(deleting || processing || !bumped || !published) return;
-    processing = true; render(); msg.textContent = 'procesando…';
-    const ok = await call('processed');
-    msg.textContent = ok ? '✓ procesado' : '× error';
-    msg.className = ok ? 'meta ok' : 'meta err';
-    if(ok){
-      bumped = false; processing = false; render();
-      toast('ok', 'Procesado');
-    } else {
-      processing = false; render();
-      toast('err', 'Error en procesado');
     }
   }
   async function unpublish(){
@@ -125,14 +110,6 @@
       if(deleting){ unp.setAttribute('disabled',''); }
       unp.addEventListener('click', unpublish);
       bar.appendChild(unp);
-      if(bumped){
-        const done = el('button', null, 'Procesado');
-        done.title = 'Unbump (local y público) + añadir a read_posts.md + desplegar';
-        if(processing){ done.textContent = 'Procesando…'; done.setAttribute('disabled',''); }
-        if(deleting){ done.setAttribute('disabled',''); }
-        done.addEventListener('click', processed);
-        bar.appendChild(done);
-      }
     }
     const del = el('button', null, deleting ? 'Eliminando…' : 'Eliminar');
     del.title = 'Borrar el archivo y volver al listado';
@@ -161,7 +138,6 @@
     if(k==='l' && !e.metaKey && !e.ctrlKey && !e.altKey){ e.preventDefault(); goList(); }
     if(k==='p' && bumped && !published && !publishing){ e.preventDefault(); publish(); }
     if(k==='d' && published && !unpublishing){ e.preventDefault(); unpublish(); }
-    if(k==='x' && bumped && published && !processing){ e.preventDefault(); processed(); }
   });
   document.addEventListener('DOMContentLoaded', ()=>{ document.body.appendChild(bar); render(); });
 })();
