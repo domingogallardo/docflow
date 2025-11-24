@@ -76,6 +76,17 @@ def test_clean_duplicate_markdown_links():
     assert "..." not in result_short
 
 
+def test_add_margins_wraps_images(tmp_path):
+    html = tmp_path / "sample.html"
+    html.write_text("<html><head></head><body><p>hola</p><img src=\"https://img.test/x.jpg\"></body></html>", encoding="utf-8")
+
+    utils.add_margins_to_html_files(tmp_path)
+
+    out = html.read_text(encoding="utf-8")
+    assert '<a href="https://img.test/x.jpg" rel="noopener" target="_blank"><img src="https://img.test/x.jpg"/></a>' in out
+    assert "cursor: zoom-in" in out
+
+
 def test_convert_urls_integration():
     """Test integral del procesamiento de URLs (duplicados + conversión)."""
     from utils import convert_urls_to_links

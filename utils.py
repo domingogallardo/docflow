@@ -180,7 +180,7 @@ def add_margins_to_html_files(directory: Path, file_filter=None):
     from bs4 import BeautifulSoup
     
     margin_style = "body { margin-left: 6%; margin-right: 6%; }"
-    img_rule = "img { max-width: 300px; height: auto; }"
+    img_rule = "img { max-width: 300px; height: auto; cursor: zoom-in; }"
     
     html_files = [
         file_path for file_path in iter_html_files(directory, file_filter)
@@ -195,6 +195,18 @@ def add_margins_to_html_files(directory: Path, file_filter=None):
             with open(html_file, 'r', encoding='utf-8') as f:
                 soup = BeautifulSoup(f, 'html.parser')
             
+            # Envolver imágenes en enlaces al propio src (abre a tamaño completo)
+            for img in soup.find_all("img"):
+                src = img.get("src")
+                if not src:
+                    continue
+                parent = img.parent
+                if parent and parent.name == "a" and parent.get("href") == src:
+                    continue  # ya envuelto
+                link = soup.new_tag("a", href=src, target="_blank", rel="noopener")
+                img.replace_with(link)
+                link.append(img)
+
             # Buscar la etiqueta <head>
             head = soup.head
             if head is None:
