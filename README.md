@@ -46,9 +46,9 @@ docflow automatiza **recolectar → procesar → priorizar (bump) → leer → p
    (cd web && ./deploy.sh)
    ```
 6. Tests rápidos:
-   ```bash
-   pytest -q
-   ```
+ ```bash
+  pytest -q
+  ```
 
 ## 🌐 Publicación en tu dominio (`/read/`)
 - Ejecuta `web/deploy.sh` (desde `web/`) para generar un índice estático ordenado por `mtime` y subirlo al contenedor web en tu servidor (ruta `/read/`, con `read_posts.md` opcional para marcar leído).
