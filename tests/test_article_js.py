@@ -6,7 +6,6 @@ def test_build_read_index_includes_article_js():
     assert spec and spec.loader
     spec.loader.exec_module(mod)  # type: ignore
     entries = [(0.0, 'doc1.html')]
-    picked = []
-    html = mod.build_html('web/public/read', entries, picked)
+    html = mod.build_html('web/public/read', entries)
     # Debe incluir el script estándar sin query params
     assert '<script src="/read/article.js" defer></script>' in html
