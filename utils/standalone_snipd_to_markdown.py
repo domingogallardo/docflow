@@ -4,7 +4,7 @@ Conversor standalone para generar archivos Markdown limpios a partir de un
 Markdown exportado desde Snipd.
 
 Uso básico:
-    python snipd_to_markdown.py input.md --output-dir ./salida
+    python utils/standalone_snipd_to_markdown.py input.md --output-dir ./salida
 
 El comando divide archivos con múltiples episodios, limpia artefactos de Snipd
 (bloques <details>, enlaces de audio, saltos <br/>) y añade un índice con

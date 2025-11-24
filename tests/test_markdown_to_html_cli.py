@@ -6,7 +6,7 @@ import pytest
 pytest.importorskip("markdown")
 pytest.importorskip("bs4")
 
-from utils.markdown_to_html_cli import main
+from utils.standalone_markdown_to_html import main
 
 
 def test_cli_converts_markdown_and_applies_repo_style(tmp_path):
