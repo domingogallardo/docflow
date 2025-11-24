@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from snipd_to_markdown import SNIP_INDEX_MARKER, SnipdMarkdownConverter
+from utils.standalone_snipd_to_markdown import SNIP_INDEX_MARKER, SnipdMarkdownConverter
 
 
 def test_snipd_converter_splits_and_indexes(tmp_path: Path) -> None:
