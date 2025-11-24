@@ -2,9 +2,14 @@
 """
 Tests para InstapaperProcessor
 """
-import pytest
+import importlib.util
 from pathlib import Path
 from unittest.mock import Mock, patch
+
+import pytest
+
+if importlib.util.find_spec("requests") is None:
+    pytest.skip("requests no está instalado", allow_module_level=True)
 
 from instapaper_processor import InstapaperDownloadRegistry, InstapaperProcessor
 
@@ -167,8 +172,49 @@ def test_download_skips_articles_on_registry(tmp_path, monkeypatch):
         processor._download_article = Mock()
 
         assert processor._download_from_instapaper() is True
+        processor._download_article.assert_not_called()
 
-    processor._download_article.assert_not_called()
+        processor._download_article.reset_mock()
+        assert processor._download_from_instapaper(force_download=True) is True
+        processor._download_article.assert_called_once_with("123")
+
+
+def test_download_instapaper_exports_generates_markdown(tmp_path, monkeypatch):
+    target_dir = tmp_path / "Export"
+    target_dir.mkdir()
+
+    processor = InstapaperProcessor(target_dir, target_dir)
+
+    with patch('instapaper_processor.INSTAPAPER_USERNAME', 'user'), \
+         patch('instapaper_processor.INSTAPAPER_PASSWORD', 'pass'):
+
+        mock_session = Mock()
+        mock_login_response = Mock()
+        mock_login_response.status_code = 200
+        mock_login_response.url = "https://www.instapaper.com/u/1"
+        mock_login_response.text = "<html><body><div>ok</div></body></html>"
+        mock_session.post.return_value = mock_login_response
+        monkeypatch.setattr('instapaper_processor.requests.Session', lambda: mock_session)
+
+        processor._get_article_ids = Mock(return_value=([("abc", False)], False))
+
+        def fake_download(article_id: str):
+            html_path = target_dir / f"{article_id}.html"
+            html_path.write_text(
+                "<html><head><title>Sample</title></head>"
+                "<body><div id='origin'>demo</div><div id=\"story\"><p>Hola</p></div></body></html>",
+                encoding="utf-8",
+            )
+            return html_path, False
+
+        processor._download_article = Mock(side_effect=fake_download)
+
+        files = processor.download_instapaper_exports(force_download=True)
+
+    assert (target_dir / "abc.html").exists()
+    assert (target_dir / "abc.md").exists()
+    suffixes = {p.suffix for p in files}
+    assert {".html", ".md"}.issubset(suffixes)
 
 
 def test_instapaper_processor_with_existing_html(tmp_path):
