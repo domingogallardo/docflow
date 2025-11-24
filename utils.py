@@ -235,8 +235,11 @@ def add_margins_to_html_files(directory: Path, file_filter=None):
                     style_tag.string = margin_style + "\n" + img_rule
                     head.append(style_tag)
             
+            output_html = str(soup)
+            # Normaliza saltos de línea para mantener <br> sin autocierre
+            output_html = output_html.replace("<br/>", "<br>").replace("<br />", "<br>")
             with open(html_file, 'w', encoding='utf-8') as f:
-                f.write(str(soup))
+                f.write(output_html)
             print(f"📏 Márgenes añadidos: {html_file.name}")
             
         except Exception as e:

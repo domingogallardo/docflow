@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 from typing import Iterable, List, Tuple
+import re
 
 import utils as U
 
@@ -67,6 +68,8 @@ def convert_markdown_file(
 
     try:
         md_text = md_file.read_text(encoding="utf-8", errors="replace")
+        # Normaliza saltos de línea para que se conviertan en <br> en lugar de párrafos vacíos
+        md_text = re.sub(r"\n{2,}", "\n", md_text)
         full_html = U.markdown_to_html(md_text, title=md_file.stem)
         html_path.write_text(full_html, encoding="utf-8")
         print(f"✅ HTML generado: {html_path}")
