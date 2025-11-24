@@ -59,7 +59,7 @@ PORT=8000 SERVE_DIR="/Users/domingo/⭐️ Documentación" python utils/serve_do
 
 El overlay:
 - lista los documentos ordenados por `mtime`,
-- permite **Bump (b)**, **Unbump (u)**, **Publicar (p)**, **Despublicar (d)**, **Procesado (x)**,
+- permite **Bump (b)**, **Unbump (u)**, **Publicar (p)**, **Despublicar (d)**,
 - aplica **bump automático** a los HTML generados desde Instapaper si el artículo original estaba marcado con ⭐ (lo hace `InstapaperProcessor` usando `utils.bump_files`, igual que en el pipeline),
 - es el punto donde decides qué pasa a la web.
 
@@ -81,7 +81,6 @@ Cuando un documento ya está bien:
 
    El script:
    - regenera `web/public/read/index.html` ordenado por `mtime`,
-   - respeta `web/public/read/read_posts.md` para los marcados como leídos,
    - sube todo a `/opt/web-domingo/` y reinicia el contenedor `web-domingo` que sirve en el puerto 8080.
 
 A partir de aquí ese documento es la **fuente oficial**: es el que usarás en Obsidian.
