@@ -231,6 +231,67 @@ def test_delete_file_and_public_copy(tmp_path, monkeypatch):
     assert not md_file.exists()
 
 
+def test_publish_sets_public_mtime_without_unbumping(tmp_path, monkeypatch):
+    sd = _load_serve_docs("serve_docs_publish_mtime")
+
+    serve_dir = tmp_path / "serve"
+    serve_dir.mkdir()
+    html_file = serve_dir / "doc.html"
+    html_file.write_text("<html><head></head><body></body></html>", encoding="utf-8")
+
+    # Bump local mtime al futuro
+    future = sd.base_epoch_cached() + 10
+    at = html_file.stat().st_atime
+    __import__("os").utime(str(html_file), (at, future))
+
+    public_reads = tmp_path / "public_reads"
+    public_reads.mkdir()
+    monkeypatch.setattr(sd, "PUBLIC_READS_DIR", str(public_reads), raising=False)
+    monkeypatch.setattr(sd, "SERVE_DIR", str(serve_dir), raising=False)
+
+    # Script de deploy simulado (no hace nada)
+    deploy = tmp_path / "deploy.sh"
+    deploy.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
+    __import__("os").chmod(deploy, 0o755)
+    monkeypatch.setattr(sd, "DEPLOY_SCRIPT", str(deploy), raising=False)
+
+    body = f"path={urllib.parse.quote(html_file.name)}&action=publish"
+
+    class Dummy(sd.HTMLOnlyRequestHandler):
+        def __init__(self):
+            self.path = "/__bump"
+            self.command = "POST"
+            self.requestline = "POST /__bump HTTP/1.1"
+            self.headers = {"Content-Length": str(len(body))}
+            self.rfile = io.BytesIO(body.encode("utf-8"))
+            self.wfile = io.BytesIO()
+            self._sent = {"status": None}
+            self.client_address = ("127.0.0.1", 0)
+
+        def send_response(self, code, message=None):  # type: ignore[override]
+            self._sent["status"] = code
+
+        def send_header(self, key, value):  # type: ignore[override]
+            pass
+
+        def end_headers(self):  # type: ignore[override]
+            pass
+
+    h = Dummy()
+    h.do_POST()
+
+    assert h._sent["status"] == 200
+
+    src_mtime = html_file.stat().st_mtime
+    dst_path = public_reads / html_file.name
+    assert dst_path.exists()
+    dst_mtime = dst_path.stat().st_mtime
+
+    # Local sigue bumped al futuro; copia pública queda con fecha no futura
+    assert src_mtime > time.time()
+    assert dst_mtime <= time.time()
+
+
 def test_compute_bump_mtime_uses_current_base(monkeypatch):
     sd = _load_serve_docs("serve_docs_compute")
 

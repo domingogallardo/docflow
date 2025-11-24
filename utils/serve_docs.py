@@ -376,9 +376,14 @@ class HTMLOnlyRequestHandler(SimpleHTTPRequestHandler):
                                 if not chunk:
                                     break
                                 dst.write(chunk)
-                    # Preservar tiempos (especialmente mtime para mantener bumps)
+                    # Preservar atime y fijar mtime sin bump en la copia pública
                     try:
-                        os.utime(dst_path, (src_stat.st_atime, src_stat.st_mtime))
+                        target_mtime = get_creation_epoch(abs_path)
+                        if target_mtime is None:
+                            target_mtime = src_stat.st_mtime
+                            if target_mtime > time.time():
+                                target_mtime = int(time.time())
+                        os.utime(dst_path, (src_stat.st_atime, int(target_mtime)))
                     except Exception:
                         pass
                 except Exception as e:
