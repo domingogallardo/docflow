@@ -8,6 +8,9 @@ docflow automatiza **recolectar → procesar → priorizar (bump) → leer → p
 - Despliegue a tu dominio vía `web/deploy.sh`: genera un índice estático en `/read/` (orden por `mtime`) para leer online y copiar citas fácilmente.
 - Registro histórico (`Incoming/processed_history.txt`) y utilidades para convertir títulos con IA, limpiar Markdown y copiar citas con Text Fragments.
 
+## 🖼️ Procesamiento completo
+![Diagrama del pipeline completo](complete_processing.png)
+
 ## 🔧 Requisitos rápidos
 - **Python 3.10+**.
 - Dependencias base:
