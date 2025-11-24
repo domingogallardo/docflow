@@ -50,6 +50,12 @@ docflow automatiza **recolectar → procesar → priorizar (bump) → leer → p
   pytest -q
   ```
 
+## 🛠️ Scripts standalone
+- `utils/standalone_download_liked_tweets.py`: descarga likes de X a Markdown desde un `storage_state` exportado.
+- `utils/standalone_download_instapaper.py`: baja todos tus artículos de Instapaper a HTML/Markdown en un directorio.
+- `utils/standalone_markdown_to_html.py`: convierte Markdown a HTML con márgenes sin depender del pipeline.
+- `utils/standalone_snipd_to_markdown.py`: limpia exports de Snipd y los divide en episodios con índice de snips.
+
 ## 🌐 Publicación en tu dominio (`/read/`)
 - Ejecuta `web/deploy.sh` (desde `web/`) para generar un índice estático ordenado por `mtime` y subirlo al contenedor web en tu servidor (ruta `/read/`).
 - Usa BasicAuth en el host si quieres acceso privado (configurable con variables de entorno en el propio `deploy.sh`).
