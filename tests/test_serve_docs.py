@@ -277,8 +277,10 @@ def test_publish_sets_public_mtime_without_unbumping(tmp_path, monkeypatch):
         def end_headers(self):  # type: ignore[override]
             pass
 
+    now_before = time.time()
     h = Dummy()
     h.do_POST()
+    now_after = time.time()
 
     assert h._sent["status"] == 200
 
@@ -287,9 +289,9 @@ def test_publish_sets_public_mtime_without_unbumping(tmp_path, monkeypatch):
     assert dst_path.exists()
     dst_mtime = dst_path.stat().st_mtime
 
-    # Local sigue bumped al futuro; copia pública queda con fecha no futura
-    assert src_mtime > time.time()
-    assert dst_mtime <= time.time()
+    # Local sigue bumped al futuro; la copia pública queda datada en el momento de publicar
+    assert src_mtime > now_after
+    assert now_before - 2 <= dst_mtime <= now_after + 2
 
 
 def test_compute_bump_mtime_uses_current_base(monkeypatch):
