@@ -234,7 +234,7 @@ def add_margins_to_html_files(directory: Path, file_filter=None):
                     style_tag = soup.new_tag("style")
                     style_tag.string = margin_style + "\n" + img_rule
                     head.append(style_tag)
-
+            
             output_html = str(soup)
             # Normaliza saltos de línea para mantener <br> sin autocierre
             output_html = output_html.replace("<br/>", "<br>").replace("<br />", "<br>")
