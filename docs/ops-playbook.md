@@ -28,12 +28,8 @@ REMOTE_USER=root REMOTE_HOST=<SERVER_IP> bash web/deploy.sh
 # Note: deploy.sh cleans remote /opt/web-domingo/public before extracting to avoid stale files.
 ```
 
-Mark completed reads (optional before deploy):
+Preview the `/read/` index locally (single list, ordered by mtime):
 ```bash
-# Edit the curated list: items here will appear BELOW a <hr/> in /read/
-$EDITOR web/public/read/read_posts.md
-
-# Preview locally without deploying
 python utils/build_read_index.py
 open web/public/read/read.html  # or xdg-open on Linux
 ```

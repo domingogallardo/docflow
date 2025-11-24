@@ -14,7 +14,7 @@ Sitio en producción: https://domingogallardo.com
 > - Nombres/rutas usados aquí: nombre del contenedor `web-domingo`, ruta remota `/opt/web-domingo` (coincide con `web/deploy.sh`).
 > - En `docker-compose` local, `/data` se monta **solo lectura** (seguro por defecto); el script de deploy monta `/data` **lectura‑escritura** en el servidor.
 > - El `web/nginx.conf` incluido sirve `/read/` (HTML+PDF) usando el **autoindex** de nginx por defecto. El índice estático `read.html` se genera en el despliegue y queda accesible en `/read/read.html`. Si prefieres que `/read/` muestre ese índice estático por defecto, añade `index read.html;` dentro de la `location /read/` del Nginx del contenedor. El contenedor usa `server_name localhost`.
-> - El listado `read.html` incluye una sección curada: si existe `web/public/read/read_posts.md`, el deploy añade un `<hr/>` y lista esos nombres de fichero debajo (en el orden del archivo). Los elementos bajo el separador representan documentos ya leídos/estudiados (completados).
+> - El listado `read.html` es un único bloque ordenado por mtime desc con todos los HTML/PDF de `web/public/read/`.
 - Los assets públicos bajo `web/public/` **no** se versionan en el repo público (ignorados vía `.gitignore`), salvo utilidades mínimas imprescindibles como `web/public/read/article.js` (botón de citas).
 
 ---
@@ -299,7 +299,7 @@ Usa `web/deploy.sh`. Empaqueta la app, la sube y reconstruye/reinicia el contene
   - Actualización opcional de BasicAuth: define `HTPASSWD_USER` y `HTPASSWD_PSS` (ver 6.1).
 
 - Qué hace (resumen):
-  - Genera `read.html` para `/public/read` (HTML+PDF). La zona superior es mtime‑desc para ficheros no listados en `read_posts.md`; debajo un `<hr/>` lista los de `web/public/read/read_posts.md` (si existe), representando **completados**. Nota: por defecto, `/read/` muestra el autoindex de nginx; este archivo se consulta como `/read/read.html`. Si prefieres que sea el índice por defecto, añade `index read.html;` dentro de la `location /read/` del Nginx del contenedor.
+  - Genera `read.html` para `/public/read` (HTML+PDF) como **un único listado por mtime desc**. Nota: por defecto, `/read/` muestra el autoindex de nginx; este archivo se consulta como `/read/read.html`. Si prefieres que sea el índice por defecto, añade `index read.html;` dentro de la `location /read/` del Nginx del contenedor.
   - Empaqueta `web/Dockerfile`, `web/nginx.conf` y `web/public/` (excluye `.DS_Store` y AppleDouble).
   - Asegura rutas remotas bajo `/opt/web-domingo` y sube el bundle.
   - Limpia cualquier `/opt/web-domingo/public` previo antes de extraer para evitar stale files.
@@ -345,8 +345,7 @@ journalctl -u nginx --since today
 docker logs -n 200 web-domingo
 ```
 
-Mantenimiento de la sección “completados” curada:
-- Edita `web/public/read/read_posts.md` en el repo para mover elementos terminados bajo el separador en el siguiente deploy. Un nombre de fichero por línea (incluida la extensión). Las líneas pueden empezar por `- ` o `* ` y se ignoran los comentarios `#`.
+Nota: el índice `/read/` es un único listado ordenado por fecha.
 
 ---
 
