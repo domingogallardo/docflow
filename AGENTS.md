@@ -24,7 +24,6 @@ This repository automates collecting and organizing personal documents (Instapap
 - Remote deploy: `env REMOTE_USER=root REMOTE_HOST=<SERVER_IP> bash web/deploy.sh`
 - What it does:
   - Generates a minimal static index for `/public/read` (HTML + PDF), ordered by mtime desc (bumps first), with entries as: `FileName — YYYY-Mon-DD HH:MM`.
-  - If `web/public/read/read_posts.md` exists, it adds a `<hr/>` and lists those filenames below in the order provided. Files under the separator represent items already read/studied (completed). Lines allow `- `, `* ` bullets and `#` comments.
   - Optionally updates host BasicAuth when `HTPASSWD_USER` and `HTPASSWD_PSS` are set (bcrypt generated on host; no secrets in Git).
   - Bundles `web/Dockerfile`, `web/nginx.conf`, and `web/public/` and deploys to `/opt/web-domingo` on the remote host.
   - Rebuilds and runs the container `web-domingo` on port 8080.
@@ -53,8 +52,8 @@ Notes for agents
 - Do not touch `/data/` auth or methods; `/read/` is a static listing now.
 - Note: the old directory-listing CSS is not used anymore by these static indexes.
 - If the server is reachable and you have approval, you can run `web/deploy.sh` directly; otherwise provide the exact command for the user to run.
-- To preview the index locally without deploying, run: `python utils/build_read_index.py` (uses `web/public/read/read_posts.md`).
- - Local overlay (`utils/serve_docs.py`) includes a “Procesado” button on HTML pages when a file is bumped and published; it unbumps locally, prepends the filename to `web/public/read/read_posts.md`, and triggers a deploy.
+- To preview the index locally without deploying, run: `python utils/build_read_index.py` (single list ordered by mtime).
+- Local overlay (`utils/serve_docs.py`) ofrece Bump/Unbump/Publicar/Despublicar.
 
 ## Instapaper Starred & Bump
 - Star marking: to mark an Instapaper article as highlighted, simply add a star (⭐) at the beginning of its title in Instapaper.

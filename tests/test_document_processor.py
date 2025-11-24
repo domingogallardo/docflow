@@ -49,6 +49,8 @@ def test_document_processor_integration(tmp_path):
     
     # 4. Crear y ejecutar procesador
     processor = DocumentProcessor(tmp_path, 2025)
+    # Evitar llamadas a Playwright/X en tests
+    processor.process_tweet_urls = lambda: []
     processor.markdown_processor.title_updater.update_titles = lambda files, renamer: None
     success = processor.process_all()
     

@@ -22,7 +22,6 @@
   - Automático si el título de Instapaper empieza por **⭐**.  
   - Manual con overlay o `utils/bump.applescript` / `utils/un-bump.applescript` (Finder).
 - **Overlay**: UI superpuesta en HTML servidos localmente para ejecutar acciones (bump/unbump, publicar, etc.).
-- **Completados**: archivos añadidos a `web/public/read/read_posts.md`; aparecen **bajo `<hr/>`** en `/read/`.
 
 ---
 
@@ -84,12 +83,12 @@ Arranca el servidor local de lectura:
  ```bash
 PORT=8000 SERVE_DIR="/ruta/a/⭐️ Documentación" python utils/serve_docs.py
 ```
-- Overlay en páginas **HTML** con botones **Bump / Unbump / Publicar / Despublicar / Procesado** y **atajos de teclado**.  
+- Overlay en páginas **HTML** con botones **Bump / Unbump / Publicar / Despublicar** y **atajos de teclado**.  
 - El listado solo muestra carpetas, HTML y PDFs (los `.md` se ocultan) ordenados por **mtime desc**.  
 - Reglas de estado:  
   - **S0** Unbumped + No publicado → muestra *Bump*.  
   - **S1** Bumped + No publicado → muestra *Unbump* y *Publicar*.  
-  - **S2** Publicado → muestra *Despublicar* y, si además está bumped, *Procesado*.  
+  - **S2** Publicado → muestra *Despublicar*.  
 - **Reglas de validación**:  
   - Publicar **requiere** que el archivo esté **bumped** y **no publicado**.  
   - Mientras esté **publicado**, no se permite (ni se muestra) **Bump/Unbump**.  
@@ -101,8 +100,8 @@ Desde el overlay, **Publicar** copia el `.html` o `.pdf` a `web/public/read/` y 
 6) **Capturar citas en páginas publicadas (Text Fragments)**  
 En `/read/`, se inyecta un botón flotante **❝ Copiar cita** que, al seleccionar texto, copia una cita en **Markdown** con enlace que incluye **Text Fragments** (`#:~:text=`). Esto facilita pegar citas directamente en Obsidian manteniendo el salto a la posición exacta del texto. (*Script*: `article.js`).
 
-7) **Cosechar / Marcar como “completado”**  
-Cuando termines de estudiar un documento publicado y (opcionalmente) bumped, usa **Procesado** en el overlay: hace **Unbump**, añade el nombre del fichero a `web/public/read/read_posts.md` y despliega. En el índice público `/read/` aparecerá **bajo un `<hr/>`** en la sección de “completados”, respetando el orden del fichero `read_posts.md`.
+7) **Cerrar ciclo**  
+Cuando termines de leer, puedes dejar el documento publicado o despublicarlo; el índice `/read/` es un único listado por fecha.
 
 8) **Infra y verificación**  
 El despliegue usa **doble Nginx**: proxy con TLS en el **host** y Nginx **dentro del contenedor** sirviendo estáticos; `/data/` permite PUT con BasicAuth (host-montado). Verifica `/read/` con `curl` tras el deploy (ver comandos más abajo).
@@ -113,7 +112,7 @@ El despliegue usa **doble Nginx**: proxy con TLS en el **host** y Nginx **dentro
 
 ## Servidor web local (`utils/serve_docs.py`)
 
-- **Acciones**: Bump (`b`), Unbump (`u`), Publicar (`p`), Despublicar (`d`), Procesado (`x`), Listado (`l`).  
+- **Acciones**: Bump (`b`), Unbump (`u`), Publicar (`p`), Despublicar (`d`), Listado (`l`).  
 - **Estados**: S0/S1/S2 (ver arriba).  
 - **Parámetros**:
   - `PORT` (por defecto 8000)
@@ -128,9 +127,7 @@ El despliegue usa **doble Nginx**: proxy con TLS en el **host** y Nginx **dentro
 
 ## Publicación web (`/read/`) y `read.html`
 
-- El deploy **genera** `read.html` con **dos zonas**:
-  - **Arriba**: todo lo **no** listado en `read_posts.md` (orden **mtime desc**).
-  - **Abajo**: elementos listados en `web/public/read/read_posts.md` (uno por línea; admite `- ` o `* ` y comentarios `#`).  
+- El deploy **genera** `read.html` como un único listado **ordenado por mtime desc** con todos los HTML/PDF de `web/public/read/`.
 - Servido por Nginx del contenedor con *autoindex* activo (ver **readme-infra.md**).
 
 Verificación rápida:
@@ -180,7 +177,7 @@ HTPASSWD_PSS='contraseña'
 
 - **Procesar**: `process_documents.py`, `instapaper_processor.py`, `podcast_processor.py`, `pdf_processor.py`.  
 - **Leer/priorizar/publicar (local)**: `utils/serve_docs.py` (overlay + acciones), `utils/bump.applescript`, `utils/un-bump.applescript`.  
-- **Publicar (remoto)**: `web/deploy.sh` (genera `read.html` por mtime desc y respeta `read_posts.md` para la zona de completados).  
+- **Publicar (remoto)**: `web/deploy.sh` (genera `read.html` por mtime desc en un único listado).  
 - **Capturar citas en `/read/`**: `article.js` (botón **❝ Copiar cita**, Markdown + `#:~:text=`).  
 - **Previsualizar índice sin deploy**: `utils/build_read_index.py`.
 

@@ -231,44 +231,67 @@ def test_delete_file_and_public_copy(tmp_path, monkeypatch):
     assert not md_file.exists()
 
 
-def test_directory_index_pdf_processed_button(tmp_path, monkeypatch):
-    sd = _load_serve_docs("serve_docs_pdf_proc")
+def test_publish_sets_public_mtime_without_unbumping(tmp_path, monkeypatch):
+    sd = _load_serve_docs("serve_docs_publish_mtime")
 
     serve_dir = tmp_path / "serve"
     serve_dir.mkdir()
-    pdf_pub = serve_dir / "proc_pub.pdf"
-    pdf_local = serve_dir / "proc_local.pdf"
-    pdf_pub.write_bytes(b"%PDF-1.4\n")
-    pdf_local.write_bytes(b"%PDF-1.4\n")
+    html_file = serve_dir / "doc.html"
+    html_file.write_text("<html><head></head><body></body></html>", encoding="utf-8")
 
-    # Bump ambos (mtime futuro)
+    # Bump local mtime al futuro
     future = sd.base_epoch_cached() + 10
-    __import__("os").utime(str(pdf_pub), (pdf_pub.stat().st_atime, future))
-    __import__("os").utime(str(pdf_local), (pdf_local.stat().st_atime, future))
+    at = html_file.stat().st_atime
+    __import__("os").utime(str(html_file), (at, future))
 
-    # Marcar publicado solo uno de ellos
     public_reads = tmp_path / "public_reads"
     public_reads.mkdir()
-    (public_reads / pdf_pub.name).write_bytes(b"%PDF-1.4\n")
     monkeypatch.setattr(sd, "PUBLIC_READS_DIR", str(public_reads), raising=False)
+    monkeypatch.setattr(sd, "SERVE_DIR", str(serve_dir), raising=False)
 
-    # Generar índice
-    h = _make_dummy_handler(sd.HTMLOnlyRequestHandler)
-    h.path = "/"
-    h.list_directory(str(serve_dir))
-    out = h.wfile.getvalue().decode("utf-8")
+    # Script de deploy simulado (no hace nada)
+    deploy = tmp_path / "deploy.sh"
+    deploy.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
+    __import__("os").chmod(deploy, 0o755)
+    monkeypatch.setattr(sd, "DEPLOY_SCRIPT", str(deploy), raising=False)
 
-    # El publicado y bumped debe mostrar botón 'Procesado'
-    for line in out.splitlines():
-        if "proc_pub.pdf" in line:
-            assert "data-dg-act='processed'" in line
-            break
+    body = f"path={urllib.parse.quote(html_file.name)}&action=publish"
 
-    # El no publicado no debe mostrar 'Procesado'
-    for line in out.splitlines():
-        if "proc_local.pdf" in line:
-            assert "data-dg-act='processed'" not in line
-            break
+    class Dummy(sd.HTMLOnlyRequestHandler):
+        def __init__(self):
+            self.path = "/__bump"
+            self.command = "POST"
+            self.requestline = "POST /__bump HTTP/1.1"
+            self.headers = {"Content-Length": str(len(body))}
+            self.rfile = io.BytesIO(body.encode("utf-8"))
+            self.wfile = io.BytesIO()
+            self._sent = {"status": None}
+            self.client_address = ("127.0.0.1", 0)
+
+        def send_response(self, code, message=None):  # type: ignore[override]
+            self._sent["status"] = code
+
+        def send_header(self, key, value):  # type: ignore[override]
+            pass
+
+        def end_headers(self):  # type: ignore[override]
+            pass
+
+    now_before = time.time()
+    h = Dummy()
+    h.do_POST()
+    now_after = time.time()
+
+    assert h._sent["status"] == 200
+
+    src_mtime = html_file.stat().st_mtime
+    dst_path = public_reads / html_file.name
+    assert dst_path.exists()
+    dst_mtime = dst_path.stat().st_mtime
+
+    # Local sigue bumped al futuro; la copia pública queda datada en el momento de publicar
+    assert src_mtime > now_after
+    assert now_before - 2 <= dst_mtime <= now_after + 2
 
 
 def test_compute_bump_mtime_uses_current_base(monkeypatch):
