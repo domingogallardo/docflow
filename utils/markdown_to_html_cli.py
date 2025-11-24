@@ -1,13 +1,14 @@
 #!/usr/bin/env python3
-"""Comando standalone para convertir archivos Markdown a HTML con el estilo del repositorio."""
+"""Comando standalone para convertir Markdown a HTML sin depender de otros módulos del repo."""
 from __future__ import annotations
 
 import argparse
+import re
 from pathlib import Path
 from typing import Iterable, List, Tuple
-import re
 
-import utils as U
+import markdown
+from bs4 import BeautifulSoup
 
 
 def parse_args(argv: Iterable[str] | None = None) -> argparse.Namespace:
@@ -35,6 +36,70 @@ def parse_args(argv: Iterable[str] | None = None) -> argparse.Namespace:
         help="Sobrescribe los archivos HTML si ya existen",
     )
     return parser.parse_args(argv)
+
+
+def convert_urls_to_links(md_text: str) -> str:
+    """Convierte URLs en texto plano a enlaces Markdown simples."""
+    url_re = re.compile(r"(?P<url>https?://[^\s<]+)")
+
+    def repl(match: re.Match[str]) -> str:
+        url = match.group("url")
+        return f"[{url}]({url})"
+
+    return url_re.sub(repl, md_text)
+
+
+def convert_newlines_to_br(html_text: str) -> str:
+    """Inserta <br> dentro de párrafos para respetar saltos de línea."""
+    def replace_in_content(match):
+        tag_open, content, tag_close = match.group(1), match.group(2), match.group(3)
+        content_with_br = content.replace("\n", "<br>\n")
+        return f"{tag_open}{content_with_br}{tag_close}"
+
+    html_text = re.sub(r"(<p[^>]*>)(.*?)(</p>)", replace_in_content, html_text, flags=re.DOTALL)
+    html_text = re.sub(r"(<li[^>]*>)(.*?)(</li>)", replace_in_content, html_text, flags=re.DOTALL)
+    html_text = re.sub(r"(<div[^>]*>)(.*?)(</div>)", replace_in_content, html_text, flags=re.DOTALL)
+    return html_text
+
+
+def markdown_to_html(md_text: str, title: str) -> str:
+    md_text = md_text.replace("\xa0", " ")
+    md_text = convert_urls_to_links(md_text)
+    html_body = markdown.markdown(
+        md_text,
+        extensions=["fenced_code", "tables", "toc", "attr_list"],
+        output_format="html5",
+    )
+    html_body = convert_newlines_to_br(html_body)
+    full_html = (
+        "<!DOCTYPE html>\n"
+        "<html>\n<head>\n<meta charset=\"utf-8\"/>\n"
+        f"<title>{title}</title>\n"
+        "</head>\n<body>\n"
+        f"{html_body}\n"
+        "</body>\n</html>\n"
+    )
+    return full_html
+
+
+def add_margins(html: str) -> str:
+    soup = BeautifulSoup(html, "html.parser")
+    margin_style = "body { margin-left: 6%; margin-right: 6%; }"
+    head = soup.head
+    if head is None:
+        head = soup.new_tag("head")
+        soup.html.insert(0, head) if soup.html else None
+    style_tag = head.find("style")
+    if style_tag:
+        existing = style_tag.string or ""
+        if margin_style not in existing:
+            style_tag.string = (existing + ("\n" if existing else "") + margin_style)
+    else:
+        style_tag = soup.new_tag("style")
+        style_tag.string = margin_style
+        head.append(style_tag)
+    html_out = str(soup).replace("<br/>", "<br>").replace("<br />", "<br>")
+    return html_out
 
 
 def collect_markdown_files(raw_paths: Iterable[str]) -> List[Path]:
@@ -68,10 +133,10 @@ def convert_markdown_file(
 
     try:
         md_text = md_file.read_text(encoding="utf-8", errors="replace")
-        # Normaliza saltos de línea para que se conviertan en <br> en lugar de párrafos vacíos
         md_text = re.sub(r"\n{2,}", "\n", md_text)
-        full_html = U.markdown_to_html(md_text, title=md_file.stem)
-        html_path.write_text(full_html, encoding="utf-8")
+        full_html = markdown_to_html(md_text, title=md_file.stem)
+        html_with_margins = add_margins(full_html)
+        html_path.write_text(html_with_margins, encoding="utf-8")
         print(f"✅ HTML generado: {html_path}")
         return html_path, True
     except Exception as exc:
@@ -80,15 +145,13 @@ def convert_markdown_file(
 
 
 def apply_margins_to_paths(html_paths: Iterable[Path]) -> None:
-    paths_by_dir: dict[Path, set[Path]] = {}
     for html_path in html_paths:
-        paths_by_dir.setdefault(html_path.parent, set()).add(html_path.resolve())
-
-    for directory, targets in paths_by_dir.items():
-        def _filter(path: Path) -> bool:
-            return path.resolve() in targets
-
-        U.add_margins_to_html_files(directory, file_filter=_filter)
+        try:
+            html_content = html_path.read_text(encoding="utf-8")
+            html_path.write_text(add_margins(html_content), encoding="utf-8")
+            print(f"📏 Márgenes añadidos: {html_path.name}")
+        except Exception as exc:
+            print(f"❌ Error añadiendo márgenes a {html_path}: {exc}")
 
 
 def main(argv: Iterable[str] | None = None) -> int:
