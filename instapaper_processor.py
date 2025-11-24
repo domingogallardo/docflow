@@ -150,34 +150,9 @@ class InstapaperProcessor:
         except Exception as e:
             print(f"❌ Error en el procesamiento de Instapaper: {e}")
             return []
-
-    def download_instapaper_exports(self, *, force_download: bool = False) -> List[Path]:
-        """Descarga solo los artículos de Instapaper a HTML y Markdown."""
-
-        print("📥 Descargando artículos de Instapaper (standalone)...")
-
-        try:
-            if not self._download_from_instapaper(force_download=force_download):
-                return []
-
-            self._convert_html_to_markdown()
-            self._fix_html_encoding()
-
-            exported_files = self._list_processed_files()
-            print(f"📥 {len(exported_files)} archivo(s) disponibles en {self.incoming_dir}")
-            return exported_files
-
-        except Exception as e:
-            print(f"❌ Error en la exportación standalone de Instapaper: {e}")
-            return []
     
-    def _download_from_instapaper(self, *, force_download: bool = False) -> bool:
-        """Descarga artículos desde Instapaper.
-
-        Args:
-            force_download: si es True ignora el registro local y fuerza la
-                descarga de todos los artículos encontrados.
-        """
+    def _download_from_instapaper(self) -> bool:
+        """Descarga artículos desde Instapaper."""
         if not INSTAPAPER_USERNAME or not INSTAPAPER_PASSWORD:
             print("❌ Credenciales de Instapaper no configuradas")
             return False
@@ -245,7 +220,7 @@ class InstapaperProcessor:
                     articles, has_more = self._get_article_ids(page)
                 
                 for article_id, starred_hint in articles:
-                    if not force_download and self.download_registry.should_skip(article_id, starred_hint):
+                    if self.download_registry.should_skip(article_id, starred_hint):
                         print(f"  {article_id}: ⏭️  ya descargado (sin cambios)")
                         continue
 
