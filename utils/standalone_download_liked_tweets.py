@@ -5,7 +5,7 @@ import argparse
 import os
 import re
 from pathlib import Path
-from typing import Iterable, List, Optional, Set, Tuple
+from typing import List, Optional, Set, Tuple
 from urllib.parse import parse_qsl, urlencode, urljoin, urlparse, urlunparse
 
 try:  # pragma: no cover - import opcional
@@ -300,12 +300,6 @@ def _absolute_url(href: str) -> str:
     return urljoin("https://x.com", href)
 
 
-def _normalize_stop_url(url: str | None) -> str | None:
-    if not url:
-        return None
-    return _canonical_status_url(url.strip())
-
-
 def _extract_tweet_urls(page, seen: Set[str]) -> List[str]:
     urls: List[str] = []
     for article in page.locator("article").element_handles():
@@ -325,9 +319,8 @@ def fetch_likes_with_state(
     *,
     likes_url: str = DEFAULT_LIKES_URL,
     max_tweets: int = DEFAULT_MAX_TWEETS,
-    stop_at_url: str | None = None,
     headless: bool = True,
-) -> Tuple[List[str], bool, int]:
+) -> Tuple[List[str], int]:
     path = state_path.expanduser()
     if not path.exists():
         raise FileNotFoundError(
@@ -353,18 +346,13 @@ def fetch_likes_with_state(
         seen: Set[str] = set()
         max_scrolls = 20
         idle_scrolls = 0
-        stop_absolute = _normalize_stop_url(stop_at_url)
-        stop_found = False
 
-        while len(collected) < max_tweets and not stop_found:
+        while len(collected) < max_tweets:
             for url in _extract_tweet_urls(page, seen):
                 collected.append(url)
-                if stop_absolute and url == stop_absolute:
-                    stop_found = True
-                    break
                 if len(collected) >= max_tweets:
                     break
-            if len(collected) >= max_tweets or stop_found:
+            if len(collected) >= max_tweets:
                 break
 
             before = page.locator("article").count()
@@ -376,13 +364,10 @@ def fetch_likes_with_state(
                 break
 
         total_articles = page.locator("article").count()
-        if stop_found and stop_absolute and stop_absolute in collected:
-            idx = collected.index(stop_absolute)
-            collected = collected[:idx]
 
         context.close()
         browser.close()
-        return collected, stop_found, total_articles
+        return collected, total_articles
 
 
 def parse_args() -> argparse.Namespace:
@@ -411,15 +396,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--max-tweets",
         type=int,
-        default=int(os.environ.get("TWEET_LIKES_MAX", DEFAULT_MAX_TWEETS)),
-        help="Límite de likes a capturar en esta ejecución",
-    )
-    parser.add_argument(
-        "--stop-at-url",
-        default=os.environ.get("TWEET_LIKES_STOP"),
-        help=(
-            "URL de tweet a partir del cual dejar de capturar (para evitar duplicados entre ejecuciones)."
-        ),
+        required=True,
+        help="Número de likes a capturar en esta ejecución",
     )
     parser.add_argument(
         "--wait-ms",
@@ -453,19 +431,21 @@ def download_likes(args: argparse.Namespace) -> None:
     if not state_path.exists():
         raise SystemExit(f"No se encontró el storage_state: {state_path}")
 
+    if args.max_tweets <= 0:
+        raise SystemExit("--max-tweets debe ser un entero positivo")
+
     dest_dir: Path = args.dest_dir.expanduser()
     dest_dir.mkdir(parents=True, exist_ok=True)
 
-    urls, stop_found, total_articles = fetch_likes_with_state(
+    urls, total_articles = fetch_likes_with_state(
         state_path,
         likes_url=likes_url,
         max_tweets=args.max_tweets,
-        stop_at_url=args.stop_at_url,
         headless=args.headless,
     )
     print(
         f"🔍 Likes encontrados: {len(urls)} (artículos visibles: {total_articles}). "
-        f"Stop URL {'encontrada' if stop_found else 'no encontrada' if args.stop_at_url else 'no usada'}."
+        f"Capturando hasta {args.max_tweets} tweets solicitados."
     )
 
     for url in urls:
