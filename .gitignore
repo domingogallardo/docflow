@@ -18,6 +18,8 @@ Misc/
 .playwright/
 x_state.json
 *_state.json
+cron.log
+bin/docflow_cron.sh
 
 # Env and secrets (never commit)
 .env
