@@ -331,8 +331,8 @@ def fetch_tweet_markdown(
             md_lines.extend(_media_markdown_lines(media_urls))
             md_lines.append("")
 
-        if external_link:
-            md_lines.extend(["", f"Enlace original: {external_link}"])
+            if external_link:
+                md_lines.extend(["", f"Enlace original: {external_link}"])
 
         markdown = "\n".join(md_lines).strip() + "\n"
 
