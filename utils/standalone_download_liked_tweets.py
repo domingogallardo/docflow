@@ -209,51 +209,21 @@ def _extract_primary_link(article, tweet_url: str) -> str | None:
     seen: set[str] = set()
     tweet_lower = tweet_url.rstrip("/").lower()
     for anchor in article.locator("a").all():
-        href = (
+        href = anchor.get_attribute("href") or ""
+        expanded = (
             anchor.get_attribute("data-expanded-url")
             or anchor.get_attribute("data-full-url")
-            or anchor.get_attribute("href")
-            or ""
-        ).strip()
+            or href
+        )
+        href = (expanded or "").strip()
         if not href or not href.startswith(("http://", "https://")):
             continue
         candidate = href.rstrip("/")
         lower = candidate.lower()
         if lower == tweet_lower or lower in seen:
             continue
-        if "/status/" in lower:
-            # Los tweets citados se capturan aparte
-            continue
         seen.add(lower)
         return candidate
-    return None
-
-
-def _canonical_status_url(href: str | None) -> str | None:
-    if not href or "/status/" not in href:
-        return None
-    absolute = _absolute_url(href)
-    parsed = urlparse(absolute)
-    segments = [seg for seg in parsed.path.split("/") if seg]
-    if len(segments) < 3 or segments[1] != "status":
-        return None
-    user = segments[0]
-    status_id = segments[2]
-    if not user or not status_id:
-        return None
-    return f"https://x.com/{user}/status/{status_id}"
-
-
-def _extract_quote_link(article, tweet_url: str) -> str | None:
-    """Devuelve el primer tweet citado si existe."""
-    current = (_canonical_status_url(tweet_url) or "").rstrip("/").lower()
-    for anchor in article.locator("a").all():
-        canonical = _canonical_status_url(anchor.get_attribute("href"))
-        if not canonical:
-            continue
-        if canonical.rstrip("/").lower() == current:
-            continue
-        return canonical
     return None
 
 
@@ -297,7 +267,6 @@ def fetch_tweet_markdown(
         image_urls: List[str] = []
         seen: set[str] = set()
         external_link = _extract_primary_link(article, url)
-        quote_link = _extract_quote_link(article, url)
         for img in article.locator("img").all():
             src = img.get_attribute("src")
             candidate = None
@@ -323,8 +292,6 @@ def fetch_tweet_markdown(
             md_lines.extend(["", f"![avatar]({avatar_url})"])
         if body_text:
             md_lines.extend(["", body_text])
-        if quote_link:
-            md_lines.extend(["", f"Tweet citado: {quote_link}"])
         if media_urls:
             md_lines.append("")
             md_lines.extend(_media_markdown_lines(media_urls))
