@@ -11,7 +11,6 @@ Notas:
 - Para destacar en Instapaper: basta con añadir una estrella (⭐) al inicio del título.
 """
 import argparse
-from datetime import datetime
 import os
 
 from pipeline_manager import DocumentProcessor
@@ -31,7 +30,7 @@ def parse_args():
         ),
     )
     p.add_argument("--year", type=int,
-                   help="Usa ese año en lugar del actual")
+                   help="Usa ese año en lugar del año por defecto (2026)")
     p.add_argument(
         "targets",
         nargs="+",
@@ -45,7 +44,7 @@ def get_year_from_args_and_env(args) -> int:
     """Obtiene el año de los argumentos de línea de comandos o variables de entorno."""
     if args.year:
         return args.year
-    return int(os.getenv("DOCPIPE_YEAR", datetime.now().year))
+    return int(os.getenv("DOCPIPE_YEAR", cfg.DEFAULT_YEAR))
 
 
 def main():
