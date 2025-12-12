@@ -87,4 +87,4 @@ docflow automatiza **recolectar → procesar → priorizar (bump) → leer → p
 └── web/ (deploy estático)
 ```
 
-© 2025 Domingo Gallardo López
+© 2026 Domingo Gallardo López
