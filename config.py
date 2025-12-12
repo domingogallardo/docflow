@@ -1,9 +1,9 @@
 from pathlib import Path
-from datetime import datetime
 import os
 
-# Año por defecto = año actual; override opcional con DOCPIPE_YEAR
-YEAR = int(os.getenv("DOCPIPE_YEAR", datetime.now().year))
+# Año por defecto = 2026; override opcional con DOCPIPE_YEAR
+DEFAULT_YEAR = 2026
+YEAR = int(os.getenv("DOCPIPE_YEAR", DEFAULT_YEAR))
 
 BASE_DIR = Path("/Users/domingo/⭐️ Documentación")
 INCOMING = BASE_DIR / "Incoming"

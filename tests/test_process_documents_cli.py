@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Tests for process_documents CLI selection."""
 import sys
+from types import SimpleNamespace
 import pytest
 import process_documents
 
@@ -76,3 +77,10 @@ def test_all_processing(monkeypatch, tmp_path):
 def test_process_images(monkeypatch, tmp_path):
     calls = run_main(monkeypatch, tmp_path, ["images"])
     assert calls == ["images", "register"]
+
+
+def test_default_year_without_env(monkeypatch):
+    monkeypatch.delenv("DOCPIPE_YEAR", raising=False)
+    args = SimpleNamespace(year=None)
+
+    assert process_documents.get_year_from_args_and_env(args) == 2026
