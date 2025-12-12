@@ -3,16 +3,18 @@
 > Este documento amplía el README resumido. Mantiene los detalles operativos para trabajar a diario con docflow. La guía de infra y TLS está en **readme-infra.md**.
 
 ## Índice
-1. [Conceptos clave](#conceptos-clave)
-2. [Comandos esenciales](#comandos-esenciales)
-3. [Flujo de trabajo detallado](#flujo-de-trabajo-detallado)
-4. [Servidor web local (`utils/serve_docs.py`)](#servidor-web-local-utilsservedocspy)
-5. [Publicación web (`/read/`) y `read.html`](#publicación-web-read-y-readhtml)
-6. [Capturar citas con Text Fragments](#capturar-citas-con-text-fragments)
-7. [Variables de entorno](#variables-de-entorno)
-8. [Resumen de scripts por fase](#resumen-de-scripts-por-fase)
-9. [Solución de problemas](#solución-de-problemas)
-10. [Infra y verificación](#infra-y-verificación)
+- [docflow — Guía ampliada](#docflow--guía-ampliada)
+  - [Índice](#índice)
+  - [Conceptos clave](#conceptos-clave)
+  - [Comandos esenciales](#comandos-esenciales)
+  - [Flujo de trabajo detallado](#flujo-de-trabajo-detallado)
+  - [Servidor web local (`utils/serve_docs.py`)](#servidor-web-local-utilsserve_docspy)
+  - [Publicación web (`/read/`) y `read.html`](#publicación-web-read-y-readhtml)
+  - [Capturar citas con Text Fragments](#capturar-citas-con-text-fragments)
+  - [Variables de entorno](#variables-de-entorno)
+  - [Resumen de scripts por fase](#resumen-de-scripts-por-fase)
+  - [Solución de problemas](#solución-de-problemas)
+  - [Infra y verificación](#infra-y-verificación)
 
 ---
 
@@ -206,4 +208,3 @@ docker logs -n 200 web-domingo
 
 ---
 
-© 2025 Domingo Gallardo López
