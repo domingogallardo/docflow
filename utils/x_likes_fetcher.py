@@ -62,17 +62,15 @@ def _extract_tweet_urls(page, seen: Set[str]) -> List[str]:
     urls: List[str] = []
     for article in page.locator("article").element_handles():
         links = article.query_selector_all("a[href*='/status/']")
-        article_url: str | None = None
         for link in links:
             href = link.get_attribute("href")
             canonical = _canonical_status_url(href)
             if not canonical:
                 continue
-            article_url = canonical
-            break
-        if article_url and article_url not in seen:
-            seen.add(article_url)
-            urls.append(article_url)
+            if canonical in seen:
+                continue
+            seen.add(canonical)
+            urls.append(canonical)
     return urls
 
 
