@@ -3,7 +3,7 @@
 Procesa el pipeline de documentos.
 
 Uso:
-    python process_documents.py [--year 2026] [pdfs|podcasts|posts|images|md|all]
+    python process_documents.py [--year AAAA] [pdfs|podcasts|posts|images|md|all]
 
 Notas:
 - Los artículos HTML de Instapaper marcados como destacados se bumpean automáticamente
@@ -30,7 +30,7 @@ def parse_args():
         ),
     )
     p.add_argument("--year", type=int,
-                   help="Usa ese año en lugar del año por defecto (2026)")
+                   help="Usa ese año en lugar del año por defecto (DOCPIPE_YEAR o año actual)")
     p.add_argument(
         "targets",
         nargs="+",
@@ -44,7 +44,7 @@ def get_year_from_args_and_env(args) -> int:
     """Obtiene el año de los argumentos de línea de comandos o variables de entorno."""
     if args.year:
         return args.year
-    return int(os.getenv("DOCPIPE_YEAR", cfg.DEFAULT_YEAR))
+    return cfg.get_default_year()
 
 
 def main():

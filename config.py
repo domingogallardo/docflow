@@ -1,9 +1,29 @@
 from pathlib import Path
 import os
+from datetime import datetime
 
-# Año por defecto = 2026; override opcional con DOCPIPE_YEAR
-DEFAULT_YEAR = 2026
-YEAR = int(os.getenv("DOCPIPE_YEAR", DEFAULT_YEAR))
+DOCPIPE_YEAR_ENV = "DOCPIPE_YEAR"
+
+
+def _system_year() -> int:
+    return datetime.now().year
+
+
+def get_default_year() -> int:
+    """
+    Año por defecto del pipeline.
+
+    Prioridad:
+    - DOCPIPE_YEAR si está definido
+    - Año actual del sistema
+    """
+    env_value = os.getenv(DOCPIPE_YEAR_ENV)
+    if env_value:
+        return int(env_value)
+    return _system_year()
+
+
+YEAR = get_default_year()
 
 BASE_DIR = Path("/Users/domingo/⭐️ Documentación")
 INCOMING = BASE_DIR / "Incoming"
