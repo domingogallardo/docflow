@@ -43,5 +43,11 @@ for ((i=1; i<=$#; i++)); do
 done
 
 echo "[$(date -Iseconds)] Docflow: year=${YEAR} (${YEAR_SOURCE})"
-exec "${PYTHON_BIN}" process_documents.py "$@"
 
+set +e
+"${PYTHON_BIN}" process_documents.py "$@"
+status=$?
+set -e
+
+echo "[$(date -Iseconds)] Docflow: finished exit=${status}"
+exit "${status}"
