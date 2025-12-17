@@ -81,6 +81,7 @@ def test_process_images(monkeypatch, tmp_path):
 
 def test_default_year_without_env(monkeypatch):
     monkeypatch.delenv("DOCPIPE_YEAR", raising=False)
+    monkeypatch.setattr(process_documents.cfg, "_system_year", lambda: 2026)
     args = SimpleNamespace(year=None)
 
     assert process_documents.get_year_from_args_and_env(args) == 2026

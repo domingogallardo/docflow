@@ -35,6 +35,11 @@ docflow automatiza **recolectar → procesar → priorizar (bump) → leer → p
 2. Ejecuta el pipeline completo (puedes pasar `--year`):
    ```bash
    python process_documents.py all --year 2025
+
+   # Si no pasas --year, usa DOCPIPE_YEAR si existe; si no, el año actual del sistema.
+
+   # Para unificar cron y ejecución manual (carga ~/.docflow_env si existe):
+   bash bin/docflow.sh all
    ```
 3. Para la cola remota de tweets:
    ```bash
@@ -58,7 +63,6 @@ docflow automatiza **recolectar → procesar → priorizar (bump) → leer → p
 - `utils/standalone_download_instapaper.py`: baja todos tus artículos de Instapaper a HTML/Markdown en un directorio.
 - `utils/standalone_markdown_to_html.py`: convierte Markdown a HTML con márgenes sin depender del pipeline.
 - `utils/standalone_snipd_to_markdown.py`: limpia exports de Snipd y los divide en episodios con índice de snips.
-- `utils/standalone_taxonomy_depth2_llm_only.py`: genera una taxonomía Macro→Categoría (con tags) para un directorio de artículos `.md` usando LLM y produce los JSON/JSONL de navegación.
 
 ## 🌐 Publicación en tu dominio (`/read/`)
 - Ejecuta `web/deploy.sh` (desde `web/`) para generar un índice estático ordenado por `mtime` y subirlo al contenedor web en tu servidor (ruta `/read/`).
