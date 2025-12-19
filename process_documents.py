@@ -16,6 +16,15 @@ import os
 from pipeline_manager import DocumentProcessor
 import config as cfg
 
+TARGET_HANDLERS = {
+    "tweets": "process_tweets_pipeline",
+    "pdfs": "process_pdfs",
+    "podcasts": "process_podcasts",
+    "posts": "process_instapaper_posts",
+    "images": "process_images",
+    "md": "process_markdown",
+}
+
 
 def parse_args():
     p = argparse.ArgumentParser(
@@ -34,7 +43,7 @@ def parse_args():
     p.add_argument(
         "targets",
         nargs="+",
-        choices=["tweets", "pdfs", "podcasts", "posts", "images", "md", "all"],
+        choices=[*TARGET_HANDLERS.keys(), "all"],
         help="Procesa solo los tipos indicados",
     )
     return p.parse_args()
@@ -57,17 +66,10 @@ def main():
     if "all" in args.targets:
         success = processor.process_all()
     else:
-        mapping = {
-            "podcasts": processor.process_podcasts,
-            "tweets": processor.process_tweets_pipeline,
-            "posts": processor.process_instapaper_posts,
-            "pdfs": processor.process_pdfs,
-            "images": processor.process_images,
-            "md": processor.process_markdown,
-        }
         try:
             for target in args.targets:
-                mapping[target]()
+                handler = getattr(processor, TARGET_HANDLERS[target])
+                handler()
             processor.register_all_files()
             print("Pipeline completado ✅")
             success = True

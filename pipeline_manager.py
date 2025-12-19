@@ -3,7 +3,7 @@
 DocumentProcessor - Clase principal para el procesamiento de documentos
 """
 from pathlib import Path
-from typing import Iterable, List, Optional, Set
+from typing import Callable, Iterable, List, Optional, Set
 
 import utils as U
 import config as cfg
@@ -23,11 +23,11 @@ class DocumentProcessor:
         self.base_dir = Path(base_dir)
         self.year = year
         self.incoming = self.base_dir / "Incoming"
-        self.posts_dest = self.base_dir / "Posts" / f"Posts {year}"
-        self.pdfs_dest = self.base_dir / "Pdfs" / f"Pdfs {year}"
-        self.podcasts_dest = self.base_dir / "Podcasts" / f"Podcasts {year}"
-        self.images_dest = self.base_dir / "Images" / f"Images {year}"
-        self.tweets_dest = self.base_dir / "Tweets" / f"Tweets {year}"
+        self.posts_dest = self._year_dir("Posts")
+        self.pdfs_dest = self._year_dir("Pdfs")
+        self.podcasts_dest = self._year_dir("Podcasts")
+        self.images_dest = self._year_dir("Images")
+        self.tweets_dest = self._year_dir("Tweets")
         self.processed_history = self.incoming / "processed_history.txt"
         self.tweets_processed = self.incoming / "tweets_processed.txt"
 
@@ -38,6 +38,17 @@ class DocumentProcessor:
         self.markdown_processor = MarkdownProcessor(self.incoming, self.posts_dest)
         self.tweet_processor = MarkdownProcessor(self.incoming, self.tweets_dest)
         self._history: List[Path] = []
+
+    def _year_dir(self, kind: str) -> Path:
+        """Construye ruta anual para el tipo indicado."""
+        return self.base_dir / kind / f"{kind} {self.year}"
+
+    def _run_and_remember(self, fn: Callable[[], List[Path]]) -> List[Path]:
+        """Ejecuta una función de proceso y registra sus resultados."""
+        paths = fn()
+        self._remember(paths)
+        return paths
+
     def process_tweet_urls(self) -> List[Path]:
         """Obtiene los likes recientes desde X y genera Markdown en Incoming/."""
         try:
@@ -133,9 +144,7 @@ class DocumentProcessor:
     def process_podcasts(self) -> List[Path]:
         """Procesa archivos de podcast con procesador unificado."""
         # Usar el procesador unificado para todo el pipeline de podcasts
-        moved_podcasts = self.podcast_processor.process_podcasts()
-        self._remember(moved_podcasts)
-        return moved_podcasts
+        return self._run_and_remember(self.podcast_processor.process_podcasts)
     
     def process_instapaper_posts(self) -> List[Path]:
         """Procesa posts web descargados de Instapaper con pipeline unificado."""
@@ -163,21 +172,15 @@ class DocumentProcessor:
     
     def process_pdfs(self) -> List[Path]:
         """Procesa PDFs usando el procesador especializado."""
-        moved_pdfs = self.pdf_processor.process_pdfs()
-        self._remember(moved_pdfs)
-        return moved_pdfs
+        return self._run_and_remember(self.pdf_processor.process_pdfs)
     
     def process_images(self) -> List[Path]:
         """Procesa imágenes moviéndolas y generando la galería anual."""
-        moved_images = self.image_processor.process_images()
-        self._remember(moved_images)
-        return moved_images
+        return self._run_and_remember(self.image_processor.process_images)
 
     def process_markdown(self) -> List[Path]:
         """Procesa archivos Markdown genéricos."""
-        moved_markdown = self.markdown_processor.process_markdown()
-        self._remember(moved_markdown)
-        return moved_markdown
+        return self._run_and_remember(self.markdown_processor.process_markdown)
     
     def process_tweets_pipeline(self) -> List[Path]:
         """Procesa la cola de tweets y mueve los resultados a la carpeta anual de Tweets."""
@@ -189,9 +192,7 @@ class DocumentProcessor:
         if not files:
             print("🐦 No hay nuevos tweets para convertir en HTML")
             return []
-        moved = self.tweet_processor.process_markdown_subset(files)
-        self._remember(moved)
-        return moved
+        return self._run_and_remember(lambda: self.tweet_processor.process_markdown_subset(files))
     
     def register_all_files(self) -> None:
         """Registra todos los archivos procesados en el historial."""

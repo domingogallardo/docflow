@@ -57,10 +57,15 @@ def _normalize_stop_url(url: str | None) -> str | None:
         return None
     return _canonical_status_url(url.strip())
 
+def _should_continue(collected: List[str], max_tweets: int, stop_found: bool) -> bool:
+    """Condición de avance del scroll: no parar por límite ni por stop_url."""
+    return len(collected) < max_tweets and not stop_found
+
 
 def _extract_tweet_urls(page, seen: Set[str]) -> List[str]:
     urls: List[str] = []
-    for article in page.locator("article").element_handles():
+    articles = page.locator("article")
+    for article in articles.element_handles():
         links = article.query_selector_all("a[href*='/status/']")
         for link in links:
             href = link.get_attribute("href")
@@ -95,22 +100,23 @@ def collect_likes_from_page(
     idle_scrolls = 0
     stop_absolute = _normalize_stop_url(stop_at_url)
     stop_found = False
+    articles = page.locator("article")
 
-    while len(collected) < max_tweets and not stop_found:
+    while _should_continue(collected, max_tweets, stop_found):
         for url in _extract_tweet_urls(page, seen):
             collected.append(url)
             if stop_absolute and url == stop_absolute:
                 stop_found = True
                 break
-            if len(collected) >= max_tweets:
+            if not _should_continue(collected, max_tweets, stop_found):
                 break
-        if len(collected) >= max_tweets or stop_found:
+        if not _should_continue(collected, max_tweets, stop_found):
             break
 
-        before_articles = page.locator("article").count()
+        before_articles = articles.count()
         page.mouse.wheel(0, 2000)
         page.wait_for_timeout(1500)
-        after_articles = page.locator("article").count()
+        after_articles = articles.count()
         if after_articles <= before_articles:
             idle_scrolls += 1
             if idle_scrolls >= max_scrolls:
@@ -118,7 +124,7 @@ def collect_likes_from_page(
         else:
             idle_scrolls = 0
 
-    total_articles = page.locator("article").count()
+    total_articles = articles.count()
     summary = (
         f"   ✅ Likes cargados correctamente. Artículos visibles: {total_articles}. "
         f"URLs recopiladas: {len(collected)} (límite: {max_tweets})"

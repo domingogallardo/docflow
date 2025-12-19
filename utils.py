@@ -81,32 +81,37 @@ def rename_podcast_files(podcasts: list[Path]) -> list[Path]:
     
     return renamed_files
 
-def move_files(files, dest):
-    dest.mkdir(parents=True, exist_ok=True)
-    moved = []
-    for f in files:
-        new_path = dest / f.name
-        shutil.move(str(f), new_path)
-        moved.append(new_path)
-    return moved
-
-
-def move_files_with_replacement(files: Iterable[Path], dest: Path) -> List[Path]:
-    """Mueve archivos reemplazando versiones anteriores si existen."""
+def _move_files_common(
+    files: Iterable[Path],
+    dest: Path,
+    *,
+    replace_existing: bool,
+    skip_missing: bool,
+) -> List[Path]:
+    """Movimiento centralizado con opciones de reemplazo y tolerancia a ausentes."""
     dest.mkdir(parents=True, exist_ok=True)
     moved: List[Path] = []
 
     for src in files:
-        if not src.exists():
+        if skip_missing and not src.exists():
             continue
         new_path = dest / src.name
-        if new_path.exists():
+        if replace_existing and new_path.exists():
             print(f"🔄 Reemplazando archivo existente: {new_path.name}")
             new_path.unlink()
         shutil.move(str(src), new_path)
         moved.append(new_path)
 
     return moved
+
+
+def move_files(files, dest):
+    return _move_files_common(files, dest, replace_existing=False, skip_missing=False)
+
+
+def move_files_with_replacement(files: Iterable[Path], dest: Path) -> List[Path]:
+    """Mueve archivos reemplazando versiones anteriores si existen."""
+    return _move_files_common(files, dest, replace_existing=True, skip_missing=True)
 
 
 def iter_html_files(directory: Path, file_filter=None):
