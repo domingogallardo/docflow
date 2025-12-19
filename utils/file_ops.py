@@ -7,7 +7,8 @@ import shutil
 from config import BASE_DIR, INCOMING, PROCESSED_HISTORY
 
 
-def list_files(exts, root=INCOMING):
+def list_files(exts, root=None):
+    root = INCOMING if root is None else root
     return [p for p in Path(root).rglob("*") if p.suffix.lower() in exts]
 
 

@@ -17,8 +17,9 @@ def is_podcast_file(file_path: Path) -> bool:
         return False
 
 
-def list_podcast_files(root=INCOMING):
+def list_podcast_files(root=None):
     """Lista todos los archivos MD que son podcasts."""
+    root = INCOMING if root is None else root
     md_files = list_files({".md"}, root)
     return [f for f in md_files if is_podcast_file(f)]
 
