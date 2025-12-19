@@ -50,6 +50,7 @@ STATIC_DIR = os.path.join(SCRIPT_DIR, "static")
 PORT = int(os.getenv("PORT", "8000"))
 SERVE_DIR = os.getenv("SERVE_DIR", "/Users/domingo/⭐️ Documentación")
 BUMP_YEARS = int(os.getenv("BUMP_YEARS", "100"))
+MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
  
 
 # Contador de la sesión (equivale al "counter" del AppleScript en un run)
@@ -88,7 +89,6 @@ def is_bumped(ts: float) -> bool:
 def fmt_ts(ts: float) -> str:
     """Formato estilo /read/: YYYY-Mon-DD HH:MM (mes en inglés abreviado)."""
     t = time.localtime(ts)
-    MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"]
     return f"{t.tm_year}-{MONTHS[t.tm_mon-1]}-{t.tm_mday:02d} {t.tm_hour:02d}:{t.tm_min:02d}"
 
 
