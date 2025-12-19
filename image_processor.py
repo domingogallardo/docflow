@@ -8,6 +8,7 @@ import html
 from urllib.parse import quote
 
 import utils as U
+from path_utils import unique_path
 
 
 class ImageProcessor:
@@ -48,16 +49,7 @@ class ImageProcessor:
 
     def _unique_destination(self, filename: str) -> Path:
         base = self.destination_dir / filename
-        if not base.exists():
-            return base
-        stem = base.stem
-        suffix = base.suffix
-        counter = 1
-        while True:
-            candidate = self.destination_dir / f"{stem} ({counter}){suffix}"
-            if not candidate.exists():
-                return candidate
-            counter += 1
+        return unique_path(base)
 
     def _build_gallery(self) -> None:
         images = [

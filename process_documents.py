@@ -11,7 +11,6 @@ Notas:
 - Para destacar en Instapaper: basta con añadir una estrella (⭐) al inicio del título.
 """
 import argparse
-import os
 
 from pipeline_manager import DocumentProcessor
 import config as cfg
