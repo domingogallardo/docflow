@@ -8,6 +8,7 @@ import time
 from pathlib import Path
 from typing import Callable, Iterable, List, Optional
 
+from path_utils import unique_pair
 
 RenameFunc = Callable[[Path, str], Path]
 
@@ -237,12 +238,12 @@ def rename_markdown_pair(md_path: Path, new_title: str) -> Path:
     md_new = parent / f"{base}.md"
     html_old = md_path.with_suffix(".html")
     html_new = parent / f"{base}.html"
-
-    counter = 1
-    while (md_new.exists() and md_new != md_path) or (html_new.exists() and html_new != html_old):
-        md_new = parent / f"{base} ({counter}).md"
-        html_new = parent / f"{base} ({counter}).html"
-        counter += 1
+    md_new, html_new = unique_pair(
+        md_new,
+        html_new,
+        allow_existing_primary=md_path,
+        allow_existing_secondary=html_old,
+    )
 
     if md_new != md_path:
         md_path.rename(md_new)

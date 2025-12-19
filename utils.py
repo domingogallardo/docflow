@@ -4,6 +4,8 @@ from datetime import datetime, timedelta
 from typing import Iterable, List
 import os, shutil, re
 
+from path_utils import unique_pair
+
 
 def list_files(exts, root=INCOMING):
     return [p for p in Path(root).rglob("*") if p.suffix.lower() in exts]
@@ -60,13 +62,7 @@ def rename_podcast_files(podcasts: list[Path]) -> list[Path]:
         # Generar nombres únicos para MD y HTML
         new_md_path = podcast.parent / f"{title}.md"
         new_html_path = podcast.parent / f"{title}.html"
-        
-        # Evitar conflictos si ya existe
-        counter = 1
-        while new_md_path.exists():
-            new_md_path = podcast.parent / f"{title} ({counter}).md"
-            new_html_path = podcast.parent / f"{title} ({counter}).html"
-            counter += 1
+        new_md_path, new_html_path = unique_pair(new_md_path, new_html_path)
         
         # Renombrar archivos
         podcast.rename(new_md_path)

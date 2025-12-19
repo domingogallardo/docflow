@@ -3,7 +3,7 @@
 DocumentProcessor - Clase principal para el procesamiento de documentos
 """
 from pathlib import Path
-from typing import Callable, Iterable, List, Optional, Set
+from typing import Callable, Iterable, List, Optional
 
 import utils as U
 import config as cfg
@@ -12,6 +12,7 @@ from instapaper_processor import InstapaperProcessor
 from podcast_processor import PodcastProcessor
 from image_processor import ImageProcessor
 from markdown_processor import MarkdownProcessor
+from path_utils import unique_path
 from utils.tweet_to_markdown import fetch_tweet_markdown
 from utils.x_likes_fetcher import fetch_likes_with_state
 
@@ -67,7 +68,6 @@ class DocumentProcessor:
 
         if not fresh_urls:
             print("🐦 No hay nuevos likes pendientes (todo está ya procesado).")
-            self.generated_tweets = []
             return []
 
         generated: List[Path] = []
@@ -93,17 +93,7 @@ class DocumentProcessor:
 
     def _unique_destination(self, target: Path) -> Path:
         """Genera un nombre único evitando sobrescribir archivos existentes."""
-        if not target.exists():
-            return target
-
-        base = target.stem
-        suffix = target.suffix
-        counter = 1
-        while True:
-            candidate = target.with_name(f"{base} ({counter}){suffix}")
-            if not candidate.exists():
-                return candidate
-            counter += 1
+        return unique_path(target)
 
     def _fetch_like_urls(self) -> List[str]:
         if not cfg.TWEET_LIKES_STATE:
@@ -182,15 +172,21 @@ class DocumentProcessor:
         """Procesa archivos Markdown genéricos."""
         return self._run_and_remember(self.markdown_processor.process_markdown)
     
-    def process_tweets_pipeline(self) -> List[Path]:
+    def process_tweets_pipeline(self, *, log_empty_conversion: bool = True) -> List[Path]:
         """Procesa la cola de tweets y mueve los resultados a la carpeta anual de Tweets."""
         generated = self.process_tweet_urls()
-        return self._process_tweet_markdown_subset(generated)
+        return self._process_tweet_markdown_subset(generated, log_empty=log_empty_conversion)
 
-    def _process_tweet_markdown_subset(self, markdown_files: Iterable[Path]) -> List[Path]:
+    def _process_tweet_markdown_subset(
+        self,
+        markdown_files: Iterable[Path],
+        *,
+        log_empty: bool = True,
+    ) -> List[Path]:
         files = [Path(path) for path in markdown_files if Path(path).exists()]
         if not files:
-            print("🐦 No hay nuevos tweets para convertir en HTML")
+            if log_empty:
+                print("🐦 No hay nuevos tweets para convertir en HTML")
             return []
         return self._run_and_remember(lambda: self.tweet_processor.process_markdown_subset(files))
     
@@ -208,9 +204,7 @@ class DocumentProcessor:
         """Ejecuta el pipeline completo."""
         try:
             # Fase 0: Descargar tweets pendientes para convertirlos en Markdown
-            tweet_sources = self.process_tweet_urls()
-            if tweet_sources:
-                self._process_tweet_markdown_subset(tweet_sources)
+            self.process_tweets_pipeline(log_empty_conversion=False)
 
             # Fase 1: Procesar podcasts primero
             self.process_podcasts()

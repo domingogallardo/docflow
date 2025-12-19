@@ -26,6 +26,7 @@ from PIL import Image
 from config import INSTAPAPER_USERNAME, INSTAPAPER_PASSWORD, OPENAI_KEY
 import utils as U
 from title_ai import TitleAIUpdater, rename_markdown_pair
+from path_utils import unique_path
 
 
 class InstapaperDownloadRegistry:
@@ -584,16 +585,7 @@ class InstapaperProcessor:
         moved_files = []
         
         for file_path in files:
-            dest_path = self.destination_dir / file_path.name
-            
-            # Evitar sobrescribir archivos existentes
-            counter = 1
-            while dest_path.exists():
-                stem = file_path.stem
-                suffix = file_path.suffix
-                dest_path = self.destination_dir / f"{stem} ({counter}){suffix}"
-                counter += 1
-            
+            dest_path = unique_path(self.destination_dir / file_path.name)
             file_path.rename(dest_path)
             moved_files.append(dest_path)
         
