@@ -13,6 +13,17 @@ from podcast_processor import PodcastProcessor
 from image_processor import ImageProcessor
 from markdown_processor import MarkdownProcessor
 from path_utils import unique_path
+
+PIPELINE_STEPS = (
+    ("tweets", "process_tweets_pipeline"),
+    ("podcasts", "process_podcasts"),
+    ("posts", "process_instapaper_posts"),
+    ("pdfs", "process_pdfs"),
+    ("images", "process_images"),
+    ("md", "process_markdown"),
+)
+TARGET_HANDLERS = {name: method for name, method in PIPELINE_STEPS}
+PIPELINE_TARGETS = tuple(name for name, _ in PIPELINE_STEPS)
 from utils.tweet_to_markdown import fetch_tweet_markdown
 from utils.x_likes_fetcher import fetch_likes_with_state
 
@@ -177,6 +188,23 @@ class DocumentProcessor:
         generated = self.process_tweet_urls()
         return self._process_tweet_markdown_subset(generated, log_empty=log_empty_conversion)
 
+    def process_targets(self, targets: Iterable[str], *, log_empty_tweets: bool = True) -> bool:
+        """Ejecuta un subconjunto del pipeline según los targets indicados."""
+        try:
+            for target in targets:
+                handler_name = TARGET_HANDLERS[target]
+                handler = getattr(self, handler_name)
+                if target == "tweets":
+                    handler(log_empty_conversion=log_empty_tweets)
+                else:
+                    handler()
+            self.register_all_files()
+            print("Pipeline completado ✅")
+            return True
+        except Exception as e:
+            print(f"❌ Error en el pipeline: {e}")
+            return False
+
     def _process_tweet_markdown_subset(
         self,
         markdown_files: Iterable[Path],
@@ -202,34 +230,7 @@ class DocumentProcessor:
     
     def process_all(self) -> bool:
         """Ejecuta el pipeline completo."""
-        try:
-            # Fase 0: Descargar tweets pendientes para convertirlos en Markdown
-            self.process_tweets_pipeline(log_empty_conversion=False)
-
-            # Fase 1: Procesar podcasts primero
-            self.process_podcasts()
-
-            # Fase 2: Procesar posts de Instapaper (con pipeline completo)
-            self.process_instapaper_posts()
-
-            # Fase 3: Procesar PDFs (solo mover, sin pipeline)
-            self.process_pdfs()
-
-            # Fase 4: Procesar imágenes (mover y actualizar galería)
-            self.process_images()
-
-            # Fase 5: Procesar Markdown genérico
-            self.process_markdown()
-
-            # Fase 6: Registrar todo en historial
-            self.register_all_files()
-            
-            print("Pipeline completado ✅")
-            return True
-        
-        except Exception as e:
-            print(f"❌ Error en el pipeline: {e}")
-            return False 
+        return self.process_targets(PIPELINE_TARGETS, log_empty_tweets=False)
 
     def _remember(self, paths: List[Path]) -> None:
         self._history.extend(paths)

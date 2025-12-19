@@ -4,6 +4,7 @@ import sys
 from types import SimpleNamespace
 import pytest
 import process_documents
+from pipeline_manager import TARGET_HANDLERS
 
 
 def run_main(monkeypatch, tmp_path, args):
@@ -21,7 +22,7 @@ def run_main(monkeypatch, tmp_path, args):
             calls.append("podcasts")
             return []
 
-        def process_tweets_pipeline(self):
+        def process_tweets_pipeline(self, *, log_empty_conversion=True):
             calls.append("tweets")
             return []
         def process_instapaper_posts(self):
@@ -42,6 +43,17 @@ def run_main(monkeypatch, tmp_path, args):
 
         def register_all_files(self):
             calls.append("register")
+
+        def process_targets(self, targets, *, log_empty_tweets=True):
+            for target in targets:
+                handler_name = TARGET_HANDLERS[target]
+                handler = getattr(self, handler_name)
+                if target == "tweets":
+                    handler(log_empty_conversion=log_empty_tweets)
+                else:
+                    handler()
+            self.register_all_files()
+            return True
 
     monkeypatch.setattr(process_documents, "DocumentProcessor", DummyProcessor)
     monkeypatch.setattr(process_documents.cfg, "BASE_DIR", tmp_path)
