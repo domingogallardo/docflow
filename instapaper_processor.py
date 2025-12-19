@@ -16,6 +16,7 @@ import re
 import time
 import requests
 from openai import OpenAI
+from contextlib import contextmanager
 from datetime import datetime
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
@@ -35,6 +36,8 @@ class InstapaperDownloadRegistry:
     def __init__(self, path: Path):
         self.path = path
         self.entries: Dict[str, Dict[str, object]] = {}
+        self._batch_depth = 0
+        self._dirty = False
         self._load()
 
     def _load(self) -> None:
@@ -83,7 +86,22 @@ class InstapaperDownloadRegistry:
             "starred": starred,
             "timestamp": timestamp,
         }
-        self._persist()
+        if self._batch_depth:
+            self._dirty = True
+        else:
+            self._persist()
+
+    @contextmanager
+    def batch(self):
+        """Acumula escrituras y persiste al salir del contexto."""
+        self._batch_depth += 1
+        try:
+            yield self
+        finally:
+            self._batch_depth -= 1
+            if self._batch_depth == 0 and self._dirty:
+                self._persist()
+                self._dirty = False
 
     def _persist(self) -> None:
         self.path.parent.mkdir(parents=True, exist_ok=True)
@@ -174,7 +192,7 @@ class InstapaperProcessor:
                 return True  # No es error, simplemente no hay nada
 
             print("📚 Iniciando descarga de artículos de Instapaper...")
-            with open("failed.txt", "a+") as failure_log:
+            with open("failed.txt", "a+") as failure_log, self.download_registry.batch():
                 self._download_articles_pages(first_articles, has_more, failure_log)
 
             print("📚 Descarga de Instapaper completada")

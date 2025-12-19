@@ -142,6 +142,19 @@ def test_download_registry_persistence(tmp_path):
     assert registry_again.should_skip("abc", True) is True
 
 
+def test_download_registry_batch_persists_on_exit(tmp_path):
+    """En batch solo se persiste al salir del contexto."""
+    registry_path = tmp_path / ".instapaper_downloads.txt"
+    registry = InstapaperDownloadRegistry(registry_path)
+
+    with registry.batch():
+        registry.mark_downloaded("abc", True)
+        assert not registry_path.exists()
+
+    assert registry_path.exists()
+    assert "abc\t1" in registry_path.read_text(encoding="utf-8")
+
+
 def test_download_skips_articles_on_registry(tmp_path, monkeypatch):
     incoming = tmp_path / "Incoming"
     destination = tmp_path / "Posts"
