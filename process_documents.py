@@ -12,17 +12,8 @@ Notas:
 """
 import argparse
 
-from pipeline_manager import DocumentProcessor
+from pipeline_manager import DocumentProcessor, PIPELINE_TARGETS
 import config as cfg
-
-TARGET_HANDLERS = {
-    "tweets": "process_tweets_pipeline",
-    "pdfs": "process_pdfs",
-    "podcasts": "process_podcasts",
-    "posts": "process_instapaper_posts",
-    "images": "process_images",
-    "md": "process_markdown",
-}
 
 
 def parse_args():
@@ -42,7 +33,7 @@ def parse_args():
     p.add_argument(
         "targets",
         nargs="+",
-        choices=[*TARGET_HANDLERS.keys(), "all"],
+        choices=[*PIPELINE_TARGETS, "all"],
         help="Procesa solo los tipos indicados",
     )
     return p.parse_args()
@@ -65,16 +56,7 @@ def main():
     if "all" in args.targets:
         success = processor.process_all()
     else:
-        try:
-            for target in args.targets:
-                handler = getattr(processor, TARGET_HANDLERS[target])
-                handler()
-            processor.register_all_files()
-            print("Pipeline completado ✅")
-            success = True
-        except Exception as e:
-            print(f"❌ Error en el pipeline: {e}")
-            success = False
+        success = processor.process_targets(args.targets)
 
     if not success:
         exit(1)
