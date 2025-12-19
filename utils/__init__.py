@@ -1,39 +1,55 @@
-"""Compatibilidad para helpers globales en ``utils.py``.
+"""Reexporta helpers comunes del pipeline."""
 
-Este paquete aloja utilidades ejecutables bajo ``utils/`` (por ejemplo,
-``utils.build_read_index``). El pipeline principal, sin embargo, espera poder
-importar ``import utils as U`` y obtener las funciones definidas en el módulo
-raíz ``utils.py``. Al introducir este paquete, la resolución de importaciones de
-Python prioriza primero la carpeta antes que el archivo, lo que hacía que
-``utils.list_podcast_files`` desapareciese.
+from utils.file_ops import (
+    bump_files,
+    iter_html_files,
+    list_files,
+    move_files,
+    move_files_with_replacement,
+    register_paths,
+)
+from utils.html_tools import (
+    add_margins_to_html_files,
+    get_article_js_script_tag,
+    get_base_css,
+    wrap_html,
+)
+from utils.instapaper_utils import is_instapaper_starred_file
+from utils.markdown_utils import (
+    clean_duplicate_markdown_links,
+    convert_newlines_to_br,
+    convert_urls_to_links,
+    extract_html_body,
+    markdown_to_html,
+    markdown_to_html_body,
+)
+from utils.podcasts import (
+    extract_episode_title,
+    is_podcast_file,
+    list_podcast_files,
+    rename_podcast_files,
+)
 
-Para mantener la compatibilidad y seguir exponiendo las herramientas CLI,
-cargamos ``utils.py`` manualmente y re-exportamos sus entidades públicas dentro
-del paquete.
-"""
-
-from importlib import util as _importlib_util
-from pathlib import Path as _Path
-
-
-_ROOT = _Path(__file__).resolve().parent.parent
-_UTILS_PATH = _ROOT / "utils.py"
-
-_spec = _importlib_util.spec_from_file_location("_docflow_utils_module", _UTILS_PATH)
-if _spec and _spec.loader:
-    _module = _importlib_util.module_from_spec(_spec)
-    _spec.loader.exec_module(_module)  # type: ignore[call-arg]
-
-    _public_names = getattr(_module, "__all__", None)
-    if _public_names is None:
-        _public_names = [name for name in dir(_module) if not name.startswith("_")]
-
-    for _name in _public_names:
-        globals()[_name] = getattr(_module, _name)
-
-    __all__ = list(_public_names)
-else:  # pragma: no cover - protección defensiva
-    raise ImportError(f"No se pudo cargar utils.py desde {_UTILS_PATH}")
-
-
-del _module, _spec, _public_names, _UTILS_PATH, _ROOT, _importlib_util, _Path
+__all__ = [
+    "add_margins_to_html_files",
+    "bump_files",
+    "clean_duplicate_markdown_links",
+    "convert_newlines_to_br",
+    "convert_urls_to_links",
+    "extract_episode_title",
+    "extract_html_body",
+    "get_article_js_script_tag",
+    "get_base_css",
+    "is_instapaper_starred_file",
+    "is_podcast_file",
+    "iter_html_files",
+    "list_files",
+    "list_podcast_files",
+    "markdown_to_html",
+    "markdown_to_html_body",
+    "move_files",
+    "move_files_with_replacement",
+    "register_paths",
+    "rename_podcast_files",
+    "wrap_html",
+]
