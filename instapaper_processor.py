@@ -11,7 +11,6 @@ descarga cuando Instapaper creó su copia, esas imágenes ya no están
 presentes y el pipeline no puede recuperarlas.
 """
 from __future__ import annotations
-import os
 import re
 import time
 import requests
@@ -22,7 +21,6 @@ from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 from bs4 import BeautifulSoup
 from markdownify import markdownify as md
-from PIL import Image
 
 from config import INSTAPAPER_USERNAME, INSTAPAPER_PASSWORD, OPENAI_KEY
 import utils as U
@@ -549,19 +547,7 @@ class InstapaperProcessor:
         """Añade márgenes a los archivos HTML."""
         U.add_margins_to_html_files(self.incoming_dir)
     
-    def _get_image_width(self, src):
-        """Obtiene el ancho de una imagen local.
-
-        No realiza ninguna petición de red para imágenes remotas.
-        """
-        try:
-            if src.startswith('http'):
-                return None
-            abs_path = os.path.abspath(src)
-            with Image.open(abs_path) as img:
-                return img.width
-        except Exception:
-            return None
+    # Nota: _get_image_width eliminado (no se usa; el ancho se maneja por width en HTML o CSS).
 
     def _update_titles_with_ai(self):
         """Genera títulos atractivos usando IA para archivos Markdown."""

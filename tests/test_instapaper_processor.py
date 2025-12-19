@@ -277,13 +277,10 @@ def test_instapaper_processor_html_encoding_fix(tmp_path):
 
 def test_instapaper_processor_image_width_reduction(tmp_path):
     """Test que verifica la reducción de ancho de imágenes."""
-    
-    # Preparar
     incoming = tmp_path / "Incoming"
     incoming.mkdir()
     destination = tmp_path / "Posts"
-    
-    # Crear archivo HTML con imagen grande
+
     html_file = incoming / "big_image.html"
     html_content = """<html>
     <body>
@@ -292,19 +289,14 @@ def test_instapaper_processor_image_width_reduction(tmp_path):
     </body>
     </html>"""
     html_file.write_text(html_content)
-    
-    # Crear procesador
+
     processor = InstapaperProcessor(incoming, destination)
-    
-    # Mock para get_image_width que devuelva ancho grande
-    with patch.object(processor, '_get_image_width', return_value=800):
-        # Ejecutar reducción de imágenes
-        processor._reduce_images_width()
-    
-    # Verificar que se redujo el ancho
+
+    processor._reduce_images_width()
+
     updated_content = html_file.read_text()
     assert 'width="300"' in updated_content
-    assert 'height="600"' not in updated_content  # height debería eliminarse
+    assert 'height="600"' not in updated_content
 
 
 def test_instapaper_processor_title_generation(tmp_path):
