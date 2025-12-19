@@ -154,98 +154,106 @@ class InstapaperProcessor:
     
     def _download_from_instapaper(self) -> bool:
         """Descarga artículos desde Instapaper."""
-        if not INSTAPAPER_USERNAME or not INSTAPAPER_PASSWORD:
+        if not self._has_instapaper_credentials():
             print("❌ Credenciales de Instapaper no configuradas")
             return False
-        
-        try:
-            # Inicializar sesión y login
-            self.session = requests.Session()
-            login_response = self.session.post("https://www.instapaper.com/user/login", data={
-                "username": INSTAPAPER_USERNAME,
-                "password": INSTAPAPER_PASSWORD,
-                "keep_logged_in": "yes"
-            })
 
-            # Verificar login de manera más robusta
-            login_successful = True
-            
-            # Verificar código de estado HTTP
-            if login_response.status_code >= 400:
-                print(f"❌ Error HTTP {login_response.status_code} - URL incorrecta o servidor no disponible")
-                login_successful = False
-            
-            # Verificar si fuimos redirigidos a la página de login (fallo)
-            elif "login" in login_response.url:
-                print("❌ Redirigido a página de login - credenciales incorrectas")
-                login_successful = False
-            
-            # Verificar si hay mensajes de error específicos en el contenido
-            soup = BeautifulSoup(login_response.text, "html.parser")
-            error_messages = soup.find_all(class_="error")
-            if error_messages:
-                print("❌ Mensajes de error encontrados en la página de login")
-                for error in error_messages:
-                    print(f"   - {error.get_text().strip()}")
-                login_successful = False
-            
-            # Verificar si hay formulario de login (indica que no estamos logueados)
-            login_form = soup.find("form")
-            if login_form and "login" in login_form.get("action", ""):
-                print("❌ Formulario de login encontrado - no estamos logueados")
-                login_successful = False
-            
-            if not login_successful:
+        try:
+            self._init_instapaper_session()
+            login_response = self._login_instapaper()
+
+            if not self._is_login_successful(login_response):
                 print("❌ Credenciales de Instapaper incorrectas")
                 return False
-            
+
             print("✅ Login en Instapaper exitoso")
-            
-            # Verificar si hay artículos para descargar
+
             first_articles, has_more = self._get_article_ids(1)
             if not first_articles:
                 print("📚 No hay artículos nuevos en Instapaper para descargar")
                 return True  # No es error, simplemente no hay nada
-            
-            print(f"📚 Iniciando descarga de artículos de Instapaper...")
-            
-            # Descargar artículos
-            page = 1
-            failure_log = open("failed.txt", "a+")
-            
-            while has_more or page == 1:
-                print(f"Page {page}")
-                if page == 1:
-                    articles = first_articles
-                else:
-                    articles, has_more = self._get_article_ids(page)
-                
-                for article_id, starred_hint in articles:
-                    if self.download_registry.should_skip(article_id, starred_hint):
-                        print(f"  {article_id}: ⏭️  ya descargado (sin cambios)")
-                        continue
 
-                    print(f"  {article_id}: ", end="")
-                    start = time.time()
-                    try:
-                        file_path, is_starred = self._download_article(article_id)
-                        self.download_registry.mark_downloaded(article_id, is_starred)
-                        duration = time.time() - start
-                        print(f"{round(duration, 2)} seconds")
-                    except Exception as e:
-                        print("failed!")
-                        failure_log.write(f"{article_id}\t{str(e)}\n")
-                        failure_log.flush()
-                
-                page += 1
-            
-            failure_log.close()
+            print("📚 Iniciando descarga de artículos de Instapaper...")
+            with open("failed.txt", "a+") as failure_log:
+                self._download_articles_pages(first_articles, has_more, failure_log)
+
             print("📚 Descarga de Instapaper completada")
             return True
-            
+
         except Exception as e:
             print(f"❌ Error en la descarga de Instapaper: {e}")
             return False
+
+    def _has_instapaper_credentials(self) -> bool:
+        return bool(INSTAPAPER_USERNAME and INSTAPAPER_PASSWORD)
+
+    def _init_instapaper_session(self) -> None:
+        self.session = requests.Session()
+
+    def _login_instapaper(self):
+        return self.session.post(
+            "https://www.instapaper.com/user/login",
+            data={
+                "username": INSTAPAPER_USERNAME,
+                "password": INSTAPAPER_PASSWORD,
+                "keep_logged_in": "yes",
+            },
+        )
+
+    def _is_login_successful(self, login_response) -> bool:
+        login_successful = True
+
+        if login_response.status_code >= 400:
+            print(f"❌ Error HTTP {login_response.status_code} - URL incorrecta o servidor no disponible")
+            login_successful = False
+        elif "login" in login_response.url:
+            print("❌ Redirigido a página de login - credenciales incorrectas")
+            login_successful = False
+
+        soup = BeautifulSoup(login_response.text, "html.parser")
+        error_messages = soup.find_all(class_="error")
+        if error_messages:
+            print("❌ Mensajes de error encontrados en la página de login")
+            for error in error_messages:
+                print(f"   - {error.get_text().strip()}")
+            login_successful = False
+
+        login_form = soup.find("form")
+        if login_form and "login" in login_form.get("action", ""):
+            print("❌ Formulario de login encontrado - no estamos logueados")
+            login_successful = False
+
+        return login_successful
+
+    def _download_articles_pages(self, first_articles, has_more, failure_log) -> None:
+        page = 1
+        while has_more or page == 1:
+            print(f"Page {page}")
+            if page == 1:
+                articles = first_articles
+            else:
+                articles, has_more = self._get_article_ids(page)
+
+            self._download_article_batch(articles, failure_log)
+            page += 1
+
+    def _download_article_batch(self, articles, failure_log) -> None:
+        for article_id, starred_hint in articles:
+            if self.download_registry.should_skip(article_id, starred_hint):
+                print(f"  {article_id}: ⏭️  ya descargado (sin cambios)")
+                continue
+
+            print(f"  {article_id}: ", end="")
+            start = time.time()
+            try:
+                _, is_starred = self._download_article(article_id)
+                self.download_registry.mark_downloaded(article_id, is_starred)
+                duration = time.time() - start
+                print(f"{round(duration, 2)} seconds")
+            except Exception as e:
+                print("failed!")
+                failure_log.write(f"{article_id}\t{str(e)}\n")
+                failure_log.flush()
 
     def _has_star_emoji_prefix(self, s: str) -> bool:
         """Devuelve True si s comienza con el emoji ⭐ (U+2B50) con o sin VS16."""
