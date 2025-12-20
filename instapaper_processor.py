@@ -14,7 +14,6 @@ from __future__ import annotations
 import re
 import time
 import requests
-from openai import OpenAI
 from contextlib import contextmanager
 from datetime import datetime
 from pathlib import Path
@@ -25,6 +24,7 @@ from markdownify import markdownify as md
 from config import INSTAPAPER_USERNAME, INSTAPAPER_PASSWORD, OPENAI_KEY
 import utils as U
 from title_ai import TitleAIUpdater, rename_markdown_pair
+from openai_client import build_openai_client
 from path_utils import unique_path
 
 
@@ -120,10 +120,7 @@ class InstapaperProcessor:
         self.incoming_dir = incoming_dir
         self.destination_dir = destination_dir
         self.session = None
-        try:
-            self.openai_client = OpenAI(api_key=OPENAI_KEY) if OPENAI_KEY else OpenAI()
-        except Exception:
-            self.openai_client = None
+        self.openai_client = build_openai_client(OPENAI_KEY)
         self.title_updater = TitleAIUpdater(self.openai_client)
         self.download_registry = InstapaperDownloadRegistry(
             self.incoming_dir / ".instapaper_downloads.txt"
