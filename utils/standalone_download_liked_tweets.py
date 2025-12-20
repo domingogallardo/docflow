@@ -327,22 +327,72 @@ def _absolute_url(href: str) -> str:
     return urljoin("https://x.com", href)
 
 
+def _normalize_stop_url(url: str | None) -> str | None:
+    if not url:
+        return None
+    return _canonical_status_url(url.strip())
+
+
+def _should_continue(collected: List[str], max_tweets: int, stop_found: bool) -> bool:
+    return len(collected) < max_tweets and not stop_found
+
+
 def _extract_tweet_urls(page, seen: Set[str]) -> List[str]:
     urls: List[str] = []
-    for article in page.locator("article").element_handles():
+    articles = page.locator("article")
+    for article in articles.element_handles():
         links = article.query_selector_all("a[href*='/status/']")
-        article_url: str | None = None
         for link in links:
             href = link.get_attribute("href")
             canonical = _canonical_status_url(href)
-            if not canonical:
+            if not canonical or canonical in seen:
                 continue
-            article_url = canonical
-            break
-        if article_url and article_url not in seen:
-            seen.add(article_url)
-            urls.append(article_url)
+            seen.add(canonical)
+            urls.append(canonical)
     return urls
+
+
+def collect_likes_from_page(
+    page,
+    likes_url: str,
+    max_tweets: int,
+    stop_at_url: str | None,
+) -> Tuple[bool, int, List[str], bool, str | None]:
+    page.goto(likes_url, wait_until="domcontentloaded", timeout=60000)
+    try:
+        page.wait_for_selector("article", timeout=15000)
+    except PlaywrightTimeoutError:
+        return False, 0, [], False, _normalize_stop_url(stop_at_url)
+
+    collected: List[str] = []
+    seen: Set[str] = set()
+    max_scrolls = 20
+    idle_scrolls = 0
+    stop_absolute = _normalize_stop_url(stop_at_url)
+    stop_found = False
+    articles = page.locator("article")
+
+    while _should_continue(collected, max_tweets, stop_found):
+        for url in _extract_tweet_urls(page, seen):
+            collected.append(url)
+            if stop_absolute and url == stop_absolute:
+                stop_found = True
+                break
+            if not _should_continue(collected, max_tweets, stop_found):
+                break
+        if not _should_continue(collected, max_tweets, stop_found):
+            break
+
+        before = articles.count()
+        page.mouse.wheel(0, 2000)
+        page.wait_for_timeout(1500)
+        after = articles.count()
+        idle_scrolls = idle_scrolls + 1 if after <= before else 0
+        if idle_scrolls >= max_scrolls:
+            break
+
+    total_articles = articles.count()
+    return True, total_articles, collected, stop_found, stop_absolute
 
 
 def fetch_likes_with_state(
@@ -350,6 +400,7 @@ def fetch_likes_with_state(
     *,
     likes_url: str = DEFAULT_LIKES_URL,
     max_tweets: int = DEFAULT_MAX_TWEETS,
+    stop_at_url: str | None = None,
     headless: bool = True,
 ) -> Tuple[List[str], int]:
     path = state_path.expanduser()
@@ -367,38 +418,21 @@ def fetch_likes_with_state(
         context.add_init_script(STEALTH_SNIPPET)
         page = context.new_page()
 
-        page.goto(likes_url, wait_until="domcontentloaded", timeout=60000)
-        try:
-            page.wait_for_selector("article", timeout=15000)
-        except PlaywrightTimeoutError:
+        success, total_articles, urls, stop_found, stop_absolute = collect_likes_from_page(
+            page,
+            likes_url=likes_url,
+            max_tweets=max_tweets,
+            stop_at_url=stop_at_url,
+        )
+        if not success:
             raise RuntimeError("No se detectaron artículos; ¿sesión caducada?")
-
-        collected: List[str] = []
-        seen: Set[str] = set()
-        max_scrolls = 20
-        idle_scrolls = 0
-
-        while len(collected) < max_tweets:
-            for url in _extract_tweet_urls(page, seen):
-                collected.append(url)
-                if len(collected) >= max_tweets:
-                    break
-            if len(collected) >= max_tweets:
-                break
-
-            before = page.locator("article").count()
-            page.mouse.wheel(0, 2000)
-            page.wait_for_timeout(1500)
-            after = page.locator("article").count()
-            idle_scrolls = idle_scrolls + 1 if after <= before else 0
-            if idle_scrolls >= max_scrolls:
-                break
-
-        total_articles = page.locator("article").count()
+        if stop_found and stop_absolute and stop_absolute in urls:
+            idx = urls.index(stop_absolute)
+            urls = urls[:idx]
 
         context.close()
         browser.close()
-        return collected, total_articles
+        return urls, total_articles
 
 
 def parse_args() -> argparse.Namespace:
@@ -429,6 +463,10 @@ def parse_args() -> argparse.Namespace:
         type=int,
         required=True,
         help="Número de likes a capturar en esta ejecución",
+    )
+    parser.add_argument(
+        "--stop-at-url",
+        help="Detén la captura cuando aparezca esta URL (útil para evitar duplicados)",
     )
     parser.add_argument(
         "--wait-ms",
@@ -472,6 +510,7 @@ def download_likes(args: argparse.Namespace) -> None:
         state_path,
         likes_url=likes_url,
         max_tweets=args.max_tweets,
+        stop_at_url=args.stop_at_url,
         headless=args.headless,
     )
     print(

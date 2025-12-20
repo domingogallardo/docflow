@@ -38,15 +38,60 @@ def parse_args(argv: Iterable[str] | None = None) -> argparse.Namespace:
     return parser.parse_args(argv)
 
 
-def convert_urls_to_links(md_text: str) -> str:
-    """Convierte URLs en texto plano a enlaces Markdown simples."""
-    url_re = re.compile(r"(?P<url>https?://[^\s<]+)")
+def clean_duplicate_markdown_links(text: str) -> str:
+    """Limpia enlaces Markdown donde el texto y la URL son idénticos."""
+    duplicate_link_pattern = r'\[(https?://[^\]]+)\]\(\1\)'
 
-    def repl(match: re.Match[str]) -> str:
-        url = match.group("url")
-        return f"[{url}]({url})"
+    def replace_duplicate_link(match):
+        url = match.group(1)
+        try:
+            from urllib.parse import urlparse
+            parsed = urlparse(url)
+            domain = parsed.netloc
+            path = parsed.path
+            if len(path) > 30:
+                path = path[:27] + "..."
+            display_text = f"{domain}{path}"
+            return f'[{display_text}]({url})'
+        except Exception:
+            return f'[Ver enlace]({url})'
 
-    return url_re.sub(repl, md_text)
+    return re.sub(duplicate_link_pattern, replace_duplicate_link, text)
+
+
+def convert_urls_to_links(text: str) -> str:
+    """Convierte URLs de texto plano a enlaces Markdown de forma robusta."""
+    text = clean_duplicate_markdown_links(text)
+
+    lines = text.split('\n')
+    processed_lines = []
+
+    for line in lines:
+        if 'http' in line:
+            url_pattern = r'https?://[^\s\)\]>"\']+'
+            matches = list(re.finditer(url_pattern, line))
+
+            for match in reversed(matches):
+                url = match.group()
+                start_pos = match.start()
+
+                prefix = line[:start_pos].lower()
+                prefix_lines = prefix.split('\n')
+                is_in_markdown_link = '](' in prefix_lines[-1] if prefix_lines else False
+
+                prefix_words = prefix.split()
+                last_word = prefix_words[-1] if prefix_words else ""
+                is_in_html_attribute = any(attr in last_word for attr in [
+                    'href=', 'src=', 'srcset=', 'poster=', 'data-src=', 'action=', 'cite='
+                ])
+                is_in_css_url = 'url(' in last_word
+
+                if not (is_in_markdown_link or is_in_html_attribute or is_in_css_url):
+                    line = line[:start_pos] + f'[{url}]({url})' + line[match.end():]
+
+        processed_lines.append(line)
+
+    return '\n'.join(processed_lines)
 
 
 def convert_newlines_to_br(html_text: str) -> str:
@@ -73,7 +118,7 @@ def markdown_to_html(md_text: str, title: str) -> str:
     html_body = convert_newlines_to_br(html_body)
     full_html = (
         "<!DOCTYPE html>\n"
-        "<html>\n<head>\n<meta charset=\"utf-8\"/>\n"
+        "<html>\n<head>\n<meta charset=\"UTF-8\">\n"
         f"<title>{title}</title>\n"
         "</head>\n<body>\n"
         f"{html_body}\n"
@@ -85,6 +130,18 @@ def markdown_to_html(md_text: str, title: str) -> str:
 def add_margins(html: str) -> str:
     soup = BeautifulSoup(html, "html.parser")
     margin_style = "body { margin-left: 6%; margin-right: 6%; }"
+    img_rule = "img { max-width: 300px; height: auto; cursor: zoom-in; }"
+
+    for img in soup.find_all("img"):
+        src = img.get("src")
+        if not src:
+            continue
+        parent = img.parent
+        if parent and parent.name == "a" and parent.get("href") == src:
+            continue
+        link = soup.new_tag("a", href=src, target="_blank", rel="noopener")
+        img.replace_with(link)
+        link.append(img)
     head = soup.head
     if head is None:
         head = soup.new_tag("head")
@@ -94,9 +151,12 @@ def add_margins(html: str) -> str:
         existing = style_tag.string or ""
         if margin_style not in existing:
             style_tag.string = (existing + ("\n" if existing else "") + margin_style)
+            existing = style_tag.string
+        if img_rule not in (style_tag.string or ""):
+            style_tag.string += "\n" + img_rule
     else:
         style_tag = soup.new_tag("style")
-        style_tag.string = margin_style
+        style_tag.string = margin_style + "\n" + img_rule
         head.append(style_tag)
     html_out = str(soup).replace("<br/>", "<br>").replace("<br />", "<br>")
     return html_out
@@ -133,7 +193,6 @@ def convert_markdown_file(
 
     try:
         md_text = md_file.read_text(encoding="utf-8", errors="replace")
-        md_text = re.sub(r"\n{2,}", "\n", md_text)
         full_html = markdown_to_html(md_text, title=md_file.stem)
         html_with_margins = add_margins(full_html)
         html_path.write_text(html_with_margins, encoding="utf-8")

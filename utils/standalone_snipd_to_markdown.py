@@ -46,7 +46,11 @@ class SnipdMarkdownConverter:
         generated: list[Path] = []
         for index, episode_text in enumerate(episodes, start=1):
             cleaned_text = self._clean_snipd_text(episode_text)
-            title = self._extract_title(cleaned_text) or f"{self.input_file.stem} part {index}"
+            title = (
+                self._extract_episode_title_from_text(cleaned_text)
+                or self._extract_title(cleaned_text)
+                or f"{self.input_file.stem} part {index}"
+            )
             filename = self._unique_filename(title, index)
             output_path = self.output_dir / filename
             output_path.write_text(cleaned_text, encoding="utf-8")
@@ -213,9 +217,25 @@ class SnipdMarkdownConverter:
         match = re.search(r"^#\s+(.+)$", text, flags=re.MULTILINE)
         return match.group(1).strip() if match else None
 
+    def _extract_episode_title_from_text(self, text: str) -> str | None:
+        show_match = re.search(r"- Show:\s*(.+)", text)
+        episode_match = re.search(r"- Episode title:\s*(.+)", text)
+
+        if not episode_match:
+            return None
+
+        episode_title = episode_match.group(1).strip()
+        show_name = show_match.group(1).strip() if show_match else None
+        full_title = f"{show_name} - {episode_title}" if show_name else episode_title
+        return self._sanitize_title_for_filename(full_title)
+
+    def _sanitize_title_for_filename(self, title: str) -> str:
+        cleaned = re.sub(r'[<>:"/\\|?*#]', '', title)
+        cleaned = re.sub(r'\s+', ' ', cleaned).strip()
+        return cleaned[:200]
+
     def _unique_filename(self, title: str, index: int) -> str:
-        slug = self._slugify(title)
-        base = slug or f"podcast-{index:02d}"
+        base = self._sanitize_title_for_filename(title) or f"podcast-{index:02d}"
         filename = f"{base}.md"
         counter = 1
         while (self.output_dir / filename).exists():

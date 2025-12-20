@@ -18,7 +18,7 @@ USER_AGENT = (
     "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
     "AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Safari/605.1.15"
 )
-STAR_PREFIXES = ("⭐", "⭐️", "★", "✪", "✭")
+STAR_PREFIXES = ("⭐", "⭐️")
 
 
 def parse_args() -> argparse.Namespace:
@@ -48,10 +48,9 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
-def _safe_filename(name: str) -> str:
-    cleaned = "".join(ch for ch in name if ch not in '<>:"/\\|?*#').strip()
-    cleaned = " ".join(cleaned.split())
-    return cleaned[:200] or "Instapaper"
+def _sanitize_title(name: str) -> str:
+    safe = "".join(c for c in name if c.isalpha() or c.isdigit() or c == " ").strip()
+    return re.sub(r"\s+", " ", safe)[:200]
 
 
 def _has_star_prefix(title: str) -> bool:
@@ -65,6 +64,35 @@ def _strip_star_prefix(title: str) -> str:
     if not title:
         return title
     return re.sub(r"^\s*(?:[\u2B50\u2605\u272A\u272D]\uFE0F?\s*)+", "", title).strip()
+
+
+def _is_starred_from_title_only(html: str) -> bool:
+    try:
+        soup = BeautifulSoup(html, "html.parser")
+        page_title = soup.title.string if (soup.title and soup.title.string) else ""
+        return _has_star_prefix(page_title)
+    except Exception:
+        return False
+
+
+def _truncate_filename(name: str, extension: str, max_length: int = 200) -> str:
+    total_length = len(name) + len(extension) + 1
+    if total_length > max_length:
+        name = name[: max_length - len(extension) - 1]
+    return name + extension
+
+
+def _unique_path(path: Path) -> Path:
+    if not path.exists():
+        return path
+    stem = path.stem
+    suffix = path.suffix
+    counter = 1
+    while True:
+        candidate = path.with_name(f"{stem} ({counter}){suffix}")
+        if not candidate.exists():
+            return candidate
+        counter += 1
 
 
 @dataclass
@@ -209,19 +237,22 @@ class InstapaperDownloader:
 
         title_el = soup.find(id="titlebar").find("h1") if soup.find(id="titlebar") else None
         raw_title = title_el.getText() if title_el else (soup.title.string if soup.title else f"Instapaper {article_id}")
-        starred = _has_star_prefix(raw_title)
         title = _strip_star_prefix(raw_title) or f"Instapaper {article_id}"
+        starred = _is_starred_from_title_only(resp.text)
 
         origin = soup.find(id="titlebar").find(class_="origin_line") if soup.find(id="titlebar") else None
         content_node = soup.find(id="story")
         content = content_node.decode_contents() if content_node else ""
 
-        filename = _safe_filename(title)
-        html_path = self.output_dir / f"{filename}.html"
+        safe = _sanitize_title(title)
+        if not safe:
+            safe = f"Instapaper {article_id}"
+        file_name = _truncate_filename(safe, ".html")
+        html_path = _unique_path(self.output_dir / file_name)
 
         star_meta = '<meta name="instapaper-starred" content="true">\n' if starred else ""
         star_attr = ' data-instapaper-starred="true"' if starred else ""
-        comment = "<!-- instapaper_starred: true -->\n" if starred else ""
+        comment = "<!-- instapaper_starred: true method=read_or_list -->\n" if starred else ""
         origin_html = str(origin) if origin else ""
         html = (
             "<!DOCTYPE html>\n"
