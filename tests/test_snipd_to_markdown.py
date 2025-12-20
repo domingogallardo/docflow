@@ -27,8 +27,8 @@ def test_snipd_converter_splits_and_indexes(tmp_path: Path) -> None:
     first_content = generated[0].read_text(encoding="utf-8")
     second_content = generated[1].read_text(encoding="utf-8")
 
-    assert generated[0].name == "episodio-uno.md"
-    assert generated[1].name == "episodio-dos.md"
+    assert generated[0].name == "Episodio Uno.md"
+    assert generated[1].name == "Episodio Dos.md"
     assert SNIP_INDEX_MARKER in first_content
     assert "- [[00:01] Primer snip](#snip-01-00-01-primer-snip)" in first_content
     assert "### [10:00] Segundo snip {#snip-01-10-00-segundo-snip}" in second_content

@@ -24,7 +24,7 @@ def test_cli_converts_markdown_and_applies_repo_style(tmp_path):
 
     assert "body { margin-left: 6%; margin-right: 6%; }" in html_content
     assert '<a href="https://example.com">https://example.com</a>' in html_content
-    assert "Linea uno<br>" in html_content
+    assert "<p>Linea uno</p>" in html_content
 
 
 def test_cli_respects_existing_html_unless_forced(tmp_path):
