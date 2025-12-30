@@ -1,17 +1,17 @@
 # 📚 docflow - Personal Documentation Pipeline (short version)
 
-docflow automates **collect → process → prioritize (bump) → read → publish → mark as completed** your documents (articles, podcasts, Markdown, PDFs, and tweets) in a yearly structure.
+docflow automates **collect -> process -> prioritize (bump) -> read -> publish -> mark as completed** for your documents (articles, podcasts, Markdown, PDFs, and tweets) in a yearly structure.
 
-## ✨ Features
-- Single pipeline for Instapaper, Snipd, PDFs, images, Markdown, and tweets (X likes + `Tweets/Tweets <YEAR>/`).
-- Automatic bump/unbump (⭐ in Instapaper) and a local overlay (`utils/serve_docs.py`) to publish and unpublish.
-- Deploy to your domain via `web/deploy.sh`: generates a static index at `/read/` (ordered by `mtime`) to read online and copy quotes easily.
-- History log (`Incoming/processed_history.txt`) and utilities to generate AI titles, clean Markdown, and copy quotes with Text Fragments.
+## ✨ Highlights
+- Single pipeline for Instapaper, Snipd, PDFs, images, Markdown, and X likes (`Tweets/Tweets <YEAR>/`).
+- Automatic bump/unbump (⭐ in Instapaper) and a local overlay (`utils/serve_docs.py`) to publish/unpublish.
+- Deploy to your domain via `web/deploy.sh`: generates a static `/read/` index ordered by `mtime`.
+- History log (`Incoming/processed_history.txt`) and utilities for AI titles, Markdown cleanup, and quote capture.
 
 ## 🖼️ Full processing
 ![Full pipeline diagram](complete_processing.png)
 
-## 🔧 Quick requirements
+## 🔧 Requirements
 - **Python 3.10+**.
 - Core dependencies:
   ```bash
@@ -24,13 +24,13 @@ docflow automates **collect → process → prioritize (bump) → read → publi
   ```
 
 ## 🚀 Quick start
-1. Configure variables if you use external services:
+1. Configure env vars if you use external services:
    ```bash
-   export OPENAI_API_KEY=...       # optional (AI titles)
-   export INSTAPAPER_USERNAME=...  # optional
-   export INSTAPAPER_PASSWORD=...  # optional
+   export OPENAI_API_KEY=...         # optional (AI titles)
+   export INSTAPAPER_USERNAME=...    # optional
+   export INSTAPAPER_PASSWORD=...    # optional
    export TWEET_LIKES_STATE=/path/to/x_state.json  # required if you process X likes
-   export TWEET_LIKES_MAX=50                          # optional, scroll limit
+   export TWEET_LIKES_MAX=50                           # optional, scroll limit
    ```
 2. Run the full pipeline (you can pass `--year`):
    ```bash
@@ -41,33 +41,40 @@ docflow automates **collect → process → prioritize (bump) → read → publi
    # To unify cron and manual execution (loads ~/.docflow_env if it exists):
    bash bin/docflow.sh all
    ```
-3. For the remote tweets queue:
-   ```bash
-   python process_documents.py tweets
-   ```
-4. Serve the local overlay and review documents:
+3. Review locally with the overlay:
    ```bash
    PORT=8000 SERVE_DIR="/path/to/⭐️ Documentación" python utils/serve_docs.py
    ```
-5. Deploy to `/read/` when content is ready:
+4. Deploy to `/read/` when ready:
    ```bash
    (cd web && ./deploy.sh)
    ```
-6. Quick tests:
+5. Quick tests:
    ```bash
    pytest -q
    ```
 
+## 🐦 X likes pipeline (quick notes)
+- One-time login to export session state:
+  ```bash
+  python utils/login_x.py --export-state x_state.json
+  ```
+- Process the likes queue:
+  ```bash
+  python process_documents.py tweets
+  ```
+- The pipeline stops at the last processed tweet (`Incoming/tweets_processed.txt`) and honors `TWEET_LIKES_MAX` and `TWEET_LIKES_BATCH` (optional).
+
 ## 🛠️ Standalone scripts
-- `utils/standalone_download_liked_tweets.py`: downloads X likes to Markdown from an exported `storage_state`.
-- `utils/standalone_download_instapaper.py`: downloads all your Instapaper articles to HTML/Markdown in a directory.
-- `utils/standalone_markdown_to_html.py`: converts Markdown to HTML with margins without the full pipeline.
-- `utils/standalone_snipd_to_markdown.py`: cleans Snipd exports and splits them into episodes with a snips index.
+- `utils/standalone_download_liked_tweets.py`: download X likes to Markdown from an exported `storage_state`.
+- `utils/standalone_download_instapaper.py`: download all Instapaper articles to HTML/Markdown in a directory.
+- `utils/standalone_markdown_to_html.py`: convert Markdown to HTML with margins without the full pipeline.
+- `utils/standalone_snipd_to_markdown.py`: clean Snipd exports and split episodes with a snips index.
 
 ## 🌐 Publish on your domain (`/read/`)
-- Run `web/deploy.sh` (from `web/`) to generate a static index ordered by `mtime` and upload it to the web container on your server (path `/read/`).
+- Run `web/deploy.sh` (from `web/`) to generate a static index ordered by `mtime` and upload to the web container.
 - Use BasicAuth on the host if you want private access (configurable via env vars in `deploy.sh`).
-- Check after deploy:
+- Verify after deploy:
   ```bash
   curl -I https://your-domain.com/read/
   curl -s https://your-domain.com/read/ | head -n 20
