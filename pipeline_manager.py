@@ -51,6 +51,8 @@ class DocumentProcessor:
         self.markdown_processor = MarkdownProcessor(self.incoming, self.posts_dest)
         self.tweet_processor = MarkdownProcessor(self.incoming, self.tweets_dest)
         self._history: List[Path] = []
+        self._router_plan = None
+        self._router_plan_printed = False
 
     def _year_dir(self, kind: str) -> Path:
         """Build the yearly path for the given kind."""
@@ -196,13 +198,14 @@ class DocumentProcessor:
     def process_tweets_pipeline(self, *, log_empty_conversion: bool = True) -> List[Path]:
         """Process the tweet queue and move results to the yearly Tweets folder."""
         generated = self.process_tweet_urls()
-        plan = self._build_router_plan()
+        plan = self._build_router_plan(refresh=True, label="after tweets fetch")
         tweet_markdown = self._merge_paths(plan.tweet_markdown, generated)
         return self._process_tweet_markdown_subset(tweet_markdown, log_empty=log_empty_conversion)
 
     def process_targets(self, targets: Iterable[str], *, log_empty_tweets: bool = True) -> bool:
         """Run a subset of the pipeline for the given targets."""
         try:
+            self._build_router_plan(refresh=True, label="initial scan")
             for target in targets:
                 handler_name = TARGET_HANDLERS[target]
                 handler = getattr(self, handler_name)
@@ -247,8 +250,38 @@ class DocumentProcessor:
     def _remember(self, paths: List[Path]) -> None:
         self._history.extend(paths)
 
-    def _build_router_plan(self):
-        return IncomingRouter(self.incoming).build_plan()
+    def _build_router_plan(self, *, refresh: bool = False, label: str | None = None):
+        if refresh or self._router_plan is None:
+            self._router_plan = IncomingRouter(self.incoming).build_plan()
+            self._print_router_plan(self._router_plan, label=label)
+            self._router_plan_printed = True
+        elif not self._router_plan_printed:
+            self._print_router_plan(self._router_plan, label=label)
+            self._router_plan_printed = True
+        return self._router_plan
+
+    @staticmethod
+    def _print_router_plan(plan, *, label: str | None = None) -> None:
+        suffix = f" ({label})" if label else ""
+        print(
+            "🧭 Incoming plan{suffix}: "
+            "tweets(md={tweet_md}, html={tweet_html}), "
+            "instapaper(html={insta_html}, md={insta_md}), "
+            "podcasts={podcasts}, "
+            "markdown={generic_md}, "
+            "pdfs={pdfs}, "
+            "images={images}".format(
+                suffix=suffix,
+                tweet_md=len(plan.tweet_markdown),
+                tweet_html=len(plan.tweet_html),
+                insta_html=len(plan.instapaper_html),
+                insta_md=len(plan.instapaper_markdown),
+                podcasts=len(plan.podcast_markdown),
+                generic_md=len(plan.generic_markdown),
+                pdfs=len(plan.pdfs),
+                images=len(plan.images),
+            )
+        )
 
     @staticmethod
     def _merge_paths(primary: Iterable[Path], secondary: Iterable[Path]) -> List[Path]:
