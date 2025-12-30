@@ -85,7 +85,7 @@ Start the local reading server:
 ```bash
 PORT=8000 SERVE_DIR="/path/to/⭐️ Documentación" python utils/serve_docs.py
 ```
-- Overlay on **HTML** pages with **Bump / Unbump / Publish / Unpublish** buttons and **keyboard shortcuts**.  
+- Overlay on **HTML** pages with **Bump / Unbump / Publish / Unpublish / Delete** buttons and **keyboard shortcuts**.  
 - The listing shows only folders, HTML, and PDFs (hides `.md`), ordered by **mtime desc**.  
 - State rules:  
   - **S0** Unbumped + Not published → shows *Bump*.  
@@ -95,6 +95,7 @@ PORT=8000 SERVE_DIR="/path/to/⭐️ Documentación" python utils/serve_docs.py
   - Publishing **requires** the file to be **bumped** and **not published**.  
   - While **published**, **Bump/Unbump** is not allowed (and not shown).  
   - The server rejects `bump`/`unbump_now` if the file is published.
+- **Delete** permanently removes the HTML/PDF (and any associated Markdown) from the local library.
 
 5) **Publish to the public web (`/read/`)**  
 From the overlay, **Publish** copies the `.html` or `.pdf` to `web/public/read/` and triggers the **deploy** (`web/deploy.sh`). The deploy builds the Nginx image, uploads assets to the remote server, and serves `/read/` with an index **ordered by date (mtime desc)**. You can set `REMOTE_USER`/`REMOTE_HOST` via the environment.
@@ -114,7 +115,7 @@ Deployment uses **double Nginx**: a TLS proxy on the **host** and Nginx **inside
 
 ## Local web server (`utils/serve_docs.py`)
 
-- **Actions**: Bump (`b`), Unbump (`u`), Publish (`p`), Unpublish (`d`), Listing (`l`).  
+- **Actions**: Bump (`b`), Unbump (`u`), Publish (`p`), Unpublish (`d`), Delete (button), Listing (`l`).  
 - **States**: S0/S1/S2 (see above).  
 - **Parameters**:
   - `PORT` (default 8000)
