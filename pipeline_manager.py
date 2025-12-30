@@ -13,6 +13,7 @@ from podcast_processor import PodcastProcessor
 from image_processor import ImageProcessor
 from markdown_processor import MarkdownProcessor
 from path_utils import unique_path
+from incoming_router import IncomingRouter
 
 PIPELINE_STEPS = (
     ("tweets", "process_tweets_pipeline"),
@@ -185,12 +186,19 @@ class DocumentProcessor:
 
     def process_markdown(self) -> List[Path]:
         """Process generic Markdown files."""
-        return self._run_and_remember(self.markdown_processor.process_markdown)
+        plan = self._build_router_plan()
+        generic_md = plan.generic_markdown
+        if not generic_md:
+            print("📝 No Markdown files found to process")
+            return []
+        return self._run_and_remember(lambda: self.markdown_processor.process_markdown_subset(generic_md))
     
     def process_tweets_pipeline(self, *, log_empty_conversion: bool = True) -> List[Path]:
         """Process the tweet queue and move results to the yearly Tweets folder."""
         generated = self.process_tweet_urls()
-        return self._process_tweet_markdown_subset(generated, log_empty=log_empty_conversion)
+        plan = self._build_router_plan()
+        tweet_markdown = self._merge_paths(plan.tweet_markdown, generated)
+        return self._process_tweet_markdown_subset(tweet_markdown, log_empty=log_empty_conversion)
 
     def process_targets(self, targets: Iterable[str], *, log_empty_tweets: bool = True) -> bool:
         """Run a subset of the pipeline for the given targets."""
@@ -238,3 +246,18 @@ class DocumentProcessor:
 
     def _remember(self, paths: List[Path]) -> None:
         self._history.extend(paths)
+
+    def _build_router_plan(self):
+        return IncomingRouter(self.incoming).build_plan()
+
+    @staticmethod
+    def _merge_paths(primary: Iterable[Path], secondary: Iterable[Path]) -> List[Path]:
+        seen: set[Path] = set()
+        merged: List[Path] = []
+        for path in list(primary) + list(secondary):
+            path = Path(path)
+            if path in seen:
+                continue
+            seen.add(path)
+            merged.append(path)
+        return merged
