@@ -35,7 +35,7 @@ class SnipdMarkdownConverter:
     def convert(self) -> List[Path]:
         """Process the input file and return generated paths."""
         if not self.input_file.exists():
-            raise FileNotFoundError(f"No existe el archivo de entrada: {self.input_file}")
+            raise FileNotFoundError(f"Input file not found: {self.input_file}")
 
         raw_text = self.input_file.read_text(encoding="utf-8", errors="ignore")
         episodes = self._split_by_episode(raw_text)
@@ -86,7 +86,7 @@ class SnipdMarkdownConverter:
             f'color: white; padding: 12px 20px; text-decoration: none; border-radius: 25px; '
             f'font-size: 14px; font-weight: 500; box-shadow: 0 4px 15px rgba(0,0,0,0.2); '
             f'transition: all 0.3s ease;">\n'
-            f'    🎧 Reproducir fragmento de audio\n'
+            f'    🎧 Play audio clip\n'
             f'  </a>\n'
             f'</div>'
         )
@@ -246,18 +246,18 @@ class SnipdMarkdownConverter:
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description=(
-            "Genera archivos Markdown listos para usar a partir de un export Markdown "
-            "de Snipd. El comando divide episodios, limpia artefactos y añade un índice "
-            "de snips con anchors navegables."
+            "Generate ready-to-use Markdown files from a Snipd Markdown export. "
+            "The command splits episodes, cleans artifacts, and adds a snips index "
+            "with navigable anchors."
         )
     )
-    parser.add_argument("input_file", type=Path, help="Archivo Markdown exportado desde Snipd")
+    parser.add_argument("input_file", type=Path, help="Markdown file exported from Snipd")
     parser.add_argument(
         "-o",
         "--output-dir",
         type=Path,
         default=Path.cwd(),
-        help="Directorio donde guardar los Markdown generados (por defecto, cwd)",
+        help="Directory where generated Markdown is saved (default: cwd)",
     )
     return parser.parse_args()
 
@@ -268,11 +268,11 @@ def main() -> None:
     generated = converter.convert()
 
     if generated:
-        print("📻 Markdown generado:")
+        print("📻 Markdown generated:")
         for path in generated:
             print(f" - {path}")
     else:
-        print("⚠️  No se generaron archivos")
+        print("⚠️  No files were generated")
 
 
 if __name__ == "__main__":

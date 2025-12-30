@@ -3,7 +3,7 @@ import re
 
 
 def is_instapaper_starred_file(file_path: Path) -> bool:
-    """Detecta si un archivo HTML/MD pertenece a un artículo de Instapaper marcado con estrella."""
+    """Detect whether an HTML/MD file belongs to a starred Instapaper article."""
     try:
         suffix = file_path.suffix.lower()
         if suffix in {".html", ".htm"}:

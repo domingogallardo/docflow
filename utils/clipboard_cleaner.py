@@ -252,22 +252,22 @@ def _write_to_clipboard(text: str) -> None:
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        description="Convierte HTML del portapapeles a Markdown sin líneas en blanco entre elementos de lista.",
+        description="Convert clipboard HTML to Markdown without blank lines between list items.",
     )
     parser.add_argument(
         "--from-stdin",
         action="store_true",
-        help="Leer el HTML desde stdin en lugar del portapapeles.",
+        help="Read HTML from stdin instead of the clipboard.",
     )
     parser.add_argument(
         "--no-copy",
         action="store_true",
-        help="No escribir el resultado en el portapapeles.",
+        help="Do not write the result to the clipboard.",
     )
     parser.add_argument(
         "--print",
         action="store_true",
-        help="Mostrar el Markdown generado por stdout.",
+        help="Print the generated Markdown to stdout.",
     )
     return parser
 

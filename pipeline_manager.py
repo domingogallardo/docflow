@@ -66,11 +66,11 @@ class DocumentProcessor:
         try:
             urls = self._fetch_like_urls()
         except Exception as exc:
-            print(f"🐦 No se pudieron leer los likes de X: {exc}")
+            print(f"🐦 Could not read X likes: {exc}")
             return []
 
         if not urls:
-            print("🐦 No hay nuevos tweets en tus likes")
+            print("🐦 No new tweets in your likes")
             return []
 
         processed_urls = self._load_processed_urls()
@@ -78,7 +78,7 @@ class DocumentProcessor:
         fresh_urls = [url for url in urls if url not in processed_set]
 
         if not fresh_urls:
-            print("🐦 No hay nuevos likes pendientes (todo está ya procesado).")
+            print("🐦 No new likes pending (everything is already processed).")
             return []
 
         generated: List[Path] = []
@@ -92,14 +92,14 @@ class DocumentProcessor:
                     storage_state=cfg.TWEET_LIKES_STATE,
                 )
             except Exception as exc:
-                print(f"❌ Error procesando {url}: {exc}")
+                print(f"❌ Error processing {url}: {exc}")
                 continue
 
             destination = self._unique_destination(self.incoming / filename)
             destination.write_text(markdown, encoding="utf-8")
             generated.append(destination)
             written_urls.append(url)
-            print(f"🐦 Tweet guardado como {destination.name}")
+            print(f"🐦 Tweet saved as {destination.name}")
 
         if written_urls:
             self._append_processed_urls(written_urls)
@@ -112,7 +112,7 @@ class DocumentProcessor:
 
     def _fetch_like_urls(self) -> List[str]:
         if not cfg.TWEET_LIKES_STATE:
-            raise RuntimeError("Configura TWEET_LIKES_STATE con el storage_state exportado de X.")
+            raise RuntimeError("Configure TWEET_LIKES_STATE with the storage_state exported from X.")
         last_processed = self._last_processed_tweet_url()
         urls, stop_found, _ = fetch_likes_with_state(
             cfg.TWEET_LIKES_STATE,
@@ -122,7 +122,7 @@ class DocumentProcessor:
             headless=True,
         )
         if last_processed and not stop_found:
-            print("⚠️  No se encontró la última URL procesada en los likes; revisa el límite TWEET_LIKES_MAX.")
+            print("⚠️  Last processed URL not found in likes; check the TWEET_LIKES_MAX limit.")
         return urls
 
     def _last_processed_tweet_url(self) -> Optional[str]:
@@ -203,10 +203,10 @@ class DocumentProcessor:
                 else:
                     handler()
             self.register_all_files()
-            print("Pipeline completado ✅")
+            print("Pipeline completed ✅")
             return True
         except Exception as e:
-            print(f"❌ Error en el pipeline: {e}")
+            print(f"❌ Pipeline error: {e}")
             return False
 
     def _process_tweet_markdown_subset(
@@ -218,7 +218,7 @@ class DocumentProcessor:
         files = [Path(path) for path in markdown_files if Path(path).exists()]
         if not files:
             if log_empty:
-                print("🐦 No hay nuevos tweets para convertir en HTML")
+                print("🐦 No new tweets to convert to HTML")
             return []
         return self._run_and_remember(lambda: self.tweet_processor.process_markdown_subset(files))
     

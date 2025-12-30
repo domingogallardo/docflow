@@ -160,7 +160,7 @@
     }
     return '> ' + quoteMd + ' [link](<' + linkUrl + '>)';
   }
-  // (UA checks eliminados para simplificar)
+  // (UA checks removed to keep it simple)
 
 
   function fallbackCopyUsingExecCommand(text) {
@@ -272,9 +272,9 @@
     btn = document.createElement('button');
     btn.id = id;
     btn.type = 'button';
-    btn.textContent = '❝ Copiar cita';
-    btn.setAttribute('aria-label', 'Copiar cita seleccionada');
-    btn.title = 'Copiar cita seleccionada';
+    btn.textContent = '❝ Copy quote';
+    btn.setAttribute('aria-label', 'Copy selected quote');
+    btn.title = 'Copy selected quote';
     // Inline, minimal styling (discreet, rounded pill)
     btn.style.cssText = [
       'position:fixed',
@@ -326,7 +326,7 @@
 
     var toastTimer = 0;
     function showToast(text, ok) {
-      toast.textContent = text || (ok ? 'Copiado' : 'No se pudo copiar');
+      toast.textContent = text || (ok ? 'Copied' : 'Copy failed');
       toast.style.background = ok ? '#0a0' : '#a00';
       toast.style.opacity = '1';
       toast.style.transform = 'translateY(0)';
@@ -354,9 +354,9 @@
     }
 
     document.addEventListener('selectionchange', updateVisibility, { passive: true });
-    // (sin resize/visibilitychange): suficiente con selectionchange
+    // (no resize/visibilitychange): selectionchange is enough
 
-    // iOS: captura temprana de selección para usarla en el click (sin copiar aún)
+    // iOS: capture selection early to use it on click (no copy yet)
     btn.addEventListener('pointerdown', function(){ pressedSnapshot = captureSelectionSnapshot() || lastSnapshot; }, { passive: true, capture: true });
     // Pointer Events cubre tap/click en Safari/iOS modernos
 
@@ -365,14 +365,14 @@
       var useSnapshot = pressedSnapshot || captureSelectionSnapshot() || lastSnapshot;
       pressedSnapshot = null;
       if (!useSnapshot || !useSnapshot.text || useSnapshot.text.length < 2) {
-        showToast('Selecciona un texto', false);
+        showToast('Select some text', false);
         btn.disabled = false;
         updateVisibility();
         return;
       }
       copyQuote(useSnapshot)
-        .then(function(res){ showToast((res && res.ok) ? 'Copiado' : 'No se pudo copiar', !!(res && res.ok)); })
-        .catch(function(){ showToast('No se pudo copiar', false); })
+        .then(function(res){ showToast((res && res.ok) ? 'Copied' : 'Copy failed', !!(res && res.ok)); })
+        .catch(function(){ showToast('Copy failed', false); })
         .finally(function(){ btn.disabled = false; updateVisibility(); });
     });
 
@@ -395,5 +395,5 @@
       ensureOverlay();
     }
   }
-  // (sin fallback extra): delegamos el salto a fragmentos en el navegador
+  // (no extra fallback): the browser handles fragment navigation
 })();

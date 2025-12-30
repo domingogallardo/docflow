@@ -30,7 +30,7 @@ def test_process_images_moves_files_and_updates_gallery(tmp_path):
     assert "photo1.jpg" in gallery
     assert "photo2.png" in gallery
     assert "photo3.webp" in gallery
-    assert "Galería Images 2025" in gallery
+    assert "Gallery Images 2025" in gallery
     assert 'class="lightbox"' in gallery
     assert 'data-full="photo1.jpg"' in gallery
     assert 'class="gallery-thumb"' in gallery

@@ -95,7 +95,7 @@ def _safe_filename(name: str) -> str:
 def _build_title(author_name: str | None, author_handle: str | None) -> str:
     base = "Tweet"
     if author_name or author_handle:
-        base += " de "
+        base += " by "
         if author_name:
             base += author_name
         if author_handle:
@@ -211,8 +211,8 @@ def _resolve_storage_state(storage_state: Path | None) -> Path | None:
     path = storage_state.expanduser()
     if not path.exists():
         raise FileNotFoundError(
-            f"No se encontró el storage_state en {path}. "
-            "Ejecuta utils/login_x.py para generarlo."
+            f"storage_state not found at {path}. "
+            "Run utils/login_x.py to generate it."
         )
     return path
 
@@ -264,8 +264,8 @@ def fetch_tweet_markdown(
 ) -> tuple[str, str]:
     if sync_playwright is None:
         raise RuntimeError(
-            "playwright no está instalado. Ejecuta 'pip install playwright' y "
-            "'playwright install chromium' para usar esta utilidad."
+            "playwright is not installed. Run 'pip install playwright' and "
+            "'playwright install chromium' to use this tool."
         )
     with sync_playwright() as playwright:
         browser = playwright.chromium.launch(headless=headless)
@@ -285,8 +285,8 @@ def fetch_tweet_markdown(
         article = _locate_tweet_article(page)
         if article is None:
             raise RuntimeError(
-                "No se encontró el <article> del post. "
-                "Puede requerir login o no estar disponible."
+                "Could not find the post <article>. "
+                "It may require login or be unavailable."
             )
 
         author_name = None
@@ -325,7 +325,7 @@ def fetch_tweet_markdown(
         filename = _build_filename(url, author_handle)
         avatar_url, media_urls = _split_image_urls(image_urls)
 
-        md_lines = [f"# {title}", "", f"[Ver en X]({url})"]
+        md_lines = [f"# {title}", "", f"[View on X]({url})"]
 
         if avatar_url:
             md_lines.extend(["", f"![avatar]({avatar_url})"])
@@ -337,7 +337,7 @@ def fetch_tweet_markdown(
             md_lines.append("")
 
             if external_link:
-                md_lines.extend(["", f"Enlace original: {external_link}"])
+                md_lines.extend(["", f"Original link: {external_link}"])
 
         markdown = "\n".join(md_lines).strip() + "\n"
         browser.close()
@@ -445,11 +445,11 @@ def fetch_likes_with_state(
     path = state_path.expanduser()
     if not path.exists():
         raise FileNotFoundError(
-            f"No se encontró el storage_state en {path}. Ejecuta utils/login_x.py para generarlo."
+            f"storage_state not found at {path}. Run utils/login_x.py to generate it."
         )
 
     if sync_playwright is None:
-        raise RuntimeError("Instala playwright para usar esta utilidad.")
+        raise RuntimeError("Install playwright to use this tool.")
 
     with sync_playwright() as playwright:
         browser = playwright.chromium.launch(headless=headless, channel="chrome")
@@ -464,7 +464,7 @@ def fetch_likes_with_state(
             stop_at_url=stop_at_url,
         )
         if not success:
-            raise RuntimeError("No se detectaron artículos; ¿sesión caducada?")
+            raise RuntimeError("No articles detected; session expired?")
         if stop_found and stop_absolute and stop_absolute in urls:
             idx = urls.index(stop_absolute)
             urls = urls[:idx]
@@ -477,41 +477,41 @@ def fetch_likes_with_state(
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description=(
-            "Descarga los tweets marcados como Me gusta a Markdown autocontenido en un directorio."
+            "Download liked tweets to self-contained Markdown in a directory."
         )
     )
     parser.add_argument(
         "--likes-url",
         default=os.environ.get("TWEET_LIKES_URL", DEFAULT_LIKES_URL),
-        help="URL de likes de X (p.ej. https://x.com/USUARIO/likes)",
+        help="X likes URL (e.g. https://x.com/USER/likes)",
     )
     parser.add_argument(
         "--state-path",
         type=Path,
         default=Path(os.environ.get("TWEET_LIKES_STATE", "x_state.json")),
-        help="Ruta al storage_state exportado tras iniciar sesión en X",
+        help="Path to the storage_state exported after logging into X",
     )
     parser.add_argument(
         "--dest-dir",
         type=Path,
         default=Path(os.environ.get("TWEET_LIKES_DEST", Path("tweets_favoritos"))),
-        help="Directorio donde guardar los Markdown",
+        help="Directory where Markdown is saved",
     )
     parser.add_argument(
         "--max-tweets",
         type=int,
         required=True,
-        help="Número de likes a capturar en esta ejecución",
+        help="Number of likes to capture in this run",
     )
     parser.add_argument(
         "--stop-at-url",
-        help="Detén la captura cuando aparezca esta URL (útil para evitar duplicados)",
+        help="Stop capture when this URL appears (useful to avoid duplicates)",
     )
     parser.add_argument(
         "--wait-ms",
         type=int,
         default=int(os.environ.get("TWEET_LIKES_WAIT_MS", 5000)),
-        help="Tiempo adicional en milisegundos tras cargar cada tweet",
+        help="Additional time in milliseconds after loading each tweet",
     )
     headless_group = parser.add_mutually_exclusive_group()
     headless_group.add_argument(
@@ -519,13 +519,13 @@ def parse_args() -> argparse.Namespace:
         dest="headless",
         action="store_true",
         default=True,
-        help="Ejecuta Chromium en modo headless (por defecto)",
+        help="Run Chromium in headless mode (default)",
     )
     headless_group.add_argument(
         "--no-headless",
         dest="headless",
         action="store_false",
-        help="Abre Chromium con UI (útil para depurar)",
+        help="Open Chromium with UI (useful for debugging)",
     )
     return parser.parse_args()
 
@@ -533,14 +533,14 @@ def parse_args() -> argparse.Namespace:
 def download_likes(args: argparse.Namespace) -> None:
     likes_url = args.likes_url
     if not likes_url:
-        raise SystemExit("--likes-url es obligatorio (ejemplo: https://x.com/USUARIO/likes)")
+        raise SystemExit("--likes-url is required (example: https://x.com/USER/likes)")
 
     state_path: Path = args.state_path.expanduser()
     if not state_path.exists():
-        raise SystemExit(f"No se encontró el storage_state: {state_path}")
+        raise SystemExit(f"storage_state not found: {state_path}")
 
     if args.max_tweets <= 0:
-        raise SystemExit("--max-tweets debe ser un entero positivo")
+        raise SystemExit("--max-tweets must be a positive integer")
 
     dest_dir: Path = args.dest_dir.expanduser()
     dest_dir.mkdir(parents=True, exist_ok=True)
@@ -553,8 +553,8 @@ def download_likes(args: argparse.Namespace) -> None:
         headless=args.headless,
     )
     print(
-        f"🔍 Likes encontrados: {len(urls)} (artículos visibles: {total_articles}). "
-        f"Capturando hasta {args.max_tweets} tweets solicitados."
+        f"🔍 Likes found: {len(urls)} (visible articles: {total_articles}). "
+        f"Capturing up to {args.max_tweets} requested tweets."
     )
 
     for url in urls:
@@ -566,7 +566,7 @@ def download_likes(args: argparse.Namespace) -> None:
         )
         output = dest_dir / filename
         output.write_text(markdown, encoding="utf-8")
-        print(f"✅ Guardado: {output}")
+        print(f"✅ Saved: {output}")
 
 
 def main() -> None:

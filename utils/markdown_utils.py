@@ -17,7 +17,7 @@ def clean_duplicate_markdown_links(text: str) -> str:
             display_text = f"{domain}{path}"
             return f'[{display_text}]({url})'
         except Exception:
-            return f'[Ver enlace]({url})'
+            return f'[View link]({url})'
 
     return re.sub(duplicate_link_pattern, replace_duplicate_link, text)
 
@@ -100,7 +100,7 @@ def markdown_to_html(md_text: str, title: str = None) -> str:
             output_format="html5",
         )
     except Exception as e:
-        print(f"⚠️  Error en conversión markdown, intentando sin extensiones: {e}")
+        print(f"⚠️  Error converting markdown, trying without extensions: {e}")
         html_body = markdown.markdown(md_text, output_format="html5")
 
     html_body = convert_newlines_to_br(html_body)

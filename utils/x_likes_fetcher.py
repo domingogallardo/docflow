@@ -86,12 +86,12 @@ def collect_likes_from_page(
     stop_at_url: str | None = None,
 ) -> Tuple[bool, int, List[str], bool, str | None]:
     """Copy of the logic used by interactive scripts to extract likes."""
-    _log(f"▶️  Intentando cargar {likes_url}…")
+    _log(f"▶️  Trying to load {likes_url}…")
     page.goto(likes_url, wait_until="domcontentloaded", timeout=60000)
     try:
         page.wait_for_selector("article", timeout=15000)
     except PlaywrightTimeoutError:
-        _log("   ⚠️  No se detectaron artículos; puede que la sesión no esté activa.")
+        _log("   ⚠️  No articles detected; the session may not be active.")
         return False, 0, [], False, _normalize_stop_url(stop_at_url)
 
     collected: List[str] = []
@@ -126,15 +126,15 @@ def collect_likes_from_page(
 
     total_articles = articles.count()
     summary = (
-        f"   ✅ Likes cargados correctamente. Artículos visibles: {total_articles}. "
-        f"URLs recopiladas: {len(collected)} (límite: {max_tweets})"
+        f"   ✅ Likes loaded successfully. Visible articles: {total_articles}. "
+        f"URLs collected: {len(collected)} (limit: {max_tweets})"
     )
     if stop_absolute:
-        summary += f". Stop URL {'encontrada' if stop_found else 'no encontrada'}."
+        summary += f". Stop URL {'found' if stop_found else 'not found'}."
     _log(summary)
 
     if collected:
-        _log("   🔗 URLs detectadas:")
+        _log("   🔗 URLs detected:")
         for idx, url in enumerate(collected, 1):
             _log(f"      {idx}. {url}")
 
@@ -153,14 +153,14 @@ def fetch_likes_with_state(
     path = state_path.expanduser()
     if not path.exists():
         raise FileNotFoundError(
-            f"No se encontró el storage_state en {path}. Ejecuta utils/login_x.py para generarlo."
+            f"storage_state not found at {path}. Run utils/login_x.py to generate it."
         )
 
     with sync_playwright() as playwright:
         try:
             browser = playwright.chromium.launch(headless=headless, channel="chrome")
         except Exception as exc:  # pragma: no cover
-            raise RuntimeError(f"No se pudo lanzar Chrome en modo headless: {exc}") from exc
+            raise RuntimeError(f"Failed to launch Chrome in headless mode: {exc}") from exc
 
         context = browser.new_context(storage_state=str(path))
         context.add_init_script(STEALTH_SNIPPET)
@@ -173,7 +173,7 @@ def fetch_likes_with_state(
                 stop_at_url=stop_at_url,
             )
             if not success:
-                raise RuntimeError("No se pudieron obtener artículos en la página de likes.")
+                raise RuntimeError("Could not retrieve articles on the likes page.")
             if stop_found and stop_absolute and stop_absolute in urls:
                 idx = urls.index(stop_absolute)
                 urls = urls[:idx]

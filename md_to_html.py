@@ -14,17 +14,17 @@ def convert_md_to_html():
     md_files = list(incoming_dir.glob("*.md"))
     
     if not md_files:
-        print("📝 No se encontraron archivos .md para convertir")
+        print("📝 No .md files found to convert")
         return
     
-    print(f"📝 Convirtiendo {len(md_files)} archivo(s) Markdown a HTML...")
+    print(f"📝 Converting {len(md_files)} Markdown file(s) to HTML...")
     
     for md_file in md_files:
         html_path = md_file.with_suffix(".html")
         
         # Skip if the HTML already exists.
         if html_path.exists():
-            print(f"⏭️  Saltando {md_file.name} (HTML ya existe)")
+            print(f"⏭️  Skipping {md_file.name} (HTML already exists)")
             continue
         
         try:
@@ -39,12 +39,12 @@ def convert_md_to_html():
             print(f"✅ HTML generado: {html_path.name}")
             
         except Exception as e:
-            print(f"❌ Error convirtiendo {md_file.name}: {e}")
+            print(f"❌ Error converting {md_file.name}: {e}")
             import traceback
             traceback.print_exc()
     
     # Apply margins to all generated HTML.
-    print("📏 Aplicando márgenes...")
+    print("📏 Applying margins...")
     U.add_margins_to_html_files(incoming_dir)
 
 

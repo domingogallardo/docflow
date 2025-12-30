@@ -28,7 +28,7 @@ def _move_files_common(
             continue
         new_path = dest / src.name
         if replace_existing and new_path.exists():
-            print(f"🔄 Reemplazando archivo existente: {new_path.name}")
+            print(f"🔄 Replacing existing file: {new_path.name}")
             new_path.unlink()
         shutil.move(str(src), new_path)
         moved.append(new_path)

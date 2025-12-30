@@ -116,20 +116,20 @@ def build_html(dir_path: str, entries: List[Tuple[float, str]]) -> str:
 
 def main(argv: list[str]) -> int:
     if len(argv) > 2:
-        print("Uso: python utils/build_read_index.py [DIRECTORIO]", file=sys.stderr)
+        print("Usage: python utils/build_read_index.py [DIRECTORY]", file=sys.stderr)
         return 2
     dir_path = argv[1] if len(argv) == 2 else os.path.join("web", "public", "read")
     if not os.path.isdir(dir_path):
-        print(f"❌ Directorio no encontrado: {dir_path}", file=sys.stderr)
+        print(f"❌ Directory not found: {dir_path}", file=sys.stderr)
         return 1
 
-    print("🧾 Generando web/public/read/read.html…")
+    print("🧾 Generating web/public/read/read.html…")
     entries = load_entries(dir_path, allowed_exts=(".html", ".htm", ".pdf"))
     html_doc = build_html(dir_path, entries)
     out_path = os.path.join(dir_path, "read.html")
     with open(out_path, "w", encoding="utf-8") as f:
         f.write(html_doc)
-    print(f"✓ Generado {out_path}")
+    print(f"✓ Generated {out_path}")
     return 0
 
 

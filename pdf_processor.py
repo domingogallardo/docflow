@@ -17,18 +17,18 @@ class PDFProcessor:
     
     def process_pdfs(self) -> List[Path]:
         """Process PDFs by moving them directly to their destination (no pipeline)."""
-        print("📚 Procesando PDFs...")
+        print("📚 Processing PDFs...")
         
         # PDFs do not need processing, only moving.
         pdfs = U.list_files({".pdf"}, root=self.incoming_dir)
         
         if not pdfs:
-            print("📚 No se encontraron PDFs para procesar")
+            print("📚 No PDFs found to process")
             return []
         
         moved_pdfs = U.move_files(pdfs, self.destination_dir)
         
         if moved_pdfs:
-            print(f"📚 {len(moved_pdfs)} PDF(s) movidos a {self.destination_dir}")
+            print(f"📚 {len(moved_pdfs)} PDF(s) moved to {self.destination_dir}")
 
         return moved_pdfs

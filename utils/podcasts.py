@@ -54,7 +54,7 @@ def rename_podcast_files(podcasts: list[Path]) -> list[Path]:
         title = extract_episode_title(podcast)
         if not title:
             renamed_files.append(podcast)
-            print(f"⚠️  No se pudo extraer título de: {podcast.name}")
+            print(f"⚠️  Could not extract title from: {podcast.name}")
             continue
 
         new_md_path = podcast.parent / f"{title}.md"
@@ -69,6 +69,6 @@ def rename_podcast_files(podcasts: list[Path]) -> list[Path]:
             html_path.rename(new_html_path)
             renamed_files.append(new_html_path)
 
-        print(f"📻 Renombrado: {podcast.name} → {new_md_path.name}")
+        print(f"📻 Renamed: {podcast.name} → {new_md_path.name}")
 
     return renamed_files

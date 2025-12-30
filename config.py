@@ -11,11 +11,11 @@ def _system_year() -> int:
 
 def get_default_year() -> int:
     """
-    Año por defecto del pipeline.
+    Default year for the pipeline.
 
-    Prioridad:
-    - DOCPIPE_YEAR si está definido
-    - Año actual del sistema
+    Priority:
+    - DOCPIPE_YEAR if set
+    - Current system year
     """
     env_value = os.getenv(DOCPIPE_YEAR_ENV)
     if env_value:

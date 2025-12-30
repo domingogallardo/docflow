@@ -1,4 +1,4 @@
--- bump-simple: mtime := (ahora + 100 años) + i s
+-- bump-simple: mtime := (now + 100 years) + i s
 on run {input, parameters}
 	set baseEpoch to do shell script "/bin/date -v+100y +%s"
 	set counter to 0

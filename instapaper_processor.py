@@ -127,12 +127,12 @@ class InstapaperProcessor:
 
     def process_instapaper_posts(self) -> List[Path]:
         """Run the full processing pipeline for Instapaper posts."""
-        print("📄 Procesando posts de Instapaper...")
+        print("📄 Processing Instapaper posts...")
         
         try:
             # 1. Download Instapaper articles
             if not self._download_from_instapaper():
-                print("⚠️ No se descargaron artículos de Instapaper, continuando con archivos existentes...")
+                print("⚠️ No Instapaper articles downloaded; continuing with existing files...")
             
             # 2. Convert HTML to Markdown
             self._convert_html_to_markdown()
@@ -153,20 +153,20 @@ class InstapaperProcessor:
             posts = self._list_processed_files()
             if posts:
                 moved_posts = self._move_files_to_destination(posts)
-                print(f"📄 {len(moved_posts)} post(s) movidos a {self.destination_dir}")
+                print(f"📄 {len(moved_posts)} post(s) moved to {self.destination_dir}")
                 return moved_posts
             else:
-                print("📄 No se encontraron posts procesados para mover")
+                print("📄 No processed posts found to move")
                 return []
                 
         except Exception as e:
-            print(f"❌ Error en el procesamiento de Instapaper: {e}")
+            print(f"❌ Error processing Instapaper: {e}")
             return []
     
     def _download_from_instapaper(self) -> bool:
         """Download articles from Instapaper."""
         if not self._has_instapaper_credentials():
-            print("❌ Credenciales de Instapaper no configuradas")
+            print("❌ Instapaper credentials not configured")
             return False
 
         try:
@@ -174,25 +174,25 @@ class InstapaperProcessor:
             login_response = self._login_instapaper()
 
             if not self._is_login_successful(login_response):
-                print("❌ Credenciales de Instapaper incorrectas")
+                print("❌ Instapaper credentials are incorrect")
                 return False
 
-            print("✅ Login en Instapaper exitoso")
+            print("✅ Instapaper login successful")
 
             first_articles, has_more = self._get_article_ids(1)
             if not first_articles:
-                print("📚 No hay artículos nuevos en Instapaper para descargar")
-                return True  # No es error, simplemente no hay nada
+                print("📚 No new Instapaper articles to download")
+                return True  # Not an error, there's simply nothing to do
 
-            print("📚 Iniciando descarga de artículos de Instapaper...")
+            print("📚 Starting Instapaper article download...")
             with open("failed.txt", "a+") as failure_log, self.download_registry.batch():
                 self._download_articles_pages(first_articles, has_more, failure_log)
 
-            print("📚 Descarga de Instapaper completada")
+            print("📚 Instapaper download completed")
             return True
 
         except Exception as e:
-            print(f"❌ Error en la descarga de Instapaper: {e}")
+            print(f"❌ Error downloading from Instapaper: {e}")
             return False
 
     def _has_instapaper_credentials(self) -> bool:
@@ -215,23 +215,23 @@ class InstapaperProcessor:
         login_successful = True
 
         if login_response.status_code >= 400:
-            print(f"❌ Error HTTP {login_response.status_code} - URL incorrecta o servidor no disponible")
+            print(f"❌ HTTP error {login_response.status_code} - wrong URL or server unavailable")
             login_successful = False
         elif "login" in login_response.url:
-            print("❌ Redirigido a página de login - credenciales incorrectas")
+            print("❌ Redirected to login page - incorrect credentials")
             login_successful = False
 
         soup = BeautifulSoup(login_response.text, "html.parser")
         error_messages = soup.find_all(class_="error")
         if error_messages:
-            print("❌ Mensajes de error encontrados en la página de login")
+            print("❌ Error messages found on the login page")
             for error in error_messages:
                 print(f"   - {error.get_text().strip()}")
             login_successful = False
 
         login_form = soup.find("form")
         if login_form and "login" in login_form.get("action", ""):
-            print("❌ Formulario de login encontrado - no estamos logueados")
+            print("❌ Login form found - not logged in")
             login_successful = False
 
         return login_successful
@@ -251,7 +251,7 @@ class InstapaperProcessor:
     def _download_article_batch(self, articles, failure_log) -> None:
         for article_id, starred_hint in articles:
             if self.download_registry.should_skip(article_id, starred_hint):
-                print(f"  {article_id}: ⏭️  ya descargado (sin cambios)")
+                print(f"  {article_id}: ⏭️  already downloaded (no changes)")
                 continue
 
             print(f"  {article_id}: ", end="")
@@ -412,10 +412,10 @@ class InstapaperProcessor:
         ]
         
         if not html_files:
-            print('📄 No hay archivos HTML pendientes de convertir a Markdown')
+            print("📄 No pending HTML files to convert to Markdown")
             return
         
-        print(f'Convirtiendo {len(html_files)} archivos HTML a Markdown')
+        print(f"Converting {len(html_files)} HTML files to Markdown")
         
         for html_file in html_files:
             try:
@@ -444,16 +444,16 @@ class InstapaperProcessor:
 
                 md_file = html_file.with_suffix('.md')
                 md_file.write_text(markdown_content, encoding='utf-8')
-                print(f'✅ Markdown guardado: {md_file} | starred={is_starred}')
+                print(f"✅ Markdown saved: {md_file} | starred={is_starred}")
             except Exception as e:
-                print(f"❌ Error convirtiendo {html_file}: {e}")
+                print(f"❌ Error converting {html_file}: {e}")
                     
     def _fix_html_encoding(self):
         """Fix HTML file encoding."""
         html_files = list(U.iter_html_files(self.incoming_dir))
 
         if not html_files:
-            print('🔧 No hay archivos HTML para procesar codificación')
+            print("🔧 No HTML files to process encoding")
             return
         
         for html_file in html_files:
@@ -463,9 +463,9 @@ class InstapaperProcessor:
                 if not self._has_charset_meta(content):
                     new_content = self._insert_charset_meta(content, 'utf-8')
                     html_file.write_text(new_content, encoding='utf-8')
-                    print(f"🔧 Codificación actualizada: {html_file}")
+                    print(f"🔧 Encoding updated: {html_file}")
             except Exception as e:
-                print(f"❌ Error procesando codificación de {html_file}: {e}")
+                print(f"❌ Error processing encoding for {html_file}: {e}")
 
     def _has_charset_meta(self, content):
         """Check whether the HTML already has a charset meta."""
@@ -497,14 +497,14 @@ class InstapaperProcessor:
         html_files = list(U.iter_html_files(self.incoming_dir))
 
         if not html_files:
-            print('🖼️  No hay archivos HTML para procesar imágenes')
+            print("🖼️  No HTML files to process images")
             return
 
         max_width = 300
         for html_file in html_files:
             try:
                 # Minimal log to identify which file is being processed.
-                print(f"🖼️  Revisando imágenes: {html_file}")
+                print(f"🖼️  Checking images: {html_file}")
                 with open(html_file, 'r', encoding='utf-8') as f:
                     soup = BeautifulSoup(f, 'html.parser')
                 
@@ -528,15 +528,15 @@ class InstapaperProcessor:
                         if 'height' in img.attrs:
                             del img['height']
                         modified = True
-                        print(f"🖼️  Ajustando: {src} ({width}px → {max_width}px)")
+                        print(f"🖼️  Adjusting: {src} ({width}px → {max_width}px)")
                 
                 if modified:
                     with open(html_file, 'w', encoding='utf-8') as f:
                         f.write(str(soup))
-                    print(f"✅ Imágenes actualizadas: {html_file}")
+                    print(f"✅ Images updated: {html_file}")
                     
             except Exception as e:
-                print(f"❌ Error procesando imágenes en {html_file}: {e}")
+                print(f"❌ Error processing images in {html_file}: {e}")
     
     def _add_margins(self):
         """Add margins to HTML files."""

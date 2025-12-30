@@ -26,13 +26,13 @@ def read_clipboard_raw() -> Tuple[str, str]:
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        description="Guarda en disco el contenido del portapapeles, "
-        "usando las mismas rutas de lectura que mdclip.",
+        description="Save clipboard contents to disk, "
+        "using the same read paths as mdclip.",
     )
     parser.add_argument(
         "--output",
         default="tmp_clipboard_raw.txt",
-        help="Ruta del archivo de salida (por defecto: %(default)s).",
+        help="Output file path (default: %(default)s).",
     )
     return parser
 
@@ -43,12 +43,12 @@ def main(argv: list[str] | None = None) -> int:
 
     content, source = read_clipboard_raw()
     if not content:
-        parser.error("No se pudo leer contenido del portapapeles.")
+        parser.error("Could not read clipboard content.")
         return 1
 
     output_path = Path(args.output)
     output_path.write_text(content, encoding="utf-8")
-    print(f"Guardado {len(content)} bytes desde {source} en {output_path}")
+    print(f"Saved {len(content)} bytes from {source} to {output_path}")
     return 0
 
 

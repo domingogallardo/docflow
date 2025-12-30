@@ -121,11 +121,11 @@ def _pdf_actions_html(rel_from_root: str, bumped: bool, published: bool) -> str:
         )
     if published:
         actions.append(
-            f"<a href='#' class='dg-act' data-dg-act='unpublish' data-dg-path='{html.escape(rel_from_root)}'>Despublicar</a>"
+            f"<a href='#' class='dg-act' data-dg-act='unpublish' data-dg-path='{html.escape(rel_from_root)}'>Unpublish</a>"
         )
     elif bumped:
         actions.append(
-            f"<a href='#' class='dg-act' data-dg-act='publish' data-dg-path='{html.escape(rel_from_root)}'>Publicar</a>"
+            f"<a href='#' class='dg-act' data-dg-act='publish' data-dg-path='{html.escape(rel_from_root)}'>Publish</a>"
         )
     if not actions:
         return ""
@@ -295,7 +295,7 @@ class HTMLOnlyRequestHandler(SimpleHTTPRequestHandler):
 
             if action == "delete":
                 if os.path.isdir(abs_path):
-                    self.send_error(400, "No se pueden borrar directorios")
+                    self.send_error(400, "Directories cannot be deleted")
                     return
                 try:
                     os.remove(abs_path)
@@ -303,7 +303,7 @@ class HTMLOnlyRequestHandler(SimpleHTTPRequestHandler):
                     self.send_error(404, "File not found")
                     return
                 except Exception as e:
-                    self.send_error(500, f"No se pudo borrar: {e}")
+                    self.send_error(500, f"Could not delete: {e}")
                     return
 
                 # Delete associated Markdown (same name).
@@ -313,7 +313,7 @@ class HTMLOnlyRequestHandler(SimpleHTTPRequestHandler):
                     if os.path.isfile(md_path):
                         os.remove(md_path)
                 except Exception as e:
-                    self.send_error(500, f"No se pudo borrar Markdown asociado: {e}")
+                    self.send_error(500, f"Could not delete associated Markdown: {e}")
                     return
 
                 # Also remove the published copy if it exists.
@@ -322,7 +322,7 @@ class HTMLOnlyRequestHandler(SimpleHTTPRequestHandler):
                     if os.path.isfile(pub_path):
                         os.remove(pub_path)
                 except Exception as e:
-                    self.send_error(500, f"No se pudo borrar copia pública: {e}")
+                    self.send_error(500, f"Could not delete public copy: {e}")
                     return
 
                 self._send_bytes(b'{"ok":true}', "application/json; charset=utf-8")
@@ -333,23 +333,23 @@ class HTMLOnlyRequestHandler(SimpleHTTPRequestHandler):
                 try:
                     st_src = os.stat(abs_path)
                 except Exception as e:
-                    self.send_error(500, f"No se pudo leer el fichero: {e}")
+                    self.send_error(500, f"Could not read file: {e}")
                     return
                 if not is_bumped(st_src.st_mtime):
-                    self.send_error(400, "No publicado: el fichero no está bumped")
+                    self.send_error(400, "Not published: file is not bumped")
                     return
                 # 1) Always copy to the public READS directory.
                 if not os.path.isdir(PUBLIC_READS_DIR):
                     try:
                         os.makedirs(PUBLIC_READS_DIR, exist_ok=True)
                     except Exception as e:
-                        self.send_error(500, f"No se pudo crear destino: {e}")
+                        self.send_error(500, f"Could not create destination: {e}")
                         return
                 dst_dir = PUBLIC_READS_DIR
                 try:
                     os.makedirs(dst_dir, exist_ok=True)
                 except Exception as e:
-                    self.send_error(500, f"No se pudo crear destino: {e}")
+                    self.send_error(500, f"Could not create destination: {e}")
                     return
 
                 dst_path = os.path.join(dst_dir, os.path.basename(abs_path))
@@ -382,19 +382,19 @@ class HTMLOnlyRequestHandler(SimpleHTTPRequestHandler):
                     except Exception:
                         pass
                 except Exception as e:
-                    self.send_error(500, f"Error copiando: {e}")
+                    self.send_error(500, f"Error copying: {e}")
                     return
 
                 # 2) Trigger deploy.
                 if not os.path.isfile(DEPLOY_SCRIPT) or not os.access(DEPLOY_SCRIPT, os.X_OK):
-                    self.send_error(500, f"Deploy no disponible: {DEPLOY_SCRIPT}")
+                    self.send_error(500, f"Deploy not available: {DEPLOY_SCRIPT}")
                     return
 
                 try:
                     # inherit environment (requires REMOTE_USER/REMOTE_HOST configured)
                     subprocess.run([DEPLOY_SCRIPT], check=True)
                 except subprocess.CalledProcessError as e:
-                    self.send_error(500, f"Fallo en deploy ({e.returncode})")
+                    self.send_error(500, f"Deploy failed ({e.returncode})")
                     return
 
                 self._send_bytes(b'{"ok":true}', "application/json; charset=utf-8")
@@ -409,17 +409,17 @@ class HTMLOnlyRequestHandler(SimpleHTTPRequestHandler):
                         os.remove(dst_path)
                         removed = True
                 except Exception as e:
-                    self.send_error(500, f"Error despublicando: {e}")
+                    self.send_error(500, f"Error unpublishing: {e}")
                     return
 
                 # Trigger deploy.
                 if not os.path.isfile(DEPLOY_SCRIPT) or not os.access(DEPLOY_SCRIPT, os.X_OK):
-                    self.send_error(500, f"Deploy no disponible: {DEPLOY_SCRIPT}")
+                    self.send_error(500, f"Deploy not available: {DEPLOY_SCRIPT}")
                     return
                 try:
                     subprocess.run([DEPLOY_SCRIPT], check=True)
                 except subprocess.CalledProcessError as e:
-                    self.send_error(500, f"Fallo en deploy ({e.returncode})")
+                    self.send_error(500, f"Deploy failed ({e.returncode})")
                     return
 
                 self._send_bytes(b'{"ok":true}', "application/json; charset=utf-8")
@@ -509,7 +509,7 @@ class HTMLOnlyRequestHandler(SimpleHTTPRequestHandler):
         )
 
         rows: list[str] = [head_html, f"<h2>Index of {html.escape(displaypath)}</h2>"]
-        rows.append("<div class='dg-legend'>🔥 bumped · 🟢 publicado</div><hr><ul class='dg-index'>")
+        rows.append("<div class='dg-legend'>🔥 bumped · 🟢 published</div><hr><ul class='dg-index'>")
 
         if displaypath != "/":
             parent = os.path.dirname(displaypath.rstrip("/"))
