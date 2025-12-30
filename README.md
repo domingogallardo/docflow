@@ -4,7 +4,7 @@ docflow automates **collect -> process -> prioritize (bump) -> read -> publish -
 
 ## ✨ Highlights
 - Single pipeline for Instapaper, Snipd, PDFs, images, Markdown, and X likes (`Tweets/Tweets <YEAR>/`).
-- Automatic bump/unbump (⭐ in Instapaper) and a local overlay (`utils/serve_docs.py`) to publish/unpublish.
+- Automatic bump/unbump (⭐ in Instapaper) and a local overlay (`utils/serve_docs.py`) to publish/unpublish/delete.
 - Deploy to your domain via `web/deploy.sh`: generates a static `/read/` index ordered by `mtime`.
 - History log (`Incoming/processed_history.txt`) and utilities for AI titles, Markdown cleanup, and quote capture.
 
@@ -41,7 +41,7 @@ docflow automates **collect -> process -> prioritize (bump) -> read -> publish -
    # To unify cron and manual execution (loads ~/.docflow_env if it exists):
    bash bin/docflow.sh all
    ```
-3. Review locally with the overlay:
+3. Review locally with the overlay (publish/unpublish/delete):
    ```bash
    PORT=8000 SERVE_DIR="/path/to/⭐️ Documentación" python utils/serve_docs.py
    ```
