@@ -74,8 +74,8 @@ docflow automates **collect → process → prioritize (bump) → read → publi
   ```
 
 ## 📚 Documentation
-- `docs/guia.md` - full operating guide (commands, overlay, quotes, troubleshooting).
-- `docs/flujo.md` - end-to-end flow (inputs, pipeline, publishing, and Obsidian).
+- `docs/guide.md` - full operating guide (commands, overlay, quotes, troubleshooting).
+- `docs/flow.md` - end-to-end flow (inputs, pipeline, publishing, and Obsidian).
 - `docs/readme-infra.md` - deployment and hardening (Docker/Nginx, TLS, BasicAuth).
 - `docs/ops-playbook.md` - operational tasks and checklists.
 
