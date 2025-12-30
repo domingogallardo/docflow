@@ -1,36 +1,36 @@
-# 📜 Flujo de contenidos con DocFlow (versión ampliada)
+# 📜 Content flow with DocFlow (extended version)
 
-Este documento describe cómo entra, se procesa y se publica cada tipo de contenido en tu sistema, según el comportamiento real de `process_documents.py`, `pipeline_manager.py`, el overlay de `serve_docs.py` y el despliegue a `domingogallardo.com`. Parte de la estructura está en el documento original que ya enumera las 4 entradas (Instapaper, Snipd, Incoming y likes de X).
-
----
-
-## 0. Prerrequisitos y entorno
-
-- Tienes definido un `BASE_DIR` en `config.py` que apunta a tu carpeta local de documentación (por ejemplo, `"/Users/domingo/⭐️ Documentación"`). Todos los procesadores escriben debajo de ahí.
-- Tienes el script de servidor local `utils/serve_docs.py` para revisar los documentos en el navegador, con los botones de **Bump**, **Unbump**, **Publicar**, etc.
-- Tienes el directorio `web/` con el script `web/deploy.sh` que genera `/read/` y sube el contenido al servidor, reiniciando el contenedor `web-domingo`. Esto es lo que convierte un documento local en “fuente oficial”.
-- Python disponible para ejecutar `process_documents.py`.
+This document describes how each content type enters, is processed, and is published in your system, based on the real behavior of `process_documents.py`, `pipeline_manager.py`, the `serve_docs.py` overlay, and the deployment to `domingogallardo.com`. Part of the structure is in the original document that already lists the four inputs (Instapaper, Snipd, Incoming, and X likes).
 
 ---
 
-## 1. Entradas
+## 0. Prerequisites and environment
 
-| Entrada | Origen | Qué llega | Procesamiento |
+- You have a `BASE_DIR` defined in `config.py` that points to your local documentation folder (for example, `"/Users/domingo/⭐️ Documentación"`). All processors write under it.
+- You have the local server script `utils/serve_docs.py` to review documents in the browser, with buttons for **Bump**, **Unbump**, **Publish**, etc.
+- You have the `web/` directory with `web/deploy.sh` which generates `/read/` and uploads the content to the server, restarting the `web-domingo` container. This is what turns a local document into an "official source."
+- Python is available to run `process_documents.py`.
+
+---
+
+## 1. Inputs
+
+| Input | Source | What arrives | Processing |
 | --- | --- | --- | --- |
-| **A. Instapaper** | Artículos y newsletters guardados en Instapaper | Markdown/HTML exportado | `python process_documents.py posts` → `InstapaperProcessor` |
-| **B. Snipd** | Snips de podcasts con transcripción | Markdown export Snipd | `python process_documents.py podcasts` → `PodcastProcessor` |
-| **C. Incoming local** | PDFs, `.md` u otros ficheros que guardas en `⭐️ Documentación/Incoming` | `.pdf`, `.md`, imágenes | `python process_documents.py pdfs/md/images` → procesadores específicos |
-| **D. Likes de X** | Marcados con “Me gusta” en `TWEET_LIKES_URL` | Tweets individuales | `python process_documents.py tweets` → `process_tweets_pipeline()` → `MarkdownProcessor.process_markdown_subset()` → `Tweets/Tweets <AÑO>/` |
+| **A. Instapaper** | Articles and newsletters saved in Instapaper | Exported Markdown/HTML | `python process_documents.py posts` → `InstapaperProcessor` |
+| **B. Snipd** | Podcast snips with transcripts | Snipd Markdown export | `python process_documents.py podcasts` → `PodcastProcessor` |
+| **C. Local Incoming** | PDFs, `.md`, or other files saved in `⭐️ Documentación/Incoming` | `.pdf`, `.md`, images | `python process_documents.py pdfs/md/images` → specific processors |
+| **D. X likes** | Marked as "Like" on `TWEET_LIKES_URL` | Individual tweets | `python process_documents.py tweets` → `process_tweets_pipeline()` → `MarkdownProcessor.process_markdown_subset()` → `Tweets/Tweets <YEAR>/` |
 
-Notas importantes del punto D:
-- El pipeline de tweets utiliza `utils/x_likes_fetcher.fetch_likes_with_state` para abrir tu feed de likes con Playwright y cortar cuando llega al último tweet registrado en `Incoming/tweets_processed.txt`.
-- Los tweets se gestionan exclusivamente mediante esos likes o herramientas dedicadas; Instapaper ya no se usa para capturarlos.
+Important notes for input D:
+- The tweets pipeline uses `utils/x_likes_fetcher.fetch_likes_with_state` to open your likes feed with Playwright and stop once it reaches the last tweet recorded in `Incoming/tweets_processed.txt`.
+- Tweets are managed exclusively via those likes or dedicated tools; Instapaper is no longer used to capture them.
 
 ---
 
-## 2. Ingesta y almacenamiento local
+## 2. Ingestion and local storage
 
-El comando base es:
+The base command is:
 
 ```bash
 python process_documents.py [targets] [--year 2025]
@@ -39,108 +39,108 @@ python process_documents.py [targets] [--year 2025]
 - `posts` → Instapaper
 - `podcasts` → Snipd
 - `pdfs`, `md`, `images` → Incoming
-- `tweets` → likes de X (envía el resultado a `Tweets/Tweets <AÑO>/`)
-- `all` → ejecuta todos y registra rutas
+- `tweets` → X likes (sends the result to `Tweets/Tweets <YEAR>/`)
+- `all` → runs everything and logs paths
 
-Cada procesador:
-1. limpia/convierten el contenido,
-2. genera HTML si aplica,
-3. lo mueve a su carpeta anual (`Posts/Posts 2025/`, `Podcasts/Podcasts 2025/`, `Pdfs/Pdfs 2025/`, `Tweets/Tweets 2025/`, etc.) dentro de `BASE_DIR`.
+Each processor:
+1. cleans/converts the content,
+2. generates HTML when applicable,
+3. moves it to its yearly folder (`Posts/Posts 2025/`, `Podcasts/Podcasts 2025/`, `Pdfs/Pdfs 2025/`, `Tweets/Tweets 2025/`, etc.) under `BASE_DIR`.
 
 ---
 
-## 3. Revisión en servidor web local
+## 3. Review on the local web server
 
-Para revisar lo procesado:
+To review processed content:
 
 ```bash
 PORT=8000 SERVE_DIR="/Users/domingo/⭐️ Documentación" python utils/serve_docs.py
 ```
 
-El overlay:
-- lista los documentos ordenados por `mtime`,
-- permite **Bump (b)**, **Unbump (u)**, **Publicar (p)**, **Despublicar (d)**,
-- aplica **bump automático** a los HTML generados desde Instapaper si el artículo original estaba marcado con ⭐ (lo hace `InstapaperProcessor` usando `utils.bump_files`, igual que en el pipeline),
-- es el punto donde decides qué pasa a la web.
+The overlay:
+- lists documents ordered by `mtime`,
+- allows **Bump (b)**, **Unbump (u)**, **Publish (p)**, **Unpublish (d)**,
+- applies **auto-bump** to HTML generated from Instapaper if the original article was starred ⭐ (done by `InstapaperProcessor` using `utils.bump_files`, same as in the pipeline),
+- is the point where you decide what goes to the web.
 
-Todas las entradas A–D convergen aquí.
+All inputs A-D converge here.
 
 ---
 
-## 4. Publicación en `domingogallardo.com`
+## 4. Publishing to `domingogallardo.com`
 
-Cuando un documento ya está bien:
+When a document is ready:
 
-1. Pulsas **Publicar** en el overlay (o copias el archivo a `web/public/read/`).
-2. Ejecutas:
+1. Click **Publish** in the overlay (or copy the file into `web/public/read/`).
+2. Run:
 
    ```bash
    cd web
    ./deploy.sh
    ```
 
-   El script:
-   - regenera `web/public/read/index.html` ordenado por `mtime`,
-   - sube todo a `/opt/web-domingo/` y reinicia el contenedor `web-domingo` que sirve en el puerto 8080.
+   The script:
+   - regenerates `web/public/read/index.html` ordered by `mtime`,
+   - uploads everything to `/opt/web-domingo/` and restarts the `web-domingo` container that serves on port 8080.
 
-A partir de aquí ese documento es la **fuente oficial**: es el que usarás en Obsidian.
-
----
-
-## 5. Destilado en Obsidian
-
-Regla: **solo llevas a Obsidian lo que ya está publicado en `/read/`**. No copias directamente desde Instapaper, ni desde Snipd, ni desde Incoming.
-
-En Obsidian:
-- copias las citas o fragmentos,
-- añades la URL pública,
-- escribes el comentario o nota personal.
+From this point on, that document is the **official source**: it is the one you will use in Obsidian.
 
 ---
 
-## 6. Ejemplo completo (caso “like en X”)
+## 5. Distillation in Obsidian
 
-1. Das “Me gusta” a un tweet desde tu cuenta principal.
-2. Ejecutas:
+Rule: **only bring into Obsidian what is already published at `/read/`**. Do not copy directly from Instapaper, Snipd, or Incoming.
+
+In Obsidian:
+- copy quotes or fragments,
+- add the public URL,
+- write your personal note.
+
+---
+
+## 6. Complete example (X like case)
+
+1. You "Like" a tweet from your main account.
+2. Run:
 
    ```bash
    python process_documents.py tweets --year 2025
    ```
 
-   Esto:
-   - abre tu feed de likes con Playwright usando el `storage_state` configurado,
-   - corta en el último tweet que ya aparece en `Incoming/tweets_processed.txt`,
-   - convierte los nuevos likes a Markdown/HTML y los mueve a `Tweets/Tweets 2025/`.
-3. Abres el servidor local (`serve_docs.py`), ves el tweet como página.
-4. Pulsas **Publicar**.
-5. Ejecutas `web/deploy.sh`.
-6. Abres la URL pública en `domingogallardo.com/read/...` y desde ahí copias el párrafo a Obsidian.
+   This:
+   - opens your likes feed with Playwright using the configured `storage_state`,
+   - stops at the last tweet already in `Incoming/tweets_processed.txt`,
+   - converts new likes to Markdown/HTML and moves them to `Tweets/Tweets 2025/`.
+3. Open the local server (`serve_docs.py`) and view the tweet as a page.
+4. Click **Publish**.
+5. Run `web/deploy.sh`.
+6. Open the public URL in `domingogallardo.com/read/...` and copy the paragraph into Obsidian from there.
 
 ---
 
-## 7. Problemas típicos
+## 7. Common issues
 
-- **No se ha procesado ningún tweet**: comprueba si la URL está comentada con `#` o si ya está en `Incoming/tweets_processed.txt`.
-- **No aparece en el overlay**: revisa que el procesador lo movió a la carpeta anual dentro de `BASE_DIR` y que `serve_docs.py` apunta ahí.
-- **Lo veo en local pero no en la web**: falta ejecutar `web/deploy.sh`.
-- **Me está mezclando años**: revisa el `--year` que pasas al procesador y el que hay en `config.py`.
+- **No tweets were processed**: check whether the URL is commented out with `#` or if it is already in `Incoming/tweets_processed.txt`.
+- **It does not appear in the overlay**: verify the processor moved it to the yearly folder under `BASE_DIR` and that `serve_docs.py` points there.
+- **I see it locally but not on the web**: you need to run `web/deploy.sh`.
+- **Years are getting mixed**: verify the `--year` you pass to the processor and the one in `config.py`.
 
 ---
 
-## 8. Diagrama del flujo
+## 8. Flow diagram
 
 ```text
-Entradas:
+Inputs:
   A) Instapaper
   B) Snipd
-  C) Incoming local
-  D) Editor remoto de tweets
+  C) Local Incoming
+  D) X likes
             │
             ▼
-  process_documents.py  →  carpetas anuales en BASE_DIR
+  process_documents.py  →  yearly folders in BASE_DIR
             │
             ▼
-  utils/serve_docs.py (overlay, revisión, publicar)
+  utils/serve_docs.py (overlay, review, publish)
             │
             ▼
   web/deploy.sh  →  domingogallardo.com (/read/)
