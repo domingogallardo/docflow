@@ -21,7 +21,7 @@ def add_margins_to_html_files(directory: Path, file_filter=None):
     ]
 
     if not html_files:
-        print('📏 No hay archivos HTML para añadir márgenes')
+        print("📏 No HTML files to add margins to")
         return
 
     for html_file in html_files:
@@ -66,10 +66,10 @@ def add_margins_to_html_files(directory: Path, file_filter=None):
             output_html = output_html.replace("<br/>", "<br>").replace("<br />", "<br>")
             with open(html_file, 'w', encoding='utf-8') as f:
                 f.write(output_html)
-            print(f"📏 Márgenes añadidos: {html_file.name}")
+            print(f"📏 Margins added: {html_file.name}")
 
         except Exception as e:
-            print(f"❌ Error añadiendo márgenes a {html_file}: {e}")
+            print(f"❌ Error adding margins to {html_file}: {e}")
 
 
 def get_base_css() -> str:

@@ -14,26 +14,26 @@ from bs4 import BeautifulSoup
 def parse_args(argv: Iterable[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description=(
-            "Convierte archivos Markdown a HTML usando las mismas transformaciones "
-            "de los pipelines del repositorio."
+            "Convert Markdown files to HTML using the same transformations "
+            "as the repository pipelines."
         )
     )
     parser.add_argument(
         "paths",
         nargs="+",
-        help="Rutas de archivos o directorios con Markdown a convertir",
+        help="File paths or directories with Markdown to convert",
     )
     parser.add_argument(
         "-o",
         "--output-dir",
         type=Path,
-        help="Directorio donde guardar los HTML generados (por defecto junto al Markdown)",
+        help="Directory to save generated HTML (default: alongside Markdown)",
     )
     parser.add_argument(
         "-f",
         "--force",
         action="store_true",
-        help="Sobrescribe los archivos HTML si ya existen",
+        help="Overwrite HTML files if they already exist",
     )
     return parser.parse_args(argv)
 
@@ -54,7 +54,7 @@ def clean_duplicate_markdown_links(text: str) -> str:
             display_text = f"{domain}{path}"
             return f'[{display_text}]({url})'
         except Exception:
-            return f'[Ver enlace]({url})'
+            return f'[View link]({url})'
 
     return re.sub(duplicate_link_pattern, replace_duplicate_link, text)
 
@@ -172,7 +172,7 @@ def collect_markdown_files(raw_paths: Iterable[str]) -> List[Path]:
         if path.suffix.lower() == ".md":
             markdown_files.append(path)
         else:
-            print(f"⚠️  Ignorando ruta no Markdown: {path}")
+            print(f"⚠️  Ignoring non-Markdown path: {path}")
     return markdown_files
 
 
@@ -180,7 +180,7 @@ def convert_markdown_file(
     md_file: Path, output_dir: Path | None, *, force: bool
 ) -> Tuple[Path | None, bool]:
     if not md_file.exists():
-        print(f"⚠️  Archivo no encontrado: {md_file}")
+        print(f"⚠️  File not found: {md_file}")
         return None, False
 
     target_dir = output_dir or md_file.parent
@@ -188,7 +188,7 @@ def convert_markdown_file(
     html_path = target_dir / f"{md_file.stem}.html"
 
     if html_path.exists() and not force:
-        print(f"⏭️  Saltando {md_file.name} (HTML ya existe)")
+        print(f"⏭️  Skipping {md_file.name} (HTML already exists)")
         return html_path, False
 
     try:
@@ -196,10 +196,10 @@ def convert_markdown_file(
         full_html = markdown_to_html(md_text, title=md_file.stem)
         html_with_margins = add_margins(full_html)
         html_path.write_text(html_with_margins, encoding="utf-8")
-        print(f"✅ HTML generado: {html_path}")
+        print(f"✅ HTML generated: {html_path}")
         return html_path, True
     except Exception as exc:
-        print(f"❌ Error convirtiendo {md_file.name}: {exc}")
+        print(f"❌ Error converting {md_file.name}: {exc}")
     return None, False
 
 
@@ -208,9 +208,9 @@ def apply_margins_to_paths(html_paths: Iterable[Path]) -> None:
         try:
             html_content = html_path.read_text(encoding="utf-8")
             html_path.write_text(add_margins(html_content), encoding="utf-8")
-            print(f"📏 Márgenes añadidos: {html_path.name}")
+            print(f"📏 Margins added: {html_path.name}")
         except Exception as exc:
-            print(f"❌ Error añadiendo márgenes a {html_path}: {exc}")
+            print(f"❌ Error adding margins to {html_path}: {exc}")
 
 
 def main(argv: Iterable[str] | None = None) -> int:
@@ -218,7 +218,7 @@ def main(argv: Iterable[str] | None = None) -> int:
     markdown_files = collect_markdown_files(args.paths)
 
     if not markdown_files:
-        print("📝 No se encontraron archivos Markdown para convertir")
+        print("📝 No Markdown files found to convert")
         return 0
 
     processed: List[Path] = []
@@ -234,11 +234,11 @@ def main(argv: Iterable[str] | None = None) -> int:
         apply_margins_to_paths(processed)
 
     if newly_generated:
-        print(f"📄 Conversión completada ({len(newly_generated)} archivo(s) HTML)")
+        print(f"📄 Conversion completed ({len(newly_generated)} HTML file(s))")
     elif processed:
-        print("⏭️  No se generaron nuevos HTML (se usaron existentes, márgenes actualizados)")
+        print("⏭️  No new HTML generated (used existing files, margins updated)")
     else:
-        print("⚠️  No se generaron archivos HTML")
+        print("⚠️  No HTML files were generated")
 
     return 0
 

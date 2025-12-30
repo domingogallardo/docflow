@@ -23,27 +23,27 @@ STAR_PREFIXES = ("⭐", "⭐️")
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="Descarga todos los artículos de Instapaper como HTML y Markdown."
+        description="Download all Instapaper articles as HTML and Markdown."
     )
     parser.add_argument(
         "output_dir",
         type=Path,
-        help="Directorio donde se guardarán los artículos descargados.",
+        help="Directory where downloaded articles will be saved.",
     )
     parser.add_argument(
         "--force",
         action="store_true",
-        help="Ignora el registro local (.instapaper_downloads.txt) y fuerza la descarga.",
+        help="Ignore the local registry (.instapaper_downloads.txt) and force download.",
     )
     parser.add_argument(
         "--username",
         default=os.getenv("INSTAPAPER_USERNAME"),
-        help="Usuario de Instapaper (por defecto INSTAPAPER_USERNAME).",
+        help="Instapaper username (default: INSTAPAPER_USERNAME).",
     )
     parser.add_argument(
         "--password",
         default=os.getenv("INSTAPAPER_PASSWORD"),
-        help="Contraseña de Instapaper (por defecto INSTAPAPER_PASSWORD).",
+        help="Instapaper password (default: INSTAPAPER_PASSWORD).",
     )
     return parser.parse_args()
 
@@ -102,7 +102,7 @@ class RegistryEntry:
 
 
 class DownloadRegistry:
-    """Registro ligero para evitar descargas duplicadas entre ejecuciones."""
+    """Lightweight registry to avoid duplicate downloads across runs."""
 
     def __init__(self, path: Path):
         self.path = path
@@ -144,7 +144,7 @@ class DownloadRegistry:
 class InstapaperDownloader:
     def __init__(self, username: str, password: str, output_dir: Path):
         if not username or not password:
-            raise ValueError("Configura usuario y contraseña de Instapaper.")
+            raise ValueError("Set Instapaper username and password.")
         self.username = username
         self.password = password
         self.output_dir = output_dir
@@ -191,7 +191,7 @@ class InstapaperDownloader:
 
         soup = BeautifulSoup(resp.text, "html.parser")
         if soup.find("form") and "login" in (soup.find("form").get("action") or ""):
-            print("❌ Credenciales incorrectas de Instapaper")
+            print("❌ Incorrect Instapaper credentials")
             return False
 
         print("✅ Login en Instapaper correcto")
@@ -284,7 +284,7 @@ class InstapaperDownloader:
         if starred:
             markdown_body = f"---\ninstapaper_starred: true\n---\n\n{markdown_body}"
         md_path.write_text(markdown_body, encoding="utf-8")
-        print(f"📝 Markdown guardado: {md_path.name}")
+        print(f"📝 Markdown saved: {md_path.name}")
         return md_path
 
 
@@ -306,11 +306,11 @@ def main() -> None:
 
     files = downloader.download_all(force=args.force)
     if not files:
-        print("⚠️  No se generaron archivos. Revisa las credenciales o si ya se descargó todo.")
+        print("⚠️  No files were generated. Check credentials or whether everything is already downloaded.")
         return
 
     html_count = sum(1 for f in files if f.suffix == ".html")
-    print(f"✅ Descarga completada: {html_count} artículo(s) en {output_dir}")
+    print(f"✅ Download completed: {html_count} article(s) in {output_dir}")
 
 
 if __name__ == "__main__":

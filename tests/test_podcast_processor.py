@@ -73,7 +73,7 @@ def test_podcast_processor_no_podcasts(tmp_path, capsys):
     
     # Verify informational message.
     captured = capsys.readouterr()
-    assert "📻 No se encontraron archivos de podcast para procesar" in captured.out
+    assert "📻 No podcast files found to process" in captured.out
 
 
 def test_podcast_processor_clean_snipd_features(tmp_path):
@@ -124,7 +124,7 @@ def test_podcast_processor_clean_snipd_features(tmp_path):
     assert "---" not in content  # Horizontal rules removed
     assert "<details>" not in content  # <details> tags removed
     assert "🎧 [Play snip]" not in content  # Audio links replaced
-    assert "🎧 Reproducir fragmento de audio" in content  # New button
+    assert "🎧 Play audio clip" in content  # New button
     assert "br/>" not in content  # Line breaks processed
     assert "Click to expand" not in content
 

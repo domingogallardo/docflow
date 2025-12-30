@@ -32,10 +32,10 @@ class PodcastProcessor:
         """Run the full podcasts processing pipeline."""
         podcasts = U.list_podcast_files(self.incoming_dir)
         if not podcasts:
-            print("📻 No se encontraron archivos de podcast para procesar")
+            print("📻 No podcast files found to process")
             return []
         
-        print(f"📻 Procesando {len(podcasts)} archivo(s) de podcast...")
+        print(f"📻 Processing {len(podcasts)} podcast file(s)...")
         
         try:
             # 0. Split files with multiple episodes (if any).
@@ -55,12 +55,12 @@ class PodcastProcessor:
             moved_files = U.move_files(renamed_files, self.destination_dir)
             
             if moved_files:
-                print(f"📻 {len(moved_files)} archivo(s) de podcast movidos a {self.destination_dir}")
+                print(f"📻 {len(moved_files)} podcast file(s) moved to {self.destination_dir}")
             
             return moved_files
             
         except Exception as e:
-            print(f"❌ Error en el procesamiento de podcasts: {e}")
+            print(f"❌ Error processing podcasts: {e}")
             return []
 
     def _split_multi_episode_files(self):
@@ -82,7 +82,7 @@ class PodcastProcessor:
                 if len(matches) <= 1:
                     continue  # nothing to split
 
-                print(f"✂️  Detectados {len(matches)} episodios en: {md_file.name}. Dividiendo…")
+                print(f"✂️  Detected {len(matches)} episodes in: {md_file.name}. Splitting…")
 
                 # Compute bounds for each block.
                 starts = [m.start() for m in matches]
@@ -109,10 +109,10 @@ class PodcastProcessor:
                 except Exception:
                     pass  # do not block if delete fails
 
-                print(f"✂️  Dividido: {md_file.name} → {len(new_files)} archivos")
+                print(f"✂️  Split: {md_file.name} → {len(new_files)} files")
 
             except Exception as e:
-                print(f"❌ Error dividiendo {md_file}: {e}")
+                print(f"❌ Error splitting {md_file}: {e}")
     
     def _clean_snipd_files(self):
         """Clean Markdown files exported from Snipd."""
@@ -122,10 +122,10 @@ class PodcastProcessor:
         podcast_files = [f for f in md_files if U.is_podcast_file(f)]
         
         if not podcast_files:
-            print("🧹 No se encontraron archivos de podcast para limpiar")
+            print("🧹 No podcast files found to clean")
             return
         
-        print(f"🧹 Limpiando {len(podcast_files)} archivo(s) de podcast...")
+        print(f"🧹 Cleaning {len(podcast_files)} podcast file(s)...")
         
         for md_file in podcast_files:
             try:
@@ -147,10 +147,10 @@ class PodcastProcessor:
 
                 if final_text != original_text:
                     md_file.write_text(final_text, encoding="utf-8")
-                    print(f"🧹 Limpiado: {md_file}")
+                    print(f"🧹 Cleaned: {md_file}")
                     
             except Exception as e:
-                print(f"❌ Error limpiando {md_file}: {e}")
+                print(f"❌ Error cleaning {md_file}: {e}")
     
     def _replace_snip_link(self, match: re.Match[str]) -> str:
         """Return embedded HTML for the snip link."""
@@ -163,7 +163,7 @@ class PodcastProcessor:
             f'color: white; padding: 12px 20px; text-decoration: none; border-radius: 25px; '
             f'font-size: 14px; font-weight: 500; box-shadow: 0 4px 15px rgba(0,0,0,0.2); '
             f'transition: all 0.3s ease;">\n'
-            f'    🎧 Reproducir fragmento de audio\n'
+            f'    🎧 Play audio clip\n'
             f'  </a>\n'
             f'</div>'
         )
@@ -313,10 +313,10 @@ class PodcastProcessor:
                    if U.is_podcast_file(p) and not p.with_suffix(".html").exists()]
         
         if not md_files:
-            print("🔄 No hay archivos Markdown de podcast pendientes de convertir")
+            print("🔄 No podcast Markdown files pending conversion")
             return
         
-        print(f"🔄 Convirtiendo {len(md_files)} archivo(s) de podcast a HTML...")
+        print(f"🔄 Converting {len(md_files)} podcast file(s) to HTML...")
         
         for md_file in md_files:
             try:
@@ -336,10 +336,10 @@ class PodcastProcessor:
                     display_path = html_path.relative_to(Path.cwd()) if html_path.is_absolute() else html_path
                 except ValueError:
                     display_path = html_path
-                print(f"✅ HTML generado: {display_path}")
+                print(f"✅ HTML generated: {display_path}")
                 
             except Exception as e:
-                print(f"❌ Error convirtiendo {md_file}: {e}")
+                print(f"❌ Error converting {md_file}: {e}")
     
     def _md_to_html(self, md_text: str) -> str:
         """Convert Markdown text to HTML and return only the body."""

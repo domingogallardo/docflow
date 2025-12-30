@@ -66,7 +66,7 @@ def test_snipd_converter_cleans_snipd_artifacts(tmp_path: Path) -> None:
     assert "<details>" not in output_text
     assert "Click to expand" not in output_text
     assert "## Show notes" in output_text
-    assert "Reproducir fragmento de audio" in output_text
+    assert "Play audio clip" in output_text
     assert "<br/>" not in output_text
     assert SNIP_INDEX_MARKER in output_text
     assert "href=\"https://share.snipd.com/episode/abc123\"" not in output_text

@@ -85,11 +85,11 @@ def _copy_selection(html_path: Path, md_path: Path) -> Path:
 def main() -> None:
     candidates = _load_candidates()
     if not candidates:
-        print("⚠️ No se encontraron candidatos con pareja HTML/MD.")
+        print("⚠️ No candidates found with an HTML/MD pair.")
         return
 
     html_path, md_path = random.choice(candidates)
-    print(f"🎯 Seleccionado: {md_path.name}")
+    print(f"🎯 Selected: {md_path.name}")
     _copy_selection(html_path, md_path)
 
 

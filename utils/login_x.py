@@ -27,48 +27,48 @@ def log(message: str) -> None:
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description=(
-            "Inicia un Chrome real con perfil persistente para loguearte manualmente "
-            "O reutiliza un storage_state existente (permite --headless)."
+            "Start a real Chrome with a persistent profile for manual login "
+            "OR reuse an existing storage_state (allows --headless)."
         )
     )
     parser.add_argument(
         "--profile-dir",
         type=Path,
         default=Path(".playwright") / "x-profile",
-        help="Directorio donde se guardará el perfil de Chrome. Puedes borrarlo para reiniciar la sesión.",
+        help="Directory where the Chrome profile is saved. You can delete it to reset the session.",
     )
     parser.add_argument(
         "--likes-url",
         default=DEFAULT_LIKES_URL,
-        help="URL privada que se abrirá tras el login para comprobar la sesión.",
+        help="Private URL opened after login to verify the session.",
     )
     parser.add_argument(
         "--export-state",
         type=Path,
-        help="Guarda el storage_state tras un login manual exitoso en la ruta indicada.",
+        help="Save storage_state after a successful manual login to the given path.",
     )
     parser.add_argument(
         "--state",
         type=Path,
-        help="Usa este storage_state existente (JSON) para abrir los likes directamente.",
+        help="Use this existing storage_state (JSON) to open likes directly.",
     )
     parser.add_argument(
         "--headless",
         action="store_true",
         default=False,
-        help="Solo válido con --state: ejecuta Chromium sin UI al reutilizar el storage_state.",
+        help="Only valid with --state: run Chromium without UI when reusing storage_state.",
     )
     parser.add_argument(
         "--stop-at-url",
-        help="URL de un tweet ya procesado; se detiene cuando aparezca en los likes.",
+        help="URL of a previously processed tweet; stops when it appears in likes.",
     )
     parser.add_argument(
         "--max-tweets",
         type=int,
         default=DEFAULT_MAX_TWEETS,
         help=(
-            "Límite duro de tweets a inspeccionar en la página de likes "
-            f"(por defecto: {DEFAULT_MAX_TWEETS})."
+            "Hard limit of tweets to inspect on the likes page "
+            f"(default: {DEFAULT_MAX_TWEETS})."
         ),
     )
     return parser.parse_args()
@@ -83,7 +83,7 @@ def manual_login_with_persistent_profile(
 ) -> None:
     profile_dir = profile_dir.expanduser()
     profile_dir.mkdir(parents=True, exist_ok=True)
-    log(f"📁 Perfil persistente: {profile_dir}")
+    log(f"📁 Persistent profile: {profile_dir}")
 
     with sync_playwright() as playwright:
         try:
@@ -98,7 +98,8 @@ def manual_login_with_persistent_profile(
             )
         except Exception as exc:  # pragma: no cover - depends on local environment
             raise SystemExit(
-                f"❌ No se pudo lanzar Chrome. Asegúrate de tener Google Chrome instalado y accesible: {exc}"
+                "❌ Could not launch Chrome. Make sure Google Chrome is installed and accessible: "
+                f"{exc}"
             ) from exc
 
         try:
@@ -110,39 +111,39 @@ def manual_login_with_persistent_profile(
             )
             if success:
                 log(
-                    f"🙌 Ya estabas autenticado. Tweets likeados visibles: {count}. "
-                    f"Stop URL {'encontrada' if stop_found else 'no encontrada'}."
+                    f"🙌 You were already authenticated. Visible liked tweets: {count}. "
+                    f"Stop URL {'found' if stop_found else 'not found'}."
                 )
             else:
-                log(f"1️⃣  No hay sesión activa. Abriendo {LOGIN_URL}…")
+                log(f"1️⃣  No active session. Opening {LOGIN_URL}…")
                 page.goto(LOGIN_URL, wait_until="domcontentloaded", timeout=60000)
-                log("   ℹ️  Completa el login manualmente en la ventana de Chrome (usa teclado/ratón).")
-                input("   ⏸️  Pulsa Enter aquí cuando veas tu timeline o X confirme la sesión.\n")
+                log("   ℹ️  Complete the login manually in the Chrome window (use keyboard/mouse).")
+                input("   ⏸️  Press Enter here when you see your timeline or X confirms the session.\n")
 
                 success, count, _, stop_found, _ = collect_likes_from_page(
                     page, likes_url, max_tweets, stop_at_url
                 )
                 if success:
                     log(
-                        f"   📊 Likes accesibles tras login. Artículos visibles: {count}. "
-                        f"Stop URL {'encontrada' if stop_found else 'no encontrada'}."
+                        f"   📊 Likes accessible after login. Visible articles: {count}. "
+                        f"Stop URL {'found' if stop_found else 'not found'}."
                     )
                 else:
-                    log("   ❌ Tras el login manual, sigue sin verse la página de likes.")
-                    log("      Revisa la ventana por si X pide pasos adicionales (2FA, captcha, etc.).")
+                    log("   ❌ After manual login, the likes page is still not visible.")
+                    log("      Check the window in case X asks for extra steps (2FA, captcha, etc.).")
 
             if export_state and success:
                 export_path = export_state.expanduser()
                 export_path.parent.mkdir(parents=True, exist_ok=True)
                 context.storage_state(path=str(export_path))
-                log(f"   💾 storage_state guardado en {export_path}")
+                log(f"   💾 storage_state saved to {export_path}")
             elif export_state:
-                log("   ⚠️  No se guardó storage_state porque la sesión no está activa.")
+                log("   ⚠️  storage_state was not saved because the session is not active.")
 
-            input("3️⃣  Pulsa Enter cuando quieras cerrar la ventana y conservar el perfil.\n")
+            input("3️⃣  Press Enter when you want to close the window and keep the profile.\n")
         finally:
             context.close()
-            log("🏁 Chrome cerrado. El perfil se mantiene en disco para reutilizarlo.")
+            log("🏁 Chrome closed. The profile stays on disk for reuse.")
 
 
 def visit_with_storage_state(
@@ -160,22 +161,22 @@ def visit_with_storage_state(
             stop_at_url=stop_at_url,
             headless=headless,
         )
-    except Exception as exc:  # pragma: no cover - mensaje amigable
-        raise SystemExit(f"❌ Error usando storage_state: {exc}") from exc
+    except Exception as exc:  # pragma: no cover - friendly message
+        raise SystemExit(f"❌ Error using storage_state: {exc}") from exc
 
-    mode = "headless" if headless else "con UI"
+    mode = "headless" if headless else "with UI"
     log(
-        f"🏁 Sesión válida ({mode}). Tweets visibles: {total}. "
-        f"Stop URL {'encontrada' if stop_found else 'no encontrada'}."
+        f"🏁 Valid session ({mode}). Visible tweets: {total}. "
+        f"Stop URL {'found' if stop_found else 'not found'}."
     )
     if urls:
-        log(f"   📌 URLs nuevas detectadas: {len(urls)}")
+        log(f"   📌 New URLs detected: {len(urls)}")
 
 
 def main() -> None:
     args = parse_args()
     if args.max_tweets <= 0:
-        raise SystemExit("❌ --max-tweets debe ser mayor que 0.")
+        raise SystemExit("❌ --max-tweets must be greater than 0.")
     if args.state:
         visit_with_storage_state(
             args.state,
@@ -187,7 +188,7 @@ def main() -> None:
         return
 
     if args.headless:
-        raise SystemExit("❌ --headless solo es compatible con --state.")
+        raise SystemExit("❌ --headless is only compatible with --state.")
 
     manual_login_with_persistent_profile(
         args.profile_dir,

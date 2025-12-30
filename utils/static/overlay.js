@@ -18,7 +18,7 @@
     if(!t){ t = el('div', {id:'dg-toast'}, ''); document.body.appendChild(t); }
     t.className = kind ? kind + ' show' : 'show';
     t.textContent = text || '';
-    if(href){ const a = el('a', {href, target:'_blank', rel:'noopener'}, 'Ver'); t.appendChild(a); }
+    if(href){ const a = el('a', {href, target:'_blank', rel:'noopener'}, 'View'); t.appendChild(a); }
     clearTimeout(window.__dg_toast_timer);
     window.__dg_toast_timer = setTimeout(()=>{ t.classList.remove('show'); }, 2200);
   }
@@ -34,53 +34,53 @@
   }
   async function publish(){
     if(deleting || publishing || !bumped || published) return;
-    publishing = true; render(); msg.textContent = '⏳ publicando…'; msg.className = 'meta';
+    publishing = true; render(); msg.textContent = '⏳ publishing…'; msg.className = 'meta';
     const ok = await call('publish');
-    msg.textContent = ok ? '✓ publicado' : '× error';
+    msg.textContent = ok ? '✓ published' : '× error';
     msg.className = ok ? 'meta ok' : 'meta err';
     if(ok){
       published = true; render();
       const fname = rel.split('/').pop();
       const base = publicBase ? (publicBase.endsWith('/') ? publicBase : publicBase + '/') : '';
       const url = base ? (base + encodeURIComponent(fname)) : '';
-      toast('ok', 'Publicado', url);
+      toast('ok', 'Published', url);
     } else {
       publishing = false; render();
-      toast('err', 'Error publicando');
+      toast('err', 'Publish failed');
     }
   }
   async function unpublish(){
     if(deleting || unpublishing || !published) return;
-    unpublishing = true; render(); msg.textContent = '⏳ despublicando…'; msg.className = 'meta';
+    unpublishing = true; render(); msg.textContent = '⏳ unpublishing…'; msg.className = 'meta';
     const ok = await call('unpublish');
-    msg.textContent = ok ? '✓ despublicado' : '× error';
+    msg.textContent = ok ? '✓ unpublished' : '× error';
     msg.className = ok ? 'meta ok' : 'meta err';
     if(ok){
       published = false; unpublishing = false; render();
-      toast('ok', 'Despublicado');
+      toast('ok', 'Unpublished');
     } else {
       unpublishing = false; render();
-      toast('err', 'Error despublicando');
+      toast('err', 'Unpublish failed');
     }
   }
   async function removeFile(){
     if(deleting) return;
-    const fname = rel.split('/').pop() || rel || 'este archivo';
-    const question = `¿Seguro que quieres borrar "${fname}"?`;
+    const fname = rel.split('/').pop() || rel || 'this file';
+    const question = `Are you sure you want to delete "${fname}"?`;
     if(!window.confirm(question)) return;
     deleting = true;
     render();
-    msg.textContent = '⏳ borrando…'; msg.className = 'meta';
+    msg.textContent = '⏳ deleting…'; msg.className = 'meta';
     const ok = await call('delete');
-    msg.textContent = ok ? '✓ borrado' : '× error';
+    msg.textContent = ok ? '✓ deleted' : '× error';
     msg.className = ok ? 'meta ok' : 'meta err';
     deleting = false;
     if(ok){
-      toast('ok', 'Borrado');
+      toast('ok', 'Deleted');
       setTimeout(()=>{ goList(); }, 350);
     } else {
       render();
-      toast('err', 'Error borrando');
+      toast('err', 'Delete failed');
     }
   }
   function render(){
@@ -90,36 +90,36 @@
     btn.addEventListener('click', async ()=>{
       if(deleting) return;
       const ok = await call(bumped ? 'unbump_now' : 'bump');
-      msg.textContent = ok ? '✓ hecho' : '× error'; msg.className = ok ? 'meta ok' : 'meta err';
+      msg.textContent = ok ? '✓ done' : '× error'; msg.className = ok ? 'meta ok' : 'meta err';
       if(ok){ bumped = !bumped; render(); }
     });
     if(deleting){ btn.setAttribute('disabled',''); }
     bar.appendChild(btn);
     if(bumped && !published){
-      const pub = el('button', null, 'Publicar');
-      pub.title = 'Copiar a /web/public/read y desplegar';
-      if(publishing){ pub.textContent = 'Publicando…'; pub.setAttribute('disabled',''); }
+      const pub = el('button', null, 'Publish');
+      pub.title = 'Copy to /web/public/read and deploy';
+      if(publishing){ pub.textContent = 'Publishing…'; pub.setAttribute('disabled',''); }
       if(deleting){ pub.setAttribute('disabled',''); }
       pub.addEventListener('click', publish);
       bar.appendChild(pub);
     }
     if(published){
-      const unp = el('button', null, 'Despublicar');
-      unp.title = 'Eliminar de /web/public/read y desplegar';
-      if(unpublishing){ unp.textContent = 'Despublicando…'; unp.setAttribute('disabled',''); }
+      const unp = el('button', null, 'Unpublish');
+      unp.title = 'Remove from /web/public/read and deploy';
+      if(unpublishing){ unp.textContent = 'Unpublishing…'; unp.setAttribute('disabled',''); }
       if(deleting){ unp.setAttribute('disabled',''); }
       unp.addEventListener('click', unpublish);
       bar.appendChild(unp);
     }
-    const del = el('button', null, deleting ? 'Eliminando…' : 'Eliminar');
-    del.title = 'Borrar el archivo y volver al listado';
+    const del = el('button', null, deleting ? 'Deleting…' : 'Delete');
+    del.title = 'Delete the file and return to the listing';
     if(deleting){
       del.setAttribute('disabled','');
     } else {
       del.addEventListener('click', removeFile);
     }
     bar.appendChild(del);
-    const raw = el('a', {href:'?raw=1', title:'Ver sin overlay'}, 'raw');
+    const raw = el('a', {href:'?raw=1', title:'View without overlay'}, 'raw');
     bar.appendChild(raw); bar.appendChild(msg);
   }
   function isEditingTarget(t){ return t && (t.tagName==='INPUT' || t.tagName==='TEXTAREA' || t.isContentEditable); }
@@ -130,10 +130,10 @@
     if(deleting) return;
     const k = (e.key || '').toLowerCase();
     if(k==='b'){
-      e.preventDefault(); const ok = await call('bump'); if(ok){ bumped=true; render(); msg.textContent='✓ hecho'; msg.className='meta ok'; }
+      e.preventDefault(); const ok = await call('bump'); if(ok){ bumped=true; render(); msg.textContent='✓ done'; msg.className='meta ok'; }
     }
     if(k==='u'){
-      e.preventDefault(); const ok = await call('unbump_now'); if(ok){ bumped=false; render(); msg.textContent='✓ hecho'; msg.className='meta ok'; }
+      e.preventDefault(); const ok = await call('unbump_now'); if(ok){ bumped=false; render(); msg.textContent='✓ done'; msg.className='meta ok'; }
     }
     if(k==='l' && !e.metaKey && !e.ctrlKey && !e.altKey){ e.preventDefault(); goList(); }
     if(k==='p' && bumped && !published && !publishing){ e.preventDefault(); publish(); }

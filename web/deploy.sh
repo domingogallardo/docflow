@@ -4,8 +4,8 @@ set -euo pipefail
 
 # Check that required variables are defined.
 if [[ -z "$REMOTE_USER" || -z "$REMOTE_HOST" ]]; then
-  echo "❌ Error: Una o más variables necesarias no están definidas."
-  echo "Por favor, asegúrate de que las siguientes variables están configuradas:"
+  echo "❌ Error: One or more required variables are not defined."
+  echo "Please make sure the following variables are set:"
   echo "  REMOTE_USER, REMOTE_HOST"
   exit 1
 fi
@@ -14,11 +14,11 @@ REMOTE_PATH="/opt/web-domingo"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # Generate read.html for /read (combined HTML+PDF) with the repo generator.
-echo "🧾 Generando listado estático (mtime desc)…"
+echo "🧾 Generating static listing (mtime desc)…"
 PYTHON_BIN="python3"; command -v python3 >/dev/null 2>&1 || PYTHON_BIN=python
 "$PYTHON_BIN" "$SCRIPT_DIR/../utils/build_read_index.py" "$SCRIPT_DIR/public/read"
 
-echo "📦 Empaquetando archivos (sin metadatos de macOS)..."
+echo "📦 Packaging files (without macOS metadata)..."
 # Avoid xattrs and AppleDouble files (.DS_Store, ._*). On macOS (bsdtar),
 # add flags to exclude xattrs and mac metadata.
 CREATE_FLAGS=""
@@ -41,7 +41,7 @@ ssh "$REMOTE_USER@$REMOTE_HOST" "mkdir -p $REMOTE_PATH $REMOTE_PATH/dynamic-data
 # Simple mode: set HTPASSWD_USER and HTPASSWD_PSS in the environment.
 # - The password is never shown in argv: it is passed via stdin and base64-encoded for SSH.
 if [[ -n "${HTPASSWD_USER:-}" && -n "${HTPASSWD_PSS:-}" ]]; then
-  echo "🔐 Actualizando .htpasswd en el host remoto (usuario: $HTPASSWD_USER)…"
+  echo "🔐 Updating .htpasswd on the remote host (user: $HTPASSWD_USER)…"
   ssh "$REMOTE_USER@$REMOTE_HOST" "mkdir -p $REMOTE_PATH/nginx"
   PASS_B64=$(printf '%s' "$HTPASSWD_PSS" | base64)
   ssh "$REMOTE_USER@$REMOTE_HOST" HTPASSWD_USER="$HTPASSWD_USER" PASS_B64="$PASS_B64" bash -s << 'EOSSH'
@@ -57,10 +57,10 @@ EOSSH
   unset PASS_B64
 fi
 
-echo "🚀 Subiendo archivos..."
+echo "🚀 Uploading files..."
 scp "$SCRIPT_DIR/deploy.tar.gz" "$REMOTE_USER@$REMOTE_HOST:$REMOTE_PATH/"
 
-echo "🔧 Desplegando en el servidor..."
+echo "🔧 Deploying on the server..."
 ssh $REMOTE_USER@$REMOTE_HOST << 'EOF'
   set -e
   cd /opt/web-domingo
@@ -89,6 +89,6 @@ EOF
 
 rm -f "$SCRIPT_DIR/deploy.tar.gz"
 
-echo "✅ Despliegue completo. El contenedor sirve por http://localhost:8080 en el servidor."
-echo "🌐 Nginx del host termina HTTPS y hace proxy a este puerto."
+echo "✅ Deploy complete. The container serves at http://localhost:8080 on the server."
+echo "🌐 Host Nginx terminates HTTPS and proxies to this port."
 :

@@ -19,22 +19,22 @@ import config as cfg
 def parse_args():
     p = argparse.ArgumentParser(
         description=(
-            "Pipeline de documentos: podcasts, Instapaper, PDFs, imágenes y Markdown. "
-            "Los HTML de Instapaper destacados se bumpean automáticamente."
+            "Document pipeline: podcasts, Instapaper, PDFs, images, and Markdown. "
+            "Starred Instapaper HTML is auto-bumped."
         ),
         epilog=(
-            "Para marcar un artículo como destacado en Instapaper, añade una estrella (⭐) "
-            "al inicio del título. El pipeline lo detecta, propaga la marca a HTML/MD y "
-            "bumpéa el HTML para priorizarlo en listados por fecha."
+            "To mark an article as starred in Instapaper, add a star (⭐) at the start "
+            "of the title. The pipeline detects it, propagates the mark to HTML/MD, and "
+            "bumps the HTML to prioritize it in date-ordered listings."
         ),
     )
     p.add_argument("--year", type=int,
-                   help="Usa ese año en lugar del año por defecto (DOCPIPE_YEAR o año actual)")
+                   help="Use this year instead of the default (DOCPIPE_YEAR or current year)")
     p.add_argument(
         "targets",
         nargs="+",
         choices=[*PIPELINE_TARGETS, "all"],
-        help="Procesa solo los tipos indicados",
+        help="Process only the specified types",
     )
     return p.parse_args()
 

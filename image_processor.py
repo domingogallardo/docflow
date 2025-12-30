@@ -23,11 +23,11 @@ class ImageProcessor:
 
     def process_images(self) -> List[Path]:
         """Move images from Incoming and update the yearly gallery."""
-        print("🖼️ Procesando imágenes...")
+        print("🖼️ Processing images...")
 
         images = self._list_incoming_images()
         if not images:
-            print("🖼️ No se encontraron imágenes para procesar")
+            print("🖼️ No images found to process")
             return []
 
         self.destination_dir.mkdir(parents=True, exist_ok=True)
@@ -40,7 +40,7 @@ class ImageProcessor:
 
         self._build_gallery()
 
-        print(f"🖼️ {len(moved)} imagen(es) movidas a {self.destination_dir}")
+        print(f"🖼️ {len(moved)} image(s) moved to {self.destination_dir}")
         return moved
 
     # --------- helpers ---------
@@ -58,7 +58,7 @@ class ImageProcessor:
         ]
         images.sort(key=lambda p: p.stat().st_mtime, reverse=True)
 
-        title = f"Galería {self.destination_dir.name}"
+        title = f"Gallery {self.destination_dir.name}"
 
         if images:
             figures = []
@@ -66,12 +66,12 @@ class ImageProcessor:
                 href = quote(img.name)
                 alt_text = html.escape(img.stem.replace("_", " ").replace("-", " "))
                 caption = html.escape(img.name)
-                aria_label = html.escape(f"Ampliar {img.name}")
+                aria_label = html.escape(f"Enlarge {img.name}")
                 figures.append(
                     "            <figure>\n"
                     "                <a class=\"gallery-thumb\" "
                     f"href=\"{href}\" data-full=\"{href}\" data-caption=\"{caption}\" "
-                    f"aria-label=\"{aria_label}\" title=\"Haz clic para ampliar\">\n"
+                    f"aria-label=\"{aria_label}\" title=\"Click to enlarge\">\n"
                     f"                    <img src=\"{href}\" alt=\"{alt_text}\">\n"
                     "                </a>\n"
                     f"                <figcaption>{caption}</figcaption>\n"
@@ -79,7 +79,7 @@ class ImageProcessor:
                 )
             gallery_body = "\n".join(figures)
         else:
-            gallery_body = "            <p>No hay imágenes procesadas para este año.</p>"
+            gallery_body = "            <p>No images processed for this year.</p>"
 
         html_doc = (
             "<!DOCTYPE html>\n"
@@ -115,8 +115,8 @@ class ImageProcessor:
             "    </div>\n"
             "    <div class=\"lightbox\" role=\"dialog\" aria-modal=\"true\" aria-hidden=\"true\" data-active=\"false\">\n"
             "        <div class=\"lightbox__inner\">\n"
-            "            <button type=\"button\" class=\"lightbox__close\" aria-label=\"Cerrar vista ampliada\">Cerrar ✕</button>\n"
-            "            <img src=\"\" alt=\"Imagen ampliada\" class=\"lightbox__image\">\n"
+            "            <button type=\"button\" class=\"lightbox__close\" aria-label=\"Close enlarged view\">Close ✕</button>\n"
+            "            <img src=\"\" alt=\"Enlarged image\" class=\"lightbox__image\">\n"
             "            <p class=\"lightbox__caption\"></p>\n"
             "        </div>\n"
             "    </div>\n"
@@ -135,7 +135,7 @@ class ImageProcessor:
             "                    return;\n"
             "                }\n"
             "                lightboxImage.src = src;\n"
-            "                lightboxImage.alt = caption ? 'Vista ampliada de ' + caption : 'Imagen ampliada';\n"
+            "                lightboxImage.alt = caption ? 'Enlarged view of ' + caption : 'Enlarged image';\n"
             "                lightboxCaption.textContent = caption || '';\n"
             "                lightbox.setAttribute('data-active', 'true');\n"
             "                lightbox.setAttribute('aria-hidden', 'false');\n"
@@ -189,4 +189,4 @@ class ImageProcessor:
 
         gallery_path = self.destination_dir / self.gallery_name
         gallery_path.write_text(html_doc, encoding="utf-8")
-        print(f"🖼️ Galería actualizada: {gallery_path}")
+        print(f"🖼️ Gallery updated: {gallery_path}")

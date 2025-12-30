@@ -29,12 +29,12 @@ class MarkdownProcessor:
         ]
 
         if not markdown_files:
-            print("📝 No se encontraron archivos Markdown para procesar")
+            print("📝 No Markdown files found to process")
             return []
 
         return self._process_markdown_batch(
             markdown_files,
-            context="📝 Procesando archivos Markdown...",
+            context="📝 Processing Markdown files...",
         )
 
     def process_markdown_subset(self, markdown_files: Iterable[Path]) -> List[Path]:
@@ -46,12 +46,12 @@ class MarkdownProcessor:
                 selected.append(path)
 
         if not selected:
-            print("📝 No hay archivos Markdown válidos para procesar")
+            print("📝 No valid Markdown files to process")
             return []
 
         return self._process_markdown_batch(
             selected,
-            context=f"📝 Procesando {len(selected)} archivo(s) Markdown seleccionados...",
+            context=f"📝 Processing {len(selected)} selected Markdown file(s)...",
         )
 
     def _process_markdown_batch(
@@ -67,7 +67,7 @@ class MarkdownProcessor:
             html_path = md_file.with_suffix(".html")
 
             if html_path.exists():
-                print(f"⏭️  Saltando conversión (HTML ya existe): {html_path.name}")
+                print(f"⏭️  Skipping conversion (HTML already exists): {html_path.name}")
                 continue
 
             try:
@@ -75,9 +75,9 @@ class MarkdownProcessor:
                 full_html = U.markdown_to_html(md_text, title=md_file.stem)
                 html_path.write_text(full_html, encoding="utf-8")
                 generated_html.append(html_path)
-                print(f"✅ HTML generado: {html_path.name}")
+                print(f"✅ HTML generated: {html_path.name}")
             except Exception as exc:
-                print(f"❌ Error convirtiendo {md_file.name}: {exc}")
+                print(f"❌ Error converting {md_file.name}: {exc}")
 
         if generated_html:
             html_targets = {path.resolve() for path in generated_html}
@@ -105,7 +105,7 @@ class MarkdownProcessor:
         moved_files = U.move_files_with_replacement(files_to_move, self.destination_dir)
 
         if moved_files:
-            print(f"📝 {len(moved_files)} archivo(s) Markdown movidos a {self.destination_dir}")
+            print(f"📝 {len(moved_files)} Markdown file(s) moved to {self.destination_dir}")
 
         return moved_files
 

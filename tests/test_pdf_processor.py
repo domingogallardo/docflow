@@ -64,7 +64,7 @@ def test_pdf_processor_no_pdfs(tmp_path, capsys):
     
     # Verify informational message.
     captured = capsys.readouterr()
-    assert "📚 No se encontraron PDFs para procesar" in captured.out
+    assert "📚 No PDFs found to process" in captured.out
 
 
 def test_pdf_processor_mixed_files(tmp_path):

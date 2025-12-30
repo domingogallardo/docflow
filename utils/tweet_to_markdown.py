@@ -99,7 +99,7 @@ def _safe_filename(name: str) -> str:
 def _build_title(author_name: str | None, author_handle: str | None) -> str:
     base = "Tweet"
     if author_name or author_handle:
-        base += " de "
+        base += " by "
         if author_name:
             base += author_name
         if author_handle:
@@ -216,8 +216,8 @@ def _resolve_storage_state(storage_state: Path | None) -> Path | None:
     path = storage_state.expanduser()
     if not path.exists():
         raise FileNotFoundError(
-            f"No se encontró el storage_state en {path}. "
-            "Ejecuta utils/login_x.py para generarlo."
+            f"storage_state not found at {path}. "
+            "Run utils/login_x.py to generate it."
         )
     return path
 
@@ -273,8 +273,8 @@ def fetch_tweet_markdown(
     """Return (markdown, filename) for the given tweet."""
     if sync_playwright is None:
         raise RuntimeError(
-            "playwright no está instalado. Ejecuta 'pip install playwright' y "
-            "'playwright install chromium' para usar esta utilidad."
+            "playwright is not installed. Run 'pip install playwright' and "
+            "'playwright install chromium' to use this tool."
         )
     with sync_playwright() as playwright:
         browser = playwright.chromium.launch(headless=headless)
@@ -294,8 +294,8 @@ def fetch_tweet_markdown(
         article = _locate_tweet_article(page)
         if article is None:
             raise RuntimeError(
-                "No se encontró el <article> del post. "
-                "Puede requerir login o no estar disponible."
+                "Could not find the post <article>. "
+                "It may require login or be unavailable."
             )
 
         author_name = None
@@ -335,7 +335,7 @@ def fetch_tweet_markdown(
 
         avatar_url, media_urls = _split_image_urls(image_urls)
 
-        md_lines = [f"# {title}", "", f"[Ver en X]({url})"]
+        md_lines = [f"# {title}", "", f"[View on X]({url})"]
 
         if avatar_url:
             md_lines.extend(["", f"![avatar]({avatar_url})"])
@@ -349,7 +349,7 @@ def fetch_tweet_markdown(
             md_lines.append("")
 
             if external_link:
-                md_lines.extend(["", f"Enlace original: {external_link}"])
+                md_lines.extend(["", f"Original link: {external_link}"])
 
         markdown = "\n".join(md_lines).strip() + "\n"
 
@@ -359,24 +359,24 @@ def fetch_tweet_markdown(
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="Descarga un tweet público y lo guarda como Markdown listo para el pipeline.",
+        description="Download a public tweet and save it as pipeline-ready Markdown.",
     )
     parser.add_argument("url", help="URL del tweet en https://x.com/...")
     parser.add_argument(
         "--output-dir",
         type=Path,
         default=cfg.INCOMING,
-        help=f"Directorio donde guardar el Markdown (por defecto: {cfg.INCOMING})",
+        help=f"Directory to save the Markdown (default: {cfg.INCOMING})",
     )
     parser.add_argument(
         "--filename",
-        help="Nombre de archivo a usar (sobrescribe el generado automáticamente).",
+        help="Filename to use (overrides the auto-generated one).",
     )
     parser.add_argument(
         "--wait-ms",
         type=int,
         default=5000,
-        help="Tiempo adicional en milisegundos para esperar tras cargar la página.",
+        help="Additional wait time in milliseconds after loading the page.",
     )
     headless_group = parser.add_mutually_exclusive_group()
     headless_group.add_argument(
@@ -384,13 +384,13 @@ def parse_args() -> argparse.Namespace:
         dest="headless",
         action="store_true",
         default=True,
-        help="Ejecuta Chromium en modo headless (por defecto).",
+        help="Run Chromium in headless mode (default).",
     )
     headless_group.add_argument(
         "--no-headless",
         dest="headless",
         action="store_false",
-        help="Abre Chromium con UI (útil para depurar).",
+        help="Open Chromium with UI (useful for debugging).",
     )
     return parser.parse_args()
 
@@ -407,14 +407,14 @@ def main() -> None:
             headless=args.headless,
         )
     except PlaywrightTimeoutError as exc:
-        raise SystemExit(f"❌ Timeout cargando el tweet: {exc}") from exc
-    except Exception as exc:  # pragma: no cover - salida controlada CLI
-        raise SystemExit(f"❌ Error extrayendo el tweet: {exc}") from exc
+        raise SystemExit(f"❌ Timeout loading the tweet: {exc}") from exc
+    except Exception as exc:  # pragma: no cover - controlled CLI output
+        raise SystemExit(f"❌ Error extracting the tweet: {exc}") from exc
 
     filename = args.filename or auto_filename
     destination = output_dir / filename
     destination.write_text(markdown, encoding="utf-8")
-    print(f"🐦 Tweet guardado en {destination}")
+    print(f"🐦 Tweet saved to {destination}")
 
 
 if __name__ == "__main__":

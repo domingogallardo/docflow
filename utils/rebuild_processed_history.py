@@ -65,7 +65,7 @@ def main():
     # Overwrite processed_history.txt.
     cfg.PROCESSED_HISTORY.write_text("".join(lines), encoding="utf-8")
 
-    print(f"processed_history reconstruido: {len(lines)} entradas (ordenadas por creación).")
+    print(f"processed_history rebuilt: {len(lines)} entries (ordered by creation time).")
 
 if __name__ == "__main__":
     main()

@@ -73,15 +73,15 @@ def _load_markdown_text(md_path: Path) -> str:
 
 def _original_filename(url: str) -> str:
     if not url:
-        return "(Sin título)"
+        return "(Untitled)"
     parsed = urlparse(url)
     path = parsed.path or ""
     if not path:
-        return "(Sin título)"
+        return "(Untitled)"
     decoded = unquote(path)
     name = Path(decoded).name
     if not name:
-        return "(Sin título)"
+        return "(Untitled)"
     if name.lower().endswith(".html"):
         stripped = Path(name).with_suffix("").name
         return stripped or Path(name).stem
@@ -139,7 +139,7 @@ def _collect_openai_output(resp) -> str:
 
 def _call_openai(system: str, prompt: str, *, max_tokens: int) -> str:
     if _OPENAI_CLIENT is None:
-        raise RuntimeError("Cliente OpenAI no configurado")
+        raise RuntimeError("OpenAI client not configured")
     client = _OPENAI_CLIENT
     if hasattr(client, "with_options"):
         client = client.with_options(timeout=45)
@@ -157,7 +157,7 @@ def _call_openai(system: str, prompt: str, *, max_tokens: int) -> str:
             debug_dump = response.model_dump() if hasattr(response, "model_dump") else repr(response)
         except Exception as exc:
             debug_dump = f"<no dump available: {exc!r}>"
-        raise RuntimeError(f"Respuesta vacía de OpenAI. Detalles: {debug_dump}")
+        raise RuntimeError(f"Empty OpenAI response. Details: {debug_dump}")
     return text
 
 
@@ -224,8 +224,8 @@ def _guess_language(text: str) -> str:
             spanish_score += 1
 
     if spanish_score >= english_score:
-        return "español"
-    return "inglés"
+        return "Spanish"
+    return "English"
 
 
 def _extract_sections_from_markdown(md_path: Path, max_sections: int = 10) -> List[str]:
@@ -388,9 +388,9 @@ def _ensure_sections(sections: List[str], title: str, summary_lines: List[str], 
         existing_norms.add(norm_topic)
 
     while len(deduped) < desired:
-        fallback_topic = f"Tema {len(deduped) + 1}"
+        fallback_topic = f"Topic {len(deduped) + 1}"
         if _normalize_label(fallback_topic) in existing_norms:
-            fallback_topic = f"Tema {len(deduped) + 1} extra"
+            fallback_topic = f"Topic {len(deduped) + 1} extra"
         deduped.append(fallback_topic)
         existing_norms.add(_normalize_label(fallback_topic))
     return deduped
@@ -400,37 +400,37 @@ def _summarize_markdown(md_path: Path, title: str) -> tuple[List[str], List[str]
     global _SUMMARY_WARNING_EMITTED
     if _OPENAI_CLIENT is None:
         if not _SUMMARY_WARNING_EMITTED:
-            print("⚠️ Cliente OpenAI no disponible; se usarán las primeras líneas como resumen.")
+            print("⚠️ OpenAI client unavailable; using the first lines as the summary.")
             _SUMMARY_WARNING_EMITTED = True
         return _fallback_summary_and_sections(md_path)
 
     raw_text = _load_markdown_text(md_path)
     if not raw_text:
-        return ["[Contenido no disponible para resumen]"], ["(Secciones no disponibles)"]
+        return ["[Content not available for summary]"], ["(Sections not available)"]
 
     truncated = raw_text[:MAX_SUMMARY_INPUT_CHARS]
     lang_hint = _guess_language(truncated)
     system = (
-        "Eres un asistente editorial. Identifica el idioma principal del texto (español o inglés) "
-        "y resume el contenido usando exactamente ese idioma. "
-        "No traduzcas el texto ni mezcles idiomas. "
-        f"Tu resumen debe rondar las {SUMMARY_WORD_TARGET} palabras y conservar las ideas clave. "
-        "Devuélvelo como uno o varios párrafos directos, sin encabezados, etiquetas ni prefijos como "
-        "'Resumen:' o indicaciones de idioma."
+        "You are an editorial assistant. Identify the main language of the text (Spanish or English) "
+        "and summarize the content using exactly that language. "
+        "Do not translate the text or mix languages. "
+        f"Your summary should be around {SUMMARY_WORD_TARGET} words and keep the key ideas. "
+        "Return it as one or more direct paragraphs, without headings, tags, or prefixes like "
+        "'Summary:' or language labels."
     )
     prompt_lines = [
-        "Genera un resumen atractivo seguido de una lista de apartados del artículo delimitado por <<<texto>>>.",
+        "Generate an engaging summary followed by a list of article sections delimited by <<<text>>>.",
         "",
-        "Requisitos:",
-        "- summary: 250-300 palabras en el mismo idioma que el texto. Empieza con 1-2 frases de gancho claras y objetivas, sin opiniones propias.",
-        "- Separa los párrafos del resumen con una línea en blanco.",
-        "- sections: tras el resumen añade una línea en blanco y una lista de apartados, cada línea empezando por '- '.",
-        "  - Usa encabezados reales (H1-H3) si existen; si faltan, inventa exactamente 5 temas breves que representen el contenido.",
-        "  - No repitas el título original ni variantes cercanas en la lista.",
-        "  - No mezcles niveles ni añadas numeración salvo que esté en el original.",
-        "- No inventes hechos ni añadas etiquetas o prefijos como 'Resumen:' o 'Secciones:'.",
+        "Requirements:",
+        "- summary: 250-300 words in the same language as the text. Start with 1-2 clear, objective hook sentences without personal opinions.",
+        "- Separate summary paragraphs with a blank line.",
+        "- sections: after the summary, add a blank line and a list of sections, each line starting with '- '.",
+        "  - Use real headings (H1-H3) if they exist; if not, invent exactly 5 short topics that represent the content.",
+        "  - Do not repeat the original title or close variants in the list.",
+        "  - Do not mix levels or add numbering unless it exists in the original.",
+        "- Do not invent facts or add labels/prefixes like 'Summary:' or 'Sections:'.",
         "",
-        f"El texto está mayoritariamente en {lang_hint}. Usa exclusivamente ese idioma.",
+        f"The text is mostly in {lang_hint}. Use only that language.",
         "",
         "<<<",
         truncated,
@@ -441,7 +441,7 @@ def _summarize_markdown(md_path: Path, title: str) -> tuple[List[str], List[str]
     try:
         summary = _call_openai(system, prompt, max_tokens=SUMMARY_MAX_OUTPUT_TOKENS)
     except Exception as exc:
-        print(f"⚠️ No se pudo generar resumen IA para {md_path.name}: {exc}")
+        print(f"⚠️ Could not generate AI summary for {md_path.name}: {exc}")
         return _fallback_summary_and_sections(md_path)
 
     summary_text = summary.strip()
@@ -462,16 +462,16 @@ def _fallback_lines(md_path: Path, limit: int) -> List[str]:
             for _, raw_line in zip(range(limit), fh):
                 lines.append(raw_line.rstrip("\n"))
     except UnicodeDecodeError:
-        return ["[Contenido no disponible: codificación inválida]"]
+        return ["[Content unavailable: invalid encoding]"]
     if not lines:
-        return ["[Contenido vacío]"]
+        return ["[Empty content]"]
     return lines
 
 
 def _build_entry(md_path: Path) -> Iterable[str]:
     url = _read_url(md_path)
     title = _original_filename(url)
-    if title == "(Sin título)":
+    if title == "(Untitled)":
         title = md_path.name
     year = _extract_year_from_url(url)
     if year is None:
@@ -479,7 +479,7 @@ def _build_entry(md_path: Path) -> Iterable[str]:
             year = str(datetime.fromtimestamp(md_path.stat().st_mtime).year)
         except FileNotFoundError:
             year = str(datetime.now().year)
-    display_url = url or "(URL no disponible)"
+    display_url = url or "(URL not available)"
     summary_lines, sections = _summarize_markdown(md_path, title)
 
     yield f"# {title} - {year}"
@@ -495,7 +495,7 @@ def _build_entry(md_path: Path) -> Iterable[str]:
 def build_pulse_digest() -> Path | None:
     md_files = _list_markdown_files()
     if not md_files:
-        print("⚠️ No hay ficheros Markdown en Pulse/Incoming.")
+        print("⚠️ No Markdown files in Pulse/Incoming.")
         return None
 
     PULSE_DIR.mkdir(parents=True, exist_ok=True)
@@ -504,15 +504,15 @@ def build_pulse_digest() -> Path | None:
     today_title = now.strftime("%d-%m-%Y")
     output_path = PULSE_DIR / f"pulse-{today_stamp}.md"
 
-    lines: list[str] = [f"# Resumen Pulse {today_title}", ""]
+    lines: list[str] = [f"# Pulse Summary {today_title}", ""]
     for index, md_path in enumerate(md_files):
-        print(f"⏳ Resumiendo {md_path.name} ({index + 1}/{len(md_files)})...")
+        print(f"⏳ Summarizing {md_path.name} ({index + 1}/{len(md_files)})...")
         lines.extend(_build_entry(md_path))
         if index < len(md_files) - 1:
             lines.extend(("", "---", ""))
 
     output_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
-    print(f"📝 Resumen creado en: {output_path}")
+    print(f"📝 Summary created at: {output_path}")
 
     for md_path in md_files:
         try:

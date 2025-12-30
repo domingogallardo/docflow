@@ -90,7 +90,7 @@ def update_font_in_html(html_file: Path) -> bool:
         return False
         
     except Exception as e:
-        print(f"❌ Error procesando {html_file}: {e}")
+        print(f"❌ Error processing {html_file}: {e}")
         return False
 
 def find_html_files(directory: Path) -> list[Path]:
@@ -110,16 +110,16 @@ def find_html_files(directory: Path) -> list[Path]:
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Actualiza la tipografía de archivos HTML a la fuente del sistema"
+        description="Update HTML typography to the system font"
     )
     parser.add_argument(
         'directory',
-        help='Directorio o archivo HTML a procesar'
+        help='Directory or HTML file to process'
     )
     parser.add_argument(
         '--dry-run',
         action='store_true',
-        help='Mostrar qué archivos se procesarían sin hacer cambios'
+        help='Show which files would be processed without making changes'
     )
     
     args = parser.parse_args()
@@ -127,24 +127,24 @@ def main():
     target_path = Path(args.directory)
     
     if not target_path.exists():
-        print(f"❌ Error: El directorio/archivo '{target_path}' no existe")
+        print(f"❌ Error: The directory/file '{target_path}' does not exist")
         sys.exit(1)
     
     # Find HTML files.
     html_files = find_html_files(target_path)
     
     if not html_files:
-        print(f"📄 No se encontraron archivos HTML en '{target_path}'")
+        print(f"📄 No HTML files found in '{target_path}'")
         return
     
-    print(f"🔍 Encontrados {len(html_files)} archivo(s) HTML")
-    print(f"🎨 Tipografía objetivo: {SYSTEM_FONT}")
+    print(f"🔍 Found {len(html_files)} HTML file(s)")
+    print(f"🎨 Target font: {SYSTEM_FONT}")
     
     if args.dry_run:
-        print("\n📋 Archivos que se procesarían:")
+        print("\n📋 Files that would be processed:")
         for html_file in html_files:
             print(f"  • {html_file}")
-        print(f"\n💡 Ejecuta sin --dry-run para aplicar los cambios")
+        print("\n💡 Run without --dry-run to apply changes")
         return
     
     # Process files.
@@ -153,17 +153,17 @@ def main():
     for html_file in html_files:
         try:
             if update_font_in_html(html_file):
-                print(f"✅ Actualizado: {html_file.name}")
+                print(f"✅ Updated: {html_file.name}")
                 updated_count += 1
             else:
-                print(f"⏭️  Sin cambios: {html_file.name}")
+                print(f"⏭️  No changes: {html_file.name}")
         
         except Exception as e:
             print(f"❌ Error: {html_file.name} - {e}")
     
-    print(f"\n🎉 Procesamiento completado:")
-    print(f"   • {updated_count} archivos actualizados")
-    print(f"   • {len(html_files) - updated_count} archivos sin cambios")
+    print("\n🎉 Processing complete:")
+    print(f"   • {updated_count} files updated")
+    print(f"   • {len(html_files) - updated_count} files unchanged")
 
 if __name__ == "__main__":
     main() 

@@ -37,7 +37,7 @@ class TitleAIUpdater:
     def update_titles(self, candidates: Iterable[Path], rename_pair: RenameFunc) -> None:
         """Generate AI titles for the given Markdown files and rename them."""
         if self.client is None:
-            print("🤖 Cliente de IA no configurado; se omite la generación de títulos")
+            print("🤖 AI client not configured; skipping title generation")
             return
 
         md_files = [
@@ -46,10 +46,10 @@ class TitleAIUpdater:
         ]
 
         if not md_files:
-            print("🤖 No hay Markdown nuevos para generar títulos")
+            print("🤖 No new Markdown files to generate titles")
             return
 
-        print(f"🤖 Generando títulos para {len(md_files)} archivos...")
+        print(f"🤖 Generating titles for {len(md_files)} files...")
 
         for md_file in md_files:
             try:
@@ -62,9 +62,9 @@ class TitleAIUpdater:
                 time.sleep(self.delay_seconds)
 
             except Exception as exc:  # pragma: no cover - logs for manual tracking
-                print(f"❌ Error generando título para {md_file}: {exc}")
+                print(f"❌ Error generating title for {md_file}: {exc}")
 
-        print("🤖 Títulos actualizados ✅")
+        print("🤖 Titles updated ✅")
 
     # -------- internals --------
     def _extract_content(self, path: Path) -> tuple[str, str]:
@@ -92,7 +92,7 @@ class TitleAIUpdater:
         for attempt in range(1, retries + 1):
             try:
                 if self.client is None:
-                    raise RuntimeError("Cliente IA no configurado")
+                    raise RuntimeError("AI client not configured")
 
                 client = self.client
                 if hasattr(client, "with_options"):
@@ -148,10 +148,10 @@ class TitleAIUpdater:
 
                 try:
                     debug_payload = resp.model_dump() if hasattr(resp, "model_dump") else repr(resp)
-                    print(f"🛠️ DEBUG respuesta OpenAI vacía: {debug_payload}")
+                    print(f"🛠️ DEBUG empty OpenAI response: {debug_payload}")
                 except Exception as debug_exc:
-                    print(f"🛠️ DEBUG no se pudo volcar la respuesta: {debug_exc!r}")
-                raise RuntimeError("Respuesta vacía de OpenAI")
+                    print(f"🛠️ DEBUG could not dump response: {debug_exc!r}")
+                raise RuntimeError("Empty OpenAI response")
             except Exception as err:  # pragma: no cover - depende de red
                 last_err = err
                 status = (
@@ -175,40 +175,40 @@ class TitleAIUpdater:
 
         if last_err:
             raise last_err
-        raise RuntimeError("Fallo desconocido en la generación de títulos")
+        raise RuntimeError("Unknown failure in title generation")
 
     def _detect_language(self, sample_text: str) -> str:
-        system = "Responde EXACTAMENTE una palabra: 'español' o 'inglés'. Sin comillas, sin puntuación."
+        system = "Respond EXACTLY one word: 'Spanish' or 'English'. No quotes, no punctuation."
         prompt = (
-            "Indica el idioma del siguiente texto (español o inglés):\n\n"
-            f"{sample_text}\n\nIdioma:"
+            "Identify the language of the following text (Spanish or English):\n\n"
+            f"{sample_text}\n\nLanguage:"
         )
         try:
             resp = self._ai_text(system=system, prompt=prompt, max_tokens=8)
             lowered = resp.strip().lower()
-            if "español" in lowered or "espanol" in lowered:
-                return "español"
-            if "inglés" in lowered or "ingles" in lowered or "english" in lowered:
-                return "inglés"
+            if "spanish" in lowered or "español" in lowered or "espanol" in lowered:
+                return "Spanish"
+            if "english" in lowered or "inglés" in lowered or "ingles" in lowered:
+                return "English"
         except Exception:
             pass
 
         if re.search(r"[áéíóúñ¿¡]", sample_text, re.I):
-            return "español"
-        return "inglés"
+            return "Spanish"
+        return "English"
 
     def _generate_title(self, snippet: str, lang: str, original_title: str) -> str:
         system = (
-            f"Devuelve SOLO un título en una línea y nada más. "
-            f"Escríbelo en {lang}. "
-            "Si detectas el nombre del autor, de la newsletter, o del repositorio/sitio, "
-            "ponlo al inicio y sepáralo con un guion. "
-            f"Máx {self.max_title_len} caracteres."
+            "Return ONLY a single-line title and nothing else. "
+            f"Write it in {lang}. "
+            "If you detect the author, newsletter, or site/repo name, "
+            "put it at the start and separate it with a dash. "
+            f"Max {self.max_title_len} characters."
         )
         prompt = (
-            "Genera un título atractivo para el siguiente contenido.\n\n"
-            f"Título original del archivo: {original_title}\n\n"
-            f"Contenido:\n{snippet}\n\nTítulo:"
+            "Generate an attractive title for the following content.\n\n"
+            f"Original filename title: {original_title}\n\n"
+            f"Content:\n{snippet}\n\nTitle:"
         )
         resp = self._ai_text(system=system, prompt=prompt, max_tokens=64)
         title = (
@@ -231,7 +231,7 @@ class TitleAIUpdater:
 
 
 def rename_markdown_pair(md_path: Path, new_title: str) -> Path:
-    """Renombra un par Markdown/HTML usando el nuevo título y devuelve la ruta MD."""
+    """Rename a Markdown/HTML pair using the new title and return the MD path."""
     parent = md_path.parent
     base = _safe_filename(new_title)
 
