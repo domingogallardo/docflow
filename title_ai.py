@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Helpers para generar títulos usando OpenAI y renombrar pares Markdown/HTML."""
+"""Helpers to generate titles using OpenAI and rename Markdown/HTML pairs."""
 from __future__ import annotations
 
 import random
@@ -14,7 +14,7 @@ RenameFunc = Callable[[Path, str], Path]
 
 
 class TitleAIUpdater:
-    """Genera títulos usando OpenAI y renombra archivos Markdown/HTML asociados."""
+    """Generate titles using OpenAI and rename associated Markdown/HTML files."""
 
     def __init__(
         self,
@@ -35,7 +35,7 @@ class TitleAIUpdater:
 
     # -------- public API --------
     def update_titles(self, candidates: Iterable[Path], rename_pair: RenameFunc) -> None:
-        """Genera títulos IA para los Markdown indicados y los renombra."""
+        """Generate AI titles for the given Markdown files and rename them."""
         if self.client is None:
             print("🤖 Cliente de IA no configurado; se omite la generación de títulos")
             return
@@ -61,7 +61,7 @@ class TitleAIUpdater:
                 md_final = rename_pair(md_file, new_title)
                 time.sleep(self.delay_seconds)
 
-            except Exception as exc:  # pragma: no cover - logs para seguimiento manual
+            except Exception as exc:  # pragma: no cover - logs for manual tracking
                 print(f"❌ Error generando título para {md_file}: {exc}")
 
         print("🤖 Títulos actualizados ✅")

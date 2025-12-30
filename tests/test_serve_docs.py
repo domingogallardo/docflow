@@ -73,20 +73,20 @@ def test_directory_index_marks_published_html(tmp_path, monkeypatch):
 
     # Assert: unpublished html does not have green marker
     assert "articulo_local.html" in data
-    # Buscamos la línea del no publicado y comprobamos que no contiene 🟢
+    # Find the unpublished line and ensure it does not contain 🟢.
     for line in data.splitlines():
         if "articulo_local.html" in line:
             assert "🟢" not in line and "dg-pub" not in line
             break
 
-    # Los ficheros .md no deben mostrarse
+    # .md files should not be shown.
     assert "nota.md" not in data
 
 
 def test_directory_index_pdf_actions_and_publish_detection(tmp_path, monkeypatch):
     sd = _load_serve_docs("serve_docs_pdf")
 
-    # Estructura: un PDF bumped/no-pub y otro bumped+publicado
+    # Structure: one bumped/unpublished PDF and one bumped+published.
     serve_dir = tmp_path / "serve"
     serve_dir.mkdir()
     pdf_pub = serve_dir / "paper_publicado.pdf"
@@ -94,31 +94,31 @@ def test_directory_index_pdf_actions_and_publish_detection(tmp_path, monkeypatch
     pdf_pub.write_bytes(b"%PDF-1.4\n")
     pdf_local.write_bytes(b"%PDF-1.4\n")
 
-    # Marcar ambos como bumped (mtime en futuro)
+    # Mark both as bumped (mtime in the future).
     future = sd.base_epoch_cached() + 10
     at = pdf_local.stat().st_atime
     __import__("os").utime(str(pdf_local), (at, future))
     at_pub = pdf_pub.stat().st_atime
     __import__("os").utime(str(pdf_pub), (at_pub, future))
 
-    # Directorio público de reads temporal con el homónimo publicado
+    # Temporary public reads directory with the published counterpart.
     public_reads = tmp_path / "public_reads"
     public_reads.mkdir()
     (public_reads / pdf_pub.name).write_bytes(b"%PDF-1.4\n")
 
-    # Patch directorio público de reads
+    # Patch the public reads directory.
     __import__("pytest")
     from _pytest.monkeypatch import MonkeyPatch
     mp = MonkeyPatch()
     mp.setattr(sd, "PUBLIC_READS_DIR", str(public_reads), raising=False)
 
-    # Generar listado
+    # Generate listing.
     h = _make_dummy_handler(sd.HTMLOnlyRequestHandler)
     h.path = "/"
     h.list_directory(str(serve_dir))
     html = h.wfile.getvalue().decode("utf-8")
 
-    # El PDF publicado muestra acciones Unbump y Despublicar
+    # Published PDF shows Unbump and Unpublish actions.
     assert "paper_publicado.pdf" in html
     for line in html.splitlines():
         if "paper_publicado.pdf" in line:
@@ -128,7 +128,7 @@ def test_directory_index_pdf_actions_and_publish_detection(tmp_path, monkeypatch
             assert "data-dg-act='publish'" not in line
             break
 
-    # El PDF local bumped muestra acciones Unbump y una opción de Publicar (reads)
+    # Local bumped PDF shows Unbump and a Publish option (reads).
     assert "paper_local.pdf" in html
     for line in html.splitlines():
         if "paper_local.pdf" in line:
@@ -239,7 +239,7 @@ def test_publish_sets_public_mtime_without_unbumping(tmp_path, monkeypatch):
     html_file = serve_dir / "doc.html"
     html_file.write_text("<html><head></head><body></body></html>", encoding="utf-8")
 
-    # Bump local mtime al futuro
+    # Bump local mtime into the future.
     future = sd.base_epoch_cached() + 10
     at = html_file.stat().st_atime
     __import__("os").utime(str(html_file), (at, future))
@@ -249,7 +249,7 @@ def test_publish_sets_public_mtime_without_unbumping(tmp_path, monkeypatch):
     monkeypatch.setattr(sd, "PUBLIC_READS_DIR", str(public_reads), raising=False)
     monkeypatch.setattr(sd, "SERVE_DIR", str(serve_dir), raising=False)
 
-    # Script de deploy simulado (no hace nada)
+    # Mock deploy script (does nothing).
     deploy = tmp_path / "deploy.sh"
     deploy.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
     __import__("os").chmod(deploy, 0o755)
@@ -289,7 +289,7 @@ def test_publish_sets_public_mtime_without_unbumping(tmp_path, monkeypatch):
     assert dst_path.exists()
     dst_mtime = dst_path.stat().st_mtime
 
-    # Local sigue bumped al futuro; la copia pública queda datada en el momento de publicar
+    # Local stays bumped into the future; public copy is dated at publish time.
     assert src_mtime > now_after
     assert now_before - 2 <= dst_mtime <= now_after + 2
 

@@ -1,4 +1,4 @@
-"""Descarga los tweets marcados como 'Me gusta' en X a Markdown, sin depender del resto del repo."""
+"""Download X likes to Markdown without depending on the rest of the repo."""
 from __future__ import annotations
 
 import argparse
@@ -8,9 +8,9 @@ from pathlib import Path
 from typing import List, Optional, Set, Tuple
 from urllib.parse import parse_qsl, urlencode, urljoin, urlparse, urlunparse
 
-try:  # pragma: no cover - import opcional
+try:  # pragma: no cover - optional import
     from playwright.sync_api import TimeoutError as PlaywrightTimeoutError, sync_playwright
-except ImportError:  # pragma: no cover - entorno sin Playwright
+except ImportError:  # pragma: no cover - environment without Playwright
     PlaywrightTimeoutError = RuntimeError  # type: ignore[misc,assignment]
     sync_playwright = None  # type: ignore[assignment]
 
@@ -32,7 +32,7 @@ window.navigator.permissions.query = (parameters) => (
 """
 
 
-# --- Helpers de conversión a Markdown (adaptados de tweet_to_markdown.py) ---
+# --- Markdown conversion helpers (adapted from tweet_to_markdown.py) ---
 STAT_KEYWORDS = (
     "retweet",
     "retuits",
@@ -205,7 +205,7 @@ def _media_markdown_lines(media_urls: List[str]) -> List[str]:
 
 
 def _resolve_storage_state(storage_state: Path | None) -> Path | None:
-    # El storage_state evita el login wall de X al abrir el tweet.
+    # The storage_state avoids X's login wall when opening the tweet.
     if storage_state is None:
         return None
     path = storage_state.expanduser()
@@ -218,7 +218,7 @@ def _resolve_storage_state(storage_state: Path | None) -> Path | None:
 
 
 def _locate_tweet_article(page, *, timeout_ms: int = 15000):
-    # El login wall de X puede esconder el <article>; busca alternativas.
+    # X's login wall can hide the <article>; look for alternatives.
     try:
         page.wait_for_selector("article, div[data-testid='tweet']", timeout=timeout_ms)
     except PlaywrightTimeoutError:
@@ -233,7 +233,7 @@ def _locate_tweet_article(page, *, timeout_ms: int = 15000):
 
 
 def _extract_primary_link(article, tweet_url: str) -> str | None:
-    """Devuelve el primer enlace http(s) diferente al del propio tweet."""
+    """Return the first http(s) link different from the tweet itself."""
     seen: set[str] = set()
     tweet_lower = tweet_url.rstrip("/").lower()
     for anchor in article.locator("a").all():
@@ -272,11 +272,11 @@ def fetch_tweet_markdown(
         state_path = _resolve_storage_state(storage_state)
         context_kwargs = {"user_agent": USER_AGENT}
         if state_path:
-            # Usa sesión autenticada para evitar el login wall de X.
+            # Use an authenticated session to avoid X's login wall.
             context_kwargs["storage_state"] = str(state_path)
         context = browser.new_context(**context_kwargs)
         if state_path:
-            # Refuerza el contexto ante el login wall de X.
+            # Reinforce the context against X's login wall.
             context.add_init_script(STEALTH_SNIPPET)
         page = context.new_page()
         page.goto(url, wait_until="domcontentloaded", timeout=60000)
@@ -344,7 +344,7 @@ def fetch_tweet_markdown(
         return markdown, filename
 
 
-# --- Helpers de scraping de likes (adaptados de x_likes_fetcher.py) ---
+# --- Like-scraping helpers (adapted from x_likes_fetcher.py) ---
 def _canonical_status_url(href: str | None) -> str | None:
     if not href or "/status/" not in href:
         return None

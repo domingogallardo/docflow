@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Tests para la recolección de tweets vía likes de X."""
+"""Tests for tweet collection via X likes."""
 from pathlib import Path
 from unittest.mock import patch
 
@@ -145,7 +145,7 @@ def test_last_processed_uses_first_line(tmp_path, monkeypatch):
         "https://x.com/user/status/2",
         "https://x.com/user/status/3",
     ]
-    # Guardados más recientes primero
+    # Most recent saved first.
     processor.tweets_processed.write_text("\n".join(reversed(urls)) + "\n", encoding="utf-8")
 
     assert processor._last_processed_tweet_url() == urls[-1]

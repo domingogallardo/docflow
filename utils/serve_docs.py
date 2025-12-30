@@ -1,24 +1,23 @@
 #!/usr/bin/env python3
 """
-Servidor local de HTML/PDF con "bump" desde la propia página leída.
+Local HTML/PDF server with "bump" from the viewed page.
 
-- Índice ordenado por mtime desc y resaltado de ficheros bump (🔥 + fondo).
-- Overlay en páginas .html para hacer Bump/Unbump del fichero abierto.
-- Sin botones en el índice.
-- CSS/JS del overlay servidos como archivos externos (evita bloqueos CSP).
-- "Bump" calcado a AppleScript:
+- Index ordered by mtime desc and highlighting bumped files (🔥 + background).
+- Overlay on .html pages to Bump/Unbump the open file.
+- No buttons in the index.
+- Overlay CSS/JS served as external files (avoids CSP blocks).
+- "Bump" mirrors the AppleScript:
     baseEpoch = /bin/date -v+{BUMP_YEARS}y +%s
-    mtime := baseEpoch + i (i empieza en 1 y crece en cada bump de la sesión)
-- Botón "inteligente": solo Bump o Unbump según mtime > now.
-- Atajos: b / u / l y ⌘B / ⌘U (o Ctrl+B / Ctrl+U).
-  · 'l' navega al listado (carpeta padre) del archivo actual.
-- Bump y publicación son estados independientes; se puede (des)bump aunque esté
-  publicado.
+    mtime := baseEpoch + i (i starts at 1 and increases per session bump)
+- "Smart" button: only Bump or Unbump depending on mtime > now.
+- Shortcuts: b / u / l and ⌘B / ⌘U (or Ctrl+B / Ctrl+U).
+  · 'l' navigates to the listing (parent folder) of the current file.
+- Bump and publish are independent states; you can (un)bump even if published.
 
-Variables de entorno:
-  PORT        (por defecto 8000)
-  SERVE_DIR   (por defecto "/Users/domingo/⭐️ Documentación")
-  BUMP_YEARS  (por defecto 100)
+Environment variables:
+  PORT        (default 8000)
+  SERVE_DIR   (default "/Users/domingo/⭐️ Documentación")
+  BUMP_YEARS  (default 100)
 """
 
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
@@ -32,7 +31,7 @@ import calendar as _cal
 import stat
 from typing import Optional
 
-# Paths relativos al repo (para publicar)
+# Paths relative to the repo (for publishing).
 SCRIPT_DIR = os.path.abspath(os.path.dirname(__file__))
 REPO_ROOT = os.path.abspath(os.path.join(SCRIPT_DIR, os.pardir))
 DEPLOY_SCRIPT = os.getenv(
@@ -53,12 +52,12 @@ BUMP_YEARS = int(os.getenv("BUMP_YEARS", "100"))
 MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
  
 
-# Contador de la sesión (equivale al "counter" del AppleScript en un run)
+# Session counter (equivalent to the AppleScript "counter" in a run).
 _BUMP_COUNTER = 0
-_LAST_BASE_EPOCH: Optional[int] = None  # recuerda la última base para reiniciar el contador
+_LAST_BASE_EPOCH: Optional[int] = None  # remembers the last base to reset the counter
 
 
-# --------- STATIC ASSETS (externos) ---------
+# --------- STATIC ASSETS (external) ---------
 
 def _load_static_bytes(filename: str) -> bytes:
     path = os.path.join(STATIC_DIR, filename)
@@ -73,7 +72,7 @@ INDEX_JS = _load_static_bytes("index.js")
 
 # --------- HELPERS ---------
 def safe_join(rel_path: str) -> str | None:
-    """Asegura que la ruta objetivo esté dentro de SERVE_DIR (evita path traversal)."""
+    """Ensure the target path stays within SERVE_DIR (avoid path traversal)."""
     rel_path = rel_path.lstrip("/")
     base = os.path.normpath(SERVE_DIR)
     target = os.path.normpath(os.path.join(base, rel_path))
@@ -87,7 +86,7 @@ def is_bumped(ts: float) -> bool:
 
 
 def fmt_ts(ts: float) -> str:
-    """Formato estilo /read/: YYYY-Mon-DD HH:MM (mes en inglés abreviado)."""
+    """Format like /read/: YYYY-Mon-DD HH:MM (English month abbreviation)."""
     t = time.localtime(ts)
     return f"{t.tm_year}-{MONTHS[t.tm_mon-1]}-{t.tm_mday:02d} {t.tm_hour:02d}:{t.tm_min:02d}"
 
@@ -149,7 +148,7 @@ def _render_list_entry(entry: os.DirEntry[str], now: float, st: os.stat_result) 
         elif lowered.endswith(".pdf"):
             type_icon = "📕 "
         else:
-            return None  # ignoramos ficheros que no sean HTML/PDF
+            return None  # ignore files that are not HTML/PDF
 
     prefix = ("🔥 " if bumped else "") + ("🟢 " if published else "") + type_icon
     date_html = f"<span class='dg-date'> — {fmt_ts(mtime)}</span>"
@@ -161,13 +160,13 @@ def _render_list_entry(entry: os.DirEntry[str], now: float, st: os.stat_result) 
 
 
 def _apple_like_base_epoch() -> int:
-    """Epoch de (ahora + BUMP_YEARS años), imitando `/bin/date -v+{BUMP_YEARS}y +%s`."""
+    """Epoch for (now + BUMP_YEARS years), mirroring `/bin/date -v+{BUMP_YEARS}y +%s`."""
     try:
         cmd = ["/bin/date", f"-v+{BUMP_YEARS}y", "+%s"]
         out = subprocess.run(cmd, check=True, capture_output=True, text=True).stdout.strip()
         return int(out)
     except Exception:
-        # Fallback: sumar años respetando calendario
+        # Fallback: add years respecting the calendar.
         now = datetime.now()
         tgt_year = now.year + BUMP_YEARS
         y, m, d = tgt_year, now.month, now.day
@@ -179,16 +178,16 @@ def _apple_like_base_epoch() -> int:
 
 
 def base_epoch_cached() -> int:
-    """Obtiene la base futura (ahora + BUMP_YEARS años).
+    """Get the future base (now + BUMP_YEARS years).
 
-    Antes se cacheaba para toda la sesión, pero ahora se recalcula en
-    cada acceso para que el bump siempre parta del momento actual.
+    Previously cached for the whole session, but now recomputed on each access
+    so bumps always start from the current moment.
     """
     return _apple_like_base_epoch()
 
 
 def get_creation_epoch(abs_path: str) -> int | None:
-    """Intenta obtener fecha de creación (APFS/Spotlight)."""
+    """Try to get creation time (APFS/Spotlight)."""
     try:
         st = os.stat(abs_path)
         birth = getattr(st, "st_birthtime", None)
@@ -220,7 +219,7 @@ def get_creation_epoch(abs_path: str) -> int | None:
 
 
 def compute_bump_mtime() -> int:
-    """Calcula el mtime futuro sumando años respecto al momento del bump."""
+    """Compute the future mtime by adding years relative to the bump moment."""
     global _BUMP_COUNTER, _LAST_BASE_EPOCH
     base_epoch = base_epoch_cached()
     if base_epoch != _LAST_BASE_EPOCH:
@@ -279,7 +278,7 @@ class HTMLOnlyRequestHandler(SimpleHTTPRequestHandler):
         try:
             if action in ("bump", "unbump_now"):
                 st = os.stat(abs_path)
-                atime = st.st_atime  # conservamos atime
+                atime = st.st_atime  # preserve atime
 
                 if action == "bump":
                     mtime = compute_bump_mtime()
@@ -307,7 +306,7 @@ class HTMLOnlyRequestHandler(SimpleHTTPRequestHandler):
                     self.send_error(500, f"No se pudo borrar: {e}")
                     return
 
-                # Borrar Markdown asociado (mismo nombre)
+                # Delete associated Markdown (same name).
                 try:
                     stem, _ = os.path.splitext(abs_path)
                     md_path = f"{stem}.md"
@@ -317,7 +316,7 @@ class HTMLOnlyRequestHandler(SimpleHTTPRequestHandler):
                     self.send_error(500, f"No se pudo borrar Markdown asociado: {e}")
                     return
 
-                # También eliminar copia publicada si existe
+                # Also remove the published copy if it exists.
                 try:
                     pub_path = os.path.join(PUBLIC_READS_DIR, os.path.basename(abs_path))
                     if os.path.isfile(pub_path):
@@ -330,7 +329,7 @@ class HTMLOnlyRequestHandler(SimpleHTTPRequestHandler):
                 return
 
             if action == "publish":
-                # Requiere que el fichero esté bumped (defensa extra)
+                # Requires the file to be bumped (extra guard).
                 try:
                     st_src = os.stat(abs_path)
                 except Exception as e:
@@ -339,7 +338,7 @@ class HTMLOnlyRequestHandler(SimpleHTTPRequestHandler):
                 if not is_bumped(st_src.st_mtime):
                     self.send_error(400, "No publicado: el fichero no está bumped")
                     return
-                # 1) Copiar a directorio público READS siempre
+                # 1) Always copy to the public READS directory.
                 if not os.path.isdir(PUBLIC_READS_DIR):
                     try:
                         os.makedirs(PUBLIC_READS_DIR, exist_ok=True)
@@ -358,7 +357,7 @@ class HTMLOnlyRequestHandler(SimpleHTTPRequestHandler):
                     src_stat = st_src
                     name_low = os.path.basename(abs_path).lower()
                     if name_low.endswith((".html", ".htm")):
-                        # Inyectar script base de artículos antes de </head> si no está presente
+                        # Inject the base article script before </head> if missing.
                         with open(abs_path, 'r', encoding='utf-8', errors='ignore') as src:
                             text = src.read()
                         if "/read/article.js" not in text:
@@ -369,14 +368,14 @@ class HTMLOnlyRequestHandler(SimpleHTTPRequestHandler):
                         with open(dst_path, 'w', encoding='utf-8') as dst:
                             dst.write(text)
                     else:
-                        # Copia binaria para otros tipos (p.ej. PDFs)
+                        # Binary copy for other types (e.g., PDFs).
                         with open(abs_path, 'rb') as src, open(dst_path, 'wb') as dst:
                             while True:
                                 chunk = src.read(1024 * 1024)
                                 if not chunk:
                                     break
                                 dst.write(chunk)
-                    # Preservar atime y fijar mtime de la copia pública al momento de publicación
+                    # Preserve atime and set public copy mtime to publish time.
                     try:
                         target_mtime = int(time.time())
                         os.utime(dst_path, (src_stat.st_atime, target_mtime))
@@ -386,13 +385,13 @@ class HTMLOnlyRequestHandler(SimpleHTTPRequestHandler):
                     self.send_error(500, f"Error copiando: {e}")
                     return
 
-                # 2) Lanzar deploy
+                # 2) Trigger deploy.
                 if not os.path.isfile(DEPLOY_SCRIPT) or not os.access(DEPLOY_SCRIPT, os.X_OK):
                     self.send_error(500, f"Deploy no disponible: {DEPLOY_SCRIPT}")
                     return
 
                 try:
-                    # heredamos entorno (requiere REMOTE_USER/REMOTE_HOST configurados)
+                    # inherit environment (requires REMOTE_USER/REMOTE_HOST configured)
                     subprocess.run([DEPLOY_SCRIPT], check=True)
                 except subprocess.CalledProcessError as e:
                     self.send_error(500, f"Fallo en deploy ({e.returncode})")
@@ -402,7 +401,7 @@ class HTMLOnlyRequestHandler(SimpleHTTPRequestHandler):
                 return
 
             if action == "unpublish":
-                # Elimina el archivo del directorio público READS y despliega
+                # Remove the file from the public READS directory and deploy.
                 removed = False
                 try:
                     dst_path = os.path.join(PUBLIC_READS_DIR, os.path.basename(abs_path))
@@ -413,7 +412,7 @@ class HTMLOnlyRequestHandler(SimpleHTTPRequestHandler):
                     self.send_error(500, f"Error despublicando: {e}")
                     return
 
-                # Lanzar deploy
+                # Trigger deploy.
                 if not os.path.isfile(DEPLOY_SCRIPT) or not os.access(DEPLOY_SCRIPT, os.X_OK):
                     self.send_error(500, f"Deploy no disponible: {DEPLOY_SCRIPT}")
                     return
@@ -433,7 +432,7 @@ class HTMLOnlyRequestHandler(SimpleHTTPRequestHandler):
     def do_GET(self):
         parsed = urllib.parse.urlparse(self.path)
 
-        # Assets del overlay (externos para evitar CSP inline)
+        # Overlay assets (external to avoid inline CSP).
         if parsed.path == "/__overlay.css":
             return self._send_bytes(OVERLAY_CSS, "text/css; charset=utf-8")
 
@@ -442,7 +441,7 @@ class HTMLOnlyRequestHandler(SimpleHTTPRequestHandler):
         if parsed.path == "/__index.js":
             return self._send_bytes(INDEX_JS, "application/javascript; charset=utf-8")
 
-        # Páginas HTML: inyectar overlay salvo ?raw=1
+        # HTML pages: inject overlay unless ?raw=1.
         rel_path = parsed.path.lstrip("/")
         qs = urllib.parse.parse_qs(parsed.query)
         raw = qs.get("raw", ["0"])[0] == "1"
@@ -459,7 +458,7 @@ class HTMLOnlyRequestHandler(SimpleHTTPRequestHandler):
                     return super().do_GET()
 
                 st = os.stat(abs_path)
-                # Publicado si ya existe un archivo con el mismo nombre en read/
+                # Published if a file with the same name already exists in read/.
                 published = False
                 try:
                     published = os.path.exists(os.path.join(PUBLIC_READS_DIR, os.path.basename(abs_path)))
@@ -468,7 +467,7 @@ class HTMLOnlyRequestHandler(SimpleHTTPRequestHandler):
                 out = inject_overlay(text, rel_fs, is_bumped(st.st_mtime), published)
                 return self._send_bytes(out, "text/html; charset=utf-8", {"X-Overlay": "1"})
 
-        # Resto: comportamiento normal
+        # Otherwise: normal behavior.
         return super().do_GET()
 
     # --------- DIRECTORY LISTING ----------

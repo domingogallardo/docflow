@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Selecciona un artículo al azar y lo copia a Pulse dejando trazabilidad del origen."""
+"""Select a random article and copy it to Pulse with traceable origin."""
 
 from __future__ import annotations
 

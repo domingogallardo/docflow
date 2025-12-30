@@ -2,7 +2,7 @@ from pathlib import Path
 
 
 def unique_path(path: Path) -> Path:
-    """Devuelve una ruta única agregando un sufijo (n) si ya existe."""
+    """Return a unique path by appending a (n) suffix if it already exists."""
     if not path.exists():
         return path
 
@@ -24,7 +24,7 @@ def unique_pair(
     allow_existing_primary: Path | None = None,
     allow_existing_secondary: Path | None = None,
 ) -> tuple[Path, Path]:
-    """Devuelve un par de rutas únicas con el mismo sufijo numérico si hace falta."""
+    """Return a pair of unique paths sharing the same numeric suffix when needed."""
     def _conflicts(path: Path, allowed: Path | None) -> bool:
         return path.exists() and path != allowed
 

@@ -5,11 +5,11 @@ from utils.file_ops import iter_html_files
 
 def add_margins_to_html_files(directory: Path, file_filter=None):
     """
-    Añade márgenes del 6% a todos los archivos HTML en un directorio.
+    Add 6% margins to all HTML files in a directory.
 
     Args:
-        directory: Directorio donde buscar archivos HTML
-        file_filter: Función opcional para filtrar qué archivos procesar (ej: is_podcast_file)
+        directory: Directory where HTML files are searched
+        file_filter: Optional function to filter which files to process (e.g., is_podcast_file)
     """
     from bs4 import BeautifulSoup
 
@@ -73,7 +73,7 @@ def add_margins_to_html_files(directory: Path, file_filter=None):
 
 
 def get_base_css() -> str:
-    """Devuelve el CSS base con la tipografía del sistema y estilos comunes."""
+    """Return base CSS with the system font and common styles."""
     return (
         "body { margin: 6%; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; }\n"
         "h1, h2, h3 { font-weight: bold; border-bottom: 1px solid #eee; padding-bottom: 10px; }\n"
@@ -85,12 +85,12 @@ def get_base_css() -> str:
 
 
 def get_article_js_script_tag() -> str:
-    """Obsoleto: la inyección de JS se realiza al publicar en /read/."""
+    """Deprecated: JS injection happens when publishing to /read/."""
     return ""
 
 
 def wrap_html(title: str, body: str, accent_color: str) -> str:
-    """Envuelve contenido en un HTML mínimo con estilos base y color destacado."""
+    """Wrap content in minimal HTML with base styles and an accent color."""
     return (
         "<!DOCTYPE html>\n"
         "<html>\n<head>\n<meta charset=\"UTF-8\">\n"

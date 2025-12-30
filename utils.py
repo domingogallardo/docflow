@@ -1,7 +1,7 @@
-"""Compatibilidad: reexporta utilidades desde el paquete utils."""
+"""Compatibility: re-export utilities from the utils package."""
 from pathlib import Path as _Path
 
-# Permite importar submódulos si se carga este archivo como módulo "utils".
+# Allow importing submodules when loading this file as the "utils" module.
 __path__ = [str(_Path(__file__).resolve().parent / "utils")]
 
 from utils.file_ops import (

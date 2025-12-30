@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Comando standalone para convertir Markdown a HTML sin depender de otros módulos del repo."""
+"""Standalone command to convert Markdown to HTML without other repo modules."""
 from __future__ import annotations
 
 import argparse
@@ -39,7 +39,7 @@ def parse_args(argv: Iterable[str] | None = None) -> argparse.Namespace:
 
 
 def clean_duplicate_markdown_links(text: str) -> str:
-    """Limpia enlaces Markdown donde el texto y la URL son idénticos."""
+    """Clean Markdown links where the text and URL are identical."""
     duplicate_link_pattern = r'\[(https?://[^\]]+)\]\(\1\)'
 
     def replace_duplicate_link(match):
@@ -60,7 +60,7 @@ def clean_duplicate_markdown_links(text: str) -> str:
 
 
 def convert_urls_to_links(text: str) -> str:
-    """Convierte URLs de texto plano a enlaces Markdown de forma robusta."""
+    """Convert plain-text URLs to Markdown links robustly."""
     text = clean_duplicate_markdown_links(text)
 
     lines = text.split('\n')
@@ -95,7 +95,7 @@ def convert_urls_to_links(text: str) -> str:
 
 
 def convert_newlines_to_br(html_text: str) -> str:
-    """Inserta <br> dentro de párrafos para respetar saltos de línea."""
+    """Insert <br> inside paragraphs to preserve line breaks."""
     def replace_in_content(match):
         tag_open, content, tag_close = match.group(1), match.group(2), match.group(3)
         content_with_br = content.replace("\n", "<br>\n")

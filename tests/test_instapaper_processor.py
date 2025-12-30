@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Tests para InstapaperProcessor
+Tests for InstapaperProcessor
 """
 import pytest
 from pathlib import Path
@@ -10,7 +10,7 @@ from instapaper_processor import InstapaperDownloadRegistry, InstapaperProcessor
 
 
 def test_star_prefix_stripping_variants():
-    """Quita prefijos de estrella comunes del título."""
+    """Remove common star prefixes from the title."""
     p = InstapaperProcessor(Path("/tmp/incoming"), Path("/tmp/dest"))
     cases = [
         ("⭐ Title", "Title"),
@@ -32,7 +32,7 @@ def test_instapaper_star_detection_and_propagation_from_read_html(tmp_path):
     incoming.mkdir()
     destination.mkdir()
 
-    # Página de lectura con estrella en <title> y en H1
+    # Read page with a star in <title> and H1.
     read_html = """<!DOCTYPE html>
     <html>
     <head>
@@ -49,41 +49,41 @@ def test_instapaper_star_detection_and_propagation_from_read_html(tmp_path):
 
     processor = InstapaperProcessor(incoming, destination)
 
-    # Mockear la sesión HTTP
+    # Mock the HTTP session.
     mock_resp = Mock()
     mock_resp.text = read_html
     processor.session = Mock()
     processor.session.get.return_value = mock_resp
 
-    # Descargar y escribir el HTML del artículo
+    # Download and write the article HTML.
     html_path, is_starred = processor._download_article("12345")
     assert is_starred is True
     html_text = html_path.read_text(encoding="utf-8")
 
-    # Debe contener la marca de estrella y atributo en <html>
+    # It must contain the star marker and attribute in <html>.
     assert '<meta name="instapaper-starred" content="true">' in html_text
     assert 'data-instapaper-starred="true"' in html_text
-    # El título debe estar limpio (sin prefijo de estrella)
+    # Title must be clean (no star prefix).
     assert "<title>Starred Sample</title>" in html_text
     assert "<h1>Starred Sample</h1>" in html_text
 
-    # Convertir a Markdown debe añadir front matter
+    # Converting to Markdown should add front matter.
     processor._convert_html_to_markdown()
     md_path = html_path.with_suffix('.md')
     md_text = md_path.read_text(encoding="utf-8")
     assert md_text.startswith("---\ninstapaper_starred: true\n---\n")
-    # No debe quedar estrella al inicio del encabezado
+    # No star should remain at the start of the heading.
     assert not md_text.splitlines()[3].startswith("# ⭐")
 
 
 def test_instapaper_processor_no_star_no_meta(tmp_path):
-    """Si el <title> no empieza con ⭐, no debe marcar como starred."""
+    """If the <title> does not start with ⭐, it should not be marked starred."""
     incoming = tmp_path / "Incoming"
     destination = tmp_path / "Posts"
     incoming.mkdir()
     destination.mkdir()
 
-    # Página de lectura SIN estrella en <title> ni en H1
+    # Read page WITHOUT a star in <title> or H1.
     read_html = """<!DOCTYPE html>
     <html>
     <head>
@@ -100,26 +100,26 @@ def test_instapaper_processor_no_star_no_meta(tmp_path):
 
     processor = InstapaperProcessor(incoming, destination)
 
-    # Mockear la sesión HTTP
+    # Mock the HTTP session.
     mock_resp = Mock()
     mock_resp.text = read_html
     processor.session = Mock()
     processor.session.get.return_value = mock_resp
 
-    # Descargar y escribir el HTML del artículo
+    # Download and write the article HTML.
     html_path, is_starred = processor._download_article("99999")
     assert is_starred is False
     html_text = html_path.read_text(encoding="utf-8")
 
-    # No debe contener marcadores de starred
+    # It should not contain starred markers.
     assert '<meta name="instapaper-starred" content="true">' not in html_text
     assert 'data-instapaper-starred="true"' not in html_text
 
-    # Título y H1 deben mantenerse tal cual
+    # Title and H1 should remain unchanged.
     assert "<title>Normal Sample</title>" in html_text
     assert "<h1>Normal Sample</h1>" in html_text
 
-    # Convertir a Markdown no debe añadir front matter de starred
+    # Converting to Markdown should not add starred front matter.
     processor._convert_html_to_markdown()
     md_path = html_path.with_suffix('.md')
     md_text = md_path.read_text(encoding="utf-8")
@@ -137,13 +137,13 @@ def test_download_registry_persistence(tmp_path):
     assert registry.should_skip("abc", True) is True
     assert registry.should_skip("abc", False) is False
 
-    # Reinstanciar para verificar persistencia
+    # Re-instantiate to verify persistence.
     registry_again = InstapaperDownloadRegistry(registry_path)
     assert registry_again.should_skip("abc", True) is True
 
 
 def test_download_registry_batch_persists_on_exit(tmp_path):
-    """En batch solo se persiste al salir del contexto."""
+    """In batch mode, persistence happens on context exit."""
     registry_path = tmp_path / ".instapaper_downloads.txt"
     registry = InstapaperDownloadRegistry(registry_path)
 
@@ -185,15 +185,15 @@ def test_download_skips_articles_on_registry(tmp_path, monkeypatch):
 
 
 def test_instapaper_processor_with_existing_html(tmp_path):
-    """Test que verifica el procesamiento de archivos HTML existentes (sin descarga)."""
+    """Test that verifies processing existing HTML files (no download)."""
     
-    # Preparar
+    # Prepare.
     incoming = tmp_path / "Incoming"
     incoming.mkdir()
     destination = tmp_path / "Posts"
     destination.mkdir()
     
-    # Crear archivo HTML de prueba
+    # Create a test HTML file.
     html_file = incoming / "test_article.html"
     html_content = """<!DOCTYPE html>
     <html>
@@ -205,58 +205,58 @@ def test_instapaper_processor_with_existing_html(tmp_path):
     </html>"""
     html_file.write_text(html_content)
     
-    # Crear procesador con mocks para APIs externas
+    # Create processor with mocks for external APIs.
     processor = InstapaperProcessor(incoming, destination)
     
     processor.title_updater.client = object()
-    # Mockear descarga y generación de títulos para evitar dependencias externas
+    # Mock download and title generation to avoid external dependencies.
     with patch.object(processor, "_download_from_instapaper", return_value=False), \
          patch.object(processor.title_updater, '_ai_text', side_effect=["inglés", "Amazing Test Article"]):
         moved_posts = processor.process_instapaper_posts()
     
-    # Verificar
+    # Verify.
     assert len(moved_posts) >= 1  # Al menos archivos procesados
     
-    # Verificar que se generó el archivo Markdown
+    # Verify the Markdown file was generated.
     md_files = list(destination.glob("*.md"))
     assert len(md_files) >= 1
     
-    # Verificar que los archivos fueron renombrados
+    # Verify the files were renamed.
     renamed_files = list(destination.glob("Amazing Test Article*"))
     assert len(renamed_files) >= 1
 
 
 def test_instapaper_processor_no_credentials(tmp_path):
-    """Test que verifica el comportamiento cuando no hay credenciales de Instapaper."""
+    """Test that verifies behavior when Instapaper credentials are missing."""
     
-    # Preparar
+    # Prepare.
     incoming = tmp_path / "Incoming" 
     incoming.mkdir()
     destination = tmp_path / "Posts"
     
-    # Crear procesador
+    # Create processor.
     processor = InstapaperProcessor(incoming, destination)
     
-    # Mock para simular falta de credenciales
+    # Mock to simulate missing credentials.
     with patch('instapaper_processor.INSTAPAPER_USERNAME', None), \
          patch('instapaper_processor.INSTAPAPER_PASSWORD', None):
         
-        # Ejecutar
+        # Execute.
         moved_posts = processor.process_instapaper_posts()
     
-    # Verificar - debería continuar sin error y devolver lista vacía
+    # Verify - should continue without error and return an empty list.
     assert moved_posts == []
 
 
 def test_instapaper_processor_html_encoding_fix(tmp_path):
-    """Test que verifica la corrección de codificación HTML."""
+    """Test that verifies HTML encoding fixes."""
     
-    # Preparar
+    # Prepare.
     incoming = tmp_path / "Incoming"
     incoming.mkdir()
     destination = tmp_path / "Posts"
     
-    # Crear archivo HTML sin charset
+    # Create an HTML file without charset.
     html_file = incoming / "no_charset.html"
     html_content = """<html>
     <head><title>No Charset</title></head>
@@ -264,19 +264,19 @@ def test_instapaper_processor_html_encoding_fix(tmp_path):
     </html>"""
     html_file.write_text(html_content)
     
-    # Crear procesador
+    # Create processor.
     processor = InstapaperProcessor(incoming, destination)
     
-    # Ejecutar solo la corrección de codificación
+    # Run only the encoding fix.
     processor._fix_html_encoding()
     
-    # Verificar que se agregó el charset
+    # Verify the charset was added.
     updated_content = html_file.read_text()
     assert '<meta charset="utf-8">' in updated_content
 
 
 def test_instapaper_processor_image_width_reduction(tmp_path):
-    """Test que verifica la reducción de ancho de imágenes."""
+    """Test that verifies image width reduction."""
     incoming = tmp_path / "Incoming"
     incoming.mkdir()
     destination = tmp_path / "Posts"
@@ -300,14 +300,14 @@ def test_instapaper_processor_image_width_reduction(tmp_path):
 
 
 def test_instapaper_processor_title_generation(tmp_path):
-    """Test que verifica la generación de títulos con IA."""
+    """Test that verifies AI title generation."""
     
-    # Preparar
+    # Prepare.
     incoming = tmp_path / "Incoming"
     incoming.mkdir()
     destination = tmp_path / "Posts"
     
-    # Crear archivo Markdown de prueba
+    # Create a test Markdown file.
     md_file = incoming / "original_title.md"
     md_content = """# Original Title
 
@@ -318,11 +318,11 @@ The content is written in English and discusses various technical topics.
     md_file.write_text(md_content)
     (incoming / "original_title.html").write_text("<html><div id='origin'>demo</div></html>", encoding="utf-8")
     
-    # Crear procesador
+    # Create processor.
     processor = InstapaperProcessor(incoming, destination)
     
     processor.title_updater.client = object()
-    # Mock para evitar llamadas reales a OpenAI
+    # Mock to avoid real OpenAI calls.
     with patch.object(
         processor.title_updater,
         '_ai_text',
@@ -330,10 +330,10 @@ The content is written in English and discusses various technical topics.
     ):
         processor._update_titles_with_ai()
     
-    # Verificar que el archivo fue renombrado
+    # Verify the file was renamed.
     renamed_files = list(incoming.glob("AI and Machine Learning - Latest Developments*"))
     assert len(renamed_files) >= 1
     
-    # Ya no se registra en un fichero de control; sólo debe existir el renombrado
+    # No longer recorded in a control file; only the rename should exist.
     done_file = incoming / "titles_done_instapaper.txt"
     assert not done_file.exists()

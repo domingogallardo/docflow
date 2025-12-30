@@ -1,14 +1,12 @@
 #!/usr/bin/env python3
 """
-InstapaperProcessor - Módulo unificado para el procesamiento completo de
-artículos de Instapaper.
+InstapaperProcessor - unified module for full processing of Instapaper articles.
 
-Nota: el procesador trabaja únicamente con el HTML que entrega
-Instapaper. Los recursos externos (imágenes, vídeos, etc.) se enlazan sin
-descargarlos, por lo que su disponibilidad depende del servidor de
-origen. Si el servicio de origen (por ejemplo, Medium) bloqueó la
-descarga cuando Instapaper creó su copia, esas imágenes ya no están
-presentes y el pipeline no puede recuperarlas.
+Note: the processor works only with the HTML delivered by Instapaper. External
+resources (images, videos, etc.) are linked without downloading them, so their
+availability depends on the origin server. If the origin service (for example,
+Medium) blocked the download when Instapaper created its copy, those images are
+already missing and the pipeline cannot recover them.
 """
 from __future__ import annotations
 import re
@@ -29,7 +27,7 @@ from path_utils import unique_path
 
 
 class InstapaperDownloadRegistry:
-    """Registro persistente para evitar descargas repetidas de Instapaper."""
+    """Persistent registry to avoid repeated Instapaper downloads."""
 
     def __init__(self, path: Path):
         self.path = path
@@ -91,7 +89,7 @@ class InstapaperDownloadRegistry:
 
     @contextmanager
     def batch(self):
-        """Acumula escrituras y persiste al salir del contexto."""
+        """Accumulate writes and persist on exit."""
         self._batch_depth += 1
         try:
             yield self
@@ -114,7 +112,7 @@ class InstapaperDownloadRegistry:
 
 
 class InstapaperProcessor:
-    """Procesador unificado para el pipeline completo de artículos de Instapaper."""
+    """Unified processor for the full Instapaper articles pipeline."""
     
     def __init__(self, incoming_dir: Path, destination_dir: Path):
         self.incoming_dir = incoming_dir
@@ -128,30 +126,30 @@ class InstapaperProcessor:
 
 
     def process_instapaper_posts(self) -> List[Path]:
-        """Ejecuta el pipeline completo de procesamiento de posts de Instapaper."""
+        """Run the full processing pipeline for Instapaper posts."""
         print("📄 Procesando posts de Instapaper...")
         
         try:
-            # 1. Descargar artículos de Instapaper
+            # 1. Download Instapaper articles
             if not self._download_from_instapaper():
                 print("⚠️ No se descargaron artículos de Instapaper, continuando con archivos existentes...")
             
-            # 2. Convertir HTML a Markdown
+            # 2. Convert HTML to Markdown
             self._convert_html_to_markdown()
             
-            # 3. Corregir codificación HTML
+            # 3. Fix HTML encoding
             self._fix_html_encoding()
 
-            # 4. Reducir imágenes
+            # 4. Reduce images
             self._reduce_images_width()
 
-            # 5. Añadir márgenes
+            # 5. Add margins
             self._add_margins()
 
-            # 6. Generar títulos con IA
+            # 6. Generate titles with AI
             self._update_titles_with_ai()
 
-            # 7. Mover archivos procesados
+            # 7. Move processed files
             posts = self._list_processed_files()
             if posts:
                 moved_posts = self._move_files_to_destination(posts)
@@ -166,7 +164,7 @@ class InstapaperProcessor:
             return []
     
     def _download_from_instapaper(self) -> bool:
-        """Descarga artículos desde Instapaper."""
+        """Download articles from Instapaper."""
         if not self._has_instapaper_credentials():
             print("❌ Credenciales de Instapaper no configuradas")
             return False
@@ -269,16 +267,16 @@ class InstapaperProcessor:
                 failure_log.flush()
 
     def _has_star_emoji_prefix(self, s: str) -> bool:
-        """Devuelve True si s comienza con el emoji ⭐ (U+2B50) con o sin VS16."""
+        """Return True if s starts with the ⭐ emoji (U+2B50) with or without VS16."""
         if not s:
             return False
         s = s.strip()
-        # Solo la estrella emoji '⭐' y su variante con VS16: '⭐️'
+        # Only the '⭐' emoji and its VS16 variant: '⭐️'.
         STAR_PREFIXES = ("⭐", "⭐️")
         return s.startswith(STAR_PREFIXES)
 
     def _strip_star_prefix(self, s: str) -> str:
-        """Elimina prefijos de estrella en títulos (⭐, ⭐️, ★, ✪, ✭ + espacios)."""
+        """Remove star prefixes from titles (⭐, ⭐️, ★, ✪, ✭ + spaces)."""
         if not s:
             return s
         s = s.strip()
@@ -287,7 +285,8 @@ class InstapaperProcessor:
 
     def _is_starred_from_title_only(self, html: str) -> bool:
         """
-        ÚNICA REGLA: starred si y solo si <title> empieza por el emoji ⭐ (con o sin VS16).
+        ONLY RULE: starred if and only if <title> starts with the ⭐ emoji
+        (with or without VS16).
         """
         try:
             soup = BeautifulSoup(html, "html.parser")
@@ -297,7 +296,7 @@ class InstapaperProcessor:
             return False
 
     def _get_article_ids(self, page: int = 1) -> Tuple[List[Tuple[str, Optional[bool]]], bool]:
-        """Obtiene IDs de artículos de una página con indicación de estrella."""
+        """Get article IDs for a page with star indication."""
         url = f"https://www.instapaper.com/u/{page}"
         r = self.session.get(url)
 
@@ -319,7 +318,7 @@ class InstapaperProcessor:
         return items, has_more
 
     def _is_article_starred_in_list(self, article_tag) -> Optional[bool]:
-        """Detecta si un artículo aparece marcado con estrella en la lista."""
+        """Detect whether an article appears starred in the list."""
         classes = article_tag.get("class") or []
         if isinstance(classes, str):
             classes = [classes]
@@ -339,29 +338,28 @@ class InstapaperProcessor:
 
     
     def _download_article(self, article_id: str) -> Tuple[Path, bool]:
-        """Descarga un artículo específico.
+        """Download a specific article.
 
-        Solo se persiste el HTML devuelto por Instapaper. Las etiquetas
-        ``<img>`` se conservan con sus URLs originales y **no** se
-        descargan los recursos remotos. Esto implica que, si el servidor
-        de origen bloquea el hotlinking, las imágenes podrían no
-        mostrarse en la copia almacenada.
+        Only the HTML returned by Instapaper is persisted. ``<img>`` tags are
+        kept with their original URLs and remote resources are **not**
+        downloaded. This means that if the origin server blocks hotlinking,
+        images might not display in the stored copy.
         """
         r = self.session.get(f"https://www.instapaper.com/read/{article_id}")
         soup = BeautifulSoup(r.text, "html.parser")
 
         title_el = soup.find(id="titlebar").find("h1")
         raw_title = title_el.getText() if title_el else (soup.title.string if soup.title else f"Instapaper {article_id}")
-        title = self._strip_star_prefix(raw_title)  # ← SANEAMOS AQUÍ
+        title = self._strip_star_prefix(raw_title)  # ← SANITIZE HERE
 
         origin = soup.find(id="titlebar").find(class_="origin_line")
         content_node = soup.find(id="story")
         content = content_node.decode_contents() if content_node else ""
 
-        # --- DETECCIÓN DE ESTRELLA (única regla: <title> con ⭐) ---
+        # --- STAR DETECTION (only rule: <title> with ⭐) ---
         is_starred_final = self._is_starred_from_title_only(r.text)
 
-        # --- NOMBRE DE FICHERO ROBUSTO ---
+        # --- ROBUST FILENAME ---
         safe = "".join([c for c in title if c.isalpha() or c.isdigit() or c == " "]).strip()
         if not safe:
             safe = f"Instapaper {article_id}"
@@ -400,14 +398,14 @@ class InstapaperProcessor:
         )
 
     def _truncate_filename(self, name, extension, max_length=200):
-        """Trunca nombres de archivo largos."""
+        """Truncate long filenames."""
         total_length = len(name) + len(extension) + 1
         if total_length > max_length:
             name = name[:max_length - len(extension) - 1]
         return name + extension
     
     def _convert_html_to_markdown(self):
-        """Convierte archivos HTML a Markdown."""
+        """Convert HTML files to Markdown."""
         html_files = [
             path for path in U.iter_html_files(self.incoming_dir)
             if not path.with_suffix('.md').exists()
@@ -423,7 +421,7 @@ class InstapaperProcessor:
             try:
                 html_content = html_file.read_text(encoding='utf-8')
 
-                # ¿Está marcado? (solo si existe el meta que pusimos en el HTML)
+                # Is it starred? (only if the meta we added in the HTML exists)
                 is_starred = bool(re.search(
                     r'<meta\s+name=["\']instapaper-starred["\']\s+content=["\']true["\']',
                     html_content, re.I
@@ -442,7 +440,7 @@ class InstapaperProcessor:
                     front_matter = "---\ninstapaper_starred: true\n---\n\n"
                     markdown_content = front_matter + markdown_body
                 else:
-                    markdown_content = markdown_body  # sin cabecera
+                    markdown_content = markdown_body  # without front matter
 
                 md_file = html_file.with_suffix('.md')
                 md_file.write_text(markdown_content, encoding='utf-8')
@@ -451,7 +449,7 @@ class InstapaperProcessor:
                 print(f"❌ Error convirtiendo {html_file}: {e}")
                     
     def _fix_html_encoding(self):
-        """Corrige la codificación de archivos HTML."""
+        """Fix HTML file encoding."""
         html_files = list(U.iter_html_files(self.incoming_dir))
 
         if not html_files:
@@ -470,7 +468,7 @@ class InstapaperProcessor:
                 print(f"❌ Error procesando codificación de {html_file}: {e}")
 
     def _has_charset_meta(self, content):
-        """Verifica si el HTML ya tiene meta charset."""
+        """Check whether the HTML already has a charset meta."""
         charset_regex = re.compile(
             r'<meta\s+[^>]*charset\s*=|<meta\s+[^>]*http-equiv=["\']Content-Type["\'][^>]*charset=',
             re.IGNORECASE
@@ -478,7 +476,7 @@ class InstapaperProcessor:
         return charset_regex.search(content) is not None
     
     def _insert_charset_meta(self, content, encoding):
-        """Inserta meta charset en HTML."""
+        """Insert a charset meta into HTML."""
         head_tag = re.search(r"<head[^>]*>", content, re.IGNORECASE)
         meta_tag = f'<meta charset="{encoding}">\n'
 
@@ -489,12 +487,12 @@ class InstapaperProcessor:
             return meta_tag + content
 
     def _reduce_images_width(self):
-        """Reduce el ancho de imágenes en archivos HTML sin medir remotamente.
+        """Reduce image widths in HTML files without remote measurement.
 
-        Política: si el HTML declara un width mayor a 300px, lo limitamos a 300px
-        y eliminamos height para preservar la proporción. Si no declara width,
-        no tocamos el elemento y confiamos en el CSS global
-        `img { max-width: 300px; height: auto; }` que se inyecta en _add_margins().
+        Policy: if the HTML declares a width greater than 300px, we cap it at
+        300px and remove height to preserve aspect ratio. If no width is
+        declared, we leave the element untouched and rely on the global CSS
+        `img { max-width: 300px; height: auto; }` injected in _add_margins().
         """
         html_files = list(U.iter_html_files(self.incoming_dir))
 
@@ -505,7 +503,7 @@ class InstapaperProcessor:
         max_width = 300
         for html_file in html_files:
             try:
-                # Log minimal para identificar en qué archivo se procesa
+                # Minimal log to identify which file is being processed.
                 print(f"🖼️  Revisando imágenes: {html_file}")
                 with open(html_file, 'r', encoding='utf-8') as f:
                     soup = BeautifulSoup(f, 'html.parser')
@@ -516,7 +514,7 @@ class InstapaperProcessor:
                     if not src:
                         continue
                     
-                    # Usar el ancho declarado si viene en el HTML; no realizar medición remota
+                    # Use the declared width from the HTML; do not do remote measurement.
                     width_attr = img.get('width')
                     width = None
                     if width_attr:
@@ -541,13 +539,13 @@ class InstapaperProcessor:
                 print(f"❌ Error procesando imágenes en {html_file}: {e}")
     
     def _add_margins(self):
-        """Añade márgenes a los archivos HTML."""
+        """Add margins to HTML files."""
         U.add_margins_to_html_files(self.incoming_dir)
     
-    # Nota: _get_image_width eliminado (no se usa; el ancho se maneja por width en HTML o CSS).
+    # Note: _get_image_width removed (unused; width is handled via HTML or CSS).
 
     def _update_titles_with_ai(self):
-        """Genera títulos atractivos usando IA para archivos Markdown."""
+        """Generate attractive titles with AI for Markdown files."""
         md_files = [
             p for p in self.incoming_dir.rglob("*.md")
             if self._is_instapaper_markdown(p)
@@ -555,11 +553,11 @@ class InstapaperProcessor:
         self.title_updater.update_titles(md_files, rename_markdown_pair)
 
     def _is_instapaper_markdown(self, path: Path) -> bool:
-        """Determina si un Markdown proviene de una conversión de Instapaper."""
+        """Determine whether a Markdown file comes from an Instapaper conversion."""
         return path.with_suffix(".html").exists()
 
     def _is_instapaper_html(self, path: Path) -> bool:
-        """Determina si un HTML pertenece a la exportación de Instapaper."""
+        """Determine whether an HTML belongs to an Instapaper export."""
         try:
             content = path.read_text(encoding="utf-8", errors="ignore")
         except Exception:
@@ -567,10 +565,10 @@ class InstapaperProcessor:
         return "<div id='origin'>" in content or '<div id="origin"' in content
     
 
-    # Nota: la generación de títulos usa title_ai.TitleAIUpdater
+    # Note: title generation uses title_ai.TitleAIUpdater.
 
     def _list_processed_files(self) -> List[Path]:
-        """Lista archivos procesados (HTML y Markdown)."""
+        """List processed files (HTML and Markdown)."""
         exts = {'.html', '.htm', '.md'}
         processed: List[Path] = []
 
@@ -589,7 +587,7 @@ class InstapaperProcessor:
         return processed
     
     def _move_files_to_destination(self, files: List[Path]) -> List[Path]:
-        """Mueve archivos al destino final."""
+        """Move files to the final destination."""
         self.destination_dir.mkdir(parents=True, exist_ok=True)
         moved_files = []
         

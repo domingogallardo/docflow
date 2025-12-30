@@ -65,7 +65,7 @@ def run_main(monkeypatch, tmp_path, args):
 
 
 def test_no_args_shows_help_and_exits(monkeypatch, tmp_path, capsys):
-    # Sin argumentos debe mostrar ayuda y salir con código 2
+    # Without arguments, it should show help and exit with code 2.
     monkeypatch.setattr(process_documents.cfg, "BASE_DIR", tmp_path)
     monkeypatch.setenv("DOCPIPE_YEAR", "2025")
     monkeypatch.setattr(sys, "argv", ["process_documents.py"]) 

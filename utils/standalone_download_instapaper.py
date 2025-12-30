@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Descarga artículos de Instapaper a HTML y Markdown sin depender del resto del repositorio."""
+"""Download Instapaper articles to HTML and Markdown without the rest of the repo."""
 from __future__ import annotations
 
 import argparse

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Utilidades para recopilar likes de X usando Playwright."""
+"""Utilities to collect X likes using Playwright."""
 from __future__ import annotations
 
 from pathlib import Path
@@ -31,7 +31,7 @@ def _is_status_href(href: str | None) -> bool:
 
 
 def _canonical_status_url(href: str | None) -> str | None:
-    """Normaliza una URL de tweet descartando sufijos (/photo, /analytics...)."""
+    """Normalize a tweet URL by dropping suffixes (/photo, /analytics...)."""
     if not href or "/status/" not in href:
         return None
     absolute = _absolute_url(href)
@@ -58,7 +58,7 @@ def _normalize_stop_url(url: str | None) -> str | None:
     return _canonical_status_url(url.strip())
 
 def _should_continue(collected: List[str], max_tweets: int, stop_found: bool) -> bool:
-    """Condición de avance del scroll: no parar por límite ni por stop_url."""
+    """Scroll continuation condition: stop on limit or stop_url."""
     return len(collected) < max_tweets and not stop_found
 
 
@@ -85,7 +85,7 @@ def collect_likes_from_page(
     max_tweets: int = DEFAULT_MAX_TWEETS,
     stop_at_url: str | None = None,
 ) -> Tuple[bool, int, List[str], bool, str | None]:
-    """Copia de la lógica usada por los scripts interactivos para extraer likes."""
+    """Copy of the logic used by interactive scripts to extract likes."""
     _log(f"▶️  Intentando cargar {likes_url}…")
     page.goto(likes_url, wait_until="domcontentloaded", timeout=60000)
     try:
@@ -149,7 +149,7 @@ def fetch_likes_with_state(
     stop_at_url: str | None = None,
     headless: bool = True,
 ) -> Tuple[List[str], bool, int]:
-    """Carga los likes con un storage_state existente y devuelve (urls, stop_encontrada, total_artículos)."""
+    """Load likes with an existing storage_state and return (urls, stop_found, total_articles)."""
     path = state_path.expanduser()
     if not path.exists():
         raise FileNotFoundError(

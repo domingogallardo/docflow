@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Tests para DocumentProcessor
+Tests for DocumentProcessor
 """
 import pytest
 from pathlib import Path
@@ -10,18 +10,18 @@ from pipeline_manager import DocumentProcessor
 
 
 def test_document_processor_integration(tmp_path):
-    """Test de integración completo del pipeline usando directorios temporales."""
+    """Full integration test of the pipeline using temporary directories."""
     
-    # 1. Preparar estructura de directorios
+    # 1. Prepare directory structure.
     incoming = tmp_path / "Incoming"
     incoming.mkdir()
     
-    # 2. Crear archivos de prueba
-    # PDF de prueba
+    # 2. Create test files.
+    # Test PDF.
     pdf_file = incoming / "test.pdf"
     pdf_file.write_bytes(b"%PDF-1.4 test content")
     
-    # Archivo de podcast de Snipd
+    # Snipd podcast file.
     podcast_file = incoming / "snipd_test.md"
     podcast_content = """# Test Podcast
 
@@ -35,29 +35,29 @@ def test_document_processor_integration(tmp_path):
 """
     podcast_file.write_text(podcast_content, encoding="utf-8")
     
-    # HTML de post regular (simulando Instapaper)
+    # Regular post HTML (simulating Instapaper).
     html_file = incoming / "test_post.html"
     html_file.write_text("<html><head><title>Test Post</title></head><body>Content</body></html>", encoding="utf-8")
 
-    # Markdown genérico
+    # Generic Markdown.
     generic_md = incoming / "nota.md"
     generic_md.write_text("# Nota\n\nContenido", encoding="utf-8")
 
-    # Imagen de prueba
+    # Test image.
     image_file = incoming / "sample.png"
     image_file.write_bytes(b"\x89PNG\r\n\x1a\n")
     
-    # 4. Crear y ejecutar procesador
+    # 4. Create and run processor.
     processor = DocumentProcessor(tmp_path, 2025)
-    # Evitar llamadas a Playwright/X en tests
+    # Avoid Playwright/X calls in tests.
     processor.process_tweet_urls = lambda: []
     processor.markdown_processor.title_updater.update_titles = lambda files, renamer: None
     success = processor.process_all()
     
-    # 6. Verificar que el pipeline se ejecutó exitosamente
+    # 6. Verify the pipeline ran successfully.
     assert success is True
     
-    # 7. Verificar que los archivos se movieron correctamente
+    # 7. Verify files were moved correctly.
     assert (tmp_path / "Podcasts" / "Podcasts 2025" / "Test Show - Test Episode.md").exists()
     assert (tmp_path / "Posts" / "Posts 2025").exists()
     assert (tmp_path / "Pdfs" / "Pdfs 2025" / "test.pdf").exists()
@@ -72,9 +72,9 @@ def test_document_processor_integration(tmp_path):
 
 
 def test_process_podcasts_only(tmp_path):
-    """Test específico para el procesamiento de podcasts."""
+    """Specific test for podcast processing."""
     
-    # Preparar
+    # Prepare.
     incoming = tmp_path / "Incoming"
     incoming.mkdir()
     
@@ -93,23 +93,23 @@ def test_process_podcasts_only(tmp_path):
     
     processor = DocumentProcessor(tmp_path, 2025)
     
-    # Ejecutar solo fase de podcasts
+    # Run only the podcasts phase.
     moved_podcasts = processor.process_podcasts()
     
-    # Verificar - puede ser 1 o 2 archivos dependiendo de si se genera HTML
-    assert len(moved_podcasts) >= 1  # Al menos el .md
+    # Verify - may be 1 or 2 files depending on HTML generation.
+    assert len(moved_podcasts) >= 1  # At least the .md
     assert (tmp_path / "Podcasts" / "Podcasts 2025" / "Great Show - Amazing Episode.md").exists()
     
-    # Scripts externos no se ejecutan (integrado en procesadores): ya no se valida vía runner
+    # External scripts are not run (integrated in processors): no runner validation.
 
 
 def test_bump_starred_instapaper_html(tmp_path):
-    """Los HTML marcados como 'starred' en Instapaper reciben bump automático."""
+    """HTML marked as 'starred' in Instapaper receives an automatic bump."""
 
     incoming = tmp_path / "Incoming"
     incoming.mkdir()
 
-    # Crear un HTML con meta de 'starred'
+    # Create an HTML with 'starred' meta.
     starred_html = incoming / "sample.html"
     starred_html.write_text(
         """<!DOCTYPE html>
@@ -127,7 +127,7 @@ def test_bump_starred_instapaper_html(tmp_path):
 
     processor = DocumentProcessor(tmp_path, 2025)
 
-    # Evitar ejecutar el pipeline real de Instapaper: simulamos el movimiento
+    # Avoid running the real Instapaper pipeline: simulate the move.
     def fake_process_instapaper_posts():
         processor.posts_dest.mkdir(parents=True, exist_ok=True)
         dest = processor.posts_dest / starred_html.name
@@ -141,7 +141,7 @@ def test_bump_starred_instapaper_html(tmp_path):
     moved = processor.posts_dest / "sample.html"
     assert moved.exists()
 
-    # Debe tener un mtime muy en el futuro (aprox. > 90 años)
+    # It should have an mtime far in the future (approx. > 90 years).
     future_threshold = time.time() + 90 * 365 * 24 * 3600
     assert moved.stat().st_mtime > future_threshold
 

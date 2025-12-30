@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Herramienta para limpiar HTML del portapapeles y generar Markdown compacto."""
+"""Tool to clean clipboard HTML and generate compact Markdown."""
 from __future__ import annotations
 
 import argparse
@@ -20,7 +20,7 @@ _MACOS_HTML_SNIFF = re.compile(r"<[a-zA-Z!/][^>]*>")
 
 
 def _normalize_structure(soup: BeautifulSoup) -> None:
-    """Elimina ruido de emails (tablas) y caracteres especiales de macOS."""
+    """Remove email noise (tables) and special macOS characters."""
     for head in soup.find_all("head"):
         head.decompose()
 
@@ -35,7 +35,7 @@ def _normalize_structure(soup: BeautifulSoup) -> None:
 
 
 def _clean_text_nodes(soup: BeautifulSoup) -> None:
-    """Limpia caracteres invisibles y normaliza espacios en texto."""
+    """Clean invisible characters and normalize whitespace in text."""
     for text_node in soup.find_all(string=True):
         new_text = _normalize_text(str(text_node))
         if new_text != text_node:
@@ -52,18 +52,17 @@ def _normalize_text(text: str) -> str:
 
 
 def _prune_empty_paragraphs(soup: BeautifulSoup) -> None:
-    """Elimina párrafos vacíos tras limpiar texto."""
+    """Remove empty paragraphs after cleaning text."""
     for p in soup.find_all("p"):
         if not p.get_text(strip=True):
             p.decompose()
 
 
 def html_to_compact_markdown(html: str) -> str:
-    """Convierte HTML a Markdown compacto, pensado para pegar en Obsidian.
+    """Convert HTML to compact Markdown, intended for pasting into Obsidian.
 
-    Elimina párrafos innecesarios dentro de los elementos de lista y colapsa
-    líneas en blanco intermedias para evitar que Obsidian inserte espacios
-    adicionales entre elementos.
+    Removes unnecessary paragraphs inside list elements and collapses intermediate
+    blank lines to avoid Obsidian inserting extra spaces between items.
     """
     if not html or not html.strip():
         return ""
@@ -71,7 +70,7 @@ def html_to_compact_markdown(html: str) -> str:
     soup = BeautifulSoup(html, "html.parser")
     _normalize_structure(soup)
 
-    # Desenvuelve <p> cuando es el único elemento significativo del <li>.
+    # Unwrap <p> when it is the only significant element inside <li>.
     for li in soup.find_all("li"):
         direct_children = [
             child
@@ -98,18 +97,18 @@ def _collapse_blank_lines_between_list_items(markdown: str) -> str:
             result.append(line.rstrip())
             continue
 
-        # Línea en blanco: evaluar siguiente línea significativa
+        # Blank line: evaluate next significant line.
         next_line = _next_non_empty_line(lines, idx + 1)
         prev_line = result[-1] if result else ""
         if _LIST_ITEM_PATTERN.match(prev_line) and _LIST_ITEM_PATTERN.match(next_line or ""):
-            continue  # omitir el blanco entre elementos contiguos
+            continue  # skip blank between adjacent items
 
         if result and result[-1] == "":
-            continue  # evitar múltiples líneas en blanco seguidas
+            continue  # avoid multiple consecutive blank lines
 
         result.append("")
 
-    # Eliminar blancos finales
+    # Remove trailing blanks.
     while result and result[-1] == "":
         result.pop()
 
@@ -209,7 +208,7 @@ console.log(output);
             else:
                 text = ""
             if text and not _looks_like_html(text):
-                # WebResourceData puede venir como base64 en texto
+                # WebResourceData can come as base64 in text.
                 try:
                     text_bytes = base64.b64decode(text, validate=True)
                     text = text_bytes.decode("utf-8", errors="ignore")

@@ -1,12 +1,12 @@
-"""Genera el índice estático web/public/read/read.html con un único listado.
+"""Generate the static web/public/read/read.html index with a single listing.
 
-- Lista los ficheros (HTML/PDF) ordenados por mtime desc.
-- Sin zonas separadas ni curadas: todo vive en el mismo bloque <ul>.
+- List files (HTML/PDF) ordered by mtime desc.
+- No separate or curated zones: everything lives in one <ul> block.
 
-Uso:
-    python utils/build_read_index.py [DIRECTORIO]
+Usage:
+    python utils/build_read_index.py [DIRECTORY]
 
-Si no se especifica DIRECTORIO, se asume "web/public/read" relativo a CWD.
+If DIRECTORY is not specified, "web/public/read" is assumed relative to CWD.
 """
 
 from __future__ import annotations

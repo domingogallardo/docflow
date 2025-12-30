@@ -1,24 +1,25 @@
-# [APP] NGINX-App (CONTENEDOR)
-# Imagen que sirve la web estática y listados ordenados por fecha.
-# - Base: Alpine 3.20. Se instalan NGINX y tzdata desde apk. Zona horaria: Europe/Madrid.
-# - Función [APP]: servir / (HTML/PDF), exponer /read con listado automático
-#   (read.html ordenado por mtime desc generado en el deploy) y habilitar WebDAV en /data (PUT) con BasicAuth usando un .htpasswd montado.
+# [APP] NGINX-App (CONTAINER)
+# Image that serves the static web and date-ordered listings.
+# - Base: Alpine 3.20. NGINX and tzdata are installed via apk. Time zone: Europe/Madrid.
+# - [APP] role: serve / (HTML/PDF), expose /read with auto listing
+#   (read.html ordered by mtime desc generated on deploy) and enable WebDAV on /data (PUT)
+#   with BasicAuth using a mounted .htpasswd.
 #
-# Despliegue en DigitalOcean con doble NGINX (domingogallardo.com):
-# - [PROXY] NGINX-Proxy (HOST): termina TLS (Let’s Encrypt), redirige 80→443 y
-#   hace proxy a http://localhost:8080. Config: /etc/nginx/sites-available/miweb.
-# - [APP] NGINX-App (CONTENEDOR): escucha en :80 y se publica como host:8080.
-#   Montajes:
-#     - /opt/web-domingo/dynamic-data  → /data  (rw)   ← ficheros editables vía WebDAV
-#     - /opt/web-domingo/nginx/.htpasswd → /etc/nginx/.htpasswd (ro) ← credenciales BasicAuth
-#   La configuración de [APP] está en /etc/nginx/nginx.conf.
+# DigitalOcean deployment with double NGINX (domingogallardo.com):
+# - [PROXY] NGINX-Proxy (HOST): terminates TLS (Let's Encrypt), redirects 80→443 and
+#   proxies to http://localhost:8080. Config: /etc/nginx/sites-available/miweb.
+# - [APP] NGINX-App (CONTAINER): listens on :80 and is published as host:8080.
+#   Mounts:
+#     - /opt/web-domingo/dynamic-data  → /data  (rw)   ← files editable via WebDAV
+#     - /opt/web-domingo/nginx/.htpasswd → /etc/nginx/.htpasswd (ro) ← BasicAuth credentials
+#   [APP] configuration is in /etc/nginx/nginx.conf.
 #
-# Nota: el fichero read.html se genera en web/deploy.sh.
-# El [PROXY] solo enruta; la autenticación de escritura se aplica en [APP].
+# Note: read.html is generated in web/deploy.sh.
+# The [PROXY] only routes; write authentication is enforced in [APP].
 
 FROM alpine:3.20
 
-# NGINX y tzdata
+# NGINX and tzdata
 RUN apk add --no-cache nginx tzdata \
     && mkdir -p /run/nginx
 

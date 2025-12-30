@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Wrapper unificado para cron y ejecución manual.
-# - Carga ~/.docflow_env si existe
-# - Ejecuta process_documents.py con los mismos defaults
+# Unified wrapper for cron and manual execution.
+# - Loads ~/.docflow_env if it exists
+# - Runs process_documents.py with the same defaults
 
 ENV_FILE="${HOME}/.docflow_env"
 if [ -f "${ENV_FILE}" ]; then
@@ -24,7 +24,7 @@ if [ -n "${DOCPIPE_YEAR:-}" ]; then
   YEAR_SOURCE="DOCPIPE_YEAR"
 fi
 
-# Si viene --year por CLI, prevalece sobre todo.
+# If --year is provided via CLI, it takes precedence.
 for ((i=1; i<=$#; i++)); do
   arg="${!i}"
   case "${arg}" in

@@ -19,7 +19,7 @@ def _move_files_common(
     replace_existing: bool,
     skip_missing: bool,
 ) -> List[Path]:
-    """Movimiento centralizado con opciones de reemplazo y tolerancia a ausentes."""
+    """Centralized move with replace options and tolerance for missing files."""
     dest.mkdir(parents=True, exist_ok=True)
     moved: List[Path] = []
 
@@ -41,12 +41,12 @@ def move_files(files, dest):
 
 
 def move_files_with_replacement(files: Iterable[Path], dest: Path) -> List[Path]:
-    """Mueve archivos reemplazando versiones anteriores si existen."""
+    """Move files, replacing prior versions when present."""
     return _move_files_common(files, dest, replace_existing=True, skip_missing=True)
 
 
 def iter_html_files(directory: Path, file_filter=None):
-    """Iterador común de archivos HTML ('.html' o '.htm')."""
+    """Common iterator for HTML files ('.html' or '.htm')."""
     for dirpath, _, filenames in os.walk(directory):
         for filename in filenames:
             if filename.lower().endswith(('.html', '.htm')):
@@ -56,16 +56,16 @@ def iter_html_files(directory: Path, file_filter=None):
 
 
 def _add_years(dt: datetime, years: int) -> datetime:
-    """Suma años de calendario. Si cae en 29-feb y no es bisiesto, usa 28-feb."""
+    """Add calendar years. If it lands on Feb-29 in a non-leap year, use Feb-28."""
     try:
         return dt.replace(year=dt.year + years)
     except ValueError:
-        # Caso 29-feb → 28-feb en año no bisiesto
+        # Feb-29 → Feb-28 in a non-leap year.
         return dt.replace(month=2, day=28, year=dt.year + years)
 
 
 def bump_files(files, years: int = 100):
-    """Ajusta el mtime de los archivos a (ahora + years) + i segundos."""
+    """Set file mtime to (now + years) + i seconds."""
     if not files:
         return
     base_time = _add_years(datetime.now().replace(microsecond=0), years)
@@ -76,7 +76,7 @@ def bump_files(files, years: int = 100):
 
 
 def register_paths(paths, base_dir: Path = None, historial_path: Path = None):
-    """Registra rutas procesadas en el log principal. Parámetros overridable para tests."""
+    """Register processed paths in the main log. Params overridable for tests."""
     if not paths:
         return
 

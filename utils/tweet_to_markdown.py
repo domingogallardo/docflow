@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Convierte un tweet público en un archivo Markdown autocontenido."""
+"""Convert a public tweet into a self-contained Markdown file."""
 from __future__ import annotations
 
 import argparse
@@ -8,9 +8,9 @@ from pathlib import Path
 from urllib.parse import urlparse, parse_qsl, urlencode, urlunparse
 from typing import List, Optional, Tuple
 
-try:  # pragma: no cover - import opcional
+try:  # pragma: no cover - optional import
     from playwright.sync_api import TimeoutError as PlaywrightTimeoutError, sync_playwright
-except ImportError:  # pragma: no cover - entorno sin Playwright
+except ImportError:  # pragma: no cover - environment without Playwright
     PlaywrightTimeoutError = RuntimeError  # type: ignore[misc,assignment]
     sync_playwright = None  # type: ignore[assignment]
 
@@ -61,7 +61,7 @@ TIME_RE = re.compile(r"\b\d{1,2}:\d{2}\b")
 
 
 def rebuild_urls_from_lines(text: str) -> str:
-    """Reconstruye URLs que X corta con saltos de línea y puntos suspensivos."""
+    """Rebuild URLs that X splits with line breaks and ellipses."""
     lines = text.splitlines()
     out: List[str] = []
     building_url = False
@@ -152,7 +152,7 @@ def _collapse_blank_lines(lines: List[str]) -> List[str]:
 
 
 def strip_tweet_stats(text: str) -> str:
-    """Elimina bloques finales con métricas (views, likes, hora, etc.)."""
+    """Remove trailing blocks with metrics (views, likes, time, etc.)."""
     lines = [line.strip() for line in text.splitlines()]
     lines = _collapse_blank_lines(lines)
 
@@ -210,7 +210,7 @@ def _media_markdown_lines(media_urls: List[str]) -> List[str]:
 
 
 def _resolve_storage_state(storage_state: Path | None) -> Path | None:
-    # El storage_state evita el login wall de X al abrir el tweet.
+    # The storage_state avoids X's login wall when opening the tweet.
     if storage_state is None:
         return None
     path = storage_state.expanduser()
@@ -223,7 +223,7 @@ def _resolve_storage_state(storage_state: Path | None) -> Path | None:
 
 
 def _locate_tweet_article(page, *, timeout_ms: int = 15000):
-    # El login wall de X puede esconder el <article>; busca alternativas.
+    # X's login wall can hide the <article>; look for alternatives.
     try:
         page.wait_for_selector("article, div[data-testid='tweet']", timeout=timeout_ms)
     except PlaywrightTimeoutError:
@@ -270,7 +270,7 @@ def fetch_tweet_markdown(
     headless: bool = True,
     storage_state: Path | None = None,
 ) -> tuple[str, str]:
-    """Devuelve (markdown, filename) para el tweet indicado."""
+    """Return (markdown, filename) for the given tweet."""
     if sync_playwright is None:
         raise RuntimeError(
             "playwright no está instalado. Ejecuta 'pip install playwright' y "
@@ -281,11 +281,11 @@ def fetch_tweet_markdown(
         state_path = _resolve_storage_state(storage_state)
         context_kwargs = {"user_agent": USER_AGENT}
         if state_path:
-            # Usa sesión autenticada para evitar el login wall de X.
+            # Use an authenticated session to avoid X's login wall.
             context_kwargs["storage_state"] = str(state_path)
         context = browser.new_context(**context_kwargs)
         if state_path:
-            # Refuerza el contexto ante el login wall de X.
+            # Reinforce the context against X's login wall.
             context.add_init_script(STEALTH_SNIPPET)
         page = context.new_page()
         page.goto(url, wait_until="domcontentloaded", timeout=60000)
