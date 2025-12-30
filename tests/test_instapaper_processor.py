@@ -200,6 +200,7 @@ def test_instapaper_processor_with_existing_html(tmp_path):
     <head><title>Test Article</title></head>
     <body>
         <h1>Test Article</h1>
+        <div id="origin">Example.com · 123</div>
         <p>This is a test article with <img src="http://example.com/image.jpg" width="500"> some content.</p>
     </body>
     </html>"""
@@ -224,6 +225,40 @@ def test_instapaper_processor_with_existing_html(tmp_path):
     # Verify the files were renamed.
     renamed_files = list(destination.glob("Amazing Test Article*"))
     assert len(renamed_files) >= 1
+
+
+def test_instapaper_processor_skips_non_instapaper_html(tmp_path):
+    """Non-Instapaper HTML should not be converted or moved as posts."""
+    incoming = tmp_path / "Incoming"
+    destination = tmp_path / "Posts"
+    incoming.mkdir()
+    destination.mkdir()
+
+    html_file = incoming / "tweet_like.html"
+    html_file.write_text(
+        """<!DOCTYPE html>
+        <html>
+        <head><title>Tweet - someone-123</title></head>
+        <body>
+          <h1>Tweet by Someone (@someone)</h1>
+          <p><a href="https://x.com/someone/status/123">View on X</a></p>
+        </body>
+        </html>""",
+        encoding="utf-8",
+    )
+
+    processor = InstapaperProcessor(incoming, destination)
+
+    processor._convert_html_to_markdown()
+
+    # The tweet-like HTML must not be converted.
+    assert not (incoming / "tweet_like.md").exists()
+
+    # Even if a Markdown file exists, it should not be treated as Instapaper.
+    md_file = incoming / "tweet_like.md"
+    md_file.write_text("# Tweet by Someone (@someone)\n", encoding="utf-8")
+
+    assert processor._list_processed_files() == []
 
 
 def test_instapaper_processor_no_credentials(tmp_path):

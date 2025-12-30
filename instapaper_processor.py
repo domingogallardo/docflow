@@ -408,7 +408,7 @@ class InstapaperProcessor:
         """Convert HTML files to Markdown."""
         html_files = [
             path for path in U.iter_html_files(self.incoming_dir)
-            if not path.with_suffix('.md').exists()
+            if not path.with_suffix('.md').exists() and self._is_instapaper_html(path)
         ]
         
         if not html_files:
@@ -554,7 +554,8 @@ class InstapaperProcessor:
 
     def _is_instapaper_markdown(self, path: Path) -> bool:
         """Determine whether a Markdown file comes from an Instapaper conversion."""
-        return path.with_suffix(".html").exists()
+        html_path = path.with_suffix(".html")
+        return html_path.exists() and self._is_instapaper_html(html_path)
 
     def _is_instapaper_html(self, path: Path) -> bool:
         """Determine whether an HTML belongs to an Instapaper export."""
