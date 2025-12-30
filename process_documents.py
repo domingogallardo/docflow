@@ -1,14 +1,14 @@
 #!/usr/bin/env python3
 """
-Procesa el pipeline de documentos.
+Process the documents pipeline.
 
-Uso:
-    python process_documents.py [--year AAAA] [pdfs|podcasts|posts|images|md|all]
+Usage:
+    python process_documents.py [--year YYYY] [pdfs|podcasts|posts|images|md|all]
 
-Notas:
-- Los artículos HTML de Instapaper marcados como destacados se bumpean automáticamente
-  (se ajusta su mtime al futuro) para que aparezcan arriba en listados por fecha.
-- Para destacar en Instapaper: basta con añadir una estrella (⭐) al inicio del título.
+Notes:
+- Instapaper HTML articles marked as starred are auto-bumped (mtime set to the
+  future) so they appear at the top of date-ordered listings.
+- To mark as starred in Instapaper: add a star (⭐) at the start of the title.
 """
 import argparse
 
@@ -40,7 +40,7 @@ def parse_args():
 
 
 def get_year_from_args_and_env(args) -> int:
-    """Obtiene el año de los argumentos de línea de comandos o variables de entorno."""
+    """Get the year from CLI arguments or environment variables."""
     if args.year:
         return args.year
     return cfg.get_default_year()
@@ -50,7 +50,7 @@ def main():
     args = parse_args()
     year = get_year_from_args_and_env(args)
     
-    # Crear procesador
+    # Create processor.
     processor = DocumentProcessor(cfg.BASE_DIR, year)
 
     if "all" in args.targets:

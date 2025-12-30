@@ -1,7 +1,7 @@
 import os
 
 ruta_base = "/Users/domingo/⭐️ Documentación/Posts/"
-min_palabras = 24  # ajusta aquí el mínimo de palabras que desees
+min_palabras = 24  # adjust the minimum word count you want here
 
 def contar_palabras_en_archivo(ruta_archivo):
     with open(ruta_archivo, "r", encoding="utf-8") as archivo:

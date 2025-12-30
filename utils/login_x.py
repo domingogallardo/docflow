@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Gestiona sesiones de X con Playwright: login manual persistente y modo storage_state."""
+"""Manage X sessions with Playwright: persistent manual login and storage_state mode."""
 from __future__ import annotations
 
 import argparse
@@ -96,7 +96,7 @@ def manual_login_with_persistent_profile(
                     "--disable-infobars",
                 ],
             )
-        except Exception as exc:  # pragma: no cover - dependiente del entorno local
+        except Exception as exc:  # pragma: no cover - depends on local environment
             raise SystemExit(
                 f"❌ No se pudo lanzar Chrome. Asegúrate de tener Google Chrome instalado y accesible: {exc}"
             ) from exc

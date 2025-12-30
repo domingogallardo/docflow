@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-PodcastProcessor - Módulo unificado para el procesamiento completo de podcasts de Snipd
+PodcastProcessor - unified module for full processing of Snipd podcasts.
 """
 from __future__ import annotations
 import re
@@ -15,21 +15,21 @@ SNIP_INDEX_MARKER = "<!-- snip-index -->"
 
 
 class PodcastProcessor:
-    """Procesador unificado para el pipeline completo de podcasts de Snipd."""
+    """Unified processor for the full Snipd podcasts pipeline."""
     
     def __init__(self, incoming_dir: Path, destination_dir: Path):
         self.incoming_dir = incoming_dir
         self.destination_dir = destination_dir
         
-        # Patrones para clean_snip
+        # Patterns for clean_snip.
         self.hr_pattern = re.compile(r"^\s*([\-*_]\s*){3,}$")    # ---  ***  ___
         self.summary_tag = re.compile(r"<summary>(.*?)</summary>", re.IGNORECASE | re.DOTALL)
         self.snip_link = re.compile(r"🎧\s*\[[^\]]*\]\((https://share\.snipd\.com/[^)]+)\)")
-        # Encabezados H1 para posibles múltiples episodios en un único archivo
+        # H1 headers for potential multiple episodes in a single file.
         self.h1_pattern = re.compile(r"^#\s+.+$", re.MULTILINE)
     
     def process_podcasts(self) -> List[Path]:
-        """Ejecuta el pipeline completo de procesamiento de podcasts."""
+        """Run the full podcasts processing pipeline."""
         podcasts = U.list_podcast_files(self.incoming_dir)
         if not podcasts:
             print("📻 No se encontraron archivos de podcast para procesar")
@@ -38,19 +38,19 @@ class PodcastProcessor:
         print(f"📻 Procesando {len(podcasts)} archivo(s) de podcast...")
         
         try:
-            # 0. Dividir archivos con múltiples episodios (si los hay)
+            # 0. Split files with multiple episodes (if any).
             self._split_multi_episode_files()
 
-            # Recalcular el conjunto de podcasts tras el split
+            # Recompute the podcasts set after the split.
             podcasts = U.list_podcast_files(self.incoming_dir)
 
-            # 1. Limpiar archivos Snipd
+            # 1. Clean Snipd files.
             self._clean_snipd_files()
             
-            # 2. Convertir Markdown a HTML
+            # 2. Convert Markdown to HTML.
             self._convert_markdown_to_html()
             
-            # 3. Renombrar y mover archivos
+            # 3. Rename and move files.
             renamed_files = U.rename_podcast_files(podcasts)
             moved_files = U.move_files(renamed_files, self.destination_dir)
             
@@ -64,37 +64,37 @@ class PodcastProcessor:
             return []
 
     def _split_multi_episode_files(self):
-        """Divide archivos con múltiples episodios (varios H1) en archivos independientes.
+        """Split files with multiple episodes (multiple H1) into separate files.
 
-        Regla básica: cada episodio comienza con un encabezado de nivel 1 ('# Título').
-        Si se detectan 2+ H1 en un archivo que cumple el patrón de Snipd, se crean
-        nuevos .md (uno por episodio) y se elimina el archivo original.
+        Basic rule: each episode starts with a level-1 heading ('# Title').
+        If 2+ H1 are detected in a file that matches the Snipd pattern, new .md
+        files are created (one per episode) and the original file is deleted.
         """
         md_files = list(self.incoming_dir.rglob("*.md"))
-        # Filtrar solo archivos de podcast
+        # Filter only podcast files.
         podcast_files = [f for f in md_files if U.is_podcast_file(f)]
 
         for md_file in podcast_files:
             try:
                 text = md_file.read_text(encoding="utf-8", errors="ignore")
-                # Buscar posiciones de los H1
+                # Find H1 positions.
                 matches = list(self.h1_pattern.finditer(text))
                 if len(matches) <= 1:
-                    continue  # nada que dividir
+                    continue  # nothing to split
 
                 print(f"✂️  Detectados {len(matches)} episodios en: {md_file.name}. Dividiendo…")
 
-                # Calcular límites de cada bloque
+                # Compute bounds for each block.
                 starts = [m.start() for m in matches]
                 ends = starts[1:] + [len(text)]
 
                 new_files: list[Path] = []
                 for i, (s, e) in enumerate(zip(starts, ends), start=1):
-                    chunk = text[s:e].lstrip()  # limpiar encabezados previos en blanco
-                    # Nombre provisional basado en el original
+                    chunk = text[s:e].lstrip()  # clean leading blank headers
+                    # Provisional name based on the original.
                     base_stem = md_file.stem
                     provisional = md_file.parent / f"{base_stem} - part {i}.md"
-                    # Evitar colisiones
+                    # Avoid collisions.
                     counter = 1
                     out_path = provisional
                     while out_path.exists():
@@ -103,11 +103,11 @@ class PodcastProcessor:
                     out_path.write_text(chunk, encoding="utf-8")
                     new_files.append(out_path)
 
-                # Eliminar el archivo original tras crear todos los nuevos
+                # Delete the original file after creating all new ones.
                 try:
                     md_file.unlink()
                 except Exception:
-                    pass  # no bloquear si falla el borrado
+                    pass  # do not block if delete fails
 
                 print(f"✂️  Dividido: {md_file.name} → {len(new_files)} archivos")
 
@@ -115,10 +115,10 @@ class PodcastProcessor:
                 print(f"❌ Error dividiendo {md_file}: {e}")
     
     def _clean_snipd_files(self):
-        """Limpia archivos Markdown exportados desde Snipd."""
+        """Clean Markdown files exported from Snipd."""
         md_files = list(self.incoming_dir.rglob("*.md"))
         
-        # Filtrar solo archivos de podcast
+        # Filter only podcast files.
         podcast_files = [f for f in md_files if U.is_podcast_file(f)]
         
         if not podcast_files:
@@ -132,11 +132,11 @@ class PodcastProcessor:
                 original_text = md_file.read_text(encoding="utf-8", errors="ignore")
                 text = original_text
                 
-                # Reemplazar saltos de línea HTML <br/> y <br/>> para quoted text
-                text = re.sub(r"<br\s*/?>\s*>\s*", "\n> ", text)  # <br/>>  → nueva línea con "> "
-                text = re.sub(r"<br\s*/?>", "\n", text)              # <br/>   → nueva línea simple
+                # Replace HTML line breaks <br/> and <br/>> for quoted text.
+                text = re.sub(r"<br\s*/?>\s*>\s*", "\n> ", text)  # <br/>> -> new line with "> "
+                text = re.sub(r"<br\s*/?>", "\n", text)           # <br/> -> simple new line
                 
-                # Reemplazar enlaces de audio
+                # Replace audio links.
                 text = self.snip_link.sub(self._replace_snip_link, text)
                 
                 text = self._lift_show_notes_section(text)
@@ -153,9 +153,9 @@ class PodcastProcessor:
                 print(f"❌ Error limpiando {md_file}: {e}")
     
     def _replace_snip_link(self, match: re.Match[str]) -> str:
-        """Devuelve HTML embebido para el enlace del snip."""
+        """Return embedded HTML for the snip link."""
         url = match.group(1)
-        # Crear botón atractivo que abre en nueva pestaña
+        # Create a styled button that opens in a new tab.
         return (
             f'<div style="text-align: center; margin: 10px 0;">\n'
             f'  <a href="{url}" target="_blank" rel="noopener" '
@@ -169,7 +169,7 @@ class PodcastProcessor:
         )
     
     def _clean_lines(self, lines: Iterable[str]) -> list[str]:
-        """Aplica reglas de limpieza línea a línea."""
+        """Apply line-by-line cleanup rules."""
         cleaned: list[str] = []
         for line in lines:
             lower = line.lower()
@@ -178,21 +178,21 @@ class PodcastProcessor:
             if 'click to expand' in stripped.lower():
                 continue
             
-            # Eliminar etiquetas <details> y </details> pero mantener su contenido
+            # Remove <details> tags but keep their content.
             if '<details' in lower:
                 continue
             if '</details>' in lower:
                 continue
                 
-            # Convertir <summary> a texto plano (pero eliminar si es solo "Click to expand")
+            # Convert <summary> to plain text (but remove if it is only "Click to expand").
             if '<summary' in lower:
                 cleaned_text = self.summary_tag.sub(r"\1", line).strip()
-                # Eliminar si el contenido del summary es solo "Click to expand"
+                # Remove if summary content is only "Click to expand".
                 if cleaned_text.lower() != "click to expand":
                     cleaned.append(cleaned_text + "\n")
                 continue
             
-            # Eliminar reglas horizontales
+            # Remove horizontal rules.
             if self.hr_pattern.match(line):
                 continue
             
@@ -200,7 +200,7 @@ class PodcastProcessor:
         return cleaned
 
     def _add_snip_index(self, text: str) -> str:
-        """Inserta un índice con enlaces a cada snip y añade anchors a sus títulos."""
+        """Insert an index linking to each snip and add anchors to titles."""
         match = re.search(r"(##\s+Snips\s*(?:\r?\n)*)", text, flags=re.IGNORECASE)
         if not match:
             return text
@@ -259,20 +259,20 @@ class PodcastProcessor:
         return prefix + index_block + updated_block + suffix
 
     def _extract_anchor_id(self, attr_text: str | None) -> str | None:
-        """Extrae el identificador #id de un bloque de atributos de Markdown."""
+        """Extract the #id identifier from a Markdown attribute block."""
         if not attr_text:
             return None
         match = re.search(r"#([A-Za-z0-9_-]+)", attr_text)
         return match.group(1) if match else None
 
     def _build_snip_anchor(self, title: str, index: int) -> str:
-        """Genera anchors predecibles para los títulos de los snips."""
+        """Generate predictable anchors for snip titles."""
         slug = self._slugify(title)
         prefix = f"snip-{index:02d}"
         return f"{prefix}-{slug}" if slug else prefix
 
     def _slugify(self, text: str) -> str:
-        """Normaliza títulos a slugs URL-safe."""
+        """Normalize titles to URL-safe slugs."""
         normalized = unicodedata.normalize("NFKD", text)
         ascii_text = "".join(ch for ch in normalized if not unicodedata.combining(ch))
         ascii_text = ascii_text.lower()
@@ -280,7 +280,7 @@ class PodcastProcessor:
         return ascii_text.strip("-")
 
     def _lift_show_notes_section(self, text: str) -> str:
-        """Convierte bloques <details> en secciones H2 y mueve metadatos posteriores."""
+        """Convert <details> blocks into H2 sections and move trailing metadata."""
         details_re = re.compile(
             r"<details>\s*<summary>(?P<title>.*?)</summary>(?P<body>.*?)</details>"
             r"(?P<trailing>(?:\s*\n- [^\n]+)*)",
@@ -308,7 +308,7 @@ class PodcastProcessor:
         return details_re.sub(_repl, text)
     
     def _convert_markdown_to_html(self):
-        """Convierte archivos Markdown de podcast a HTML."""
+        """Convert podcast Markdown files to HTML."""
         md_files = [p for p in self.incoming_dir.rglob("*.md") 
                    if U.is_podcast_file(p) and not p.with_suffix(".html").exists()]
         
@@ -322,7 +322,7 @@ class PodcastProcessor:
             try:
                 html_path = md_file.with_suffix(".html")
                 
-                # No sobrescribir si ya existe
+                # Do not overwrite if it already exists.
                 if html_path.exists():
                     continue
                 
@@ -331,7 +331,7 @@ class PodcastProcessor:
                 full_html = self._wrap_html(md_file.stem, html_body)
                 html_path.write_text(full_html, encoding="utf-8")
                 
-                # Mostrar ruta relativa si es posible
+                # Show relative path if possible.
                 try:
                     display_path = html_path.relative_to(Path.cwd()) if html_path.is_absolute() else html_path
                 except ValueError:
@@ -342,9 +342,9 @@ class PodcastProcessor:
                 print(f"❌ Error convirtiendo {md_file}: {e}")
     
     def _md_to_html(self, md_text: str) -> str:
-        """Convierte texto Markdown en HTML y devuelve solo el contenido."""
+        """Convert Markdown text to HTML and return only the body."""
         return U.markdown_to_html_body(md_text)
     
     def _wrap_html(self, title: str, body: str) -> str:
-        """Envuelve el contenido en un HTML con estilos y color de podcast."""
+        """Wrap content in HTML with styles and the podcast color."""
         return U.wrap_html(title, body, "#667eea")

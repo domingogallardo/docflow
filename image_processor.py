@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""ImageProcessor - Gestiona imágenes en el pipeline anual."""
+"""ImageProcessor - manage images in the yearly pipeline."""
 from __future__ import annotations
 
 from pathlib import Path
@@ -12,7 +12,7 @@ from path_utils import unique_path
 
 
 class ImageProcessor:
-    """Procesador para mover imágenes y generar una galería anual."""
+    """Processor for moving images and generating a yearly gallery."""
 
     SUPPORTED_EXTS = {".jpg", ".jpeg", ".png", ".gif", ".bmp", ".tiff", ".webp"}
 
@@ -22,7 +22,7 @@ class ImageProcessor:
         self.gallery_name = "gallery.html"
 
     def process_images(self) -> List[Path]:
-        """Mueve imágenes desde Incoming y actualiza la galería anual."""
+        """Move images from Incoming and update the yearly gallery."""
         print("🖼️ Procesando imágenes...")
 
         images = self._list_incoming_images()

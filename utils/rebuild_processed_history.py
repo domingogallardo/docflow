@@ -2,17 +2,17 @@
 """
 Rebuild Incoming/processed_history.txt from scratch.
 
-• Incluye todos los .md en   Posts/Posts <año>/
-• Incluye todos los .pdf en  Pdfs/Pdfs  <año>/
-• Incluye todos los .md en   Podcasts/Podcasts <año>/
-• Orden: más nuevo arriba, según fecha de creación (st_ctime)
-• Sobrescribe Incoming/processed_history.txt (hace copia .bak por seguridad)
+• Include all .md in   Posts/Posts <year>/
+• Include all .pdf in  Pdfs/Pdfs  <year>/
+• Include all .md in   Podcasts/Podcasts <year>/
+• Order: newest first, by creation time (st_ctime)
+• Overwrite Incoming/processed_history.txt (creates a .bak backup)
 """
 
 import sys
 from pathlib import Path
 
-# Agregar el directorio padre al path para poder importar config
+# Add the parent directory to the path to import config.
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 import shutil
@@ -20,7 +20,7 @@ from datetime import datetime
 import config as cfg  # BASE_DIR, PROCESSED_HISTORY
 
 def collect_files():
-    """Devuelve lista de Path con .md y .pdf relevantes."""
+    """Return a list of relevant .md and .pdf Paths."""
     files = []
 
     # Posts
@@ -39,30 +39,30 @@ def collect_files():
 
 def get_creation_time(path: Path) -> float:
     """
-    Devuelve la fecha de creación (st_ctime) del archivo.
-    En la mayoría de sistemas Unix es la fecha de cambio de metadatos,
-    pero en macOS es realmente la fecha de creación real.
+    Return the creation time (st_ctime) for the file.
+    On most Unix systems it is the metadata change time,
+    but on macOS it is the actual creation time.
     """
     return path.stat().st_ctime
 
 def main():
     all_files = collect_files()
 
-    # Ordenar por fecha de creación (más recientes primero)
+    # Sort by creation time (newest first).
     all_files.sort(key=get_creation_time, reverse=True)
 
-    # Formatear rutas relativas con "./" e incluir fecha de creación
+    # Format relative paths with "./" and include creation time.
     lines = []
     for f in all_files:
         creation_time = datetime.fromtimestamp(f.stat().st_ctime).strftime("%Y-%m-%d %H:%M:%S")
         line = "./" + f.relative_to(cfg.BASE_DIR).as_posix() + " - " + creation_time + "\n"
         lines.append(line)
 
-    # Copia de seguridad
+    # Backup.
     if cfg.PROCESSED_HISTORY.exists():
         shutil.copy2(cfg.PROCESSED_HISTORY, cfg.PROCESSED_HISTORY.with_suffix(".bak"))
 
-    # Sobrescribir processed_history.txt
+    # Overwrite processed_history.txt.
     cfg.PROCESSED_HISTORY.write_text("".join(lines), encoding="utf-8")
 
     print(f"processed_history reconstruido: {len(lines)} entradas (ordenadas por creación).")

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Tests para PodcastProcessor
+Tests for PodcastProcessor
 """
 import pytest
 from pathlib import Path
@@ -9,15 +9,15 @@ from podcast_processor import PodcastProcessor
 
 
 def test_podcast_processor_with_podcasts(tmp_path):
-    """Test que verifica el procesamiento exitoso de podcasts."""
+    """Test that verifies successful podcast processing."""
     
-    # Preparar
+    # Prepare.
     incoming = tmp_path / "Incoming"
     incoming.mkdir()
     destination = tmp_path / "Podcasts"
     destination.mkdir()
     
-    # Crear archivo de podcast de prueba
+    # Create a test podcast file.
     podcast_file = incoming / "test_podcast.md" 
     podcast_content = """# Test Podcast
 
@@ -32,59 +32,59 @@ def test_podcast_processor_with_podcasts(tmp_path):
 """
     podcast_file.write_text(podcast_content)
     
-    # Crear procesador
+    # Create processor.
     processor = PodcastProcessor(incoming, destination)
     
-    # Ejecutar
+    # Execute.
     moved_podcasts = processor.process_podcasts()
     
-    # Verificar
+    # Verify.
     assert len(moved_podcasts) >= 1
     
-    # Verificar que el archivo fue renombrado usando metadatos
+    # Verify the file was renamed using metadata.
     renamed_files = list(destination.glob("Great Show - Amazing Episode*"))
     assert len(renamed_files) >= 1
     
-    # Verificar que se generó el HTML correspondiente
+    # Verify the corresponding HTML was generated.
     html_files = list(destination.glob("*.html"))
     assert len(html_files) >= 1
 
 
 def test_podcast_processor_no_podcasts(tmp_path, capsys):
-    """Test que verifica el comportamiento cuando no hay podcasts."""
+    """Test that verifies behavior when there are no podcasts."""
     
-    # Preparar directorios vacíos
+    # Prepare empty directories.
     incoming = tmp_path / "Incoming"
     incoming.mkdir()
     destination = tmp_path / "Podcasts"
     
-    # Crear algunos archivos que NO son podcasts
+    # Create some files that are NOT podcasts.
     (incoming / "regular_article.md").write_text("# Regular Article\nNot a podcast")
     (incoming / "document.pdf").write_bytes(b"PDF content")
     
-    # Crear procesador
+    # Create processor.
     processor = PodcastProcessor(incoming, destination)
     
-    # Ejecutar
+    # Execute.
     moved_podcasts = processor.process_podcasts()
     
-    # Verificar
+    # Verify.
     assert len(moved_podcasts) == 0
     
-    # Verificar mensaje informativo
+    # Verify informational message.
     captured = capsys.readouterr()
     assert "📻 No se encontraron archivos de podcast para procesar" in captured.out
 
 
 def test_podcast_processor_clean_snipd_features(tmp_path):
-    """Test que verifica la limpieza específica de Snipd."""
+    """Test that verifies Snipd-specific cleaning."""
     
-    # Preparar
+    # Prepare.
     incoming = tmp_path / "Incoming"
     incoming.mkdir()
     destination = tmp_path / "Podcasts"
     
-    # Crear archivo con elementos específicos de Snipd
+    # Create a file with Snipd-specific elements.
     podcast_file = incoming / "snipd_test.md"
     podcast_content = """# Snipd Test
 
@@ -101,16 +101,16 @@ def test_podcast_processor_clean_snipd_features(tmp_path):
 """
     podcast_file.write_text(podcast_content)
     
-    # Crear procesador
+    # Create processor.
     processor = PodcastProcessor(incoming, destination)
     
-    # Ejecutar
+    # Execute.
     moved_podcasts = processor.process_podcasts()
     
-    # Verificar que se procesó el archivo
+    # Verify the file was processed.
     assert len(moved_podcasts) >= 1
     
-    # Verificar el contenido fue limpiado
+    # Verify the content was cleaned.
     processed_md = None
     for file in moved_podcasts:
         if file.suffix == '.md':
@@ -120,12 +120,12 @@ def test_podcast_processor_clean_snipd_features(tmp_path):
     assert processed_md is not None
     content = processed_md.read_text()
     
-    # Verificar que se eliminaron elementos específicos de Snipd
-    assert "---" not in content  # Reglas horizontales eliminadas
-    assert "<details>" not in content  # Tags details eliminados
-    assert "🎧 [Play snip]" not in content  # Enlaces de audio reemplazados
-    assert "🎧 Reproducir fragmento de audio" in content  # Nuevo botón
-    assert "br/>" not in content  # Line breaks procesados
+    # Verify Snipd-specific elements were removed.
+    assert "---" not in content  # Horizontal rules removed
+    assert "<details>" not in content  # <details> tags removed
+    assert "🎧 [Play snip]" not in content  # Audio links replaced
+    assert "🎧 Reproducir fragmento de audio" in content  # New button
+    assert "br/>" not in content  # Line breaks processed
     assert "Click to expand" not in content
 
 
@@ -172,14 +172,14 @@ def test_podcast_processor_show_notes_promoted(tmp_path):
     assert "> Line 1" in content and "> Line 2" in content
 
 def test_podcast_processor_markdown_to_html_conversion(tmp_path):
-    """Test que verifica la conversión de Markdown a HTML."""
+    """Test that verifies Markdown to HTML conversion."""
     
-    # Preparar
+    # Prepare.
     incoming = tmp_path / "Incoming"
     incoming.mkdir()
     destination = tmp_path / "Podcasts"
     
-    # Crear archivo de podcast con Markdown
+    # Create a podcast file with Markdown.
     podcast_file = incoming / "markdown_test.md"
     podcast_content = """# Markdown Test
 
@@ -198,37 +198,37 @@ def test_podcast_processor_markdown_to_html_conversion(tmp_path):
 """
     podcast_file.write_text(podcast_content)
     
-    # Crear procesador
+    # Create processor.
     processor = PodcastProcessor(incoming, destination)
     
-    # Ejecutar
+    # Execute.
     moved_podcasts = processor.process_podcasts()
     
-    # Verificar que se creó el HTML
+    # Verify the HTML was created.
     html_files = [f for f in moved_podcasts if f.suffix == '.html']
     assert len(html_files) >= 1
     
-    # Verificar el contenido del HTML
+    # Verify the HTML content.
     html_content = html_files[0].read_text()
     assert "<!DOCTYPE html>" in html_content
     assert "<meta charset=\"UTF-8\">" in html_content
     assert "<strong>Bold text</strong>" in html_content
     assert "<em>italic text</em>" in html_content
     assert "<code>Code snippet</code>" in html_content
-    assert "<ol>" in html_content  # Lista ordenada
+    assert "<ol>" in html_content  # Ordered list
     assert "<a href=\"https://example.com\">" in html_content
 
 
 def test_podcast_processor_mixed_files(tmp_path):
-    """Test que verifica que solo se procesan archivos de podcast."""
+    """Test that verifies only podcast files are processed."""
     
-    # Preparar
+    # Prepare.
     incoming = tmp_path / "Incoming"
     incoming.mkdir()
     destination = tmp_path / "Podcasts"
     
-    # Crear mezcla de archivos
-    # Archivo de podcast válido
+    # Create a mix of files.
+    # Valid podcast file.
     podcast_file = incoming / "valid_podcast.md"
     podcast_content = """# Valid Podcast
 
@@ -241,33 +241,33 @@ def test_podcast_processor_mixed_files(tmp_path):
 """
     podcast_file.write_text(podcast_content)
     
-    # Archivo que NO es podcast
+    # File that is NOT a podcast.
     regular_file = incoming / "regular.md"
     regular_file.write_text("# Regular Article\nJust regular content without podcast metadata")
     
-    # Otros archivos
+    # Other files.
     (incoming / "document.pdf").write_bytes(b"PDF content")
     (incoming / "image.jpg").write_bytes(b"JPEG content")
     
-    # Crear procesador
+    # Create processor.
     processor = PodcastProcessor(incoming, destination)
     
-    # Ejecutar
+    # Execute.
     moved_podcasts = processor.process_podcasts()
     
-    # Verificar que solo se procesó el archivo de podcast
+    # Verify only the podcast file was processed.
     assert len(moved_podcasts) >= 1
     
-    # Verificar que el archivo de podcast fue renombrado
+    # Verify the podcast file was renamed.
     podcast_names = [f.name for f in moved_podcasts]
     assert any("Valid Show - Valid Episode" in name for name in podcast_names)
 
 
 def test_podcast_processor_splits_multi_episode_file(tmp_path):
-    """Debe dividir un .md con varios episodios (H1) y procesarlos por separado."""
+    """Should split a .md with multiple episodes (H1) and process separately."""
     import re
 
-    # Preparar
+    # Prepare.
     incoming = tmp_path / "Incoming"
     incoming.mkdir()
     destination = tmp_path / "Podcasts"
@@ -310,16 +310,16 @@ def test_podcast_processor_splits_multi_episode_file(tmp_path):
     processor = PodcastProcessor(incoming, destination)
     moved = processor.process_podcasts()
 
-    # El archivo original debe desaparecer tras el split
+    # The original file should disappear after the split.
     assert not multi.exists()
 
-    # Deben existir al menos 2 MD y 2 HTML en destino
+    # At least 2 MD and 2 HTML should exist in the destination.
     md_files = list(destination.glob("*.md"))
     html_files = list(destination.glob("*.html"))
     assert len(md_files) >= 2
     assert len(html_files) >= 2
 
-    # Comprobar nombres esperados (sanitizados como en utils.extract_episode_title)
+    # Check expected names (sanitized as in utils.extract_episode_title).
     def sanitize(filename: str) -> str:
         s = re.sub(r'[<>:\"/\\|?*#]', '', filename)
         s = re.sub(r"\s+", " ", s).strip()
@@ -334,7 +334,7 @@ def test_podcast_processor_splits_multi_episode_file(tmp_path):
 
 
 def test_podcast_processor_builds_snip_index(tmp_path):
-    """Debe añadir un índice con enlaces a cada snip y anchors en los títulos."""
+    """Should add an index linking to each snip and anchors in titles."""
 
     incoming = tmp_path / "Incoming"
     incoming.mkdir()

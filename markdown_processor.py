@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""MarkdownProcessor - Convierte Markdown genérico a HTML y lo archiva junto a Instapaper."""
+"""MarkdownProcessor - convert generic Markdown to HTML and archive alongside Instapaper."""
 from __future__ import annotations
 
 from pathlib import Path
@@ -12,7 +12,7 @@ from openai_client import build_openai_client
 
 
 class MarkdownProcessor:
-    """Procesa archivos Markdown ubicados en Incoming/ que no pertenecen a otros pipelines."""
+    """Process Markdown files in Incoming/ that do not belong to other pipelines."""
 
     def __init__(self, incoming_dir: Path, destination_dir: Path):
         self.incoming_dir = incoming_dir
@@ -21,7 +21,7 @@ class MarkdownProcessor:
         self.title_updater = TitleAIUpdater(openai_client)
 
     def process_markdown(self) -> List[Path]:
-        """Convierte Markdown a HTML, aplica márgenes y mueve ambos archivos al destino anual."""
+        """Convert Markdown to HTML, apply margins, and move both files to the yearly destination."""
         markdown_files = [
             path
             for path in self.incoming_dir.glob("*.md")
@@ -38,7 +38,7 @@ class MarkdownProcessor:
         )
 
     def process_markdown_subset(self, markdown_files: Iterable[Path]) -> List[Path]:
-        """Procesa un subconjunto específico de Markdown (por ejemplo, tweets recién descargados)."""
+        """Process a specific Markdown subset (for example, newly downloaded tweets)."""
         selected: List[Path] = []
         for raw_path in markdown_files:
             path = Path(raw_path)
@@ -110,7 +110,7 @@ class MarkdownProcessor:
         return moved_files
 
     def _is_generic_markdown(self, path: Path) -> bool:
-        """Determina si el archivo Markdown no pertenece a otros pipelines especializados."""
+        """Determine whether the Markdown file does not belong to other specialized pipelines."""
         if not path.is_file() or path.suffix.lower() != ".md":
             return False
         if U.is_podcast_file(path):
@@ -118,7 +118,7 @@ class MarkdownProcessor:
         return True
 
     def _collect_move_candidates(self, markdown_files: Iterable[Path]) -> List[Path]:
-        """Recopila los archivos (MD + HTML) que deben moverse al destino anual."""
+        """Collect files (MD + HTML) to move to the yearly destination."""
         candidates: List[Path] = []
         for md_file in markdown_files:
             if not md_file.exists():

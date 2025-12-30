@@ -2,7 +2,7 @@ import re
 
 
 def clean_duplicate_markdown_links(text: str) -> str:
-    """Limpia enlaces Markdown donde el texto y la URL son idénticos."""
+    """Clean Markdown links where the text and URL are identical."""
     duplicate_link_pattern = r'\[(https?://[^\]]+)\]\(\1\)'
 
     def replace_duplicate_link(match):
@@ -23,7 +23,7 @@ def clean_duplicate_markdown_links(text: str) -> str:
 
 
 def convert_urls_to_links(text: str) -> str:
-    """Convierte URLs de texto plano a enlaces Markdown de forma robusta."""
+    """Convert plain-text URLs to Markdown links robustly."""
     text = clean_duplicate_markdown_links(text)
 
     lines = text.split('\n')
@@ -60,8 +60,8 @@ def convert_urls_to_links(text: str) -> str:
 
 def convert_newlines_to_br(html_text: str) -> str:
     """
-    Convierte saltos de línea simples a elementos <br>, pero solo dentro del contenido,
-    no entre elementos de bloque HTML.
+    Convert single line breaks to <br> elements, but only inside content,
+    not between HTML block elements.
     """
     def replace_in_content(match):
         tag_open = match.group(1)
@@ -81,7 +81,7 @@ def convert_newlines_to_br(html_text: str) -> str:
 
 def markdown_to_html(md_text: str, title: str = None) -> str:
     """
-    Convierte texto Markdown a HTML completo con limpieza y URLs clickables.
+    Convert Markdown text to full HTML with cleanup and clickable URLs.
     """
     import markdown
 
@@ -119,11 +119,11 @@ def markdown_to_html(md_text: str, title: str = None) -> str:
 
 
 def extract_html_body(html: str) -> str:
-    """Extrae el contenido dentro de la etiqueta <body>."""
+    """Extract content inside the <body> tag."""
     body = re.search(r"<body>(.*)</body>", html, re.DOTALL | re.IGNORECASE)
     return body.group(1).strip() if body else html
 
 
 def markdown_to_html_body(md_text: str, title: str = None) -> str:
-    """Convierte Markdown a HTML y devuelve solo el contenido del <body>."""
+    """Convert Markdown to HTML and return only the <body> content."""
     return extract_html_body(markdown_to_html(md_text, title))

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Genera un resumen diario con los borradores en Pulse/Incoming."""
+"""Generate a daily summary from drafts in Pulse/Incoming."""
 
 from __future__ import annotations
 
@@ -12,7 +12,7 @@ from urllib.parse import unquote, urlparse
 
 try:
     from openai import OpenAI
-except ImportError:  # pragma: no cover - dependencia opcional
+except ImportError:  # pragma: no cover - optional dependency
     OpenAI = None  # type: ignore[assignment]
 
 ROOT_DIR = Path(__file__).resolve().parent.parent
@@ -218,7 +218,7 @@ def _guess_language(text: str) -> str:
             english_score += 1
 
     if spanish_score == english_score:
-        # desempatar en base a caracteres extendidos vs ASCII puro
+        # Break ties based on extended characters vs pure ASCII.
         non_ascii = sum(1 for ch in sample if ord(ch) > 127)
         if non_ascii > len(sample) * 0.01:
             spanish_score += 1
@@ -277,7 +277,7 @@ def _parse_summary_sections(text: str) -> tuple[List[str], List[str]]:
         line = raw_line.strip()
         if not line:
             if not in_sections:
-                # mantener separación de párrafos
+                # Keep paragraph separation.
                 if summary_lines and summary_lines[-1] != "":
                     summary_lines.append("")
             continue
@@ -309,7 +309,7 @@ def _parse_summary_sections(text: str) -> tuple[List[str], List[str]]:
         else:
             summary_lines.append(line)
 
-    # Eliminar posibles saltos finales
+    # Remove possible trailing blanks.
     while summary_lines and summary_lines[-1] == "":
         summary_lines.pop()
 

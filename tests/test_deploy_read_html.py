@@ -3,7 +3,7 @@ import os
 import subprocess
 
 def test_gen_index_creates_read_html(tmp_path):
-    # Crear ficheros de prueba
+    # Create test files.
     (tmp_path / "a.html").write_text("<p>A</p>", encoding="utf-8")
     (tmp_path / "b.pdf").write_bytes(b"%PDF-1.4\n")
 
@@ -11,10 +11,10 @@ def test_gen_index_creates_read_html(tmp_path):
     builder = repo_root / "utils" / "build_read_index.py"
     assert builder.exists(), "utils/build_read_index.py no encontrado"
 
-    # Ejecutar generador
+    # Run generator.
     subprocess.run(["python3", str(builder), str(tmp_path)], check=True)
 
-    # Comprobar resultados
+    # Check results.
     read_file = tmp_path / "read.html"
     assert read_file.exists()
     assert not (tmp_path / "index.html").exists()

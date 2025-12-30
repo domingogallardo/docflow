@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Vuelca el contenido del portapapeles (HTML o texto) a un fichero."""
+"""Dump clipboard contents (HTML or text) to a file."""
 from __future__ import annotations
 
 import argparse
@@ -7,7 +7,7 @@ import sys
 from pathlib import Path
 from typing import Tuple
 
-# Permite ejecutar el script directamente desde el root del repo.
+# Allow running the script directly from the repo root.
 ROOT = Path(__file__).resolve().parent.parent
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
@@ -16,7 +16,7 @@ from clipboard_cleaner import _read_macos_html_clipboard, _run_command_capture  
 
 
 def read_clipboard_raw() -> Tuple[str, str]:
-    """Devuelve el contenido del portapapeles y la fuente usada."""
+    """Return clipboard content and the source used."""
     html = _read_macos_html_clipboard()
     if html:
         return html, "html"

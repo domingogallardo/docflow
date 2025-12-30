@@ -1,14 +1,13 @@
 #!/usr/bin/env python3
 """
-Conversor standalone para generar archivos Markdown limpios a partir de un
-Markdown exportado desde Snipd.
+Standalone converter to generate clean Markdown files from a Snipd export.
 
-Uso básico:
-    python utils/standalone_snipd_to_markdown.py input.md --output-dir ./salida
+Basic usage:
+    python utils/standalone_snipd_to_markdown.py input.md --output-dir ./output
 
-El comando divide archivos con múltiples episodios, limpia artefactos de Snipd
-(bloques <details>, enlaces de audio, saltos <br/>) y añade un índice con
-anchors para cada snip bajo la sección "## Snips".
+The command splits files with multiple episodes, cleans Snipd artifacts
+(<details> blocks, audio links, <br/> breaks) and adds an index with anchors
+for each snip under the "## Snips" section.
 """
 from __future__ import annotations
 
@@ -22,7 +21,7 @@ SNIP_INDEX_MARKER = "<!-- snip-index -->"
 
 
 class SnipdMarkdownConverter:
-    """Convierte un export Markdown de Snipd en archivos Markdown limpios."""
+    """Convert a Snipd Markdown export into clean Markdown files."""
 
     def __init__(self, input_file: Path, output_dir: Path):
         self.input_file = input_file
@@ -34,7 +33,7 @@ class SnipdMarkdownConverter:
         self.h1_pattern = re.compile(r"^#\s+.+$", re.MULTILINE)
 
     def convert(self) -> List[Path]:
-        """Procesa el archivo de entrada y devuelve las rutas generadas."""
+        """Process the input file and return generated paths."""
         if not self.input_file.exists():
             raise FileNotFoundError(f"No existe el archivo de entrada: {self.input_file}")
 
@@ -59,7 +58,7 @@ class SnipdMarkdownConverter:
         return generated
 
     def _split_by_episode(self, text: str) -> list[str]:
-        """Divide el contenido en episodios usando encabezados de nivel 1."""
+        """Split content into episodes using level-1 headings."""
         matches = list(self.h1_pattern.finditer(text))
         if len(matches) <= 1:
             return [text]
@@ -69,7 +68,7 @@ class SnipdMarkdownConverter:
         return [text[s:e].lstrip() for s, e in zip(starts, ends)]
 
     def _clean_snipd_text(self, text: str) -> str:
-        """Aplica las reglas de limpieza y añade el índice de snips."""
+        """Apply cleanup rules and add the snips index."""
         text = re.sub(r"<br\s*/?>\s*>\s*", "\n> ", text)
         text = re.sub(r"<br\s*/?>", "\n", text)
         text = self.snip_link.sub(self._replace_snip_link, text)

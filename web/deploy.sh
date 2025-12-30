@@ -2,7 +2,7 @@
 
 set -euo pipefail
 
-# Comprobar que las variables necesarias están definidas
+# Check that required variables are defined.
 if [[ -z "$REMOTE_USER" || -z "$REMOTE_HOST" ]]; then
   echo "❌ Error: Una o más variables necesarias no están definidas."
   echo "Por favor, asegúrate de que las siguientes variables están configuradas:"
@@ -13,14 +13,14 @@ fi
 REMOTE_PATH="/opt/web-domingo"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-# Generar read.html para /read (HTML+PDF combinados) con el generador del repo
+# Generate read.html for /read (combined HTML+PDF) with the repo generator.
 echo "🧾 Generando listado estático (mtime desc)…"
 PYTHON_BIN="python3"; command -v python3 >/dev/null 2>&1 || PYTHON_BIN=python
 "$PYTHON_BIN" "$SCRIPT_DIR/../utils/build_read_index.py" "$SCRIPT_DIR/public/read"
 
 echo "📦 Empaquetando archivos (sin metadatos de macOS)..."
-# Evita xattrs y archivos AppleDouble (.DS_Store, ._*). En macOS (bsdtar),
-# añade flags para no incluir xattrs ni metadata de mac.
+# Avoid xattrs and AppleDouble files (.DS_Store, ._*). On macOS (bsdtar),
+# add flags to exclude xattrs and mac metadata.
 CREATE_FLAGS=""
 if tar --version 2>/dev/null | grep -qi bsdtar; then
   CREATE_FLAGS="--no-xattrs --no-mac-metadata"
@@ -37,9 +37,9 @@ COPYFILE_DISABLE=1 tar $CREATE_FLAGS \
 echo "📁 Preparando servidor remoto..."
 ssh "$REMOTE_USER@$REMOTE_HOST" "mkdir -p $REMOTE_PATH $REMOTE_PATH/dynamic-data"
 
-# (Opcional) Gestionar credenciales BasicAuth (.htpasswd) en el host remoto
-# Modo único y simple: definir HTPASSWD_USER y HTPASSWD_PSS en el entorno.
-# - La contraseña nunca se muestra en argv: se pasa por stdin y se codifica base64 para el salto SSH.
+# (Optional) Manage BasicAuth credentials (.htpasswd) on the remote host.
+# Simple mode: set HTPASSWD_USER and HTPASSWD_PSS in the environment.
+# - The password is never shown in argv: it is passed via stdin and base64-encoded for SSH.
 if [[ -n "${HTPASSWD_USER:-}" && -n "${HTPASSWD_PSS:-}" ]]; then
   echo "🔐 Actualizando .htpasswd en el host remoto (usuario: $HTPASSWD_USER)…"
   ssh "$REMOTE_USER@$REMOTE_HOST" "mkdir -p $REMOTE_PATH/nginx"
@@ -64,9 +64,9 @@ echo "🔧 Desplegando en el servidor..."
 ssh $REMOTE_USER@$REMOTE_HOST << 'EOF'
   set -e
   cd /opt/web-domingo
-  # Limpiar "public" previo para evitar residuos (p.ej. /public/posts)
+  # Clean previous "public" to avoid leftovers (e.g., /public/posts)
   rm -rf public
-  # Extrae silenciando warnings por keywords desconocidos y timestamps futuros si está soportado
+  # Extract while silencing warnings for unknown keywords and future timestamps if supported.
   if tar --help 2>&1 | grep -q -- '--warning'; then
     tar --warning=no-unknown-keyword --warning=no-timestamp -xzf deploy.tar.gz
   else
@@ -74,7 +74,7 @@ ssh $REMOTE_USER@$REMOTE_HOST << 'EOF'
   fi
   rm deploy.tar.gz
 
-  # Permisos para edición (nginx en Alpine: uid=100, gid=101)
+  # Edit permissions (nginx on Alpine: uid=100, gid=101)
   chown -R 100:101 /opt/web-domingo/dynamic-data
   chmod -R 755 /opt/web-domingo/dynamic-data
 

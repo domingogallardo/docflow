@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-DocumentProcessor - Clase principal para el procesamiento de documentos
+DocumentProcessor - main class for document processing.
 """
 from pathlib import Path
 from typing import Callable, Iterable, List, Optional
@@ -29,7 +29,7 @@ from utils.x_likes_fetcher import fetch_likes_with_state
 
 
 class DocumentProcessor:
-    """Procesador principal de documentos con lógica modular y configurable."""
+    """Main document processor with modular, configurable logic."""
     
     def __init__(self, base_dir: Path, year: int):
         self.base_dir = Path(base_dir)
@@ -52,17 +52,17 @@ class DocumentProcessor:
         self._history: List[Path] = []
 
     def _year_dir(self, kind: str) -> Path:
-        """Construye ruta anual para el tipo indicado."""
+        """Build the yearly path for the given kind."""
         return self.base_dir / kind / f"{kind} {self.year}"
 
     def _run_and_remember(self, fn: Callable[[], List[Path]]) -> List[Path]:
-        """Ejecuta una función de proceso y registra sus resultados."""
+        """Run a processing function and record its results."""
         paths = fn()
         self._remember(paths)
         return paths
 
     def process_tweet_urls(self) -> List[Path]:
-        """Obtiene los likes recientes desde X y genera Markdown en Incoming/."""
+        """Fetch recent likes from X and generate Markdown in Incoming/."""
         try:
             urls = self._fetch_like_urls()
         except Exception as exc:
@@ -88,7 +88,7 @@ class DocumentProcessor:
             try:
                 markdown, filename = fetch_tweet_markdown(
                     url,
-                    # Usa el storage_state para evitar el login wall de X.
+                    # Use storage_state to avoid X's login wall.
                     storage_state=cfg.TWEET_LIKES_STATE,
                 )
             except Exception as exc:
@@ -107,7 +107,7 @@ class DocumentProcessor:
         return generated
 
     def _unique_destination(self, target: Path) -> Path:
-        """Genera un nombre único evitando sobrescribir archivos existentes."""
+        """Generate a unique name to avoid overwriting existing files."""
         return unique_path(target)
 
     def _fetch_like_urls(self) -> List[str]:
@@ -142,24 +142,24 @@ class DocumentProcessor:
         path = self.tweets_processed
         path.parent.mkdir(parents=True, exist_ok=True)
         existing = self._load_processed_urls()
-        # Prepend nuevos URLs (más recientes al inicio)
+        # Prepend new URLs (newest first).
         all_urls = list(urls) + [u for u in existing if u not in urls]
         path.write_text("\n".join(all_urls) + "\n", encoding="utf-8")
 
     def process_podcasts(self) -> List[Path]:
-        """Procesa archivos de podcast con procesador unificado."""
-        # Usar el procesador unificado para todo el pipeline de podcasts
+        """Process podcast files with the unified processor."""
+        # Use the unified processor for the whole podcasts pipeline.
         return self._run_and_remember(self.podcast_processor.process_podcasts)
     
     def process_instapaper_posts(self) -> List[Path]:
-        """Procesa posts web descargados de Instapaper con pipeline unificado."""
-        # Usar el procesador unificado para todo el pipeline de Instapaper
+        """Process Instapaper web posts with the unified pipeline."""
+        # Use the unified processor for the whole Instapaper pipeline.
         moved_posts = self.instapaper_processor.process_instapaper_posts()
 
-        # Bump automático: solo HTML marcados como "starred" por Instapaper
-        # Nota para contribuidores: un artículo se considera "destacado" si en Instapaper
-        # se le añade una ⭐ al inicio del título. Al bumpear ajustamos su mtime al futuro
-        # para que aparezca arriba en listados ordenados por fecha.
+        # Auto-bump: only HTML marked as "starred" by Instapaper.
+        # Note for contributors: an article is considered "starred" if a ⭐ is
+        # added at the start of the title in Instapaper. Bumping sets its mtime
+        # to the future so it appears at the top of date-ordered listings.
         try:
             from utils import is_instapaper_starred_file
             starred_htmls = [
@@ -169,31 +169,31 @@ class DocumentProcessor:
             if starred_htmls:
                 U.bump_files(starred_htmls)
         except Exception:
-            # No bloquear el pipeline si falla la detección
+            # Do not block the pipeline if detection fails.
             pass
 
         self._remember(moved_posts)
         return moved_posts
     
     def process_pdfs(self) -> List[Path]:
-        """Procesa PDFs usando el procesador especializado."""
+        """Process PDFs using the specialized processor."""
         return self._run_and_remember(self.pdf_processor.process_pdfs)
     
     def process_images(self) -> List[Path]:
-        """Procesa imágenes moviéndolas y generando la galería anual."""
+        """Process images by moving them and generating the yearly gallery."""
         return self._run_and_remember(self.image_processor.process_images)
 
     def process_markdown(self) -> List[Path]:
-        """Procesa archivos Markdown genéricos."""
+        """Process generic Markdown files."""
         return self._run_and_remember(self.markdown_processor.process_markdown)
     
     def process_tweets_pipeline(self, *, log_empty_conversion: bool = True) -> List[Path]:
-        """Procesa la cola de tweets y mueve los resultados a la carpeta anual de Tweets."""
+        """Process the tweet queue and move results to the yearly Tweets folder."""
         generated = self.process_tweet_urls()
         return self._process_tweet_markdown_subset(generated, log_empty=log_empty_conversion)
 
     def process_targets(self, targets: Iterable[str], *, log_empty_tweets: bool = True) -> bool:
-        """Ejecuta un subconjunto del pipeline según los targets indicados."""
+        """Run a subset of the pipeline for the given targets."""
         try:
             for target in targets:
                 handler_name = TARGET_HANDLERS[target]
@@ -223,7 +223,7 @@ class DocumentProcessor:
         return self._run_and_remember(lambda: self.tweet_processor.process_markdown_subset(files))
     
     def register_all_files(self) -> None:
-        """Registra todos los archivos procesados en el historial."""
+        """Register all processed files in history."""
         if self._history:
             U.register_paths(
                 self._history,
@@ -233,7 +233,7 @@ class DocumentProcessor:
             self._history = []
     
     def process_all(self) -> bool:
-        """Ejecuta el pipeline completo."""
+        """Run the full pipeline."""
         return self.process_targets(PIPELINE_TARGETS, log_empty_tweets=False)
 
     def _remember(self, paths: List[Path]) -> None:

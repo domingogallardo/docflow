@@ -7,7 +7,7 @@ from utils.file_ops import list_files
 
 
 def is_podcast_file(file_path: Path) -> bool:
-    """Detecta si un archivo MD es un podcast exportado de Snipd."""
+    """Detect whether an MD file is a Snipd-exported podcast."""
     try:
         if not file_path.suffix.lower() == '.md':
             return False
@@ -18,14 +18,14 @@ def is_podcast_file(file_path: Path) -> bool:
 
 
 def list_podcast_files(root=None):
-    """Lista todos los archivos MD que son podcasts."""
+    """List all MD files that are podcasts."""
     root = INCOMING if root is None else root
     md_files = list_files({".md"}, root)
     return [f for f in md_files if is_podcast_file(f)]
 
 
 def extract_episode_title(file_path: Path) -> str | None:
-    """Extrae el título del episodio de los metadatos del archivo de podcast."""
+    """Extract the episode title from podcast file metadata."""
     try:
         content = file_path.read_text(encoding="utf-8", errors="ignore")
 
@@ -47,7 +47,7 @@ def extract_episode_title(file_path: Path) -> str | None:
 
 
 def rename_podcast_files(podcasts: list[Path]) -> list[Path]:
-    """Renombra archivos de podcast usando el título del episodio."""
+    """Rename podcast files using the episode title."""
     renamed_files = []
 
     for podcast in podcasts:

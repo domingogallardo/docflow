@@ -2,7 +2,7 @@ import sys
 from pathlib import Path
 import pytest
 
-sys.path.append(str(Path(__file__).parent.parent))  # Para importar utils.py
+sys.path.append(str(Path(__file__).parent.parent))  # To import utils.py.
 import utils
 from podcast_processor import PodcastProcessor
 
@@ -16,21 +16,21 @@ def test_is_podcast_file_true():
     assert utils.is_podcast_file(fixture_path) is True
 
 def test_is_podcast_file_false():
-    # Crear un archivo temporal que no es de Snipd
+    # Create a temporary file that is not from Snipd.
     non_podcast_path = Path(__file__).parent / "fixtures" / "not_a_podcast.md"
     non_podcast_path.write_text("# Not a podcast\nSome random markdown content\n", encoding="utf-8")
     try:
         assert utils.is_podcast_file(non_podcast_path) is False
     finally:
-        non_podcast_path.unlink()  # Limpiar el archivo temporal
+        non_podcast_path.unlink()  # Clean up the temporary file.
 
 
-# Tests para CSS centralizado
+# Tests for centralized CSS.
 def test_get_base_css():
-    """Test que verifica que get_base_css() devuelve el CSS correcto."""
+    """Test that verifies get_base_css() returns the correct CSS."""
     css = utils.get_base_css()
     
-    # Verificar que contiene los elementos esperados
+    # Verify it contains the expected elements.
     assert "-apple-system" in css, "CSS no contiene la tipografía del sistema"
     assert "margin: 6%" in css, "CSS no contiene los márgenes"
     assert "font-weight: bold" in css, "CSS no contiene títulos en negrita"
@@ -40,11 +40,11 @@ def test_get_base_css():
 
 
 def test_podcast_processor_uses_centralized_css():
-    """Test que verifica que PodcastProcessor usa el CSS centralizado."""
+    """Test that verifies PodcastProcessor uses centralized CSS."""
     processor = PodcastProcessor(Path("/tmp"), Path("/tmp"))
     html = processor._wrap_html("Test Podcast", "<p>Contenido de prueba</p>")
     
-    # Verificar que usa el CSS base
+    # Verify it uses the base CSS.
     assert "-apple-system" in html, "PodcastProcessor no usa tipografía del sistema"
     assert "margin: 6%" in html, "PodcastProcessor no usa márgenes centralizados"
     assert "#667eea" in html, "PodcastProcessor no usa color de podcast"
@@ -52,24 +52,24 @@ def test_podcast_processor_uses_centralized_css():
 
 
 def test_clean_duplicate_markdown_links():
-    """Test para verificar la limpieza de enlaces Markdown duplicados."""
+    """Test to verify cleaning duplicated Markdown links."""
     from utils import clean_duplicate_markdown_links
     
-    # Test con enlace duplicado
+    # Test with a duplicated link.
     text_with_duplicate = """See more details: [https://people.idsia.ch/~juergen/who-invented-backpropagation.html](https://people.idsia.ch/~juergen/who-invented-backpropagation.html)"""
     
     result = clean_duplicate_markdown_links(text_with_duplicate)
     
-    # Verificar que la URL se truncó y limpió
+    # Verify the URL was truncated and cleaned.
     assert "people.idsia.ch/~juergen/who-invented-back..." in result
-    assert result.count("https://people.idsia.ch/~juergen/who-invented-backpropagation.html") == 1  # Solo en el enlace
+    assert result.count("https://people.idsia.ch/~juergen/who-invented-backpropagation.html") == 1  # Only in the link.
     
-    # Test con enlace normal (no duplicado) - no debe cambiar
+    # Test with a normal (non-duplicated) link - should not change.
     text_normal = """See [this article](https://example.com) for more info."""
     result_normal = clean_duplicate_markdown_links(text_normal)
     assert result_normal == text_normal
     
-    # Test con URL corta - no debe truncarse
+    # Test with a short URL - should not be truncated.
     text_short = """Visit [https://x.com/test](https://x.com/test)"""
     result_short = clean_duplicate_markdown_links(text_short)
     assert "x.com/test" in result_short
@@ -88,7 +88,7 @@ def test_add_margins_wraps_images(tmp_path):
 
 
 def test_convert_urls_integration():
-    """Test integral del procesamiento de URLs (duplicados + conversión)."""
+    """End-to-end test for URL processing (dedupe + conversion)."""
     from utils import convert_urls_to_links
     
     test_text = """Enlaces duplicados: [https://people.idsia.ch/~juergen/very-long-path-that-should-be-truncated.html](https://people.idsia.ch/~juergen/very-long-path-that-should-be-truncated.html)
@@ -97,11 +97,11 @@ URL aislada: https://x.com/SchmidhuberAI/status/1950194864940835159"""
     
     result = convert_urls_to_links(test_text)
     
-    # Verificar que el enlace duplicado se limpió
+    # Verify the duplicated link was cleaned.
     assert "people.idsia.ch/~juergen/very-long-path-th..." in result
     
-    # Verificar que la URL aislada se convirtió a enlace
+    # Verify the standalone URL was converted to a link.
     assert "[https://x.com/SchmidhuberAI/status/1950194864940835159](https://x.com/SchmidhuberAI/status/1950194864940835159)" in result 
 
 
-# (tests de is_instapaper_starred_file se movieron a tests/test_instapaper_starred_utils.py
+# (tests for is_instapaper_starred_file moved to tests/test_instapaper_starred_utils.py)

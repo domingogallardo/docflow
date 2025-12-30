@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Tests para MarkdownProcessor."""
+"""Tests for MarkdownProcessor."""
 from pathlib import Path
 
 from markdown_processor import MarkdownProcessor
@@ -13,7 +13,7 @@ def test_markdown_processor_converts_and_moves_files(tmp_path):
     generic_md = incoming / "nota.md"
     generic_md.write_text("# Título\n\nContenido en **Markdown**.", encoding="utf-8")
 
-    # Archivos que deben ser ignorados por pipelines específicos
+    # Files that should be ignored by specific pipelines.
     podcast_md = incoming / "snipd_ep.md"
     podcast_md.write_text("""# Episodio\n\n## Episode metadata\n- Episode title: Test\n- Show: Demo\n\n## Snips\n- Contenido""", encoding="utf-8")
 
@@ -29,7 +29,7 @@ def test_markdown_processor_converts_and_moves_files(tmp_path):
     assert "body { margin-left: 6%;" in html_content
     assert "Contenido en <strong>Markdown</strong>." in html_content
 
-    # Los archivos ignorados deben permanecer en Incoming
+    # Ignored files should remain in Incoming.
     assert podcast_md.exists()
 
 

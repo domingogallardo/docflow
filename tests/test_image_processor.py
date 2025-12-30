@@ -42,7 +42,7 @@ def test_process_images_renames_conflicts(tmp_path):
     dest = tmp_path / "Images" / "Images 2025"
     dest.mkdir(parents=True, exist_ok=True)
 
-    # Archivo existente que forzará renombrado
+    # Existing file that will force a rename.
     write_dummy_image(dest / "duplicate.png", b"\x89PNG\r\n\x1a\n")
     write_dummy_image(incoming / "duplicate.png", b"\x89PNG\r\n\x1a\n")
 
