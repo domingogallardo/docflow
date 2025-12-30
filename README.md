@@ -1,94 +1,94 @@
-# 📚 docflow — Pipeline de Documentación Personal (versión resumida)
+# 📚 docflow - Personal Documentation Pipeline (short version)
 
-docflow automatiza **recolectar → procesar → priorizar (bump) → leer → publicar → marcar como completado** tus documentos (artículos, podcasts, Markdown, PDFs y tweets) en una estructura anual.
+docflow automates **collect → process → prioritize (bump) → read → publish → mark as completed** your documents (articles, podcasts, Markdown, PDFs, and tweets) in a yearly structure.
 
-## ✨ Características
-- Pipeline único para Instapaper, Snipd, PDFs, imágenes, Markdown y tweets (likes de X + `Tweets/Tweets <AÑO>/`).
-- Bump/unbump automático (⭐ en Instapaper) y overlay local (`utils/serve_docs.py`) para publicar y despublicar.
-- Despliegue a tu dominio vía `web/deploy.sh`: genera un índice estático en `/read/` (orden por `mtime`) para leer online y copiar citas fácilmente.
-- Registro histórico (`Incoming/processed_history.txt`) y utilidades para convertir títulos con IA, limpiar Markdown y copiar citas con Text Fragments.
+## ✨ Features
+- Single pipeline for Instapaper, Snipd, PDFs, images, Markdown, and tweets (X likes + `Tweets/Tweets <YEAR>/`).
+- Automatic bump/unbump (⭐ in Instapaper) and a local overlay (`utils/serve_docs.py`) to publish and unpublish.
+- Deploy to your domain via `web/deploy.sh`: generates a static index at `/read/` (ordered by `mtime`) to read online and copy quotes easily.
+- History log (`Incoming/processed_history.txt`) and utilities to generate AI titles, clean Markdown, and copy quotes with Text Fragments.
 
-## 🖼️ Procesamiento completo
-![Diagrama del pipeline completo](complete_processing.png)
+## 🖼️ Full processing
+![Full pipeline diagram](complete_processing.png)
 
-## 🔧 Requisitos rápidos
+## 🔧 Quick requirements
 - **Python 3.10+**.
-- Dependencias base:
+- Core dependencies:
   ```bash
   pip install requests beautifulsoup4 markdownify openai pillow pytest markdown
   ```
-- Para capturar tweets directamente (opcional):
+- To capture tweets directly (optional):
   ```bash
   pip install playwright
   playwright install chromium
   ```
 
-## 🚀 Arranque rápido
-1. Configura variables si usas servicios externos:
+## 🚀 Quick start
+1. Configure variables if you use external services:
    ```bash
-   export OPENAI_API_KEY=...     # opcional (títulos IA)
-   export INSTAPAPER_USERNAME=...  # opcional
-   export INSTAPAPER_PASSWORD=...  # opcional
-   export TWEET_LIKES_STATE=/ruta/a/x_state.json  # obligatorio si procesas likes de X
-   export TWEET_LIKES_MAX=50                      # opcional, límite de scroll
+   export OPENAI_API_KEY=...       # optional (AI titles)
+   export INSTAPAPER_USERNAME=...  # optional
+   export INSTAPAPER_PASSWORD=...  # optional
+   export TWEET_LIKES_STATE=/path/to/x_state.json  # required if you process X likes
+   export TWEET_LIKES_MAX=50                          # optional, scroll limit
    ```
-2. Ejecuta el pipeline completo (puedes pasar `--year`):
+2. Run the full pipeline (you can pass `--year`):
    ```bash
    python process_documents.py all --year 2025
 
-   # Si no pasas --year, usa DOCPIPE_YEAR si existe; si no, el año actual del sistema.
+   # If you don't pass --year, DOCPIPE_YEAR is used if present; otherwise the system year.
 
-   # Para unificar cron y ejecución manual (carga ~/.docflow_env si existe):
+   # To unify cron and manual execution (loads ~/.docflow_env if it exists):
    bash bin/docflow.sh all
    ```
-3. Para la cola remota de tweets:
+3. For the remote tweets queue:
    ```bash
    python process_documents.py tweets
    ```
-4. Sirve el overlay local y revisa los documentos:
+4. Serve the local overlay and review documents:
    ```bash
-   PORT=8000 SERVE_DIR="/ruta/a/⭐️ Documentación" python utils/serve_docs.py
+   PORT=8000 SERVE_DIR="/path/to/⭐️ Documentación" python utils/serve_docs.py
    ```
-5. Despliega a `/read/` cuando tengas contenido listo:
+5. Deploy to `/read/` when content is ready:
    ```bash
    (cd web && ./deploy.sh)
    ```
-6. Tests rápidos:
- ```bash
-  pytest -q
-  ```
+6. Quick tests:
+   ```bash
+   pytest -q
+   ```
 
-## 🛠️ Scripts standalone
-- `utils/standalone_download_liked_tweets.py`: descarga likes de X a Markdown desde un `storage_state` exportado.
-- `utils/standalone_download_instapaper.py`: baja todos tus artículos de Instapaper a HTML/Markdown en un directorio.
-- `utils/standalone_markdown_to_html.py`: convierte Markdown a HTML con márgenes sin depender del pipeline.
-- `utils/standalone_snipd_to_markdown.py`: limpia exports de Snipd y los divide en episodios con índice de snips.
+## 🛠️ Standalone scripts
+- `utils/standalone_download_liked_tweets.py`: downloads X likes to Markdown from an exported `storage_state`.
+- `utils/standalone_download_instapaper.py`: downloads all your Instapaper articles to HTML/Markdown in a directory.
+- `utils/standalone_markdown_to_html.py`: converts Markdown to HTML with margins without the full pipeline.
+- `utils/standalone_snipd_to_markdown.py`: cleans Snipd exports and splits them into episodes with a snips index.
 
-## 🌐 Publicación en tu dominio (`/read/`)
-- Ejecuta `web/deploy.sh` (desde `web/`) para generar un índice estático ordenado por `mtime` y subirlo al contenedor web en tu servidor (ruta `/read/`).
-- Usa BasicAuth en el host si quieres acceso privado (configurable con variables de entorno en el propio `deploy.sh`).
-- Comprueba tras el deploy:
+## 🌐 Publish on your domain (`/read/`)
+- Run `web/deploy.sh` (from `web/`) to generate a static index ordered by `mtime` and upload it to the web container on your server (path `/read/`).
+- Use BasicAuth on the host if you want private access (configurable via env vars in `deploy.sh`).
+- Check after deploy:
   ```bash
-  curl -I https://tu-dominio.com/read/
-  curl -s https://tu-dominio.com/read/ | head -n 20
+  curl -I https://your-domain.com/read/
+  curl -s https://your-domain.com/read/ | head -n 20
   ```
 
-## 📚 Documentación
-- `docs/guia.md` — guía operativa completa (comandos, overlay, citas, troubleshooting).
-- `docs/flujo.md` — flujo de extremo a extremo (entradas, pipeline, publicación y Obsidian).
-- `docs/readme-infra.md` — despliegue y hardening (Docker/Nginx, TLS, BasicAuth).
-- `docs/ops-playbook.md` — tareas operativas y checklists.
+## 📚 Documentation
+- `docs/guia.md` - full operating guide (commands, overlay, quotes, troubleshooting).
+- `docs/flujo.md` - end-to-end flow (inputs, pipeline, publishing, and Obsidian).
+- `docs/readme-infra.md` - deployment and hardening (Docker/Nginx, TLS, BasicAuth).
+- `docs/ops-playbook.md` - operational tasks and checklists.
 
-## 📂 Estructura base
+## 📂 Base structure
 ```
 ⭐️ Documentación/
 ├── Incoming/
-├── Posts/Posts <AÑO>/
-├── Tweets/Tweets <AÑO>/
-├── Podcasts/Podcasts <AÑO>/
-├── Pdfs/Pdfs <AÑO>/
-├── Images/Images <AÑO>/
-└── web/ (deploy estático)
+├── Posts/Posts <YEAR>/
+├── Tweets/Tweets <YEAR>/
+├── Podcasts/Podcasts <YEAR>/
+├── Pdfs/Pdfs <YEAR>/
+├── Images/Images <YEAR>/
+└── web/ (static deploy)
 ```
 
 © 2026 Domingo Gallardo López
