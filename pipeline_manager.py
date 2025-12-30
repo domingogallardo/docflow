@@ -86,7 +86,11 @@ class DocumentProcessor:
 
         for url in fresh_urls:
             try:
-                markdown, filename = fetch_tweet_markdown(url)
+                markdown, filename = fetch_tweet_markdown(
+                    url,
+                    # Usa el storage_state para evitar el login wall de X.
+                    storage_state=cfg.TWEET_LIKES_STATE,
+                )
             except Exception as exc:
                 print(f"❌ Error procesando {url}: {exc}")
                 continue

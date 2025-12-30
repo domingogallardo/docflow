@@ -20,6 +20,16 @@ USER_AGENT = (
     "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
     "AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Safari/605.1.15"
 )
+STEALTH_SNIPPET = """
+Object.defineProperty(navigator, 'webdriver', {get: () => undefined});
+window.chrome = window.chrome || { runtime: {} };
+const originalQuery = window.navigator.permissions.query;
+window.navigator.permissions.query = (parameters) => (
+  parameters.name === 'notifications'
+    ? Promise.resolve({ state: Notification.permission })
+    : originalQuery(parameters)
+);
+"""
 
 
 STAT_KEYWORDS = (
@@ -199,6 +209,34 @@ def _media_markdown_lines(media_urls: List[str]) -> List[str]:
     return lines
 
 
+def _resolve_storage_state(storage_state: Path | None) -> Path | None:
+    # El storage_state evita el login wall de X al abrir el tweet.
+    if storage_state is None:
+        return None
+    path = storage_state.expanduser()
+    if not path.exists():
+        raise FileNotFoundError(
+            f"No se encontró el storage_state en {path}. "
+            "Ejecuta utils/login_x.py para generarlo."
+        )
+    return path
+
+
+def _locate_tweet_article(page, *, timeout_ms: int = 15000):
+    # El login wall de X puede esconder el <article>; busca alternativas.
+    try:
+        page.wait_for_selector("article, div[data-testid='tweet']", timeout=timeout_ms)
+    except PlaywrightTimeoutError:
+        return None
+    article = page.locator("article")
+    if article.count() > 0:
+        return article.first
+    tweet = page.locator("div[data-testid='tweet']")
+    if tweet.count() > 0:
+        return tweet.first
+    return None
+
+
 def _extract_primary_link(article, tweet_url: str) -> str | None:
     """Returns the first external link (expanded/full/href) pointing to http(s), excluding the tweet itself."""
     seen: set[str] = set()
@@ -230,6 +268,7 @@ def fetch_tweet_markdown(
     *,
     wait_ms: int = 5000,
     headless: bool = True,
+    storage_state: Path | None = None,
 ) -> tuple[str, str]:
     """Devuelve (markdown, filename) para el tweet indicado."""
     if sync_playwright is None:
@@ -239,15 +278,25 @@ def fetch_tweet_markdown(
         )
     with sync_playwright() as playwright:
         browser = playwright.chromium.launch(headless=headless)
-        context = browser.new_context(user_agent=USER_AGENT)
+        state_path = _resolve_storage_state(storage_state)
+        context_kwargs = {"user_agent": USER_AGENT}
+        if state_path:
+            # Usa sesión autenticada para evitar el login wall de X.
+            context_kwargs["storage_state"] = str(state_path)
+        context = browser.new_context(**context_kwargs)
+        if state_path:
+            # Refuerza el contexto ante el login wall de X.
+            context.add_init_script(STEALTH_SNIPPET)
         page = context.new_page()
         page.goto(url, wait_until="domcontentloaded", timeout=60000)
         page.wait_for_timeout(wait_ms)
 
-        article = page.locator("article")
-        if article.count() == 0:
-            raise RuntimeError("No se encontró el <article> del post.")
-        article = article.first
+        article = _locate_tweet_article(page)
+        if article is None:
+            raise RuntimeError(
+                "No se encontró el <article> del post. "
+                "Puede requerir login o no estar disponible."
+            )
 
         author_name = None
         author_handle = None
