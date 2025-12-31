@@ -1,3 +1,7 @@
+---
+source: podcast
+---
+
 # Example Podcast
 
 ## Episode metadata

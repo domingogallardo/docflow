@@ -89,11 +89,12 @@ def get_article_js_script_tag() -> str:
     return ""
 
 
-def wrap_html(title: str, body: str, accent_color: str) -> str:
+def wrap_html(title: str, body: str, accent_color: str, meta_tags: str = "") -> str:
     """Wrap content in minimal HTML with base styles and an accent color."""
     return (
         "<!DOCTYPE html>\n"
         "<html>\n<head>\n<meta charset=\"UTF-8\">\n"
+        f"{meta_tags}"
         f"<title>{title}</title>\n"
         "<style>\n"
         f"{get_base_css()}"

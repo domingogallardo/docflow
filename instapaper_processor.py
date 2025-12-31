@@ -567,7 +567,14 @@ class InstapaperProcessor:
             content = path.read_text(encoding="utf-8", errors="ignore")
         except Exception:
             return False
-        return "<div id='origin'>" in content or '<div id="origin"' in content
+        try:
+            soup = BeautifulSoup(content, "html.parser")
+        except Exception:
+            return False
+        meta = soup.find("meta", attrs={"name": "docflow-source"})
+        if not meta:
+            return False
+        return str(meta.get("content", "")).strip().lower() == "instapaper"
     
 
     # Note: title generation uses title_ai.TitleAIUpdater.

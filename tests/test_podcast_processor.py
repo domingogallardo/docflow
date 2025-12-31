@@ -6,6 +6,7 @@ import pytest
 from pathlib import Path
 
 from podcast_processor import PodcastProcessor
+import utils as U
 
 
 def test_podcast_processor_with_podcasts(tmp_path):
@@ -119,14 +120,16 @@ def test_podcast_processor_clean_snipd_features(tmp_path):
     
     assert processed_md is not None
     content = processed_md.read_text()
-    
+    front_matter, body = U.split_front_matter(content)
+
     # Verify Snipd-specific elements were removed.
-    assert "---" not in content  # Horizontal rules removed
-    assert "<details>" not in content  # <details> tags removed
-    assert "🎧 [Play snip]" not in content  # Audio links replaced
-    assert "🎧 Play audio clip" in content  # New button
-    assert "br/>" not in content  # Line breaks processed
-    assert "Click to expand" not in content
+    assert front_matter.get("source") == "podcast"
+    assert "\n---\n" not in body  # Horizontal rules removed
+    assert "<details>" not in body  # <details> tags removed
+    assert "🎧 [Play snip]" not in body  # Audio links replaced
+    assert "🎧 Play audio clip" in body  # New button
+    assert "br/>" not in body  # Line breaks processed
+    assert "Click to expand" not in body
 
 
 def test_podcast_processor_show_notes_promoted(tmp_path):
@@ -212,6 +215,7 @@ def test_podcast_processor_markdown_to_html_conversion(tmp_path):
     html_content = html_files[0].read_text()
     assert "<!DOCTYPE html>" in html_content
     assert "<meta charset=\"UTF-8\">" in html_content
+    assert "<meta name=\"docflow-source\" content=\"podcast\">" in html_content
     assert "<strong>Bold text</strong>" in html_content
     assert "<em>italic text</em>" in html_content
     assert "<code>Code snippet</code>" in html_content

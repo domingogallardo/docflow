@@ -20,8 +20,10 @@ from utils.markdown_utils import (
     convert_newlines_to_br,
     convert_urls_to_links,
     extract_html_body,
+    front_matter_meta_tags,
     markdown_to_html,
     markdown_to_html_body,
+    split_front_matter,
 )
 from utils.podcasts import (
     extract_episode_title,
@@ -38,6 +40,7 @@ __all__ = [
     "convert_urls_to_links",
     "extract_episode_title",
     "extract_html_body",
+    "front_matter_meta_tags",
     "get_article_js_script_tag",
     "get_base_css",
     "is_instapaper_starred_file",
@@ -51,5 +54,6 @@ __all__ = [
     "move_files_with_replacement",
     "register_paths",
     "rename_podcast_files",
+    "split_front_matter",
     "wrap_html",
 ]

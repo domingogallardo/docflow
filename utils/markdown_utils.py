@@ -11,7 +11,7 @@ _FRONT_MATTER_KEYS = {
 }
 
 
-def _extract_front_matter(md_text: str) -> tuple[dict[str, str], str]:
+def split_front_matter(md_text: str) -> tuple[dict[str, str], str]:
     lines = md_text.splitlines()
     if not lines or lines[0].strip() != "---":
         return {}, md_text
@@ -48,14 +48,26 @@ def _parse_front_matter(lines: list[str]) -> dict[str, str]:
     return meta
 
 
-def _front_matter_meta_tags(meta: dict[str, str]) -> str:
+def front_matter_meta_tags(meta: dict[str, str]) -> str:
     tags: list[str] = []
     for key, meta_name in _FRONT_MATTER_KEYS.items():
         if key not in meta:
             continue
         value = html.escape(str(meta[key]), quote=True)
         tags.append(f'<meta name="{meta_name}" content="{value}">')
+        if key == "instapaper_starred":
+            tags.append(f'<meta name="instapaper-starred" content="{value}">')
     return "\n".join(tags) + ("\n" if tags else "")
+
+
+def _extract_front_matter(md_text: str) -> tuple[dict[str, str], str]:
+    """Backward-compatible wrapper for split_front_matter."""
+    return split_front_matter(md_text)
+
+
+def _front_matter_meta_tags(meta: dict[str, str]) -> str:
+    """Backward-compatible wrapper for front_matter_meta_tags."""
+    return front_matter_meta_tags(meta)
 
 
 def clean_duplicate_markdown_links(text: str) -> str:
@@ -143,7 +155,7 @@ def markdown_to_html(md_text: str, title: str = None) -> str:
     import markdown
 
     md_text = md_text.replace('\xa0', ' ')
-    front_matter, md_body = _extract_front_matter(md_text)
+    front_matter, md_body = split_front_matter(md_text)
     md_body = convert_urls_to_links(md_body)
 
     try:
@@ -164,7 +176,7 @@ def markdown_to_html(md_text: str, title: str = None) -> str:
     html_body = convert_newlines_to_br(html_body)
 
     title_tag = f"<title>{title}</title>\n" if title else ""
-    meta_tags = _front_matter_meta_tags(front_matter)
+    meta_tags = front_matter_meta_tags(front_matter)
     full_html = (
         "<!DOCTYPE html>\n"
         "<html>\n<head>\n<meta charset=\"UTF-8\">\n"

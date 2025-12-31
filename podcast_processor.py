@@ -30,6 +30,7 @@ class PodcastProcessor:
     
     def process_podcasts(self) -> List[Path]:
         """Run the full podcasts processing pipeline."""
+        self._tag_podcast_sources()
         podcasts = U.list_podcast_files(self.incoming_dir)
         if not podcasts:
             print("📻 No podcast files found to process")
@@ -91,6 +92,7 @@ class PodcastProcessor:
                 new_files: list[Path] = []
                 for i, (s, e) in enumerate(zip(starts, ends), start=1):
                     chunk = text[s:e].lstrip()  # clean leading blank headers
+                    chunk = self._ensure_podcast_front_matter(chunk)
                     # Provisional name based on the original.
                     base_stem = md_file.stem
                     provisional = md_file.parent / f"{base_stem} - part {i}.md"
@@ -144,6 +146,7 @@ class PodcastProcessor:
                 cleaned_lines = self._clean_lines(lines_after)
                 final_text = "".join(cleaned_lines)
                 final_text = self._add_snip_index(final_text)
+                final_text = self._ensure_podcast_front_matter(final_text)
 
                 if final_text != original_text:
                     md_file.write_text(final_text, encoding="utf-8")
@@ -151,6 +154,76 @@ class PodcastProcessor:
                     
             except Exception as e:
                 print(f"❌ Error cleaning {md_file}: {e}")
+
+    def _tag_podcast_sources(self) -> None:
+        """Tag Snipd exports with source: podcast when missing."""
+        md_files = list(self.incoming_dir.rglob("*.md"))
+        tagged = 0
+
+        for md_file in md_files:
+            try:
+                original_text = md_file.read_text(encoding="utf-8", errors="ignore")
+                meta, _ = U.split_front_matter(original_text)
+                if meta.get("source"):
+                    continue
+                if not self._looks_like_podcast(original_text):
+                    continue
+                updated_text = self._ensure_podcast_front_matter(original_text)
+                if updated_text != original_text:
+                    md_file.write_text(updated_text, encoding="utf-8")
+                    tagged += 1
+            except Exception as e:
+                print(f"❌ Error tagging {md_file}: {e}")
+
+        if tagged:
+            print(f"🏷️ Tagged {tagged} podcast file(s) with source: podcast")
+
+    @staticmethod
+    def _looks_like_podcast(text: str) -> bool:
+        lowered = text.lower()
+        return "episode metadata" in lowered and "## snips" in lowered
+
+    def _ensure_podcast_front_matter(self, text: str) -> str:
+        """Ensure podcast files carry a source tag in front matter."""
+        lines = text.splitlines()
+        if not lines or lines[0].strip() != "---":
+            cleaned = text.lstrip("\n")
+            return f"---\nsource: podcast\n---\n\n{cleaned}"
+
+        for idx in range(1, len(lines)):
+            if lines[idx].strip() != "---":
+                continue
+            front_lines = lines[1:idx]
+            body_lines = lines[idx + 1 :]
+            found_source = False
+            updated = False
+            new_front_lines: list[str] = []
+            for line in front_lines:
+                stripped = line.strip()
+                if stripped.startswith("source:"):
+                    found_source = True
+                    if stripped != "source: podcast":
+                        new_front_lines.append("source: podcast")
+                        updated = True
+                    else:
+                        new_front_lines.append(line)
+                    continue
+                new_front_lines.append(line)
+
+            if not found_source:
+                new_front_lines.insert(0, "source: podcast")
+                updated = True
+
+            if not updated:
+                return text
+
+            rebuilt = "\n".join(["---", *new_front_lines, "---", *body_lines])
+            if text.endswith("\n") and not rebuilt.endswith("\n"):
+                rebuilt += "\n"
+            return rebuilt
+
+        cleaned = text.lstrip("\n")
+        return f"---\nsource: podcast\n---\n\n{cleaned}"
     
     def _replace_snip_link(self, match: re.Match[str]) -> str:
         """Return embedded HTML for the snip link."""
@@ -327,8 +400,10 @@ class PodcastProcessor:
                     continue
                 
                 md_text = md_file.read_text(encoding="utf-8")
-                html_body = self._md_to_html(md_text)
-                full_html = self._wrap_html(md_file.stem, html_body)
+                front_matter, md_body = U.split_front_matter(md_text)
+                html_body = self._md_to_html(md_body)
+                meta_tags = U.front_matter_meta_tags(front_matter)
+                full_html = self._wrap_html(md_file.stem, html_body, meta_tags)
                 html_path.write_text(full_html, encoding="utf-8")
                 
                 # Show relative path if possible.
@@ -345,6 +420,6 @@ class PodcastProcessor:
         """Convert Markdown text to HTML and return only the body."""
         return U.markdown_to_html_body(md_text)
     
-    def _wrap_html(self, title: str, body: str) -> str:
+    def _wrap_html(self, title: str, body: str, meta_tags: str = "") -> str:
         """Wrap content in HTML with styles and the podcast color."""
-        return U.wrap_html(title, body, "#667eea")
+        return U.wrap_html(title, body, "#667eea", meta_tags)

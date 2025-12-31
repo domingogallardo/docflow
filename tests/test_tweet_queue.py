@@ -31,8 +31,8 @@ def test_process_tweet_urls_creates_files_from_likes(tmp_path, monkeypatch):
     )
 
     responses = [
-        ("# T1\n\n[View on X](https://x.com/1)\n", "Tweet - user-1.md"),
-        ("# T2\n\n[View on X](https://x.com/2)\n", "Tweet - user-2.md"),
+        ("---\nsource: tweet\n---\n\n# T1\n\n[View on X](https://x.com/1)\n", "Tweet - user-1.md"),
+        ("---\nsource: tweet\n---\n\n# T2\n\n[View on X](https://x.com/2)\n", "Tweet - user-2.md"),
     ]
 
     with patch("pipeline_manager.fetch_tweet_markdown", side_effect=responses):
@@ -60,7 +60,10 @@ def test_process_tweets_pipeline_runs_markdown_subset(tmp_path, monkeypatch):
 
     with patch(
         "pipeline_manager.fetch_tweet_markdown",
-        return_value=("# T1\n\n[View on X](https://x.com/1)\n", "Tweet - user-1.md"),
+        return_value=(
+            "---\nsource: tweet\n---\n\n# T1\n\n[View on X](https://x.com/1)\n",
+            "Tweet - user-1.md",
+        ),
     ):
         captured = {}
 
@@ -70,7 +73,7 @@ def test_process_tweets_pipeline_runs_markdown_subset(tmp_path, monkeypatch):
 
         monkeypatch.setattr(
             processor.tweet_processor,
-            "process_markdown_subset",
+            "process_tweet_markdown_subset",
             fake_subset,
         )
 
@@ -85,11 +88,11 @@ def test_process_tweets_pipeline_skips_when_likes_empty(tmp_path, monkeypatch):
     mock_likes(monkeypatch, [])
 
     def fail_subset(_):
-        raise AssertionError("process_markdown_subset debe omitirse")
+        raise AssertionError("process_tweet_markdown_subset debe omitirse")
 
     monkeypatch.setattr(
         processor.tweet_processor,
-        "process_markdown_subset",
+        "process_tweet_markdown_subset",
         fail_subset,
     )
 
@@ -112,7 +115,10 @@ def test_process_tweet_urls_skips_already_processed(tmp_path, monkeypatch):
 
     with patch(
         "pipeline_manager.fetch_tweet_markdown",
-        return_value=("# T2\n\n[View on X](https://x.com/2)\n", "Tweet - user-2.md"),
+        return_value=(
+            "---\nsource: tweet\n---\n\n# T2\n\n[View on X](https://x.com/2)\n",
+            "Tweet - user-2.md",
+        ),
     ) as mocked:
         created = processor.process_tweet_urls()
 
@@ -130,7 +136,10 @@ def test_process_tweet_urls_appends_processed_file(tmp_path, monkeypatch):
 
     with patch(
         "pipeline_manager.fetch_tweet_markdown",
-        return_value=("# T\n\n[View on X](https://x.com/42)\n", "Tweet - user-42.md"),
+        return_value=(
+            "---\nsource: tweet\n---\n\n# T\n\n[View on X](https://x.com/42)\n",
+            "Tweet - user-42.md",
+        ),
     ):
         processor.process_tweet_urls()
 
@@ -153,7 +162,10 @@ def test_last_processed_uses_first_line(tmp_path, monkeypatch):
     mock_likes(monkeypatch, ["https://x.com/user/status/4"])
     with patch(
         "pipeline_manager.fetch_tweet_markdown",
-        return_value=("# T4\n\n[View on X](https://x.com/4)\n", "Tweet - user-4.md"),
+        return_value=(
+            "---\nsource: tweet\n---\n\n# T4\n\n[View on X](https://x.com/4)\n",
+            "Tweet - user-4.md",
+        ),
     ):
         processor.process_tweet_urls()
 
@@ -169,11 +181,11 @@ def test_process_tweet_urls_processes_all_when_no_stop(tmp_path, monkeypatch):
     with patch(
         "pipeline_manager.fetch_tweet_markdown",
         side_effect=[
-            ("# T1\n\n[View on X](https://x.com/1)\n", "Tweet - user-1.md"),
-            ("# T2\n\n[View on X](https://x.com/2)\n", "Tweet - user-2.md"),
-            ("# T3\n\n[View on X](https://x.com/3)\n", "Tweet - user-3.md"),
-            ("# T4\n\n[View on X](https://x.com/4)\n", "Tweet - user-4.md"),
-            ("# T5\n\n[View on X](https://x.com/5)\n", "Tweet - user-5.md"),
+            ("---\nsource: tweet\n---\n\n# T1\n\n[View on X](https://x.com/1)\n", "Tweet - user-1.md"),
+            ("---\nsource: tweet\n---\n\n# T2\n\n[View on X](https://x.com/2)\n", "Tweet - user-2.md"),
+            ("---\nsource: tweet\n---\n\n# T3\n\n[View on X](https://x.com/3)\n", "Tweet - user-3.md"),
+            ("---\nsource: tweet\n---\n\n# T4\n\n[View on X](https://x.com/4)\n", "Tweet - user-4.md"),
+            ("---\nsource: tweet\n---\n\n# T5\n\n[View on X](https://x.com/5)\n", "Tweet - user-5.md"),
         ],
     ):
         created = processor.process_tweet_urls()

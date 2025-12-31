@@ -15,7 +15,21 @@ def test_markdown_processor_converts_and_moves_files(tmp_path):
 
     # Files that should be ignored by specific pipelines.
     podcast_md = incoming / "snipd_ep.md"
-    podcast_md.write_text("""# Episodio\n\n## Episode metadata\n- Episode title: Test\n- Show: Demo\n\n## Snips\n- Contenido""", encoding="utf-8")
+    podcast_md.write_text(
+        """---
+source: podcast
+---
+
+# Episodio
+
+## Episode metadata
+- Episode title: Test
+- Show: Demo
+
+## Snips
+- Contenido""",
+        encoding="utf-8",
+    )
 
     processor = MarkdownProcessor(incoming, destination)
     processor.title_updater.update_titles = lambda files, renamer: None

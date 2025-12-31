@@ -198,7 +198,10 @@ def test_instapaper_processor_with_existing_html(tmp_path):
     html_file = incoming / "test_article.html"
     html_content = """<!DOCTYPE html>
     <html>
-    <head><title>Test Article</title></head>
+    <head>
+        <meta name="docflow-source" content="instapaper">
+        <title>Test Article</title>
+    </head>
     <body>
         <h1>Test Article</h1>
         <div id="origin">Example.com · 123</div>
@@ -352,7 +355,11 @@ It contains interesting information about the latest developments in the field.
 The content is written in English and discusses various technical topics.
 """
     md_file.write_text(md_content)
-    (incoming / "original_title.html").write_text("<html><div id='origin'>demo</div></html>", encoding="utf-8")
+    (incoming / "original_title.html").write_text(
+        "<html><head><meta name=\"docflow-source\" content=\"instapaper\"></head>"
+        "<div id='origin'>demo</div></html>",
+        encoding="utf-8",
+    )
     
     # Create processor.
     processor = InstapaperProcessor(incoming, destination)
