@@ -37,7 +37,11 @@ def test_document_processor_integration(tmp_path):
     
     # Regular post HTML (simulating Instapaper).
     html_file = incoming / "test_post.html"
-    html_file.write_text("<html><head><title>Test Post</title></head><body>Content</body></html>", encoding="utf-8")
+    html_file.write_text(
+        "<html><head><meta name=\"docflow-source\" content=\"instapaper\">"
+        "<title>Test Post</title></head><body>Content</body></html>",
+        encoding="utf-8",
+    )
 
     # Generic Markdown.
     generic_md = incoming / "nota.md"

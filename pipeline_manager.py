@@ -221,7 +221,7 @@ class DocumentProcessor:
             if log_empty:
                 print("🐦 No new tweets to convert to HTML")
             return []
-        return self._run_and_remember(lambda: self.tweet_processor.process_markdown_subset(files))
+        return self._run_and_remember(lambda: self.tweet_processor.process_tweet_markdown_subset(files))
     
     def register_all_files(self) -> None:
         """Register all processed files in history."""

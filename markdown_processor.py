@@ -54,6 +54,23 @@ class MarkdownProcessor:
             context=f"📝 Processing {len(selected)} selected Markdown file(s)...",
         )
 
+    def process_tweet_markdown_subset(self, markdown_files: Iterable[Path]) -> List[Path]:
+        """Process a specific tweet Markdown subset (for example, newly downloaded tweets)."""
+        selected: List[Path] = []
+        for raw_path in markdown_files:
+            path = Path(raw_path)
+            if self.is_tweet_markdown(path):
+                selected.append(path)
+
+        if not selected:
+            print("🐦 No valid tweet Markdown files to process")
+            return []
+
+        return self._process_markdown_batch(
+            selected,
+            context=f"📝 Processing {len(selected)} selected Markdown file(s)...",
+        )
+
     def _process_markdown_batch(
         self,
         markdown_files: List[Path],
@@ -113,51 +130,11 @@ class MarkdownProcessor:
         """Determine whether the Markdown file does not belong to other specialized pipelines."""
         if not path.is_file() or path.suffix.lower() != ".md":
             return False
-        source = self._front_matter_source(path)
-        if source in {"tweet", "instapaper"}:
-            return False
-        if U.is_podcast_file(path):
-            return False
-        if self.is_tweet_markdown(path):
-            return False
-        if self._is_instapaper_markdown(path):
-            return False
-        return True
-
-    def _is_instapaper_markdown(self, path: Path) -> bool:
-        html_path = path.with_suffix(".html")
-        if html_path.exists():
-            return self._is_instapaper_html(html_path)
-        return False
-
-    @staticmethod
-    def _is_instapaper_html(path: Path) -> bool:
-        try:
-            content = path.read_text(encoding="utf-8", errors="ignore")
-        except Exception:
-            return False
-        if '<meta name="docflow-source" content="instapaper">' in content:
-            return True
-        return "<div id='origin'>" in content or '<div id="origin"' in content
+        return self._front_matter_source(path) == ""
 
     @staticmethod
     def is_tweet_markdown(path: Path) -> bool:
-        source = MarkdownProcessor._front_matter_source(path)
-        if source == "tweet":
-            return True
-        if source == "instapaper":
-            return False
-        lines = MarkdownProcessor._read_lines(path, 12)
-        if not lines:
-            return False
-        header = lines[0].lower()
-        if header.startswith("# tweet by") or header.startswith("# tweet de"):
-            return True
-        for line in lines[:5]:
-            lower = line.lower()
-            if ("view on x" in lower or "ver en x" in lower) and "x.com/" in lower:
-                return True
-        return False
+        return MarkdownProcessor._front_matter_source(path) == "tweet"
 
     @staticmethod
     def _front_matter_source(path: Path) -> str:
@@ -188,22 +165,6 @@ class MarkdownProcessor:
             value = raw.strip().strip("'\"")
             return value.lower()
         return ""
-
-    @staticmethod
-    def _read_lines(path: Path, max_lines: int) -> list[str]:
-        try:
-            lines = []
-            with open(path, "r", encoding="utf-8", errors="ignore") as fh:
-                for _ in range(max_lines):
-                    line = fh.readline()
-                    if not line:
-                        break
-                    stripped = line.strip()
-                    if stripped:
-                        lines.append(stripped)
-            return lines
-        except Exception:
-            return []
 
     def _collect_move_candidates(self, markdown_files: Iterable[Path]) -> List[Path]:
         """Collect files (MD + HTML) to move to the yearly destination."""

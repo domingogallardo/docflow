@@ -4,6 +4,7 @@ import re
 from config import INCOMING
 from path_utils import unique_pair
 from utils.file_ops import list_files
+from utils.markdown_utils import split_front_matter
 
 
 def is_podcast_file(file_path: Path) -> bool:
@@ -12,7 +13,8 @@ def is_podcast_file(file_path: Path) -> bool:
         if not file_path.suffix.lower() == '.md':
             return False
         content = file_path.read_text(encoding="utf-8", errors="ignore")
-        return "Episode metadata" in content and "## Snips" in content
+        meta, _ = split_front_matter(content)
+        return str(meta.get("source", "")).lower() == "podcast"
     except Exception:
         return False
 
