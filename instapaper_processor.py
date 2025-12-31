@@ -382,12 +382,14 @@ class InstapaperProcessor:
         comment = "<!-- instapaper_starred: true method=read_or_list -->\n" if starred else ""
         html_attrs = ' data-instapaper-starred="true"' if starred else ""
         extra_meta = '<meta name="instapaper-starred" content="true">\n' if starred else ""
+        source_meta = '<meta name="docflow-source" content="instapaper">\n'
         return (
             "<!DOCTYPE html>\n"
             f"{comment}"
             f"<html{html_attrs}>\n"
             "<head>\n"
             '<meta charset="UTF-8">\n'
+            f"{source_meta}"
             f"{extra_meta}"
             f"<title>{title}</title>\n"
             "</head>\n<body>\n"
