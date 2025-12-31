@@ -20,11 +20,18 @@ This document describes how each content type enters, is processed, and is publi
 | **A. Instapaper** | Articles and newsletters saved in Instapaper | Exported Markdown/HTML | `python process_documents.py posts` → `InstapaperProcessor` |
 | **B. Snipd** | Podcast snips with transcripts | Snipd Markdown export | `python process_documents.py podcasts` → `PodcastProcessor` |
 | **C. Local Incoming** | PDFs, `.md`, or other files saved in `⭐️ Documentación/Incoming` | `.pdf`, `.md`, images | `python process_documents.py pdfs/md/images` → specific processors |
-| **D. X likes** | Marked as "Like" on `TWEET_LIKES_URL` | Individual tweets | `python process_documents.py tweets` → `process_tweets_pipeline()` → `MarkdownProcessor.process_markdown_subset()` → `Tweets/Tweets <YEAR>/` |
+| **D. X likes** | Marked as "Like" on `TWEET_LIKES_URL` | Individual tweets | `python process_documents.py tweets` → `process_tweets_pipeline()` → `MarkdownProcessor.process_tweet_markdown_subset()` → `Tweets/Tweets <YEAR>/` |
 
 Important notes for input D:
 - The tweets pipeline uses `utils/x_likes_fetcher.fetch_likes_with_state` to open your likes feed with Playwright and stop once it reaches the last tweet recorded in `Incoming/tweets_processed.txt`.
 - Tweets are managed exclusively via those likes or dedicated tools; Instapaper is no longer used to capture them.
+
+Routing rule (no heuristics):
+- **Markdown** is routed exclusively by `source:` front matter.
+- **Tweets**: `source: tweet`.
+- **Instapaper**: Markdown uses `source: instapaper`; HTML must include `<meta name="docflow-source" content="instapaper">`.
+- **Podcasts**: `source: podcast` (auto-added when cleaning Snipd exports).
+- **Generic Markdown**: any `.md` without a `source:` tag.
 
 ---
 

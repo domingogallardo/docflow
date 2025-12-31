@@ -24,6 +24,11 @@
   - Automatic if the Instapaper title starts with **⭐**.  
   - Manual via the overlay or `utils/bump.applescript` / `utils/un-bump.applescript` (Finder).
 - **Overlay**: UI on locally served HTML to perform actions (bump/unbump, publish, etc.).
+- **Source tags (routing)**: Markdown routing is based on `source:` front matter only.  
+  - Tweets: `source: tweet`  
+  - Instapaper: `source: instapaper` (HTML must include `<meta name="docflow-source" content="instapaper">`)  
+  - Podcasts: `source: podcast`  
+  - Generic Markdown: any `.md` without a `source:` tag
 
 ---
 
@@ -70,7 +75,7 @@ python process_documents.py images
 - Snipd podcasts (MD → clean HTML, system typography, audio buttons).  
 - PDFs (yearly organization).  
 - Images (yearly copy + `gallery.html` for JPG/PNG/WebP/TIFF/GIF/BMP).  
-All of this is orchestrated by `process_documents.py` and specific `*_processor.py` modules.
+All of this is orchestrated by `process_documents.py` and specific `*_processor.py` modules. Routing is tag-based: any Markdown without a `source:` tag is treated as generic input.
 
 > **Tweet shortcut**: `python utils/tweet_to_markdown.py https://x.com/...` downloads the tweet with Playwright and saves it as `.md` with title, link, profile photo, and body without metrics (views/likes), followed by attached images.
 

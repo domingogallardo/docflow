@@ -7,6 +7,7 @@ docflow automates **collect -> process -> prioritize (bump) -> read -> publish -
 - Automatic bump/unbump (⭐ in Instapaper) and a local overlay (`utils/serve_docs.py`) to publish/unpublish/delete.
 - Deploy to your domain via `web/deploy.sh`: generates a static `/read/` index ordered by `mtime`.
 - History log (`Incoming/processed_history.txt`) and utilities for AI titles, Markdown cleanup, and quote capture.
+- Routing is tag-based: tweets/podcasts/Instapaper are tagged, and generic Markdown is any `.md` without a `source:` tag.
 
 ## 🖼️ Full processing
 ![Full pipeline diagram](complete_processing.png)
@@ -64,6 +65,13 @@ docflow automates **collect -> process -> prioritize (bump) -> read -> publish -
   python process_documents.py tweets
   ```
 - The pipeline stops at the last processed tweet (`Incoming/tweets_processed.txt`) and honors `TWEET_LIKES_MAX` and `TWEET_LIKES_BATCH` (optional).
+
+## 🏷️ Source tags (routing)
+- Markdown routing is based on `source:` front matter (no heuristics).
+- Tweets: `source: tweet` (added by `tweet_to_markdown.py` / likes pipeline).
+- Instapaper: HTML includes `<meta name="docflow-source" content="instapaper">` and Markdown includes `source: instapaper`.
+- Podcasts: `source: podcast` (auto-added when cleaning Snipd exports).
+- Generic Markdown: any `.md` in `Incoming/` without a `source:` tag.
 
 ## 🛠️ Standalone scripts
 - `utils/standalone_download_liked_tweets.py`: download X likes to Markdown from an exported `storage_state`.
