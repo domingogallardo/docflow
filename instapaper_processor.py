@@ -436,11 +436,13 @@ class InstapaperProcessor:
                     flags=re.MULTILINE
                 )
                 
-                if is_starred:
-                    front_matter = "---\ninstapaper_starred: true\n---\n\n"
-                    markdown_content = front_matter + markdown_body
-                else:
-                    markdown_content = markdown_body  # without front matter
+                front_matter = (
+                    "---\n"
+                    "source: instapaper\n"
+                    f"instapaper_starred: {'true' if is_starred else 'false'}\n"
+                    "---\n\n"
+                )
+                markdown_content = front_matter + markdown_body
 
                 md_file = html_file.with_suffix('.md')
                 md_file.write_text(markdown_content, encoding='utf-8')

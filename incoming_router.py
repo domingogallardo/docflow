@@ -8,6 +8,7 @@ from typing import Iterable
 
 import utils as U
 from image_processor import ImageProcessor
+import re
 
 
 @dataclass
@@ -52,6 +53,14 @@ class IncomingRouter:
         instapaper_html_stems = {p.with_suffix("").name for p in instapaper_html}
 
         for md_path in md_files:
+            front_matter = self._read_front_matter(md_path)
+            source = front_matter.get("source", "").lower()
+            if source == "tweet":
+                plan.tweet_markdown.append(md_path)
+                continue
+            if source == "instapaper":
+                plan.instapaper_markdown.append(md_path)
+                continue
             if U.is_podcast_file(md_path):
                 plan.podcast_markdown.append(md_path)
                 continue
@@ -66,6 +75,12 @@ class IncomingRouter:
         return plan
 
     def _is_instapaper_markdown(self, path: Path, instapaper_html_stems: Iterable[str]) -> bool:
+        front_matter = self._read_front_matter(path)
+        source = front_matter.get("source", "").lower()
+        if source == "instapaper":
+            return True
+        if source == "tweet":
+            return False
         html_path = path.with_suffix(".html")
         if html_path.exists():
             if html_path.with_suffix("").name in instapaper_html_stems:
@@ -75,10 +90,20 @@ class IncomingRouter:
         return "instapaper_starred:" in head
 
     def _is_instapaper_html(self, path: Path) -> bool:
+        meta = self._read_html_meta(path)
+        source = meta.get("docflow-source", "").lower()
+        if source == "instapaper":
+            return True
         content = self._read_head(path)
         return "<div id='origin'>" in content or '<div id="origin"' in content
 
     def _is_tweet_markdown(self, path: Path) -> bool:
+        front_matter = self._read_front_matter(path)
+        source = front_matter.get("source", "").lower()
+        if source == "tweet":
+            return True
+        if source == "instapaper":
+            return False
         lines = self._read_lines(path, 12)
         if not lines:
             return False
@@ -92,6 +117,10 @@ class IncomingRouter:
         return False
 
     def _is_tweet_html(self, path: Path) -> bool:
+        meta = self._read_html_meta(path)
+        source = meta.get("docflow-source", "").lower()
+        if source == "tweet":
+            return True
         content = self._read_head(path)
         lowered = content.lower()
         if "tweet by" in lowered or "tweet de" in lowered:
@@ -107,6 +136,53 @@ class IncomingRouter:
             return data.decode("utf-8", errors="ignore")
         except Exception:
             return ""
+
+    @staticmethod
+    def _read_front_matter(path: Path) -> dict[str, str]:
+        try:
+            with open(path, "r", encoding="utf-8", errors="ignore") as fh:
+                lines = []
+                for _ in range(64):
+                    line = fh.readline()
+                    if not line:
+                        break
+                    lines.append(line.rstrip("\n"))
+        except Exception:
+            return {}
+
+        if not lines or lines[0].strip() != "---":
+            return {}
+
+        meta: dict[str, str] = {}
+        for line in lines[1:]:
+            stripped = line.strip()
+            if stripped == "---":
+                return meta
+            if ":" not in line:
+                continue
+            key, raw = line.split(":", 1)
+            key = key.strip()
+            value = raw.strip()
+            if not key:
+                continue
+            if value.startswith(("\"", "'")) and value.endswith(("\"", "'")) and len(value) >= 2:
+                value = value[1:-1]
+            if value:
+                meta[key] = value
+        return {}
+
+    def _read_html_meta(self, path: Path) -> dict[str, str]:
+        head = self._read_head(path)
+        meta: dict[str, str] = {}
+        for tag in re.findall(r"<meta\\s+[^>]*>", head, flags=re.I):
+            name_match = re.search(r'name=["\\\']([^"\\\']+)["\\\']', tag, flags=re.I)
+            if not name_match:
+                continue
+            content_match = re.search(r'content=["\\\']([^"\\\']*)["\\\']', tag, flags=re.I)
+            name = name_match.group(1)
+            value = content_match.group(1) if content_match else ""
+            meta[name] = value
+        return meta
 
     @staticmethod
     def _read_lines(path: Path, max_lines: int) -> list[str]:

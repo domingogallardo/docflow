@@ -1,4 +1,61 @@
 import re
+import html
+
+
+_FRONT_MATTER_KEYS = {
+    "source": "docflow-source",
+    "tweet_url": "docflow-tweet-url",
+    "tweet_author": "docflow-tweet-author",
+    "tweet_author_name": "docflow-tweet-author-name",
+    "instapaper_starred": "docflow-instapaper-starred",
+}
+
+
+def _extract_front_matter(md_text: str) -> tuple[dict[str, str], str]:
+    lines = md_text.splitlines()
+    if not lines or lines[0].strip() != "---":
+        return {}, md_text
+
+    front_lines: list[str] = []
+    for idx in range(1, len(lines)):
+        if lines[idx].strip() == "---":
+            meta = _parse_front_matter(front_lines)
+            if not meta:
+                return {}, md_text
+            body = "\n".join(lines[idx + 1 :])
+            if md_text.endswith("\n") and not body.endswith("\n"):
+                body += "\n"
+            return meta, body
+        front_lines.append(lines[idx])
+
+    return {}, md_text
+
+
+def _parse_front_matter(lines: list[str]) -> dict[str, str]:
+    meta: dict[str, str] = {}
+    for line in lines:
+        if ":" not in line:
+            continue
+        key, raw = line.split(":", 1)
+        key = key.strip()
+        value = raw.strip()
+        if not key:
+            continue
+        if value.startswith(("\"", "'")) and value.endswith(("\"", "'")) and len(value) >= 2:
+            value = value[1:-1]
+        if value:
+            meta[key] = value
+    return meta
+
+
+def _front_matter_meta_tags(meta: dict[str, str]) -> str:
+    tags: list[str] = []
+    for key, meta_name in _FRONT_MATTER_KEYS.items():
+        if key not in meta:
+            continue
+        value = html.escape(str(meta[key]), quote=True)
+        tags.append(f'<meta name="{meta_name}" content="{value}">')
+    return "\n".join(tags) + ("\n" if tags else "")
 
 
 def clean_duplicate_markdown_links(text: str) -> str:
@@ -86,11 +143,12 @@ def markdown_to_html(md_text: str, title: str = None) -> str:
     import markdown
 
     md_text = md_text.replace('\xa0', ' ')
-    md_text = convert_urls_to_links(md_text)
+    front_matter, md_body = _extract_front_matter(md_text)
+    md_body = convert_urls_to_links(md_body)
 
     try:
         html_body = markdown.markdown(
-            md_text,
+            md_body,
             extensions=[
                 "fenced_code",
                 "tables",
@@ -101,14 +159,16 @@ def markdown_to_html(md_text: str, title: str = None) -> str:
         )
     except Exception as e:
         print(f"⚠️  Error converting markdown, trying without extensions: {e}")
-        html_body = markdown.markdown(md_text, output_format="html5")
+        html_body = markdown.markdown(md_body, output_format="html5")
 
     html_body = convert_newlines_to_br(html_body)
 
     title_tag = f"<title>{title}</title>\n" if title else ""
+    meta_tags = _front_matter_meta_tags(front_matter)
     full_html = (
         "<!DOCTYPE html>\n"
         "<html>\n<head>\n<meta charset=\"UTF-8\">\n"
+        f"{meta_tags}"
         f"{title_tag}"
         "</head>\n<body>\n"
         f"{html_body}\n"

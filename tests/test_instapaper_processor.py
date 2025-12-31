@@ -71,9 +71,11 @@ def test_instapaper_star_detection_and_propagation_from_read_html(tmp_path):
     processor._convert_html_to_markdown()
     md_path = html_path.with_suffix('.md')
     md_text = md_path.read_text(encoding="utf-8")
-    assert md_text.startswith("---\ninstapaper_starred: true\n---\n")
+    assert md_text.startswith("---\nsource: instapaper\ninstapaper_starred: true\n---\n")
     # No star should remain at the start of the heading.
-    assert not md_text.splitlines()[3].startswith("# ⭐")
+    header_lines = [line for line in md_text.splitlines() if line.startswith("#")]
+    assert header_lines
+    assert not header_lines[0].startswith("# ⭐")
 
 
 def test_instapaper_processor_no_star_no_meta(tmp_path):
@@ -119,12 +121,11 @@ def test_instapaper_processor_no_star_no_meta(tmp_path):
     assert "<title>Normal Sample</title>" in html_text
     assert "<h1>Normal Sample</h1>" in html_text
 
-    # Converting to Markdown should not add starred front matter.
+    # Converting to Markdown should add front matter with starred=false.
     processor._convert_html_to_markdown()
     md_path = html_path.with_suffix('.md')
     md_text = md_path.read_text(encoding="utf-8")
-    assert not md_text.startswith("---\ninstapaper_starred: true\n---\n")
-    assert "instapaper_starred:" not in md_text
+    assert md_text.startswith("---\nsource: instapaper\ninstapaper_starred: false\n---\n")
 
 
 def test_download_registry_persistence(tmp_path):
