@@ -250,6 +250,7 @@ class InstapaperDownloader:
         file_name = _truncate_filename(safe, ".html")
         html_path = _unique_path(self.output_dir / file_name)
 
+        source_meta = '<meta name="docflow-source" content="instapaper">\n'
         star_meta = '<meta name="instapaper-starred" content="true">\n' if starred else ""
         star_attr = ' data-instapaper-starred="true"' if starred else ""
         comment = "<!-- instapaper_starred: true method=read_or_list -->\n" if starred else ""
@@ -258,6 +259,7 @@ class InstapaperDownloader:
             "<!DOCTYPE html>\n"
             f"{comment}"
             f"<html{star_attr}>\n<head>\n<meta charset=\"UTF-8\">\n"
+            f"{source_meta}"
             f"{star_meta}"
             f"<title>{title}</title>\n"
             "</head>\n<body>\n"
@@ -281,9 +283,13 @@ class InstapaperDownloader:
         )
 
         md_path = html_path.with_suffix(".md")
-        if starred:
-            markdown_body = f"---\ninstapaper_starred: true\n---\n\n{markdown_body}"
-        md_path.write_text(markdown_body, encoding="utf-8")
+        front_matter = (
+            "---\n"
+            "source: instapaper\n"
+            f"instapaper_starred: {'true' if starred else 'false'}\n"
+            "---\n\n"
+        )
+        md_path.write_text(front_matter + markdown_body, encoding="utf-8")
         print(f"📝 Markdown saved: {md_path.name}")
         return md_path
 

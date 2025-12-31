@@ -325,7 +325,18 @@ def fetch_tweet_markdown(
         filename = _build_filename(url, author_handle)
         avatar_url, media_urls = _split_image_urls(image_urls)
 
-        md_lines = [f"# {title}", "", f"[View on X]({url})"]
+        front_matter = [
+            "---",
+            "source: tweet",
+            f"tweet_url: {url}",
+        ]
+        if author_handle:
+            front_matter.append(f'tweet_author: "{author_handle}"')
+        if author_name:
+            front_matter.append(f'tweet_author_name: "{author_name}"')
+        front_matter.extend(["---", ""])
+
+        md_lines = [*front_matter, f"# {title}", "", f"[View on X]({url})"]
 
         if avatar_url:
             md_lines.extend(["", f"![avatar]({avatar_url})"])
