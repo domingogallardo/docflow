@@ -38,20 +38,32 @@ class SnipdMarkdownConverter:
             raise FileNotFoundError(f"Input file not found: {self.input_file}")
 
         raw_text = self.input_file.read_text(encoding="utf-8", errors="ignore")
+        source = self._front_matter_source(raw_text)
+        if source and source.lower() != "podcast":
+            print("⚠️  Input already has a different source; skipping.")
+            return []
+        if source is None and not self._looks_like_podcast(raw_text):
+            print("⚠️  Input does not look like a Snipd podcast export.")
+            return []
+
         episodes = self._split_by_episode(raw_text)
+        multiple = len(episodes) > 1
 
         self.output_dir.mkdir(parents=True, exist_ok=True)
 
         generated: list[Path] = []
         for index, episode_text in enumerate(episodes, start=1):
+            episode_text = self._ensure_podcast_front_matter(episode_text)
             cleaned_text = self._clean_snipd_text(episode_text)
             cleaned_text = self._ensure_podcast_front_matter(cleaned_text)
-            title = (
-                self._extract_episode_title_from_text(cleaned_text)
-                or self._extract_title(cleaned_text)
-                or f"{self.input_file.stem} part {index}"
-            )
-            filename = self._unique_filename(title, index)
+            title = self._extract_episode_title_from_text(cleaned_text)
+            if title:
+                base = title
+            elif multiple:
+                base = f"{self.input_file.stem} - part {index}"
+            else:
+                base = self.input_file.stem
+            filename = self._unique_filename(base)
             output_path = self.output_dir / filename
             output_path.write_text(cleaned_text, encoding="utf-8")
             generated.append(output_path)
@@ -118,6 +130,28 @@ class SnipdMarkdownConverter:
 
         cleaned = text.lstrip("\n")
         return f"---\nsource: podcast\n---\n\n{cleaned}"
+
+    def _front_matter_source(self, text: str) -> str | None:
+        lines = text.splitlines()
+        if not lines or lines[0].strip() != "---":
+            return None
+        for idx in range(1, len(lines)):
+            if lines[idx].strip() == "---":
+                for line in lines[1:idx]:
+                    if ":" not in line:
+                        continue
+                    key, raw = line.split(":", 1)
+                    if key.strip() == "source":
+                        value = raw.strip()
+                        if value.startswith(("\"", "'")) and value.endswith(("\"", "'")) and len(value) >= 2:
+                            value = value[1:-1]
+                        return value
+                return None
+        return None
+
+    def _looks_like_podcast(self, text: str) -> bool:
+        lowered = text.lower()
+        return "episode metadata" in lowered and "## snips" in lowered
 
     def _replace_snip_link(self, match: re.Match[str]) -> str:
         url = match.group(1)
@@ -275,8 +309,8 @@ class SnipdMarkdownConverter:
         cleaned = re.sub(r'\s+', ' ', cleaned).strip()
         return cleaned[:200]
 
-    def _unique_filename(self, title: str, index: int) -> str:
-        base = self._sanitize_title_for_filename(title) or f"podcast-{index:02d}"
+    def _unique_filename(self, title: str) -> str:
+        base = self._sanitize_title_for_filename(title) or "podcast"
         filename = f"{base}.md"
         counter = 1
         while (self.output_dir / filename).exists():
