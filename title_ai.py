@@ -54,7 +54,9 @@ class TitleAIUpdater:
         for md_file in md_files:
             try:
                 old_title, snippet = self._extract_content(md_file)
-                lang = self._detect_language(" ".join(snippet.split()[:50]))
+                lang_sample = self._extract_language_sample(md_file)
+                lang_probe = lang_sample or " ".join(snippet.split()[:50])
+                lang = self._detect_language(lang_probe)
                 new_title = self._generate_title(snippet, lang, old_title)
                 print(f"📄 {old_title} → {new_title} [{lang}]")
 
@@ -77,6 +79,62 @@ class TitleAIUpdater:
                     break
         snippet = " ".join(words[: self.num_words]).encode("utf-8")[: self.max_bytes_md].decode("utf-8", "ignore")
         return raw_name, snippet
+
+    def _extract_language_sample(self, path: Path) -> str:
+        try:
+            lines = path.read_text(encoding="utf-8", errors="ignore").splitlines()
+        except Exception:
+            return ""
+
+        author_name = None
+        author_handle = None
+        start_idx = 0
+        if lines and lines[0].strip() == "---":
+            start_idx = 1
+            while start_idx < len(lines):
+                line = lines[start_idx].strip()
+                if line == "---":
+                    start_idx += 1
+                    break
+                if line.startswith("tweet_author_name:"):
+                    author_name = line.split(":", 1)[1].strip().strip("'\"")
+                elif line.startswith("tweet_author:"):
+                    author_handle = line.split(":", 1)[1].strip().strip("'\"")
+                start_idx += 1
+
+        words: List[str] = []
+        for line in lines[start_idx:]:
+            stripped = line.strip()
+            if not stripped:
+                continue
+
+            lowered = stripped.lower()
+            if stripped.startswith("#") and "tweet by" in lowered:
+                continue
+            if lowered.startswith("tweet by "):
+                continue
+            if lowered.startswith("[view on x]("):
+                continue
+            if stripped.startswith(("![", "[![")):
+                continue
+            if lowered.startswith("original link:"):
+                continue
+            if lowered.startswith(("http://", "https://")):
+                continue
+            if stripped == "·" or lowered in ("show more", "quote"):
+                continue
+            if author_name and stripped == author_name:
+                continue
+            if author_handle and stripped == author_handle:
+                continue
+            if stripped.startswith("@") and len(stripped) <= 30:
+                continue
+
+            words.extend(stripped.split())
+            if len(words) >= self.num_words:
+                break
+
+        return " ".join(words[: self.num_words]).encode("utf-8")[: self.max_bytes_md].decode("utf-8", "ignore")
 
     def _ai_text(
         self,
@@ -192,8 +250,70 @@ class TitleAIUpdater:
                 return "English"
         except Exception:
             pass
+        return self._fallback_language(sample_text)
 
-        if re.search(r"[áéíóúñ¿¡]", sample_text, re.I):
+    def _fallback_language(self, sample_text: str) -> str:
+        cleaned = re.sub(r"https?://\\S+", " ", sample_text)
+        cleaned = re.sub(r"@\\w+", " ", cleaned)
+        lowered = cleaned.lower()
+        tokens = re.findall(r"[a-záéíóúñü]+", lowered)
+
+        spanish_hints = {
+            "el",
+            "la",
+            "los",
+            "las",
+            "de",
+            "del",
+            "al",
+            "que",
+            "y",
+            "por",
+            "para",
+            "con",
+            "una",
+            "un",
+            "es",
+            "en",
+            "como",
+            "pero",
+            "si",
+            "no",
+            "sus",
+            "su",
+            "lo",
+        }
+        english_hints = {
+            "the",
+            "and",
+            "of",
+            "to",
+            "in",
+            "for",
+            "with",
+            "that",
+            "this",
+            "is",
+            "are",
+            "was",
+            "were",
+            "be",
+            "on",
+            "as",
+            "it",
+            "we",
+            "you",
+        }
+
+        spanish_hits = sum(1 for token in tokens if token in spanish_hints)
+        english_hits = sum(1 for token in tokens if token in english_hints)
+        accent_hits = len(re.findall(r"[áéíóúñü]", lowered))
+
+        if re.search(r"[¿¡]", lowered):
+            return "Spanish"
+        if spanish_hits >= 2 and spanish_hits >= english_hits:
+            return "Spanish"
+        if accent_hits >= 2 and spanish_hits >= 1 and english_hits == 0:
             return "Spanish"
         return "English"
 
