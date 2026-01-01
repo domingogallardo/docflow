@@ -32,6 +32,26 @@ window.navigator.permissions.query = (parameters) => (
 """
 
 
+def _log(message: str) -> None:
+    print(message)
+
+
+def _unique_path(path: Path) -> Path:
+    """Return a unique path by appending a (n) suffix if it already exists."""
+    if not path.exists():
+        return path
+
+    stem = path.stem
+    suffix = path.suffix
+    parent = path.parent
+    counter = 1
+    while True:
+        candidate = parent / f"{stem} ({counter}){suffix}"
+        if not candidate.exists():
+            return candidate
+        counter += 1
+
+
 # --- Markdown conversion helpers (adapted from tweet_to_markdown.py) ---
 STAT_KEYWORDS = (
     "retweet",
@@ -357,6 +377,7 @@ def fetch_tweet_markdown(
 
 # --- Like-scraping helpers (adapted from x_likes_fetcher.py) ---
 def _canonical_status_url(href: str | None) -> str | None:
+    """Normalize a tweet URL by dropping suffixes (/photo, /analytics...)."""
     if not href or "/status/" not in href:
         return None
     absolute = _absolute_url(href)
@@ -408,10 +429,13 @@ def collect_likes_from_page(
     max_tweets: int,
     stop_at_url: str | None,
 ) -> Tuple[bool, int, List[str], bool, str | None]:
+    """Copy of the logic used by interactive scripts to extract likes."""
+    _log(f"▶️  Trying to load {likes_url}…")
     page.goto(likes_url, wait_until="domcontentloaded", timeout=60000)
     try:
         page.wait_for_selector("article", timeout=15000)
     except PlaywrightTimeoutError:
+        _log("   ⚠️  No articles detected; the session may not be active.")
         return False, 0, [], False, _normalize_stop_url(stop_at_url)
 
     collected: List[str] = []
@@ -437,11 +461,26 @@ def collect_likes_from_page(
         page.mouse.wheel(0, 2000)
         page.wait_for_timeout(1500)
         after = articles.count()
-        idle_scrolls = idle_scrolls + 1 if after <= before else 0
-        if idle_scrolls >= max_scrolls:
-            break
+        if after <= before:
+            idle_scrolls += 1
+            if idle_scrolls >= max_scrolls:
+                break
+        else:
+            idle_scrolls = 0
 
     total_articles = articles.count()
+    summary = (
+        f"   ✅ Likes loaded successfully. Visible articles: {total_articles}. "
+        f"URLs collected: {len(collected)} (limit: {max_tweets})"
+    )
+    if stop_absolute:
+        summary += f". Stop URL {'found' if stop_found else 'not found'}."
+    _log(summary)
+
+    if collected:
+        _log("   🔗 URLs detected:")
+        for idx, url in enumerate(collected, 1):
+            _log(f"      {idx}. {url}")
     return True, total_articles, collected, stop_found, stop_absolute
 
 
@@ -452,7 +491,8 @@ def fetch_likes_with_state(
     max_tweets: int = DEFAULT_MAX_TWEETS,
     stop_at_url: str | None = None,
     headless: bool = True,
-) -> Tuple[List[str], int]:
+) -> Tuple[List[str], bool, int]:
+    """Load likes with an existing storage_state and return (urls, stop_found, total_articles)."""
     path = state_path.expanduser()
     if not path.exists():
         raise FileNotFoundError(
@@ -463,26 +503,30 @@ def fetch_likes_with_state(
         raise RuntimeError("Install playwright to use this tool.")
 
     with sync_playwright() as playwright:
-        browser = playwright.chromium.launch(headless=headless, channel="chrome")
+        try:
+            browser = playwright.chromium.launch(headless=headless, channel="chrome")
+        except Exception as exc:  # pragma: no cover
+            raise RuntimeError(f"Failed to launch Chrome in headless mode: {exc}") from exc
+
         context = browser.new_context(storage_state=str(path))
         context.add_init_script(STEALTH_SNIPPET)
         page = context.new_page()
-
-        success, total_articles, urls, stop_found, stop_absolute = collect_likes_from_page(
-            page,
-            likes_url=likes_url,
-            max_tweets=max_tweets,
-            stop_at_url=stop_at_url,
-        )
-        if not success:
-            raise RuntimeError("No articles detected; session expired?")
-        if stop_found and stop_absolute and stop_absolute in urls:
-            idx = urls.index(stop_absolute)
-            urls = urls[:idx]
-
-        context.close()
-        browser.close()
-        return urls, total_articles
+        try:
+            success, total, urls, stop_found, stop_absolute = collect_likes_from_page(
+                page,
+                likes_url=likes_url,
+                max_tweets=max_tweets,
+                stop_at_url=stop_at_url,
+            )
+            if not success:
+                raise RuntimeError("Could not retrieve articles on the likes page.")
+            if stop_found and stop_absolute and stop_absolute in urls:
+                idx = urls.index(stop_absolute)
+                urls = urls[:idx]
+            return urls, stop_found, total
+        finally:
+            context.close()
+            browser.close()
 
 
 def parse_args() -> argparse.Namespace:
@@ -556,28 +600,39 @@ def download_likes(args: argparse.Namespace) -> None:
     dest_dir: Path = args.dest_dir.expanduser()
     dest_dir.mkdir(parents=True, exist_ok=True)
 
-    urls, total_articles = fetch_likes_with_state(
-        state_path,
-        likes_url=likes_url,
-        max_tweets=args.max_tweets,
-        stop_at_url=args.stop_at_url,
-        headless=args.headless,
-    )
-    print(
-        f"🔍 Likes found: {len(urls)} (visible articles: {total_articles}). "
-        f"Capturing up to {args.max_tweets} requested tweets."
-    )
+    try:
+        urls, stop_found, _ = fetch_likes_with_state(
+            state_path,
+            likes_url=likes_url,
+            max_tweets=args.max_tweets,
+            stop_at_url=args.stop_at_url,
+            headless=args.headless,
+        )
+    except Exception as exc:
+        raise SystemExit(f"🐦 Could not read X likes: {exc}") from exc
+
+    if args.stop_at_url and not stop_found:
+        print("⚠️  Last processed URL not found in likes; check the TWEET_LIKES_MAX limit.")
+
+    if not urls:
+        print("🐦 No new tweets in your likes")
+        return
 
     for url in urls:
-        markdown, filename = fetch_tweet_markdown(
-            url,
-            wait_ms=args.wait_ms,
-            headless=args.headless,
-            storage_state=state_path,
-        )
-        output = dest_dir / filename
+        try:
+            markdown, filename = fetch_tweet_markdown(
+                url,
+                wait_ms=args.wait_ms,
+                headless=args.headless,
+                storage_state=state_path,
+            )
+        except Exception as exc:
+            print(f"❌ Error processing {url}: {exc}")
+            continue
+
+        output = _unique_path(dest_dir / filename)
         output.write_text(markdown, encoding="utf-8")
-        print(f"✅ Saved: {output}")
+        print(f"🐦 Tweet saved as {output.name}")
 
 
 def main() -> None:

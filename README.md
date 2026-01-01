@@ -76,7 +76,7 @@ docflow automates **collect -> process -> prioritize (bump) -> read -> publish -
 ## 🛠️ Standalone scripts
 - `utils/standalone_download_liked_tweets.py`: download X likes to Markdown from an exported `storage_state`.
 - `utils/standalone_download_instapaper.py`: download all Instapaper articles to HTML/Markdown in a directory.
-- `utils/standalone_markdown_to_html.py`: convert Markdown to HTML with margins without the full pipeline.
+- `utils/standalone_markdown_to_html.py`: convert Markdown to HTML with the main pipeline transforms (margins + optional AI titles when configured); `--output-dir` moves the MD/HTML pair.
 - `utils/standalone_snipd_to_markdown.py`: clean Snipd exports and split episodes with a snips index.
 
 ## 🌐 Publish on your domain (`/read/`)

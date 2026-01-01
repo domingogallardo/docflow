@@ -5,11 +5,20 @@ import pytest
 
 pytest.importorskip("markdown")
 pytest.importorskip("bs4")
+pytest.importorskip("openai")
 
 from utils.standalone_markdown_to_html import main
 
 
-def test_cli_converts_markdown_and_applies_repo_style(tmp_path):
+def _disable_ai(monkeypatch):
+    monkeypatch.setattr(
+        "utils.standalone_markdown_to_html.build_openai_client",
+        lambda *_args, **_kwargs: None,
+    )
+
+
+def test_cli_converts_markdown_and_applies_repo_style(tmp_path, monkeypatch):
+    _disable_ai(monkeypatch)
     markdown_dir = tmp_path / "notas"
     markdown_dir.mkdir()
     md_file = markdown_dir / "demo.md"
@@ -27,7 +36,8 @@ def test_cli_converts_markdown_and_applies_repo_style(tmp_path):
     assert "<p>Linea uno</p>" in html_content
 
 
-def test_cli_respects_existing_html_unless_forced(tmp_path):
+def test_cli_respects_existing_html_unless_forced(tmp_path, monkeypatch):
+    _disable_ai(monkeypatch)
     md_file = tmp_path / "nota.md"
     md_file.write_text("contenido", encoding="utf-8")
     html_file = tmp_path / "nota.html"
@@ -42,7 +52,8 @@ def test_cli_respects_existing_html_unless_forced(tmp_path):
     assert "contenido" in updated
 
 
-def test_cli_updates_margins_on_existing_html(tmp_path):
+def test_cli_updates_margins_on_existing_html(tmp_path, monkeypatch):
+    _disable_ai(monkeypatch)
     md_file = tmp_path / "nota.md"
     md_file.write_text("contenido", encoding="utf-8")
     html_file = tmp_path / "nota.html"
@@ -51,5 +62,5 @@ def test_cli_updates_margins_on_existing_html(tmp_path):
     main([str(md_file)])
 
     html_content = html_file.read_text(encoding="utf-8")
-    assert "body { margin-left: 6%; margin-right: 6%; }" in html_content
-    assert "previo" in html_content
+    assert "body { margin-left: 6%; margin-right: 6%; }" not in html_content
+    assert html_content == "<html><body>previo</body></html>"
