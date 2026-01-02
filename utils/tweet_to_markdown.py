@@ -5,7 +5,7 @@ from __future__ import annotations
 import argparse
 import re
 from pathlib import Path
-from urllib.parse import urlparse, parse_qsl, urlencode, urlunparse
+from urllib.parse import urlparse, parse_qsl, urlencode, urljoin, urlunparse
 from typing import List, Optional, Tuple
 
 try:  # pragma: no cover - optional import
@@ -58,6 +58,7 @@ STAT_KEYWORDS = (
 )
 STAT_NUMBER_RE = re.compile(r"^\d[\d.,]*(?:\s?[kmbKMB])?$")
 TIME_RE = re.compile(r"\b\d{1,2}:\d{2}\b")
+QUOTE_MARKERS = {"quote"}
 
 
 def rebuild_urls_from_lines(text: str) -> str:
@@ -169,6 +170,190 @@ def strip_tweet_stats(text: str) -> str:
             lines.pop()
 
     return "\n".join(lines).strip()
+
+
+def _insert_quote_separator(text: str, quoted_url: str | None = None) -> str:
+    """Insert a Markdown horizontal rule before quote markers."""
+    lines = text.splitlines()
+    out: List[str] = []
+    inserted_link = False
+
+    for line in lines:
+        stripped = line.strip()
+        if stripped.lower() in QUOTE_MARKERS:
+            if not out or out[-1].strip() != "---":
+                if out and out[-1].strip():
+                    out.append("")
+                out.append("---")
+            if quoted_url and not inserted_link:
+                out.append(f"[View quoted tweet]({quoted_url})")
+                inserted_link = True
+            out.append(line)
+            continue
+        out.append(line)
+
+    return "\n".join(out)
+
+
+def _insert_media_before_quote(text: str, media_lines: List[str]) -> str:
+    if not media_lines:
+        return text
+    lines = text.splitlines()
+    for idx, line in enumerate(lines):
+        if line.strip().lower() in QUOTE_MARKERS:
+            insert_at = idx
+            for j in range(idx - 1, -1, -1):
+                if lines[j].strip() == "---":
+                    insert_at = j
+                    break
+            block: List[str] = []
+            if insert_at > 0 and lines[insert_at - 1].strip():
+                block.append("")
+            block.extend(media_lines)
+            block.append("")
+            lines = lines[:insert_at] + block + lines[insert_at:]
+            return "\n".join(lines)
+    return text
+
+
+def _is_after_quote_marker(img, root) -> bool:
+    if root is None:
+        return False
+    try:
+        return bool(
+            img.evaluate(
+                """
+                (el, root) => {
+                    const walker = document.createTreeWalker(
+                        root,
+                        NodeFilter.SHOW_TEXT
+                    );
+                    let quoteEl = null;
+                    while (walker.nextNode()) {
+                        const value = walker.currentNode.nodeValue || "";
+                        const text = value.trim();
+                        if (text === "Quote" || text === "Cita") {
+                            quoteEl = walker.currentNode.parentElement;
+                            break;
+                        }
+                    }
+                    if (!quoteEl) return false;
+                    const pos = el.compareDocumentPosition(quoteEl);
+                    return !!(pos & Node.DOCUMENT_POSITION_PRECEDING);
+                }
+                """,
+                root,
+            )
+        )
+    except Exception:
+        return False
+
+def _canonical_status_url(href: str | None) -> str | None:
+    """Normalize a tweet URL by dropping suffixes (/photo, /analytics...)."""
+    if not href or "/status/" not in href:
+        return None
+    absolute = href
+    if not href.startswith(("http://", "https://")):
+        absolute = urljoin("https://x.com", href)
+    parsed = urlparse(absolute)
+    segments = [seg for seg in parsed.path.split("/") if seg]
+    if len(segments) >= 4 and segments[0] == "i" and segments[1] == "web" and segments[2] == "status":
+        status_id = segments[3]
+        if not status_id:
+            return None
+        return f"https://x.com/i/web/status/{status_id}"
+    if len(segments) < 3 or segments[1] != "status":
+        return None
+    user = segments[0]
+    status_id = segments[2]
+    if not user or not status_id:
+        return None
+    return f"https://x.com/{user}/status/{status_id}"
+
+
+def _status_id_from_url(url: str | None) -> str | None:
+    if not url or "/status/" not in url:
+        return None
+    parsed = urlparse(url)
+    segments = [seg for seg in parsed.path.split("/") if seg]
+    if len(segments) >= 4 and segments[0] == "i" and segments[1] == "web" and segments[2] == "status":
+        return segments[3] or None
+    if len(segments) >= 3 and segments[1] == "status":
+        return segments[2] or None
+    return None
+
+
+def _find_rest_id(payload: object) -> str | None:
+    if isinstance(payload, dict):
+        if "rest_id" in payload and payload["rest_id"]:
+            return str(payload["rest_id"])
+        for value in payload.values():
+            found = _find_rest_id(value)
+            if found:
+                return found
+    elif isinstance(payload, list):
+        for item in payload:
+            found = _find_rest_id(item)
+            if found:
+                return found
+    return None
+
+
+def _find_quoted_status_id(payload: object) -> str | None:
+    if isinstance(payload, dict):
+        if payload.get("quoted_status_id_str"):
+            return str(payload["quoted_status_id_str"])
+        if payload.get("quoted_status_id"):
+            return str(payload["quoted_status_id"])
+        if "quoted_status_result" in payload:
+            found = _find_rest_id(payload["quoted_status_result"])
+            if found:
+                return found
+        for value in payload.values():
+            found = _find_quoted_status_id(value)
+            if found:
+                return found
+    elif isinstance(payload, list):
+        for item in payload:
+            found = _find_quoted_status_id(item)
+            if found:
+                return found
+    return None
+
+
+def _quoted_url_from_graphql_id(quoted_id: str | None, tweet_url: str) -> str | None:
+    if not quoted_id:
+        return None
+    tweet_id = _status_id_from_url(tweet_url)
+    if tweet_id and quoted_id == tweet_id:
+        return None
+    return f"https://x.com/i/web/status/{quoted_id}"
+
+
+def _pick_quoted_tweet_url(hrefs: List[str], tweet_url: str) -> str | None:
+    tweet_canonical = _canonical_status_url(tweet_url) or tweet_url.rstrip("/")
+    seen = {tweet_canonical.lower()}
+    for href in hrefs:
+        canonical = _canonical_status_url(href)
+        if not canonical:
+            continue
+        lower = canonical.lower()
+        if lower in seen:
+            continue
+        return canonical
+    return None
+
+
+def _extract_quoted_tweet_url(article, tweet_url: str) -> str | None:
+    hrefs = [
+        anchor.get_attribute("href") or ""
+        for anchor in article.locator("a[href*='/status/']").all()
+    ]
+    return _pick_quoted_tweet_url(hrefs, tweet_url)
+
+
+def _has_quote_marker(text: str) -> bool:
+    return any(line.strip().lower() in QUOTE_MARKERS for line in text.splitlines())
 
 
 def _split_image_urls(image_urls: List[str]) -> Tuple[Optional[str], List[str]]:
@@ -288,6 +473,24 @@ def fetch_tweet_markdown(
             # Reinforce the context against X's login wall.
             context.add_init_script(STEALTH_SNIPPET)
         page = context.new_page()
+        quoted_status_id: str | None = None
+
+        def handle_response(response) -> None:
+            nonlocal quoted_status_id
+            if quoted_status_id:
+                return
+            url = response.url
+            if "TweetResultByRestId" not in url and "TweetDetail" not in url:
+                return
+            try:
+                payload = response.json()
+            except Exception:
+                return
+            found = _find_quoted_status_id(payload)
+            if found:
+                quoted_status_id = found
+
+        page.on("response", handle_response)
         page.goto(url, wait_until="domcontentloaded", timeout=60000)
         page.wait_for_timeout(wait_ms)
 
@@ -311,10 +514,20 @@ def fetch_tweet_markdown(
 
         raw_text = article.inner_text()
         body_text = strip_tweet_stats(rebuild_urls_from_lines(raw_text).strip())
+        quoted_tweet_url = _quoted_url_from_graphql_id(quoted_status_id, url)
+        if not quoted_tweet_url:
+            quoted_tweet_url = _extract_quoted_tweet_url(article, url)
+        has_quote_marker = _has_quote_marker(body_text)
+        body_text = _insert_quote_separator(
+            body_text,
+            quoted_tweet_url if has_quote_marker and quoted_tweet_url else None,
+        )
 
-        image_urls: List[str] = []
+        image_urls_main: List[str] = []
+        image_urls_quoted: List[str] = []
         seen: set[str] = set()
         external_link = _extract_primary_link(article, url)
+        root_handle = article.element_handle()
         for img in article.locator("img").all():
             src = img.get_attribute("src")
             candidate = None
@@ -328,12 +541,21 @@ def fetch_tweet_markdown(
                         candidate = parts[-1].split(" ")[0]
             if candidate and candidate not in seen:
                 seen.add(candidate)
-                image_urls.append(candidate)
+                if has_quote_marker and _is_after_quote_marker(img, root_handle):
+                    image_urls_quoted.append(candidate)
+                else:
+                    image_urls_main.append(candidate)
 
         title = _build_title(author_name, author_handle)
         filename = _build_filename(url, author_handle)
 
-        avatar_url, media_urls = _split_image_urls(image_urls)
+        avatar_url, media_urls = _split_image_urls(image_urls_main)
+        _, quoted_media_urls = _split_image_urls(image_urls_quoted)
+        main_media_lines = _media_markdown_lines(media_urls)
+        quoted_media_lines = _media_markdown_lines(quoted_media_urls)
+        if has_quote_marker and main_media_lines:
+            body_text = _insert_media_before_quote(body_text, main_media_lines)
+            main_media_lines = []
 
         front_matter = [
             "---",
@@ -347,20 +569,21 @@ def fetch_tweet_markdown(
         front_matter.extend(["---", ""])
 
         md_lines = [*front_matter, f"# {title}", "", f"[View on X]({url})"]
-
         if avatar_url:
             md_lines.extend(["", f"![avatar]({avatar_url})"])
 
         if body_text:
             md_lines.extend(["", body_text])
 
-        if media_urls:
+        media_present = bool(media_urls or quoted_media_urls)
+        trailing_media_lines = quoted_media_lines if has_quote_marker else main_media_lines
+        if trailing_media_lines:
             md_lines.append("")
-            md_lines.extend(_media_markdown_lines(media_urls))
+            md_lines.extend(trailing_media_lines)
             md_lines.append("")
 
-            if external_link:
-                md_lines.extend(["", f"Original link: {external_link}"])
+        if external_link and media_present:
+            md_lines.extend(["", f"Original link: {external_link}"])
 
         markdown = "\n".join(md_lines).strip() + "\n"
 
