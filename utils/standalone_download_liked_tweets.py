@@ -80,6 +80,7 @@ STAT_KEYWORDS = (
 STAT_NUMBER_RE = re.compile(r"^\d[\d.,]*(?:\s?[kmbKMB])?$")
 TIME_RE = re.compile(r"\b\d{1,2}:\d{2}\b")
 QUOTE_MARKERS = {"quote"}
+QUOTE_MARKERS_JS = ", ".join(f'"{m}"' for m in sorted(QUOTE_MARKERS))
 
 
 def rebuild_urls_from_lines(text: str) -> str:
@@ -237,25 +238,26 @@ def _is_after_quote_marker(img, root) -> bool:
     try:
         return bool(
             img.evaluate(
-                """
-                (el, root) => {
+                f"""
+                (el, root) => {{
+                    const markers = new Set([{QUOTE_MARKERS_JS}]);
                     const walker = document.createTreeWalker(
                         root,
                         NodeFilter.SHOW_TEXT
                     );
                     let quoteEl = null;
-                    while (walker.nextNode()) {
+                    while (walker.nextNode()) {{
                         const value = walker.currentNode.nodeValue || "";
-                        const text = value.trim();
-                        if (text === "Quote" || text === "Cita") {
+                        const text = value.trim().toLowerCase();
+                        if (markers.has(text)) {{
                             quoteEl = walker.currentNode.parentElement;
                             break;
-                        }
-                    }
+                        }}
+                    }}
                     if (!quoteEl) return false;
                     const pos = el.compareDocumentPosition(quoteEl);
                     return !!(pos & Node.DOCUMENT_POSITION_PRECEDING);
-                }
+                }}
                 """,
                 root,
             )
@@ -371,6 +373,27 @@ def _has_quote_marker(text: str) -> bool:
     return any(line.strip().lower() in QUOTE_MARKERS for line in text.splitlines())
 
 
+def _attach_quoted_status_listener(page) -> dict[str, str | None]:
+    quoted: dict[str, str | None] = {"id": None}
+
+    def handle_response(response) -> None:
+        if quoted["id"]:
+            return
+        url = response.url
+        if "TweetResultByRestId" not in url and "TweetDetail" not in url:
+            return
+        try:
+            payload = response.json()
+        except Exception:
+            return
+        found = _find_quoted_status_id(payload)
+        if found:
+            quoted["id"] = found
+
+    page.on("response", handle_response)
+    return quoted
+
+
 def _split_image_urls(image_urls: List[str]) -> Tuple[Optional[str], List[str]]:
     avatar = None
     media: List[str] = []
@@ -484,24 +507,7 @@ def fetch_tweet_markdown(
             # Reinforce the context against X's login wall.
             context.add_init_script(STEALTH_SNIPPET)
         page = context.new_page()
-        quoted_status_id: str | None = None
-
-        def handle_response(response) -> None:
-            nonlocal quoted_status_id
-            if quoted_status_id:
-                return
-            response_url = response.url
-            if "TweetResultByRestId" not in response_url and "TweetDetail" not in response_url:
-                return
-            try:
-                payload = response.json()
-            except Exception:
-                return
-            found = _find_quoted_status_id(payload)
-            if found:
-                quoted_status_id = found
-
-        page.on("response", handle_response)
+        quoted_status = _attach_quoted_status_listener(page)
         page.goto(url, wait_until="domcontentloaded", timeout=60000)
         page.wait_for_timeout(wait_ms)
 
@@ -525,7 +531,7 @@ def fetch_tweet_markdown(
 
         raw_text = article.inner_text()
         body_text = strip_tweet_stats(rebuild_urls_from_lines(raw_text).strip())
-        quoted_tweet_url = _quoted_url_from_graphql_id(quoted_status_id, url)
+        quoted_tweet_url = _quoted_url_from_graphql_id(quoted_status["id"], url)
         if not quoted_tweet_url:
             quoted_tweet_url = _extract_quoted_tweet_url(article, url)
         has_quote_marker = _has_quote_marker(body_text)
@@ -599,33 +605,6 @@ def fetch_tweet_markdown(
 
 
 # --- Like-scraping helpers (adapted from x_likes_fetcher.py) ---
-def _canonical_status_url(href: str | None) -> str | None:
-    """Normalize a tweet URL by dropping suffixes (/photo, /analytics...)."""
-    if not href or "/status/" not in href:
-        return None
-    absolute = _absolute_url(href)
-    parsed = urlparse(absolute)
-    segments = [seg for seg in parsed.path.split("/") if seg]
-    if len(segments) >= 4 and segments[0] == "i" and segments[1] == "web" and segments[2] == "status":
-        status_id = segments[3]
-        if not status_id:
-            return None
-        return f"https://x.com/i/web/status/{status_id}"
-    if len(segments) < 3 or segments[1] != "status":
-        return None
-    user = segments[0]
-    status_id = segments[2]
-    if not user or not status_id:
-        return None
-    return f"https://x.com/{user}/status/{status_id}"
-
-
-def _absolute_url(href: str) -> str:
-    if href.startswith(("http://", "https://")):
-        return href
-    return urljoin("https://x.com", href)
-
-
 def _normalize_stop_url(url: str | None) -> str | None:
     if not url:
         return None
