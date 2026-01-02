@@ -59,6 +59,7 @@ STAT_KEYWORDS = (
 STAT_NUMBER_RE = re.compile(r"^\d[\d.,]*(?:\s?[kmbKMB])?$")
 TIME_RE = re.compile(r"\b\d{1,2}:\d{2}\b")
 QUOTE_MARKERS = {"quote"}
+QUOTE_MARKERS_JS = ", ".join(f'"{m}"' for m in sorted(QUOTE_MARKERS))
 
 
 def rebuild_urls_from_lines(text: str) -> str:
@@ -222,25 +223,26 @@ def _is_after_quote_marker(img, root) -> bool:
     try:
         return bool(
             img.evaluate(
-                """
-                (el, root) => {
+                f"""
+                (el, root) => {{
+                    const markers = new Set([{QUOTE_MARKERS_JS}]);
                     const walker = document.createTreeWalker(
                         root,
                         NodeFilter.SHOW_TEXT
                     );
                     let quoteEl = null;
-                    while (walker.nextNode()) {
+                    while (walker.nextNode()) {{
                         const value = walker.currentNode.nodeValue || "";
-                        const text = value.trim();
-                        if (text === "Quote" || text === "Cita") {
+                        const text = value.trim().toLowerCase();
+                        if (markers.has(text)) {{
                             quoteEl = walker.currentNode.parentElement;
                             break;
-                        }
-                    }
+                        }}
+                    }}
                     if (!quoteEl) return false;
                     const pos = el.compareDocumentPosition(quoteEl);
                     return !!(pos & Node.DOCUMENT_POSITION_PRECEDING);
-                }
+                }}
                 """,
                 root,
             )
@@ -354,6 +356,27 @@ def _extract_quoted_tweet_url(article, tweet_url: str) -> str | None:
 
 def _has_quote_marker(text: str) -> bool:
     return any(line.strip().lower() in QUOTE_MARKERS for line in text.splitlines())
+
+
+def _attach_quoted_status_listener(page) -> dict[str, str | None]:
+    quoted: dict[str, str | None] = {"id": None}
+
+    def handle_response(response) -> None:
+        if quoted["id"]:
+            return
+        url = response.url
+        if "TweetResultByRestId" not in url and "TweetDetail" not in url:
+            return
+        try:
+            payload = response.json()
+        except Exception:
+            return
+        found = _find_quoted_status_id(payload)
+        if found:
+            quoted["id"] = found
+
+    page.on("response", handle_response)
+    return quoted
 
 
 def _split_image_urls(image_urls: List[str]) -> Tuple[Optional[str], List[str]]:
@@ -473,24 +496,7 @@ def fetch_tweet_markdown(
             # Reinforce the context against X's login wall.
             context.add_init_script(STEALTH_SNIPPET)
         page = context.new_page()
-        quoted_status_id: str | None = None
-
-        def handle_response(response) -> None:
-            nonlocal quoted_status_id
-            if quoted_status_id:
-                return
-            url = response.url
-            if "TweetResultByRestId" not in url and "TweetDetail" not in url:
-                return
-            try:
-                payload = response.json()
-            except Exception:
-                return
-            found = _find_quoted_status_id(payload)
-            if found:
-                quoted_status_id = found
-
-        page.on("response", handle_response)
+        quoted_status = _attach_quoted_status_listener(page)
         page.goto(url, wait_until="domcontentloaded", timeout=60000)
         page.wait_for_timeout(wait_ms)
 
@@ -514,7 +520,7 @@ def fetch_tweet_markdown(
 
         raw_text = article.inner_text()
         body_text = strip_tweet_stats(rebuild_urls_from_lines(raw_text).strip())
-        quoted_tweet_url = _quoted_url_from_graphql_id(quoted_status_id, url)
+        quoted_tweet_url = _quoted_url_from_graphql_id(quoted_status["id"], url)
         if not quoted_tweet_url:
             quoted_tweet_url = _extract_quoted_tweet_url(article, url)
         has_quote_marker = _has_quote_marker(body_text)
