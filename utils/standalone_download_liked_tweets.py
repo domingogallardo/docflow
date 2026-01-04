@@ -445,12 +445,30 @@ def _resolve_storage_state(storage_state: Path | None) -> Path | None:
     return path
 
 
-def _locate_tweet_article(page, *, timeout_ms: int = 15000):
+def _locate_tweet_article(page, tweet_url: str | None = None, *, timeout_ms: int = 15000):
     # X's login wall can hide the <article>; look for alternatives.
+    tweet_id = _status_id_from_url(tweet_url) if tweet_url else None
+    target_selector = f"a[href*='/status/{tweet_id}']" if tweet_id else None
     try:
-        page.wait_for_selector("article, div[data-testid='tweet']", timeout=timeout_ms)
+        if target_selector:
+            page.wait_for_selector(
+                f"article {target_selector}, div[data-testid='tweet'] {target_selector}",
+                timeout=timeout_ms,
+            )
+        else:
+            page.wait_for_selector("article, div[data-testid='tweet']", timeout=timeout_ms)
     except PlaywrightTimeoutError:
         return None
+    if target_selector:
+        # Prefer the tweet matching the requested status ID (threads show replies first).
+        article = page.locator("article").filter(has=page.locator(target_selector))
+        if article.count() > 0:
+            return article.first
+        tweet = page.locator("div[data-testid='tweet']").filter(
+            has=page.locator(target_selector)
+        )
+        if tweet.count() > 0:
+            return tweet.first
     article = page.locator("article")
     if article.count() > 0:
         return article.first
@@ -511,7 +529,7 @@ def fetch_tweet_markdown(
         page.goto(url, wait_until="domcontentloaded", timeout=60000)
         page.wait_for_timeout(wait_ms)
 
-        article = _locate_tweet_article(page)
+        article = _locate_tweet_article(page, url)
         if article is None:
             raise RuntimeError(
                 "Could not find the post <article>. "
