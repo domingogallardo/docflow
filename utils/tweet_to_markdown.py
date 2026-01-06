@@ -71,22 +71,43 @@ def rebuild_urls_from_lines(text: str) -> str:
     for original_line in lines:
         stripped = original_line.strip()
 
-        if stripped == "…":
-            building_url = False
-            continue
-
         if stripped.startswith(("https://", "http://")):
-            out.append(stripped)
-            building_url = True
+            if "…" in stripped:
+                before, _, after = stripped.partition("…")
+                if before:
+                    out.append(before)
+                building_url = False
+                remainder = after.lstrip()
+                if remainder:
+                    out.append(remainder)
+            else:
+                out.append(stripped)
+                building_url = True
             continue
 
         if building_url:
             if not stripped or stripped.endswith(":"):
                 out.append(original_line)
                 building_url = False
-            else:
-                out[-1] = out[-1] + stripped
+                continue
+            if "…" in stripped:
+                before, _, after = stripped.partition("…")
+                if before:
+                    out[-1] = out[-1] + before
+                building_url = False
+                remainder = after.lstrip()
+                if remainder:
+                    out.append(remainder)
+                continue
+            out[-1] = out[-1] + stripped
         else:
+            if stripped == "…":
+                continue
+            if stripped.startswith("…"):
+                remainder = stripped.lstrip("…").lstrip()
+                if remainder:
+                    out.append(remainder)
+                continue
             out.append(original_line)
 
     return "\n".join(out)

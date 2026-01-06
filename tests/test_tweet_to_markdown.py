@@ -48,6 +48,23 @@ def test_rebuild_urls_stops_on_ellipsis_or_blank():
     assert "Fin" in result.splitlines()[-1]
 
 
+def test_rebuild_urls_stops_on_ellipsis_with_trailing_text():
+    raw = "\n".join(
+        [
+            "Texto introductorio",
+            "https://example.com/path/",
+            "segmento",
+            "… y sigue el texto.",
+            "Cierre",
+        ]
+    )
+    result = rebuild_urls_from_lines(raw)
+    lines = result.splitlines()
+    assert "https://example.com/path/segmento" in result
+    assert "… y sigue el texto." not in result
+    assert any("y sigue el texto." in line for line in lines)
+
+
 def test_strip_tweet_stats_removes_metrics_lines():
     raw = "\n".join(
         [
