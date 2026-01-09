@@ -58,7 +58,7 @@ docflow automates **collect -> process -> prioritize (bump) -> read -> publish -
 ## 🐦 X likes pipeline (quick notes)
 - One-time login to export session state:
   ```bash
-  python utils/login_x.py --export-state x_state.json
+  python utils/create_x_state.py
   ```
 - Process the likes queue:
   ```bash

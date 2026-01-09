@@ -153,7 +153,7 @@ def fetch_likes_with_state(
     path = state_path.expanduser()
     if not path.exists():
         raise FileNotFoundError(
-            f"storage_state not found at {path}. Run utils/login_x.py to generate it."
+            f"storage_state not found at {path}. Run utils/create_x_state.py to generate it."
         )
 
     with sync_playwright() as playwright:

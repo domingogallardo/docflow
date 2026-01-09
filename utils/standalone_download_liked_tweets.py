@@ -462,7 +462,7 @@ def _resolve_storage_state(storage_state: Path | None) -> Path | None:
     if not path.exists():
         raise FileNotFoundError(
             f"storage_state not found at {path}. "
-            "Run utils/login_x.py to generate it."
+            "Run utils/create_x_state.py to generate it."
         )
     return path
 
@@ -743,7 +743,7 @@ def fetch_likes_with_state(
     path = state_path.expanduser()
     if not path.exists():
         raise FileNotFoundError(
-            f"storage_state not found at {path}. Run utils/login_x.py to generate it."
+            f"storage_state not found at {path}. Run utils/create_x_state.py to generate it."
         )
 
     if sync_playwright is None:

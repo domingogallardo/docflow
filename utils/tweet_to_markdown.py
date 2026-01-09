@@ -446,7 +446,7 @@ def _resolve_storage_state(storage_state: Path | None) -> Path | None:
     if not path.exists():
         raise FileNotFoundError(
             f"storage_state not found at {path}. "
-            "Run utils/login_x.py to generate it."
+            "Run utils/create_x_state.py to generate it."
         )
     return path
 
