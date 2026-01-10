@@ -24,8 +24,8 @@ PIPELINE_STEPS = (
 )
 TARGET_HANDLERS = {name: method for name, method in PIPELINE_STEPS}
 PIPELINE_TARGETS = tuple(name for name, _ in PIPELINE_STEPS)
-from utils.tweet_to_markdown import fetch_tweet_markdown
-from utils.x_likes_fetcher import fetch_likes_with_state
+from utils.tweet_to_markdown import fetch_tweet_thread_markdown
+from utils.x_likes_fetcher import LikeTweet, fetch_like_items_with_state
 
 
 class DocumentProcessor:
@@ -64,41 +64,44 @@ class DocumentProcessor:
     def process_tweet_urls(self) -> List[Path]:
         """Fetch recent likes from X and generate Markdown in Incoming/."""
         try:
-            urls = self._fetch_like_urls()
+            likes = self._fetch_like_items()
         except Exception as exc:
             print(f"🐦 Could not read X likes: {exc}")
             return []
 
-        if not urls:
+        if not likes:
             print("🐦 No new tweets in your likes")
             return []
 
         processed_urls = self._load_processed_urls()
         processed_set = set(processed_urls)
-        fresh_urls = [url for url in urls if url not in processed_set]
+        fresh_likes = [like for like in likes if like.url not in processed_set]
 
-        if not fresh_urls:
+        if not fresh_likes:
             print("🐦 No new likes pending (everything is already processed).")
             return []
 
         generated: List[Path] = []
         written_urls: List[str] = []
 
-        for url in fresh_urls:
+        for like in fresh_likes:
             try:
-                markdown, filename = fetch_tweet_markdown(
-                    url,
+                markdown, filename = fetch_tweet_thread_markdown(
+                    like.url,
                     # Use storage_state to avoid X's login wall.
                     storage_state=cfg.TWEET_LIKES_STATE,
+                    like_author_handle=like.author_handle,
+                    like_time_text=like.time_text,
+                    like_time_datetime=like.time_datetime,
                 )
             except Exception as exc:
-                print(f"❌ Error processing {url}: {exc}")
+                print(f"❌ Error processing {like.url}: {exc}")
                 continue
 
             destination = self._unique_destination(self.incoming / filename)
             destination.write_text(markdown, encoding="utf-8")
             generated.append(destination)
-            written_urls.append(url)
+            written_urls.append(like.url)
             print(f"🐦 Tweet saved as {destination.name}")
 
         if written_urls:
@@ -110,11 +113,11 @@ class DocumentProcessor:
         """Generate a unique name to avoid overwriting existing files."""
         return unique_path(target)
 
-    def _fetch_like_urls(self) -> List[str]:
+    def _fetch_like_items(self) -> List[LikeTweet]:
         if not cfg.TWEET_LIKES_STATE:
             raise RuntimeError("Configure TWEET_LIKES_STATE with the storage_state exported from X.")
         last_processed = self._last_processed_tweet_url()
-        urls, stop_found, _ = fetch_likes_with_state(
+        items, stop_found, _ = fetch_like_items_with_state(
             cfg.TWEET_LIKES_STATE,
             likes_url=cfg.TWEET_LIKES_URL,
             max_tweets=cfg.TWEET_LIKES_MAX,
@@ -123,7 +126,7 @@ class DocumentProcessor:
         )
         if last_processed and not stop_found:
             print("⚠️  Last processed URL not found in likes; check the TWEET_LIKES_MAX limit.")
-        return urls
+        return items
 
     def _last_processed_tweet_url(self) -> Optional[str]:
         lines = self._load_processed_urls()

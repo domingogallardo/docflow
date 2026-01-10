@@ -4,6 +4,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 from pipeline_manager import DocumentProcessor
+from utils.x_likes_fetcher import LikeTweet
 
 
 def prepare_processor(tmp_path):
@@ -14,10 +15,20 @@ def prepare_processor(tmp_path):
 
 
 def mock_likes(monkeypatch, urls, stop_found=True):
-    def fake_fetch(*args, **kwargs):
-        return list(urls), stop_found, len(urls)
+    items = [
+        LikeTweet(
+            url=url,
+            author_handle="@user",
+            time_text="4h",
+            time_datetime="2026-01-09T12:00:00.000Z",
+        )
+        for url in urls
+    ]
 
-    monkeypatch.setattr("pipeline_manager.fetch_likes_with_state", fake_fetch)
+    def fake_fetch(*args, **kwargs):
+        return list(items), stop_found, len(items)
+
+    monkeypatch.setattr("pipeline_manager.fetch_like_items_with_state", fake_fetch)
 
 
 def test_process_tweet_urls_creates_files_from_likes(tmp_path, monkeypatch):
@@ -35,7 +46,7 @@ def test_process_tweet_urls_creates_files_from_likes(tmp_path, monkeypatch):
         ("---\nsource: tweet\n---\n\n# T2\n\n[View on X](https://x.com/2)\n", "Tweet - user-2.md"),
     ]
 
-    with patch("pipeline_manager.fetch_tweet_markdown", side_effect=responses):
+    with patch("pipeline_manager.fetch_tweet_thread_markdown", side_effect=responses):
         created = processor.process_tweet_urls()
 
     assert len(created) == 2
@@ -49,7 +60,7 @@ def test_process_tweet_urls_handles_fetch_error(tmp_path, monkeypatch):
     def failing_fetch(*args, **kwargs):
         raise RuntimeError("boom")
 
-    monkeypatch.setattr("pipeline_manager.fetch_likes_with_state", failing_fetch)
+    monkeypatch.setattr("pipeline_manager.fetch_like_items_with_state", failing_fetch)
     created = processor.process_tweet_urls()
     assert created == []
 
@@ -59,7 +70,7 @@ def test_process_tweets_pipeline_runs_markdown_subset(tmp_path, monkeypatch):
     mock_likes(monkeypatch, ["https://x.com/user/status/1"])
 
     with patch(
-        "pipeline_manager.fetch_tweet_markdown",
+        "pipeline_manager.fetch_tweet_thread_markdown",
         return_value=(
             "---\nsource: tweet\n---\n\n# T1\n\n[View on X](https://x.com/1)\n",
             "Tweet - user-1.md",
@@ -114,7 +125,7 @@ def test_process_tweet_urls_skips_already_processed(tmp_path, monkeypatch):
     )
 
     with patch(
-        "pipeline_manager.fetch_tweet_markdown",
+        "pipeline_manager.fetch_tweet_thread_markdown",
         return_value=(
             "---\nsource: tweet\n---\n\n# T2\n\n[View on X](https://x.com/2)\n",
             "Tweet - user-2.md",
@@ -135,7 +146,7 @@ def test_process_tweet_urls_appends_processed_file(tmp_path, monkeypatch):
     mock_likes(monkeypatch, [url])
 
     with patch(
-        "pipeline_manager.fetch_tweet_markdown",
+        "pipeline_manager.fetch_tweet_thread_markdown",
         return_value=(
             "---\nsource: tweet\n---\n\n# T\n\n[View on X](https://x.com/42)\n",
             "Tweet - user-42.md",
@@ -161,7 +172,7 @@ def test_last_processed_uses_first_line(tmp_path, monkeypatch):
 
     mock_likes(monkeypatch, ["https://x.com/user/status/4"])
     with patch(
-        "pipeline_manager.fetch_tweet_markdown",
+        "pipeline_manager.fetch_tweet_thread_markdown",
         return_value=(
             "---\nsource: tweet\n---\n\n# T4\n\n[View on X](https://x.com/4)\n",
             "Tweet - user-4.md",
@@ -179,7 +190,7 @@ def test_process_tweet_urls_processes_all_when_no_stop(tmp_path, monkeypatch):
     mock_likes(monkeypatch, urls, stop_found=False)
 
     with patch(
-        "pipeline_manager.fetch_tweet_markdown",
+        "pipeline_manager.fetch_tweet_thread_markdown",
         side_effect=[
             ("---\nsource: tweet\n---\n\n# T1\n\n[View on X](https://x.com/1)\n", "Tweet - user-1.md"),
             ("---\nsource: tweet\n---\n\n# T2\n\n[View on X](https://x.com/2)\n", "Tweet - user-2.md"),

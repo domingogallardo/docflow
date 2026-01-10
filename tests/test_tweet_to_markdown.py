@@ -11,6 +11,8 @@ from utils.tweet_to_markdown import (
     _status_id_from_url,
     _find_quoted_status_id,
     _quoted_url_from_graphql_id,
+    _select_thread_indices,
+    _extract_thread_ids_from_payload,
 )
 
 
@@ -253,3 +255,121 @@ def test_media_markdown_lines_include_direct_links():
     )
     assert lines[0] == "[![image 1](https://pbs.twimg.com/media/img1?format=jpg)](https://pbs.twimg.com/media/img1?format=jpg)"
     assert lines[1] == "[![image 2](https://pbs.twimg.com/media/img2?format=jpg)](https://pbs.twimg.com/media/img2?format=jpg)"
+
+
+def test_select_thread_indices_requires_context():
+    entries = [("@user", "4h", None), ("@user", "4h", None)]
+    assert _select_thread_indices(entries, 1, author_handle=None, time_text="4h", anchor_time_datetime=None) == [1]
+    assert _select_thread_indices(entries, 1, author_handle="@user", time_text=None, anchor_time_datetime=None) == [1]
+
+
+def test_select_thread_indices_collects_contiguous_matches():
+    entries = [("@user", "4h", None), ("@user", "4h", None), ("@user", "4h", None)]
+    assert _select_thread_indices(entries, 2, author_handle="@user", time_text="4h", anchor_time_datetime=None) == [0, 1, 2]
+
+
+def test_select_thread_indices_stops_on_first_mismatch():
+    entries = [("@user", "4h", None), ("@other", "4h", None), ("@user", "4h", None)]
+    assert _select_thread_indices(entries, 2, author_handle="@user", time_text="4h", anchor_time_datetime=None) == [2]
+
+
+def test_select_thread_indices_uses_datetime_window():
+    entries = [
+        ("@user", "32m", "2026-01-09T16:54:22.000Z"),
+        ("@user", "27m", "2026-01-09T16:59:23.000Z"),
+    ]
+    selected = _select_thread_indices(
+        entries,
+        1,
+        author_handle="@user",
+        time_text="27m",
+        anchor_time_datetime="2026-01-09T16:59:23.000Z",
+    )
+    assert selected == [0, 1]
+
+
+def test_select_thread_indices_respects_datetime_window_limit():
+    entries = [
+        ("@user", "2d", "2026-01-07T10:00:00.000Z"),
+        ("@user", "1h", "2026-01-09T12:30:00.000Z"),
+    ]
+    selected = _select_thread_indices(
+        entries,
+        1,
+        author_handle="@user",
+        time_text="1h",
+        anchor_time_datetime="2026-01-09T12:30:00.000Z",
+    )
+    assert selected == [1]
+
+
+def test_extract_thread_ids_from_payload_filters_author_and_time():
+    payload = {
+        "data": {
+            "threaded_conversation_with_injections_v2": {
+                "instructions": [
+                    {
+                        "type": "TimelineAddEntries",
+                        "entries": [
+                            {
+                                "entryId": "tweet-1",
+                                "content": {
+                                    "itemContent": {
+                                        "tweet_results": {
+                                            "result": {
+                                                "__typename": "Tweet",
+                                                "rest_id": "111",
+                                                "core": {
+                                                    "user_results": {
+                                                        "result": {
+                                                            "core": {
+                                                                "screen_name": "author",
+                                                            }
+                                                        }
+                                                    }
+                                                },
+                                                "legacy": {
+                                                    "created_at": "Thu Jan 08 10:00:00 +0000 2026"
+                                                },
+                                            }
+                                        }
+                                    }
+                                },
+                            },
+                            {
+                                "entryId": "tweet-2",
+                                "content": {
+                                    "itemContent": {
+                                        "tweet_results": {
+                                            "result": {
+                                                "__typename": "Tweet",
+                                                "rest_id": "222",
+                                                "core": {
+                                                    "user_results": {
+                                                        "result": {
+                                                            "core": {
+                                                                "screen_name": "other",
+                                                            }
+                                                        }
+                                                    }
+                                                },
+                                                "legacy": {
+                                                    "created_at": "Thu Jan 08 11:00:00 +0000 2026"
+                                                },
+                                            }
+                                        }
+                                    }
+                                },
+                            },
+                        ],
+                    }
+                ]
+            }
+        }
+    }
+    ids = _extract_thread_ids_from_payload(
+        payload,
+        author_handle="@author",
+        anchor_time_datetime="2026-01-08T12:00:00.000Z",
+    )
+    assert ids == ["111"]

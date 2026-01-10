@@ -14,6 +14,7 @@ def test_extract_language_sample_ignores_tweet_boilerplate(tmp_path: Path) -> No
         "---\n"
         "\n"
         "# Tweet by S\u00e9b Krier (@sebkrier)\n"
+        "# Thread by S\u00e9b Krier (@sebkrier)\n"
         "\n"
         "[View on X](https://x.com/user/status/1)\n"
         "\n"
@@ -34,6 +35,7 @@ def test_extract_language_sample_ignores_tweet_boilerplate(tmp_path: Path) -> No
     assert "I also don't have" in sample
     assert "tweet_url" not in sample
     assert "Tweet by" not in sample
+    assert "Thread by" not in sample
     assert "View on X" not in sample
     assert "S\u00e9b" not in sample
     assert "@sebkrier" not in sample
