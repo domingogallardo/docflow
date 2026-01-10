@@ -106,8 +106,8 @@ PORT=8000 SERVE_DIR="/path/to/⭐️ Documentación" python utils/serve_docs.py
 5) **Publish to the public web (`/read/`)**  
 From the overlay, **Publish** copies the `.html` or `.pdf` to `web/public/read/` and triggers the **deploy** (`web/deploy.sh`). The deploy builds the Nginx image, uploads assets to the remote server, and serves `/read/` with an index **ordered by date (mtime desc)**. You can set `REMOTE_USER`/`REMOTE_HOST` via the environment.
 
-6) **Capture quotes on published pages (Text Fragments)**  
-On `/read/`, a floating **❝ Copy quote** button is injected. When you select text, it copies a **Markdown** quote with a link that includes **Text Fragments** (`#:~:text=`). This makes it easy to paste quotes directly into Obsidian while keeping the jump to the exact position. (*Script*: `article.js`).
+6) **Capture quotes and highlights on published pages**  
+On `/read/`, a floating **❝ Copy quote** button is injected. When you select text, it copies a **Markdown** quote with a link that includes **Text Fragments** (`#:~:text=`). This makes it easy to paste quotes directly into Obsidian while keeping the jump to the exact position. The overlay also shows **Subrayar**, which saves highlights to `/data/highlights/<file>.json` (visible across browsers). Hold **Alt** or **Shift** and click a highlight to remove it. (*Script*: `article.js`).
 
 7) **Close the loop**  
 When you finish reading, you can keep the document published or unpublish it; `/read/` is a single date-ordered listing.
@@ -147,12 +147,14 @@ curl -s https://<your_domain>/read/ | head -n 40
 
 ---
 
-## Capture quotes with Text Fragments
+## Capture quotes and highlights
 
 - Pages under `/read/` inject a **❝ Copy quote** button (`article.js`).  
 - Select text and copy a **Markdown** quote with a link that includes `#:~:text=` to jump to the exact position.  
 - It preserves links and emphasis from the selected fragment, converting them to Markdown before copying.  
 - The button only appears when there is selected text and shows a success/error *toast*.
+- The overlay also includes **Subrayar**, which saves highlights to `/data/highlights/<file>.json` (visible across browsers).
+- Hold **Alt** or **Shift** and click a highlight to remove it.
 - iOS/iPadOS: selection is captured early so it isn't lost when tapping the button. If the clipboard fails (e.g., private browsing), you'll see an error toast; fragment navigation is handled by the browser.
 
 ---
@@ -187,7 +189,7 @@ HTPASSWD_PSS='password'
 - **Process**: `process_documents.py`, `instapaper_processor.py`, `podcast_processor.py`, `pdf_processor.py`.  
 - **Read/prioritize/publish (local)**: `utils/serve_docs.py` (overlay + actions), `utils/bump.applescript`, `utils/un-bump.applescript`.  
 - **Publish (remote)**: `web/deploy.sh` (generates `read.html` by mtime desc as a single listing).  
-- **Capture quotes in `/read/`**: `article.js` (**❝ Copy quote** button, Markdown + `#:~:text=`).  
+- **Capture quotes/highlights in `/read/`**: `article.js` (**❝ Copy quote** + **Subrayar**, Markdown + `#:~:text=`, highlights via `/data/highlights/`).  
 - **Preview index without deploy**: `utils/build_read_index.py`.
 
 ---
