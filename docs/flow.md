@@ -23,7 +23,7 @@ This document describes how each content type enters, is processed, and is publi
 | **D. X likes** | Marked as "Like" on `TWEET_LIKES_URL` | Individual tweets | `python process_documents.py tweets` → `process_tweets_pipeline()` → `MarkdownProcessor.process_tweet_markdown_subset()` → `Tweets/Tweets <YEAR>/` |
 
 Important notes for input D:
-- The tweets pipeline uses `utils/x_likes_fetcher.fetch_likes_with_state` to open your likes feed with Playwright and stop once it reaches the last tweet recorded in `Incoming/tweets_processed.txt`.
+- The tweets pipeline uses `utils/x_likes_fetcher.fetch_like_items_with_state` to open your likes feed with Playwright and stop once it reaches the last tweet recorded in `Incoming/tweets_processed.txt`.
 - Tweets are managed exclusively via those likes or dedicated tools; Instapaper is no longer used to capture them.
 
 Routing rule (no heuristics):

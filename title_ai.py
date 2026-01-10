@@ -109,9 +109,9 @@ class TitleAIUpdater:
                 continue
 
             lowered = stripped.lower()
-            if stripped.startswith("#") and "tweet by" in lowered:
+            if stripped.startswith("#") and ("tweet by" in lowered or "thread by" in lowered):
                 continue
-            if lowered.startswith("tweet by "):
+            if lowered.startswith(("tweet by ", "thread by ")):
                 continue
             if lowered.startswith("[view on x]("):
                 continue

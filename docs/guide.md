@@ -77,9 +77,10 @@ python process_documents.py images
 - Images (yearly copy + `gallery.html` for JPG/PNG/WebP/TIFF/GIF/BMP).  
 All of this is orchestrated by `process_documents.py` and specific `*_processor.py` modules. Routing is tag-based: any Markdown without a `source:` tag is treated as generic input.
 
-> **Tweet shortcut**: `python utils/tweet_to_markdown.py https://x.com/...` downloads the tweet with Playwright and saves it as `.md` with title, link, profile photo, and body without metrics (views/likes), followed by attached images.
+> **Tweet shortcut**: `python utils/tweet_to_markdown.py https://x.com/...` downloads the tweet with Playwright and saves it as `.md` with title, link, profile photo, and body without metrics (views/likes), followed by attached images. Default wait after load is 1s.
 
 > **Tweets queue**: Like the tweets you want to process on X. Run once `python utils/create_x_state.py` to log in manually and save your `storage_state` (you can change the path with `--state-path` and point `TWEET_LIKES_STATE` to that file). From then on, `python process_documents.py tweets` opens your likes feed (`TWEET_LIKES_URL`, default `https://x.com/domingogallardo/likes`) with Playwright, extracts the newest links until it finds the last processed tweet (using `Incoming/tweets_processed.txt` as reference) or until the `TWEET_LIKES_MAX` limit (default 100). To avoid overload, set `TWEET_LIKES_BATCH` (default 10) so only that many new likes are processed per run.
+> If you like the last tweet of a thread, the pipeline groups the previous tweets by the same author/time into a single Markdown file.
 
 3) **Prioritize for reading → Bump/Unbump**  
 - **Star in Instapaper**: if you add a star to the article **title** in Instapaper, the pipeline **propagates** that "featured" status to HTML/MD and **auto-bumps** the HTML (sets its `mtime` to the future) so it appears at the top of date-sorted lists.  
