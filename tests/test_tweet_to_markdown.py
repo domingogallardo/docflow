@@ -11,6 +11,8 @@ from utils.tweet_to_markdown import (
     _status_id_from_url,
     _find_quoted_status_id,
     _quoted_url_from_graphql_id,
+    _wait_for_tweet_detail,
+    PlaywrightTimeoutError,
     _select_thread_indices,
     _extract_thread_ids_from_payload,
 )
@@ -255,6 +257,50 @@ def test_media_markdown_lines_include_direct_links():
     )
     assert lines[0] == "[![image 1](https://pbs.twimg.com/media/img1?format=jpg)](https://pbs.twimg.com/media/img1?format=jpg)"
     assert lines[1] == "[![image 2](https://pbs.twimg.com/media/img2?format=jpg)](https://pbs.twimg.com/media/img2?format=jpg)"
+
+
+def test_wait_for_tweet_detail_returns_payload():
+    class FakeResponse:
+        url = "https://x.com/i/api/graphql/xyz/TweetDetail"
+
+        def __init__(self, payload):
+            self._payload = payload
+
+        def json(self):
+            return self._payload
+
+    class FakePage:
+        def wait_for_response(self, predicate, timeout):
+            resp = FakeResponse({"ok": True})
+            assert predicate(resp)
+            assert timeout == 123
+            return resp
+
+    assert _wait_for_tweet_detail(FakePage(), 123) == {"ok": True}
+
+
+def test_wait_for_tweet_detail_returns_none_on_timeout():
+    class FakePage:
+        def wait_for_response(self, predicate, timeout):
+            raise PlaywrightTimeoutError("timeout")
+
+    assert _wait_for_tweet_detail(FakePage(), 50) is None
+
+
+def test_wait_for_tweet_detail_returns_none_on_bad_json():
+    class FakeResponse:
+        url = "https://x.com/i/api/graphql/xyz/TweetDetail"
+
+        def json(self):
+            raise ValueError("bad")
+
+    class FakePage:
+        def wait_for_response(self, predicate, timeout):
+            resp = FakeResponse()
+            assert predicate(resp)
+            return resp
+
+    assert _wait_for_tweet_detail(FakePage(), 100) is None
 
 
 def test_select_thread_indices_requires_context():
