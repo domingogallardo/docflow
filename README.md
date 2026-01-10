@@ -75,12 +75,6 @@ docflow automates **collect -> process -> prioritize (bump) -> read -> publish -
 - Podcasts: `source: podcast` (auto-added when cleaning Snipd exports).
 - Generic Markdown: any `.md` in `Incoming/` without a `source:` tag.
 
-## 🛠️ Standalone scripts
-- `utils/standalone_download_liked_tweets.py`: download X likes to Markdown from an exported `storage_state`.
-- `utils/standalone_download_instapaper.py`: download all Instapaper articles to HTML/Markdown in a directory.
-- `utils/standalone_markdown_to_html.py`: convert Markdown to HTML with the main pipeline transforms (margins + optional AI titles when configured); `--output-dir` moves the MD/HTML pair.
-- `utils/standalone_snipd_to_markdown.py`: clean Snipd exports and split episodes with a snips index.
-
 ## 🌐 Publish on your domain (`/read/`)
 - Run `web/deploy.sh` (from `web/`) to generate a static index ordered by `mtime` and upload to the web container.
 - Use BasicAuth on the host if you want private access (configurable via env vars in `deploy.sh`).
