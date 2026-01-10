@@ -65,6 +65,7 @@ QUOTE_MARKERS_JS = ", ".join(f'"{m}"' for m in sorted(QUOTE_MARKERS))
 THREAD_MAX_MINUTES = 24 * 60
 THREAD_MARKER_RE = re.compile(r"\bthread\b|\bhilo\b", re.IGNORECASE)
 WAIT_MS = 1000
+TWEET_DETAIL_WAIT_MS = 5000
 
 
 @dataclass(frozen=True)
@@ -164,6 +165,22 @@ def _wait_with_log(page, wait_ms: int, reason: str) -> None:
         return
     print(f"⏳ Esperando {_format_wait_ms(wait_ms)} para {reason}...")
     page.wait_for_timeout(wait_ms)
+
+
+def _wait_for_tweet_detail(page, timeout_ms: int) -> object | None:
+    if timeout_ms <= 0:
+        return None
+    try:
+        response = page.wait_for_response(
+            lambda resp: "TweetDetail" in resp.url,
+            timeout=timeout_ms,
+        )
+    except PlaywrightTimeoutError:
+        return None
+    try:
+        return response.json()
+    except Exception:
+        return None
 
 
 def _parse_iso_datetime(value: str | None) -> datetime | None:
@@ -921,6 +938,10 @@ def fetch_tweet_thread_markdown(
             return _build_single_tweet_markdown(target_parts, url), filename
 
         thread_payload = tweet_detail.get("payload")
+        if thread_payload is None:
+            thread_payload = _wait_for_tweet_detail(page, TWEET_DETAIL_WAIT_MS)
+            if thread_payload is not None:
+                tweet_detail["payload"] = thread_payload
         thread_marker = _has_thread_marker(article)
         thread_ids = _extract_thread_ids_from_payload(
             thread_payload,
