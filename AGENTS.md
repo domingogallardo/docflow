@@ -54,8 +54,6 @@ Notes for agents
 - If the server is reachable and you have approval, you can run `web/deploy.sh` directly; otherwise provide the exact command for the user to run.
 - To preview the index locally without deploying, run: `python utils/build_read_index.py` (single list ordered by mtime).
 - Local overlay (`utils/serve_docs.py`) offers Bump/Unbump/Publish/Unpublish.
-- Whenever you change the base code, check whether the change should also be reflected in standalone scripts (for example, `utils/standalone_*.py`).
-- By default, user requests refer to the main pipeline code; only update standalone scripts after the user confirms the base change.
 
 ## Instapaper Starred & Bump
 - Star marking: to highlight an Instapaper article, add a star (⭐) at the beginning of its title in Instapaper.
