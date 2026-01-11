@@ -50,4 +50,16 @@ status=$?
 set -e
 
 echo "[$(date -Iseconds)] Docflow: finished exit=${status}"
-exit "${status}"
+
+set +e
+"${PYTHON_BIN}" utils/sync_public_highlights.py --year "${YEAR}"
+sync_status=$?
+set -e
+
+echo "[$(date -Iseconds)] Docflow: highlights sync exit=${sync_status}"
+
+final_status="${status}"
+if [ "${final_status}" -eq 0 ] && [ "${sync_status}" -ne 0 ]; then
+  final_status="${sync_status}"
+fi
+exit "${final_status}"
