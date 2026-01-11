@@ -171,14 +171,15 @@ def _wait_for_tweet_detail(page, timeout_ms: int) -> object | None:
     if timeout_ms <= 0:
         return None
     try:
-        response = page.wait_for_response(
+        with page.expect_response(
             lambda resp: "TweetDetail" in resp.url,
             timeout=timeout_ms,
-        )
+        ) as response_info:
+            pass
     except PlaywrightTimeoutError:
         return None
     try:
-        return response.json()
+        return response_info.value.json()
     except Exception:
         return None
 

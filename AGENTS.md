@@ -10,7 +10,7 @@ This repository automates collecting and organizing personal documents (Instapap
 
 ## Build, Test, and Dev Commands
 - Install deps: `pip install requests beautifulsoup4 markdownify openai pillow pytest markdown`
-- Tweet capture deps: `pip install playwright && playwright install chromium`
+- Tweet capture deps: `pip install "playwright>=1.55" && playwright install chromium` (expects `expect_response`, tested with 1.55.0)
 - Run pipeline: `python process_documents.py all --year 2025`
 - Tweets queue: `python process_documents.py tweets` opens your X likes with Playwright (`TWEET_LIKES_STATE`, `TWEET_LIKES_URL`) until it finds the last tweet recorded in `Incoming/tweets_processed.txt`, avoids duplicates, and completes the Markdown/HTML pipeline
 - Selective run: `python process_documents.py pdfs md`

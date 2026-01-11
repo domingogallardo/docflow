@@ -269,19 +269,29 @@ def test_wait_for_tweet_detail_returns_payload():
         def json(self):
             return self._payload
 
+    class FakeContext:
+        def __init__(self, response):
+            self.value = response
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, tb):
+            return False
+
     class FakePage:
-        def wait_for_response(self, predicate, timeout):
+        def expect_response(self, predicate, timeout):
             resp = FakeResponse({"ok": True})
             assert predicate(resp)
             assert timeout == 123
-            return resp
+            return FakeContext(resp)
 
     assert _wait_for_tweet_detail(FakePage(), 123) == {"ok": True}
 
 
 def test_wait_for_tweet_detail_returns_none_on_timeout():
     class FakePage:
-        def wait_for_response(self, predicate, timeout):
+        def expect_response(self, predicate, timeout):
             raise PlaywrightTimeoutError("timeout")
 
     assert _wait_for_tweet_detail(FakePage(), 50) is None
@@ -294,13 +304,24 @@ def test_wait_for_tweet_detail_returns_none_on_bad_json():
         def json(self):
             raise ValueError("bad")
 
+    class FakeContext:
+        def __init__(self, response):
+            self.value = response
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, tb):
+            return False
+
     class FakePage:
-        def wait_for_response(self, predicate, timeout):
+        def expect_response(self, predicate, timeout):
             resp = FakeResponse()
             assert predicate(resp)
-            return resp
+            return FakeContext(resp)
 
     assert _wait_for_tweet_detail(FakePage(), 100) is None
+
 
 
 def test_select_thread_indices_requires_context():
