@@ -20,9 +20,10 @@ docflow automates **collect -> process -> prioritize (bump) -> read -> publish -
   ```
 - To capture tweets directly (optional):
   ```bash
-  pip install playwright
+  pip install "playwright>=1.55"
   playwright install chromium
   ```
+  (Uses Playwright's `expect_response`; tested with 1.55.0.)
 
 ## 🚀 Quick start
 1. Configure env vars if you use external services:

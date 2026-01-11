@@ -53,9 +53,10 @@ pip install requests beautifulsoup4 markdownify openai pillow pytest markdown
 ```
 To capture tweets directly:
 ```bash
-pip install playwright
+pip install "playwright>=1.55"
 playwright install chromium
 ```
+(`expect_response` required; tested with 1.55.0.)
 
 ---
 
