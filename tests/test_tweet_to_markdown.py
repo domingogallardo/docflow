@@ -15,6 +15,8 @@ from utils.tweet_to_markdown import (
     PlaywrightTimeoutError,
     _select_thread_indices,
     _extract_thread_ids_from_payload,
+    _build_single_tweet_markdown,
+    TweetParts,
 )
 
 
@@ -257,6 +259,34 @@ def test_media_markdown_lines_include_direct_links():
     )
     assert lines[0] == "[![image 1](https://pbs.twimg.com/media/img1?format=jpg)](https://pbs.twimg.com/media/img1?format=jpg)"
     assert lines[1] == "[![image 2](https://pbs.twimg.com/media/img2?format=jpg)](https://pbs.twimg.com/media/img2?format=jpg)"
+
+
+def test_build_single_tweet_markdown_includes_external_link_without_media():
+    parts = TweetParts(
+        author_name="Autor",
+        author_handle="@autor",
+        body_text="Texto del tweet.",
+        avatar_url=None,
+        trailing_media_lines=[],
+        media_present=False,
+        external_link="https://example.com/post",
+    )
+    md = _build_single_tweet_markdown(parts, "https://x.com/autor/status/123")
+    assert "Original link: https://example.com/post" in md
+
+
+def test_build_single_tweet_markdown_skips_duplicate_external_link():
+    parts = TweetParts(
+        author_name="Autor",
+        author_handle="@autor",
+        body_text="Texto https://example.com/post/ con enlace.",
+        avatar_url=None,
+        trailing_media_lines=[],
+        media_present=False,
+        external_link="https://example.com/post",
+    )
+    md = _build_single_tweet_markdown(parts, "https://x.com/autor/status/123")
+    assert "Original link: https://example.com/post" not in md
 
 
 def test_wait_for_tweet_detail_returns_payload():
