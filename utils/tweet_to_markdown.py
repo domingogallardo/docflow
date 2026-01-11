@@ -163,7 +163,7 @@ def _format_wait_ms(wait_ms: int) -> str:
 def _wait_with_log(page, wait_ms: int, reason: str) -> None:
     if wait_ms <= 0:
         return
-    print(f"⏳ Esperando {_format_wait_ms(wait_ms)} para {reason}...")
+    print(f"⏳ Waiting {_format_wait_ms(wait_ms)} to {reason}...")
     page.wait_for_timeout(wait_ms)
 
 
@@ -876,7 +876,7 @@ def fetch_tweet_markdown(
         page = context.new_page()
         quoted_status = _attach_quoted_status_listener(page)
         page.goto(url, wait_until="domcontentloaded", timeout=60000)
-        _wait_with_log(page, WAIT_MS, "cargar el tweet")
+        _wait_with_log(page, WAIT_MS, "load the tweet")
 
         article = _locate_tweet_article(page, url)
         if article is None:
@@ -921,7 +921,7 @@ def fetch_tweet_thread_markdown(
         quoted_status = _attach_quoted_status_listener(page)
         tweet_detail = _attach_tweet_detail_listener(page)
         page.goto(url, wait_until="domcontentloaded", timeout=60000)
-        _wait_with_log(page, WAIT_MS, "cargar el tweet")
+        _wait_with_log(page, WAIT_MS, "load the tweet")
 
         article = _locate_tweet_article(page, url)
         if article is None:
@@ -954,7 +954,7 @@ def fetch_tweet_thread_markdown(
         total = articles.count()
         if total <= 1 and (not thread_ids or len(thread_ids) <= 1):
             if thread_payload is None and thread_marker:
-                _wait_with_log(page, WAIT_MS, "cargar el hilo")
+                _wait_with_log(page, WAIT_MS, "load the thread")
                 thread_payload = tweet_detail.get("payload")
                 thread_marker = _has_thread_marker(article)
                 thread_ids = _extract_thread_ids_from_payload(
@@ -1009,7 +1009,7 @@ def fetch_tweet_thread_markdown(
                     thread_parts.append((section_url, target_parts))
                     continue
                 page.goto(section_url, wait_until="domcontentloaded", timeout=60000)
-                _wait_with_log(page, WAIT_MS, "cargar un tweet del hilo")
+                _wait_with_log(page, WAIT_MS, "load a tweet from the thread")
                 art = _locate_tweet_article(page, section_url)
                 if art is None:
                     continue
