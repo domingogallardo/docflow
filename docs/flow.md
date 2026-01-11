@@ -67,6 +67,8 @@ PORT=8000 SERVE_DIR="/Users/domingo/⭐️ Documentación" python utils/serve_do
 The overlay:
 - lists documents ordered by `mtime`,
 - allows **Bump (b)**, **Unbump (u)**, **Publish (p)**, **Unpublish (d)**, and **Delete**,
+- **Bump/Unbump** adjusts the local file `mtime` so it moves in the listing,
+- **Publish/Unpublish** copies/removes the file in `web/public/read/` and runs `web/deploy.sh`,
 - applies **auto-bump** to HTML generated from Instapaper if the original article was starred ⭐ (done by `InstapaperProcessor` using `utils.bump_files`, same as in the pipeline),
 - is the point where you decide what goes to the web.
 

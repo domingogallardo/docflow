@@ -94,14 +94,9 @@ PORT=8000 SERVE_DIR="/path/to/⭐️ Documentación" python utils/serve_docs.py
 ```
 - Overlay on **HTML** pages with **Bump / Unbump / Publish / Unpublish / Delete** buttons and **keyboard shortcuts**.  
 - The listing shows only folders, HTML, and PDFs (hides `.md`), ordered by **mtime desc**.  
-- State rules:  
-  - **S0** Unbumped + Not published → shows *Bump*.  
-  - **S1** Bumped + Not published → shows *Unbump* and *Publish*.  
-  - **S2** Published → shows *Unpublish*.  
-- **Validation rules**:  
-  - Publishing **requires** the file to be **bumped** and **not published**.  
-  - While **published**, **Bump/Unbump** is not allowed (and not shown).  
-  - The server rejects `bump`/`unbump_now` if the file is published.
+- Buttons reflect file status:  
+  - **Bump/Unbump** toggles based on `mtime` (future vs now).  
+  - **Publish/Unpublish** toggles based on whether a same-name file exists in `PUBLIC_READS_DIR`.  
 - **Delete** permanently removes the HTML/PDF (and any associated Markdown) from the local library.
 
 5) **Publish to the public web (`/read/`)**  
@@ -123,7 +118,7 @@ Deployment uses **double Nginx**: a TLS proxy on the **host** and Nginx **inside
 ## Local web server (`utils/serve_docs.py`)
 
 - **Actions**: Bump (`b`), Unbump (`u`), Publish (`p`), Unpublish (`d`), Delete (button), Listing (`l`).  
-- **States**: S0/S1/S2 (see above).  
+- **States**: The overlay reflects both bump status (`mtime`) and published status (`PUBLIC_READS_DIR`).  
 - **Parameters**:
   - `PORT` (default 8000)
   - `SERVE_DIR` (base path)
@@ -197,7 +192,7 @@ HTPASSWD_PSS='password'
 
 ## Troubleshooting
 
-- **"Publish" does not appear** → the file is not **bumped** or already exists in `PUBLIC_READS_DIR`. Check `mtime` and names.  
+- **"Publish" does not appear** → the file already exists in `PUBLIC_READS_DIR` (published) or you're viewing with `?raw=1`.  
 - **"Unpublish" does not appear** → the file is not in `PUBLIC_READS_DIR` (detected by name).  
 - **`read.html` does not change** → deploy regenerates it; hard-refresh and check `web/deploy.sh` output.  
 - **Deploy error** → verify `web/deploy.sh` permissions (`chmod +x`) and that `REMOTE_USER`/`REMOTE_HOST` are set.  
