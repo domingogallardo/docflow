@@ -5,6 +5,7 @@ docflow automates **collect -> process -> prioritize (bump) -> read -> publish -
 ## ✨ Highlights
 - Single pipeline for Instapaper, Snipd, PDFs, images, Markdown, and X likes (`Tweets/Tweets <YEAR>/`).
 - Automatic bump/unbump (⭐ in Instapaper) and a local overlay (`utils/serve_docs.py`) to bump/unbump, publish/unpublish (copies to `web/public/read/` + deploy), or delete.
+- Sync public highlights into `Posts/Posts <YEAR>/highlights/` after `bin/docflow.sh` (manual: `python utils/sync_public_highlights.py --base-url https://...`).
 - Deploy to your domain via `web/deploy.sh`: generates a static `/read/` index ordered by `mtime`.
 - History log (`Incoming/processed_history.txt`) and utilities for AI titles, Markdown cleanup, and quote capture.
 - Routing is tag-based: tweets/podcasts/Instapaper are tagged, and generic Markdown is any `.md` without a `source:` tag.
@@ -33,6 +34,7 @@ docflow automates **collect -> process -> prioritize (bump) -> read -> publish -
    export INSTAPAPER_PASSWORD=...    # optional
    export TWEET_LIKES_STATE=/path/to/x_state.json  # required if you process X likes
    export TWEET_LIKES_MAX=50                           # optional, scroll limit
+   export HIGHLIGHTS_BASE_URL=https://your-domain.com  # required for highlight sync in bin/docflow.sh
    ```
 2. Run the full pipeline (you can pass `--year`):
    ```bash
@@ -42,6 +44,7 @@ docflow automates **collect -> process -> prioritize (bump) -> read -> publish -
 
    # To unify cron and manual execution (loads ~/.docflow_env if it exists):
    bash bin/docflow.sh all
+   # Also syncs public highlights into Posts/Posts <YEAR>/highlights/.
    ```
 3. Review locally with the overlay (bump/unbump, publish/unpublish, delete):
    ```bash

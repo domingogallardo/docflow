@@ -167,6 +167,7 @@ INSTAPAPER_PASSWORD=...        # optional
 REMOTE_USER=root
 REMOTE_HOST=1.2.3.4
 PUBLIC_READS_URL_BASE=https://<your_domain>/read
+HIGHLIGHTS_BASE_URL=https://<your_domain>
 
 # Local server
 PORT=8000
@@ -186,6 +187,7 @@ HTPASSWD_PSS='password'
 - **Read/prioritize/publish (local)**: `utils/serve_docs.py` (overlay + actions), `utils/bump.applescript`, `utils/un-bump.applescript`.  
 - **Publish (remote)**: `web/deploy.sh` (generates `read.html` by mtime desc as a single listing).  
 - **Capture quotes/highlights in `/read/`**: `article.js` (**❝ Copy quote** + **Subrayar**, Markdown + `#:~:text=`, highlights via `/data/highlights/`).  
+- **Sync public highlights → local**: runs after `bin/docflow.sh` via `utils/sync_public_highlights.py --base-url https://<your_domain>` (stores JSON in `Posts/Posts <YEAR>/highlights/` + `sync_state.json`).  
 - **Preview index without deploy**: `utils/build_read_index.py`.
 
 ---
