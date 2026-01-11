@@ -33,7 +33,7 @@
     window.location.href = parent || '/';
   }
   async function publish(){
-    if(deleting || publishing || !bumped || published) return;
+    if(deleting || publishing || published) return;
     publishing = true; render(); msg.textContent = '⏳ publishing…'; msg.className = 'meta';
     const ok = await call('publish');
     msg.textContent = ok ? '✓ published' : '× error';
@@ -95,7 +95,7 @@
     });
     if(deleting){ btn.setAttribute('disabled',''); }
     bar.appendChild(btn);
-    if(bumped && !published){
+    if(!published){
       const pub = el('button', null, 'Publish');
       pub.title = 'Copy to /web/public/read and deploy';
       if(publishing){ pub.textContent = 'Publishing…'; pub.setAttribute('disabled',''); }
@@ -136,7 +136,7 @@
       e.preventDefault(); const ok = await call('unbump_now'); if(ok){ bumped=false; render(); msg.textContent='✓ done'; msg.className='meta ok'; }
     }
     if(k==='l' && !e.metaKey && !e.ctrlKey && !e.altKey){ e.preventDefault(); goList(); }
-    if(k==='p' && bumped && !published && !publishing){ e.preventDefault(); publish(); }
+    if(k==='p' && !published && !publishing){ e.preventDefault(); publish(); }
     if(k==='d' && published && !unpublishing){ e.preventDefault(); unpublish(); }
   });
   document.addEventListener('DOMContentLoaded', ()=>{ document.body.appendChild(bar); render(); });

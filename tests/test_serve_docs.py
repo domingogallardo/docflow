@@ -86,7 +86,7 @@ def test_directory_index_marks_published_html(tmp_path, monkeypatch):
 def test_directory_index_pdf_actions_and_publish_detection(tmp_path, monkeypatch):
     sd = _load_serve_docs("serve_docs_pdf")
 
-    # Structure: one bumped/unpublished PDF and one bumped+published.
+    # Structure: one unbumped/unpublished PDF and one bumped+published.
     serve_dir = tmp_path / "serve"
     serve_dir.mkdir()
     pdf_pub = serve_dir / "paper_publicado.pdf"
@@ -94,12 +94,12 @@ def test_directory_index_pdf_actions_and_publish_detection(tmp_path, monkeypatch
     pdf_pub.write_bytes(b"%PDF-1.4\n")
     pdf_local.write_bytes(b"%PDF-1.4\n")
 
-    # Mark both as bumped (mtime in the future).
+    # Mark the published PDF as bumped (mtime in the future).
     future = sd.base_epoch_cached() + 10
-    at = pdf_local.stat().st_atime
-    __import__("os").utime(str(pdf_local), (at, future))
     at_pub = pdf_pub.stat().st_atime
     __import__("os").utime(str(pdf_pub), (at_pub, future))
+    at = pdf_local.stat().st_atime
+    __import__("os").utime(str(pdf_local), (at, time.time() - 10))
 
     # Temporary public reads directory with the published counterpart.
     public_reads = tmp_path / "public_reads"
@@ -128,11 +128,11 @@ def test_directory_index_pdf_actions_and_publish_detection(tmp_path, monkeypatch
             assert "data-dg-act='publish'" not in line
             break
 
-    # Local bumped PDF shows Unbump and a Publish option (reads).
+    # Local PDF shows Bump and a Publish option (reads), even when not bumped.
     assert "paper_local.pdf" in html
     for line in html.splitlines():
         if "paper_local.pdf" in line:
-            assert "data-dg-act='unbump_now'" in line
+            assert "data-dg-act='bump'" in line
             assert "data-dg-act='publish'" in line
             assert "data-dg-target" not in line
             break
@@ -229,6 +229,58 @@ def test_delete_file_and_public_copy(tmp_path, monkeypatch):
     assert not html_file.exists()
     assert not public_copy.exists()
     assert not md_file.exists()
+
+
+def test_publish_allows_unbumped_file(tmp_path, monkeypatch):
+    sd = _load_serve_docs("serve_docs_publish_unbumped")
+
+    serve_dir = tmp_path / "serve"
+    serve_dir.mkdir()
+    html_file = serve_dir / "doc.html"
+    html_file.write_text("<html><head></head><body></body></html>", encoding="utf-8")
+
+    past = int(time.time()) - 120
+    at = html_file.stat().st_atime
+    __import__("os").utime(str(html_file), (at, past))
+
+    public_reads = tmp_path / "public_reads"
+    public_reads.mkdir()
+    monkeypatch.setattr(sd, "PUBLIC_READS_DIR", str(public_reads), raising=False)
+    monkeypatch.setattr(sd, "SERVE_DIR", str(serve_dir), raising=False)
+
+    deploy = tmp_path / "deploy.sh"
+    deploy.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
+    __import__("os").chmod(deploy, 0o755)
+    monkeypatch.setattr(sd, "DEPLOY_SCRIPT", str(deploy), raising=False)
+
+    body = f"path={urllib.parse.quote(html_file.name)}&action=publish"
+
+    class Dummy(sd.HTMLOnlyRequestHandler):
+        def __init__(self):
+            self.path = "/__bump"
+            self.command = "POST"
+            self.requestline = "POST /__bump HTTP/1.1"
+            self.headers = {"Content-Length": str(len(body))}
+            self.rfile = io.BytesIO(body.encode("utf-8"))
+            self.wfile = io.BytesIO()
+            self._sent = {"status": None}
+            self.client_address = ("127.0.0.1", 0)
+
+        def send_response(self, code, message=None):  # type: ignore[override]
+            self._sent["status"] = code
+
+        def send_header(self, key, value):  # type: ignore[override]
+            pass
+
+        def end_headers(self):  # type: ignore[override]
+            pass
+
+    h = Dummy()
+    h.do_POST()
+
+    assert h._sent["status"] == 200
+    assert (public_reads / html_file.name).exists()
+    assert int(html_file.stat().st_mtime) == past
 
 
 def test_publish_sets_public_mtime_without_unbumping(tmp_path, monkeypatch):

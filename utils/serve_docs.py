@@ -123,7 +123,7 @@ def _pdf_actions_html(rel_from_root: str, bumped: bool, published: bool) -> str:
         actions.append(
             f"<a href='#' class='dg-act' data-dg-act='unpublish' data-dg-path='{html.escape(rel_from_root)}'>Unpublish</a>"
         )
-    elif bumped:
+    else:
         actions.append(
             f"<a href='#' class='dg-act' data-dg-act='publish' data-dg-path='{html.escape(rel_from_root)}'>Publish</a>"
         )
@@ -329,14 +329,10 @@ class HTMLOnlyRequestHandler(SimpleHTTPRequestHandler):
                 return
 
             if action == "publish":
-                # Requires the file to be bumped (extra guard).
                 try:
                     st_src = os.stat(abs_path)
                 except Exception as e:
                     self.send_error(500, f"Could not read file: {e}")
-                    return
-                if not is_bumped(st_src.st_mtime):
-                    self.send_error(400, "Not published: file is not bumped")
                     return
                 # 1) Always copy to the public READS directory.
                 if not os.path.isdir(PUBLIC_READS_DIR):
