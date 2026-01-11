@@ -819,6 +819,19 @@ def _extract_tweet_parts(
     )
 
 
+def _normalize_link_for_match(url: str) -> str:
+    return url.strip().rstrip("/").lower()
+
+
+def _should_append_external_link(body_text: str, external_link: str | None) -> bool:
+    if not external_link:
+        return False
+    if not body_text:
+        return True
+    normalized = _normalize_link_for_match(external_link)
+    return normalized not in body_text.lower()
+
+
 def _build_single_tweet_markdown(parts: TweetParts, tweet_url: str) -> str:
     title = _build_title(parts.author_name, parts.author_handle)
     front_matter = [
@@ -844,7 +857,7 @@ def _build_single_tweet_markdown(parts: TweetParts, tweet_url: str) -> str:
         md_lines.extend(parts.trailing_media_lines)
         md_lines.append("")
 
-    if parts.external_link and parts.media_present:
+    if _should_append_external_link(parts.body_text, parts.external_link):
         md_lines.extend(["", f"Original link: {parts.external_link}"])
 
     return "\n".join(md_lines).strip() + "\n"
@@ -1063,7 +1076,7 @@ def fetch_tweet_thread_markdown(
                 md_lines.append("")
                 md_lines.extend(parts.trailing_media_lines)
                 md_lines.append("")
-            if parts.external_link and parts.media_present:
+            if _should_append_external_link(parts.body_text, parts.external_link):
                 md_lines.extend(["", f"Original link: {parts.external_link}"])
 
         markdown = "\n".join(md_lines).strip() + "\n"
