@@ -701,7 +701,12 @@ def sync_public_highlights(
                     md_text = md_path.read_text(encoding="utf-8")
                 updated_text = apply_highlight_markers(md_text, highlights)
                 if updated_text != md_text:
+                    st = md_path.stat()
                     md_path.write_text(updated_text, encoding="utf-8")
+                    try:
+                        os.utime(md_path, (st.st_atime, st.st_mtime))
+                    except Exception:
+                        pass
                     summary.md_updated += 1
                     _log(f"📝 Resaltados actualizados: {md_path.name}")
 
