@@ -159,22 +159,6 @@ class DocumentProcessor:
         # Use the unified processor for the whole Instapaper pipeline.
         moved_posts = self.instapaper_processor.process_instapaper_posts()
 
-        # Auto-bump: only HTML marked as "starred" by Instapaper.
-        # Note for contributors: an article is considered "starred" if a ⭐ is
-        # added at the start of the title in Instapaper. Bumping sets its mtime
-        # to the future so it appears at the top of date-ordered listings.
-        try:
-            from utils import is_instapaper_starred_file
-            starred_htmls = [
-                f for f in moved_posts
-                if f.suffix.lower() in {'.html', '.htm'} and is_instapaper_starred_file(f)
-            ]
-            if starred_htmls:
-                U.bump_files(starred_htmls)
-        except Exception:
-            # Do not block the pipeline if detection fails.
-            pass
-
         self._remember(moved_posts)
         return moved_posts
     

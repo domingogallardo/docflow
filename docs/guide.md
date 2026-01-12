@@ -21,7 +21,6 @@
 ## Key concepts
 
 - **Bump/Unbump**: adjust a file's `mtime` to prioritize it in date-ordered listings.  
-  - Automatic if the Instapaper title starts with **⭐**.  
   - Manual via the overlay or `utils/bump.applescript` / `utils/un-bump.applescript` (Finder).
 - **Overlay**: UI on locally served HTML to perform actions (bump/unbump, publish, etc.).
 - **Source tags (routing)**: Markdown routing is based on `source:` front matter only.  
@@ -84,8 +83,7 @@ All of this is orchestrated by `process_documents.py` and specific `*_processor.
 > If you like the last tweet of a thread, the pipeline groups the previous tweets by the same author/time into a single Markdown file.
 
 3) **Prioritize for reading → Bump/Unbump**  
-- **Star in Instapaper**: if you add a star to the article **title** in Instapaper, the pipeline **propagates** that "featured" status to HTML/MD and **auto-bumps** the HTML (sets its `mtime` to the future) so it appears at the top of date-sorted lists.  
-- You also have Finder shortcuts (`utils/bump.applescript`, `utils/un-bump.applescript`) if you need to bump/unbump manually.
+- Use the overlay or Finder shortcuts (`utils/bump.applescript`, `utils/un-bump.applescript`) to bump/unbump manually.
 
 4) **Read locally and manage state → `utils/serve_docs.py`**  
 Start the local reading server:  

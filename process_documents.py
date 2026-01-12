@@ -6,9 +6,8 @@ Usage:
     python process_documents.py [--year YYYY] [pdfs|podcasts|posts|images|md|all]
 
 Notes:
-- Instapaper HTML articles marked as starred are auto-bumped (mtime set to the
-  future) so they appear at the top of date-ordered listings.
-- To mark as starred in Instapaper: add a star (⭐) at the start of the title.
+- Instapaper HTML articles are downloaded and processed without special
+  starring rules.
 """
 import argparse
 
@@ -19,14 +18,9 @@ import config as cfg
 def parse_args():
     p = argparse.ArgumentParser(
         description=(
-            "Document pipeline: podcasts, Instapaper, PDFs, images, and Markdown. "
-            "Starred Instapaper HTML is auto-bumped."
+            "Document pipeline: podcasts, Instapaper, PDFs, images, and Markdown."
         ),
-        epilog=(
-            "To mark an article as starred in Instapaper, add a star (⭐) at the start "
-            "of the title. The pipeline detects it, propagates the mark to HTML/MD, and "
-            "bumps the HTML to prioritize it in date-ordered listings."
-        ),
+        epilog=None,
     )
     p.add_argument("--year", type=int,
                    help="Use this year instead of the default (DOCPIPE_YEAR or current year)")

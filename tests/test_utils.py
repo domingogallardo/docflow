@@ -104,4 +104,4 @@ URL aislada: https://x.com/SchmidhuberAI/status/1950194864940835159"""
     assert "[https://x.com/SchmidhuberAI/status/1950194864940835159](https://x.com/SchmidhuberAI/status/1950194864940835159)" in result 
 
 
-# (tests for is_instapaper_starred_file moved to tests/test_instapaper_starred_utils.py)
+# (tests for Instapaper-starred utils were removed)
