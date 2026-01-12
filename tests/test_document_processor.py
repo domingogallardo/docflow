@@ -2,10 +2,6 @@
 """
 Tests for DocumentProcessor
 """
-import pytest
-from pathlib import Path
-import time
-
 from pipeline_manager import DocumentProcessor
 
 
@@ -105,49 +101,3 @@ def test_process_podcasts_only(tmp_path):
     assert (tmp_path / "Podcasts" / "Podcasts 2025" / "Great Show - Amazing Episode.md").exists()
     
     # External scripts are not run (integrated in processors): no runner validation.
-
-
-def test_bump_starred_instapaper_html(tmp_path):
-    """HTML marked as 'starred' in Instapaper receives an automatic bump."""
-
-    incoming = tmp_path / "Incoming"
-    incoming.mkdir()
-
-    # Create an HTML with 'starred' meta.
-    starred_html = incoming / "sample.html"
-    starred_html.write_text(
-        """<!DOCTYPE html>
-        <html data-instapaper-starred=\"true\">
-        <head>
-          <meta charset=\"UTF-8\">
-          <meta name=\"instapaper-starred\" content=\"true\">
-          <title>Sample</title>
-        </head>
-        <body><h1>Sample</h1></body>
-        </html>
-        """,
-        encoding="utf-8",
-    )
-
-    processor = DocumentProcessor(tmp_path, 2025)
-
-    # Avoid running the real Instapaper pipeline: simulate the move.
-    def fake_process_instapaper_posts():
-        processor.posts_dest.mkdir(parents=True, exist_ok=True)
-        dest = processor.posts_dest / starred_html.name
-        dest.write_text(starred_html.read_text(encoding="utf-8"), encoding="utf-8")
-        return [dest]
-
-    processor.instapaper_processor.process_instapaper_posts = fake_process_instapaper_posts
-
-    processor.process_instapaper_posts()
-
-    moved = processor.posts_dest / "sample.html"
-    assert moved.exists()
-
-    # It should have an mtime far in the future (approx. > 90 years).
-    future_threshold = time.time() + 90 * 365 * 24 * 3600
-    assert moved.stat().st_mtime > future_threshold
-
-
- 

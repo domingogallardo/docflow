@@ -2,37 +2,19 @@
 """
 Tests for InstapaperProcessor
 """
-import pytest
-from pathlib import Path
 from unittest.mock import Mock, patch
 
 from instapaper_processor import InstapaperDownloadRegistry, InstapaperProcessor
 
 
-def test_star_prefix_stripping_variants():
-    """Remove common star prefixes from the title."""
-    p = InstapaperProcessor(Path("/tmp/incoming"), Path("/tmp/dest"))
-    cases = [
-        ("⭐ Title", "Title"),
-        ("⭐️ Title", "Title"),
-        ("★ Title", "Title"),
-        ("✪ Title", "Title"),
-        ("✭ Title", "Title"),
-        ("  ⭐   Title", "Title"),
-        ("No Star Title", "No Star Title"),
-    ]
-    for raw, expected in cases:
-        assert p._strip_star_prefix(raw) == expected
-
-
-def test_instapaper_star_detection_and_propagation_from_read_html(tmp_path):
-    """Detecta estrella en /read y la propaga a HTML y Markdown."""
+def test_instapaper_download_writes_html_and_markdown(tmp_path):
+    """Downloads HTML and builds Markdown with only source front matter."""
     incoming = tmp_path / "Incoming"
     destination = tmp_path / "Posts"
     incoming.mkdir()
     destination.mkdir()
 
-    # Read page with a star in <title> and H1.
+    # Read page with a star in <title> and H1 (no special handling expected).
     read_html = """<!DOCTYPE html>
     <html>
     <head>
@@ -56,91 +38,35 @@ def test_instapaper_star_detection_and_propagation_from_read_html(tmp_path):
     processor.session.get.return_value = mock_resp
 
     # Download and write the article HTML.
-    html_path, is_starred = processor._download_article("12345")
-    assert is_starred is True
+    html_path = processor._download_article("12345")
     html_text = html_path.read_text(encoding="utf-8")
 
-    # It must contain the star marker and attribute in <html>.
-    assert '<meta name="instapaper-starred" content="true">' in html_text
-    assert 'data-instapaper-starred="true"' in html_text
-    # Title must be clean (no star prefix).
-    assert "<title>Starred Sample</title>" in html_text
-    assert "<h1>Starred Sample</h1>" in html_text
-
-    # Converting to Markdown should add front matter.
-    processor._convert_html_to_markdown()
-    md_path = html_path.with_suffix('.md')
-    md_text = md_path.read_text(encoding="utf-8")
-    assert md_text.startswith("---\nsource: instapaper\ninstapaper_starred: true\n---\n")
-    # No star should remain at the start of the heading.
-    header_lines = [line for line in md_text.splitlines() if line.startswith("#")]
-    assert header_lines
-    assert not header_lines[0].startswith("# ⭐")
-
-
-def test_instapaper_processor_no_star_no_meta(tmp_path):
-    """If the <title> does not start with ⭐, it should not be marked starred."""
-    incoming = tmp_path / "Incoming"
-    destination = tmp_path / "Posts"
-    incoming.mkdir()
-    destination.mkdir()
-
-    # Read page WITHOUT a star in <title> or H1.
-    read_html = """<!DOCTYPE html>
-    <html>
-    <head>
-      <title>Normal Sample</title>
-    </head>
-    <body>
-      <div id=\"titlebar\">
-        <h1>Normal Sample</h1>
-        <div class=\"origin_line\">Example.com</div>
-      </div>
-      <div id=\"story\"><p>Body</p></div>
-    </body>
-    </html>"""
-
-    processor = InstapaperProcessor(incoming, destination)
-
-    # Mock the HTTP session.
-    mock_resp = Mock()
-    mock_resp.text = read_html
-    processor.session = Mock()
-    processor.session.get.return_value = mock_resp
-
-    # Download and write the article HTML.
-    html_path, is_starred = processor._download_article("99999")
-    assert is_starred is False
-    html_text = html_path.read_text(encoding="utf-8")
-
-    # It should not contain starred markers.
-    assert '<meta name="instapaper-starred" content="true">' not in html_text
+    assert '<meta name="docflow-source" content="instapaper">' in html_text
+    assert '<meta name="instapaper-starred"' not in html_text
     assert 'data-instapaper-starred="true"' not in html_text
+    assert "<title>⭐ Starred Sample</title>" in html_text
+    assert "<h1>⭐ Starred Sample</h1>" in html_text
 
-    # Title and H1 should remain unchanged.
-    assert "<title>Normal Sample</title>" in html_text
-    assert "<h1>Normal Sample</h1>" in html_text
-
-    # Converting to Markdown should add front matter with starred=false.
+    # Converting to Markdown should add only source front matter.
     processor._convert_html_to_markdown()
     md_path = html_path.with_suffix('.md')
     md_text = md_path.read_text(encoding="utf-8")
-    assert md_text.startswith("---\nsource: instapaper\ninstapaper_starred: false\n---\n")
+    assert md_text.startswith("---\nsource: instapaper\n---\n")
+    assert "instapaper_starred" not in md_text
 
 
 def test_download_registry_persistence(tmp_path):
     registry_path = tmp_path / ".instapaper_downloads.txt"
     registry = InstapaperDownloadRegistry(registry_path)
 
-    assert registry.should_skip("abc", True) is False
+    assert registry.should_skip("abc") is False
 
-    registry.mark_downloaded("abc", True)
-    assert registry.should_skip("abc", True) is True
-    assert registry.should_skip("abc", False) is False
+    registry.mark_downloaded("abc")
+    assert registry.should_skip("abc") is True
 
     # Re-instantiate to verify persistence.
     registry_again = InstapaperDownloadRegistry(registry_path)
-    assert registry_again.should_skip("abc", True) is True
+    assert registry_again.should_skip("abc") is True
 
 
 def test_download_registry_batch_persists_on_exit(tmp_path):
@@ -149,11 +75,11 @@ def test_download_registry_batch_persists_on_exit(tmp_path):
     registry = InstapaperDownloadRegistry(registry_path)
 
     with registry.batch():
-        registry.mark_downloaded("abc", True)
+        registry.mark_downloaded("abc")
         assert not registry_path.exists()
 
     assert registry_path.exists()
-    assert "abc\t1" in registry_path.read_text(encoding="utf-8")
+    assert "abc\t" in registry_path.read_text(encoding="utf-8")
 
 
 def test_download_skips_articles_on_registry(tmp_path, monkeypatch):
@@ -163,7 +89,7 @@ def test_download_skips_articles_on_registry(tmp_path, monkeypatch):
     destination.mkdir()
 
     processor = InstapaperProcessor(incoming, destination)
-    processor.download_registry.mark_downloaded("123", False)
+    processor.download_registry.mark_downloaded("123")
 
     with patch('instapaper_processor.INSTAPAPER_USERNAME', 'user'), \
          patch('instapaper_processor.INSTAPAPER_PASSWORD', 'pass'):
@@ -177,7 +103,7 @@ def test_download_skips_articles_on_registry(tmp_path, monkeypatch):
 
         monkeypatch.setattr('instapaper_processor.requests.Session', lambda: mock_session)
 
-        processor._get_article_ids = Mock(return_value=([("123", False)], False))
+        processor._get_article_ids = Mock(return_value=(["123"], False))
         processor._download_article = Mock()
 
         assert processor._download_from_instapaper() is True

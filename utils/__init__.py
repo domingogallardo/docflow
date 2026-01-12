@@ -14,7 +14,6 @@ from utils.html_tools import (
     get_base_css,
     wrap_html,
 )
-from utils.instapaper_utils import is_instapaper_starred_file
 from utils.markdown_utils import (
     clean_duplicate_markdown_links,
     convert_newlines_to_br,
@@ -43,7 +42,6 @@ __all__ = [
     "front_matter_meta_tags",
     "get_article_js_script_tag",
     "get_base_css",
-    "is_instapaper_starred_file",
     "is_podcast_file",
     "iter_html_files",
     "list_files",

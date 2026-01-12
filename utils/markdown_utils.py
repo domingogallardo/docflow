@@ -7,7 +7,6 @@ _FRONT_MATTER_KEYS = {
     "tweet_url": "docflow-tweet-url",
     "tweet_author": "docflow-tweet-author",
     "tweet_author_name": "docflow-tweet-author-name",
-    "instapaper_starred": "docflow-instapaper-starred",
 }
 
 
@@ -55,8 +54,6 @@ def front_matter_meta_tags(meta: dict[str, str]) -> str:
             continue
         value = html.escape(str(meta[key]), quote=True)
         tags.append(f'<meta name="{meta_name}" content="{value}">')
-        if key == "instapaper_starred":
-            tags.append(f'<meta name="instapaper-starred" content="{value}">')
     return "\n".join(tags) + ("\n" if tags else "")
 
 

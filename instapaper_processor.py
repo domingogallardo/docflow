@@ -15,7 +15,7 @@ import requests
 from contextlib import contextmanager
 from datetime import datetime
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Tuple
 from bs4 import BeautifulSoup
 from markdownify import markdownify as md
 
@@ -55,31 +55,21 @@ class InstapaperDownloadRegistry:
                 continue
 
             article_id = parts[0].strip()
-            starred_flag = parts[1].strip()
-            timestamp = parts[2].strip() if len(parts) > 2 else ""
+            timestamp = parts[-1].strip() if len(parts) > 1 else ""
 
             if not article_id:
                 continue
 
             self.entries[article_id] = {
-                "starred": starred_flag == "1",
                 "timestamp": timestamp,
             }
 
-    def should_skip(self, article_id: str, starred_hint: Optional[bool]) -> bool:
-        entry = self.entries.get(article_id)
-        if not entry:
-            return False
+    def should_skip(self, article_id: str) -> bool:
+        return article_id in self.entries
 
-        if starred_hint is None:
-            return True
-
-        return bool(entry.get("starred")) == starred_hint
-
-    def mark_downloaded(self, article_id: str, starred: bool) -> None:
+    def mark_downloaded(self, article_id: str) -> None:
         timestamp = datetime.utcnow().isoformat(timespec="seconds") + "Z"
         self.entries[article_id] = {
-            "starred": starred,
             "timestamp": timestamp,
         }
         if self._batch_depth:
@@ -103,9 +93,8 @@ class InstapaperDownloadRegistry:
         self.path.parent.mkdir(parents=True, exist_ok=True)
         lines = []
         for article_id, data in self.entries.items():
-            starred_flag = "1" if data.get("starred") else "0"
             timestamp = str(data.get("timestamp") or "")
-            lines.append(f"{article_id}\t{starred_flag}\t{timestamp}")
+            lines.append(f"{article_id}\t{timestamp}")
 
         payload = "\n".join(lines) + ("\n" if lines else "")
         self.path.write_text(payload, encoding="utf-8")
@@ -249,16 +238,16 @@ class InstapaperProcessor:
             page += 1
 
     def _download_article_batch(self, articles, failure_log) -> None:
-        for article_id, starred_hint in articles:
-            if self.download_registry.should_skip(article_id, starred_hint):
+        for article_id in articles:
+            if self.download_registry.should_skip(article_id):
                 print(f"  {article_id}: ⏭️  already downloaded (no changes)")
                 continue
 
             print(f"  {article_id}: ", end="")
             start = time.time()
             try:
-                _, is_starred = self._download_article(article_id)
-                self.download_registry.mark_downloaded(article_id, is_starred)
+                self._download_article(article_id)
+                self.download_registry.mark_downloaded(article_id)
                 duration = time.time() - start
                 print(f"{round(duration, 2)} seconds")
             except Exception as e:
@@ -266,37 +255,8 @@ class InstapaperProcessor:
                 failure_log.write(f"{article_id}\t{str(e)}\n")
                 failure_log.flush()
 
-    def _has_star_emoji_prefix(self, s: str) -> bool:
-        """Return True if s starts with the ⭐ emoji (U+2B50) with or without VS16."""
-        if not s:
-            return False
-        s = s.strip()
-        # Only the '⭐' emoji and its VS16 variant: '⭐️'.
-        STAR_PREFIXES = ("⭐", "⭐️")
-        return s.startswith(STAR_PREFIXES)
-
-    def _strip_star_prefix(self, s: str) -> str:
-        """Remove star prefixes from titles (⭐, ⭐️, ★, ✪, ✭ + spaces)."""
-        if not s:
-            return s
-        s = s.strip()
-        # U+2B50 ⭐, U+FE0F VS16, U+2605 ★, U+272A ✪, U+272D ✭
-        return re.sub(r'^\s*(?:[\u2B50\u2605\u272A\u272D]\uFE0F?\s*)+', '', s)
-
-    def _is_starred_from_title_only(self, html: str) -> bool:
-        """
-        ONLY RULE: starred if and only if <title> starts with the ⭐ emoji
-        (with or without VS16).
-        """
-        try:
-            soup = BeautifulSoup(html, "html.parser")
-            page_title = soup.title.string if (soup.title and soup.title.string) else ""
-            return self._has_star_emoji_prefix(page_title)
-        except Exception:
-            return False
-
-    def _get_article_ids(self, page: int = 1) -> Tuple[List[Tuple[str, Optional[bool]]], bool]:
-        """Get article IDs for a page with star indication."""
+    def _get_article_ids(self, page: int = 1) -> Tuple[List[str], bool]:
+        """Get article IDs for a page."""
         url = f"https://www.instapaper.com/u/{page}"
         r = self.session.get(url)
 
@@ -307,37 +267,18 @@ class InstapaperProcessor:
 
         articles = container.find_all("article")
 
-        items: List[Tuple[str, Optional[bool]]] = []
+        items: List[str] = []
         for art in articles:
             aid = (art.get("id") or "").replace("article_", "")
             if not aid:
                 continue
-            items.append((aid, self._is_article_starred_in_list(art)))
+            items.append(aid)
 
         has_more = soup.find(class_="paginate_older") is not None
         return items, has_more
 
-    def _is_article_starred_in_list(self, article_tag) -> Optional[bool]:
-        """Detect whether an article appears starred in the list."""
-        classes = article_tag.get("class") or []
-        if isinstance(classes, str):
-            classes = [classes]
-        classes = [cls.strip().lower() for cls in classes if cls]
-        if "starred" in classes:
-            return True
-
-        data_starred = article_tag.get("data-starred")
-        if isinstance(data_starred, str):
-            normalized = data_starred.strip().lower()
-            if normalized in {"1", "true", "yes"}:
-                return True
-            if normalized in {"0", "false", "no"}:
-                return False
-
-        return None
-
     
-    def _download_article(self, article_id: str) -> Tuple[Path, bool]:
+    def _download_article(self, article_id: str) -> Path:
         """Download a specific article.
 
         Only the HTML returned by Instapaper is persisted. ``<img>`` tags are
@@ -350,14 +291,11 @@ class InstapaperProcessor:
 
         title_el = soup.find(id="titlebar").find("h1")
         raw_title = title_el.getText() if title_el else (soup.title.string if soup.title else f"Instapaper {article_id}")
-        title = self._strip_star_prefix(raw_title)  # ← SANITIZE HERE
+        title = raw_title
 
         origin = soup.find(id="titlebar").find(class_="origin_line")
         content_node = soup.find(id="story")
         content = content_node.decode_contents() if content_node else ""
-
-        # --- STAR DETECTION (only rule: <title> with ⭐) ---
-        is_starred_final = self._is_starred_from_title_only(r.text)
 
         # --- ROBUST FILENAME ---
         safe = "".join([c for c in title if c.isalpha() or c.isdigit() or c == " "]).strip()
@@ -372,25 +310,19 @@ class InstapaperProcessor:
             origin_html=origin_html,
             article_id=article_id,
             content=content,
-            starred=is_starred_final,
         )
 
         file_path.write_text(html_content, encoding="utf-8")
-        return file_path, is_starred_final
+        return file_path
 
-    def _build_article_html(self, *, title: str, origin_html: str, article_id: str, content: str, starred: bool) -> str:
-        comment = "<!-- instapaper_starred: true method=read_or_list -->\n" if starred else ""
-        html_attrs = ' data-instapaper-starred="true"' if starred else ""
-        extra_meta = '<meta name="instapaper-starred" content="true">\n' if starred else ""
+    def _build_article_html(self, *, title: str, origin_html: str, article_id: str, content: str) -> str:
         source_meta = '<meta name="docflow-source" content="instapaper">\n'
         return (
             "<!DOCTYPE html>\n"
-            f"{comment}"
-            f"<html{html_attrs}>\n"
+            "<html>\n"
             "<head>\n"
             '<meta charset="UTF-8">\n'
             f"{source_meta}"
-            f"{extra_meta}"
             f"<title>{title}</title>\n"
             "</head>\n<body>\n"
             f"<h1>{title}</h1>\n"
@@ -423,32 +355,18 @@ class InstapaperProcessor:
             try:
                 html_content = html_file.read_text(encoding='utf-8')
 
-                # Is it starred? (only if the meta we added in the HTML exists)
-                is_starred = bool(re.search(
-                    r'<meta\s+name=["\']instapaper-starred["\']\s+content=["\']true["\']',
-                    html_content, re.I
-                ))
-
                 markdown_body = md(html_content, heading_style="ATX")
-
-                markdown_body = re.sub(
-                    r'^(#{1,6}\s*)(?:[\u2B50\u2605\u272A\u272D]\uFE0F?\s*)+',
-                    r'\1',
-                    markdown_body,
-                    flags=re.MULTILINE
-                )
                 
                 front_matter = (
                     "---\n"
                     "source: instapaper\n"
-                    f"instapaper_starred: {'true' if is_starred else 'false'}\n"
                     "---\n\n"
                 )
                 markdown_content = front_matter + markdown_body
 
                 md_file = html_file.with_suffix('.md')
                 md_file.write_text(markdown_content, encoding='utf-8')
-                print(f"✅ Markdown saved: {md_file} | starred={is_starred}")
+                print(f"✅ Markdown saved: {md_file}")
             except Exception as e:
                 print(f"❌ Error converting {html_file}: {e}")
                     
