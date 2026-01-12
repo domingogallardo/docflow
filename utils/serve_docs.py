@@ -38,7 +38,6 @@ DEPLOY_SCRIPT = os.getenv(
     "DEPLOY_SCRIPT",
     os.path.join(REPO_ROOT, "web", "deploy.sh"),
 )
-PUBLIC_READS_URL_BASE = os.getenv("PUBLIC_READS_URL_BASE", "")
 PUBLIC_READS_DIR = os.getenv(
     "PUBLIC_READS_DIR",
     os.path.join(REPO_ROOT, "web", "public", "read"),
@@ -237,8 +236,7 @@ def inject_overlay(html_text: str, rel_fs: str, bumped: bool, published: bool) -
         '<link rel="stylesheet" href="/__overlay.css">'
         f'<script src="/__overlay.js" defer data-path="{html.escape(rel_fs)}" '
         f'data-bumped="{"1" if bumped else "0"}" '
-        f' data-published="{"1" if published else "0"}"'
-        f' data-public-base="{html.escape(PUBLIC_READS_URL_BASE)}"></script>'
+        f' data-published="{"1" if published else "0"}"></script>'
     )
     low = html_text.lower()
     idx = low.rfind("</body>")

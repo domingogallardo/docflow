@@ -6,7 +6,6 @@
   let publishing = false;
   let unpublishing = false;
   let deleting = false;
-  const publicBase = script.dataset.publicBase || '';
   function el(tag, attrs, text){
     const e = document.createElement(tag);
     if(attrs){ for(const k in attrs){ e.setAttribute(k, attrs[k]); } }
@@ -40,10 +39,7 @@
     msg.className = ok ? 'meta ok' : 'meta err';
     if(ok){
       published = true; render();
-      const fname = rel.split('/').pop();
-      const base = publicBase ? (publicBase.endsWith('/') ? publicBase : publicBase + '/') : '';
-      const url = base ? (base + encodeURIComponent(fname)) : '';
-      toast('ok', 'Published', url);
+      toast('ok', 'Published');
     } else {
       publishing = false; render();
       toast('err', 'Publish failed');
