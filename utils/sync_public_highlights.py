@@ -18,7 +18,7 @@ from pathlib import Path
 import re
 import sys
 from typing import Callable, Dict, Iterable, Tuple
-from urllib.parse import unquote, urljoin, urlparse
+from urllib.parse import unquote, urljoin
 
 # Allow running as a script from the repo root or utils/.
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -73,13 +73,7 @@ def derive_base_url() -> str | None:
     env_base = os.getenv("HIGHLIGHTS_BASE_URL", "").strip()
     if env_base:
         return env_base
-    reads_base = os.getenv("PUBLIC_READS_URL_BASE", "").strip()
-    if not reads_base:
-        return None
-    parsed = urlparse(reads_base)
-    if not parsed.scheme or not parsed.netloc:
-        return None
-    return f"{parsed.scheme}://{parsed.netloc}"
+    return None
 
 
 def extract_links_from_autoindex(html_text: str) -> list[str]:
@@ -336,7 +330,7 @@ def main(argv: Iterable[str]) -> int:
     args = parser.parse_args(list(argv))
 
     if not args.base_url:
-        _log("❌ Falta --base-url o HIGHLIGHTS_BASE_URL/PUBLIC_READS_URL_BASE.")
+        _log("❌ Falta --base-url o HIGHLIGHTS_BASE_URL.")
         return 2
 
     base_url = normalize_base_url(args.base_url)

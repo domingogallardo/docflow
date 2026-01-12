@@ -80,7 +80,7 @@ All of this is orchestrated by `process_documents.py` and specific `*_processor.
 
 > **Tweet shortcut**: `python utils/tweet_to_markdown.py https://x.com/...` downloads the tweet with Playwright and saves it as `.md` with title, link, profile photo, and body without metrics (views/likes), followed by attached images. Default wait after load is 1s.
 
-> **Tweets queue**: Like the tweets you want to process on X. Run once `python utils/create_x_state.py` to log in manually and save your `storage_state` (you can change the path with `--state-path` and point `TWEET_LIKES_STATE` to that file). From then on, `python process_documents.py tweets` opens your likes feed (`TWEET_LIKES_URL`, default `https://x.com/domingogallardo/likes`) with Playwright, extracts the newest links until it finds the last processed tweet (using `Incoming/tweets_processed.txt` as reference) or until the `TWEET_LIKES_MAX` limit (default 100). To avoid overload, set `TWEET_LIKES_BATCH` (default 10) so only that many new likes are processed per run.
+> **Tweets queue**: Like the tweets you want to process on X. Run once `python utils/create_x_state.py` to log in manually and save your `storage_state` (you can change the path with `--state-path` and point `TWEET_LIKES_STATE` to that file). From then on, `python process_documents.py tweets` opens your likes feed (`TWEET_LIKES_URL`, default `https://x.com/domingogallardo/likes`) with Playwright, extracts the newest links until it finds the last processed tweet (using `Incoming/tweets_processed.txt` as reference) or until the `TWEET_LIKES_MAX` limit (default 100).
 > If you like the last tweet of a thread, the pipeline groups the previous tweets by the same author/time into a single Markdown file.
 
 3) **Prioritize for reading → Bump/Unbump**  
@@ -126,7 +126,6 @@ Deployment uses **double Nginx**: a TLS proxy on the **host** and Nginx **inside
   - Local publishing:
     - `PUBLIC_READS_DIR` (default `web/public/read`)
     - `DEPLOY_SCRIPT` (default `web/deploy.sh`)
-    - `PUBLIC_READS_URL_BASE` (to link the "View" after publishing)
 
 ---
 
@@ -166,7 +165,6 @@ INSTAPAPER_PASSWORD=...        # optional
 # Publishing/Deploy
 REMOTE_USER=root
 REMOTE_HOST=1.2.3.4
-PUBLIC_READS_URL_BASE=https://<your_domain>/read
 HIGHLIGHTS_BASE_URL=https://<your_domain>
 
 # Local server
@@ -178,6 +176,29 @@ BUMP_YEARS=100
 HTPASSWD_USER=editor
 HTPASSWD_PSS='password'
 ```
+
+`bin/docflow.sh` carga `~/.docflow_env` si existe. Valores actuales (no sensibles):
+- `BUMP_YEARS`: 100
+- `DEPLOY_SCRIPT`: /Users/domingo/Programacion/Python/docflow/web/deploy.sh
+- `DOCPIPE_YEAR`: 2026
+- `HIGHLIGHTS_BASE_URL`: https://domingogallardo.com
+- `HIGHLIGHTS_PATH`: /data/highlights/
+- `HTPASSWD_USER`: domingogallardo
+- `PORT`: 8000
+- `PUBLIC_READS_DIR`: /Users/domingo/Programacion/Python/docflow/web/public/read
+- `PYTHON_BIN`: /opt/homebrew/bin/python3.11
+- `REMOTE_HOST`: 167.99.142.146
+- `REMOTE_USER`: root
+- `SERVE_DIR`: /Users/domingo/⭐️ Documentación
+- `TWEET_LIKES_MAX`: 50
+- `TWEET_LIKES_STATE`: /Users/domingo/Programacion/Python/docflow/x_state.json
+- `TWEET_LIKES_URL`: https://x.com/domingogallardo/likes
+
+Variables confidenciales (no se listan los valores):
+- `HTPASSWD_PSS`
+- `INSTAPAPER_PASSWORD`
+- `INSTAPAPER_USERNAME`
+- `OPENAI_API_KEY`
 
 ---
 
@@ -198,7 +219,6 @@ HTPASSWD_PSS='password'
 - **"Unpublish" does not appear** → the file is not in `PUBLIC_READS_DIR` (detected by name).  
 - **`read.html` does not change** → deploy regenerates it; hard-refresh and check `web/deploy.sh` output.  
 - **Deploy error** → verify `web/deploy.sh` permissions (`chmod +x`) and that `REMOTE_USER`/`REMOTE_HOST` are set.  
-- **Toast without "View" link** → set `PUBLIC_READS_URL_BASE`.  
 
 ---
 

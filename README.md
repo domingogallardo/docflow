@@ -70,7 +70,7 @@ docflow automates **collect -> process -> prioritize (bump) -> read -> publish -
   ```
 - If you like the last tweet of a thread, the pipeline saves the full thread in a single Markdown file.
 - The pipeline waits ~1s after loading a tweet to let X finish rendering before extraction.
-- The pipeline stops at the last processed tweet (`Incoming/tweets_processed.txt`) and honors `TWEET_LIKES_MAX` and `TWEET_LIKES_BATCH` (optional).
+- The pipeline stops at the last processed tweet (`Incoming/tweets_processed.txt`) and honors `TWEET_LIKES_MAX`.
 
 ## 🏷️ Source tags (routing)
 - Markdown routing is based on `source:` front matter (no heuristics).
