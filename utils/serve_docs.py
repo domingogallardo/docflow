@@ -288,6 +288,13 @@ class HTMLOnlyRequestHandler(SimpleHTTPRequestHandler):
                         mtime = st.st_mtime if st.st_mtime <= time.time() else time.time() - 60
 
                 os.utime(abs_path, (atime, mtime))
+                md_path = os.path.splitext(abs_path)[0] + ".md"
+                if os.path.isfile(md_path):
+                    try:
+                        md_stat = os.stat(md_path)
+                        os.utime(md_path, (md_stat.st_atime, mtime))
+                    except Exception:
+                        pass
                 self._send_bytes(b'{"ok":true}', "application/json; charset=utf-8")
                 return
 

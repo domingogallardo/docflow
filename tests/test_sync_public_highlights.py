@@ -303,6 +303,76 @@ def test_sync_updates_markdown_when_marker_ids_missing(tmp_path):
     assert summary.md_updated == 1
 
 
+def test_sync_preserves_md_mtime(tmp_path):
+    import os
+    import time
+
+    import sync_public_highlights as sph
+
+    base_dir = tmp_path / "Library"
+    local_dir = base_dir / "Posts" / "Posts 2024"
+    local_dir.mkdir(parents=True)
+    html_path = local_dir / "Doc.html"
+    html_path.write_text("<html></html>", encoding="utf-8")
+    md_path = local_dir / "Doc.md"
+    md_path.write_text("Texto Nuevo\n", encoding="utf-8")
+
+    future_mtime = int(time.time()) + 10_000
+    st = md_path.stat()
+    os.utime(md_path, (st.st_atime, future_mtime))
+
+    remote_name = "Doc.html.json"
+    payload = {
+        "version": 1,
+        "updated_at": "2025-01-01T10:00:00Z",
+        "highlights": [{"id": "h1", "text": "Nuevo"}],
+    }
+    raw_text = json.dumps(payload)
+
+    highlights_dir = base_dir / "Posts" / "Posts 2024" / "highlights"
+    highlights_dir.mkdir(parents=True, exist_ok=True)
+    (highlights_dir / remote_name).write_text(raw_text + "\n", encoding="utf-8")
+    state_path = highlights_dir / "sync_state.json"
+    state_path.write_text(
+        json.dumps(
+            {
+                "schema_version": 1,
+                "year": 2024,
+                "source": {"base_url": "https://example.com", "highlights_path": "/data/highlights/"},
+                "last_run_at": "2025-01-01T11:00:00Z",
+                "files": {
+                    remote_name: {
+                        "remote_updated_at": payload["updated_at"],
+                        "html_etag": "etag-1",
+                    }
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    def fake_listing(_: str) -> str:
+        return f'<a href="{remote_name}">{remote_name}</a>'
+
+    def fake_json(_: str) -> tuple[str, dict, str | None]:
+        return raw_text, payload, '"etag-1"'
+
+    def fake_head(_: str) -> tuple[str | None, str | None]:
+        return "etag-1", None
+
+    sph.sync_public_highlights(
+        base_url="https://example.com",
+        highlights_path="/data/highlights/",
+        base_dir=base_dir,
+        default_year=2024,
+        listing_fetcher=fake_listing,
+        json_fetcher=fake_json,
+        html_head_fetcher=fake_head,
+    )
+
+    assert int(md_path.stat().st_mtime) == future_mtime
+
+
 def test_apply_highlight_markers_handles_links():
     import sync_public_highlights as sph
 
