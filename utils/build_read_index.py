@@ -1,7 +1,7 @@
-"""Generate the static web/public/read/read.html index with a single listing.
+"""Generate the static web/public/read/read.html index with year headings.
 
 - List files (HTML/PDF) ordered by mtime desc.
-- No separate or curated zones: everything lives in one <ul> block.
+- Entries are grouped by year with <h2> headings.
 
 Usage:
     python utils/build_read_index.py [DIRECTORY]
@@ -64,7 +64,21 @@ def _render_list_item(name: str, mtime: float) -> str:
 
 
 def build_html(dir_path: str, entries: List[Tuple[float, str]]) -> str:
-    items: List[str] = [_render_list_item(name, mtime) for mtime, name in entries]
+    if not entries:
+        list_html = "<ul></ul>"
+    else:
+        list_parts: List[str] = []
+        current_year: int | None = None
+        for mtime, name in entries:
+            year = time.localtime(mtime).tm_year
+            if year != current_year:
+                if current_year is not None:
+                    list_parts.append("</ul>")
+                list_parts.append(f"<h2>{year}</h2><ul>")
+                current_year = year
+            list_parts.append(_render_list_item(name, mtime))
+        list_parts.append("</ul>")
+        list_html = "\n".join(list_parts)
 
     ascii_open = r'''<style>
   .ascii-head { margin-top: 28px; color: #666; font-size: 14px; }
@@ -107,7 +121,7 @@ def build_html(dir_path: str, entries: List[Tuple[float, str]]) -> str:
         '<script src="/read/article.js" defer></script>'
         '<title>Read</title></head><body>'
         '<h1>Read</h1>'
-        + '<ul>' + "\n".join(items) + '</ul>'
+        + list_html
         + ascii_open
         + '</body></html>'
     )
