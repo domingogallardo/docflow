@@ -22,6 +22,7 @@ Environment variables:
 
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 import os
+import re
 import time
 import html
 import urllib.parse
@@ -49,6 +50,7 @@ PORT = int(os.getenv("PORT", "8000"))
 SERVE_DIR = os.getenv("SERVE_DIR", "/Users/domingo/⭐️ Documentación")
 BUMP_YEARS = int(os.getenv("BUMP_YEARS", "100"))
 MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
+YEAR_PATTERN = re.compile(r"(\d{4})$")
  
 
 # Session counter (equivalent to the AppleScript "counter" in a run).
@@ -67,6 +69,7 @@ def _load_static_bytes(filename: str) -> bytes:
 OVERLAY_CSS = _load_static_bytes("overlay.css")
 OVERLAY_JS = _load_static_bytes("overlay.js")
 INDEX_JS = _load_static_bytes("index.js")
+HIGHLIGHTS_JS = _load_static_bytes("highlights.js")
 
 
 # --------- HELPERS ---------
@@ -77,6 +80,51 @@ def safe_join(rel_path: str) -> str | None:
     target = os.path.normpath(os.path.join(base, rel_path))
     if target == base or target.startswith(base + os.sep):
         return target
+    return None
+
+
+def _extract_year_from_path(abs_path: str) -> int | None:
+    parts = abs_path.split(os.sep)
+    for part in reversed(parts):
+        match = YEAR_PATTERN.search(part)
+        if not match:
+            continue
+        try:
+            return int(match.group(1))
+        except ValueError:
+            continue
+    return None
+
+
+def _find_highlight_json(abs_html_path: str) -> str | None:
+    name = os.path.basename(abs_html_path)
+    if not name:
+        return None
+    encoded = urllib.parse.quote(name, safe="~!*()'")
+    posts_root = os.path.join(SERVE_DIR, "Posts")
+    year = _extract_year_from_path(abs_html_path)
+    if year:
+        candidate = os.path.join(posts_root, f"Posts {year}", "highlights", f"{encoded}.json")
+        if os.path.isfile(candidate):
+            return candidate
+    if not os.path.isdir(posts_root):
+        return None
+    years: list[int] = []
+    try:
+        for entry in os.listdir(posts_root):
+            match = YEAR_PATTERN.search(entry)
+            if not match:
+                continue
+            try:
+                years.append(int(match.group(1)))
+            except ValueError:
+                continue
+    except Exception:
+        return None
+    for year in sorted(set(years), reverse=True):
+        candidate = os.path.join(posts_root, f"Posts {year}", "highlights", f"{encoded}.json")
+        if os.path.isfile(candidate):
+            return candidate
     return None
 
 
@@ -234,6 +282,7 @@ def compute_bump_mtime() -> int:
 def inject_overlay(html_text: str, rel_fs: str, bumped: bool, published: bool) -> bytes:
     tags = (
         '<link rel="stylesheet" href="/__overlay.css">'
+        f'<script src="/__highlights.js" defer data-path="{html.escape(rel_fs)}"></script>'
         f'<script src="/__overlay.js" defer data-path="{html.escape(rel_fs)}" '
         f'data-bumped="{"1" if bumped else "0"}" '
         f' data-published="{"1" if published else "0"}"></script>'
@@ -441,6 +490,30 @@ class HTMLOnlyRequestHandler(SimpleHTTPRequestHandler):
             return self._send_bytes(OVERLAY_JS, "application/javascript; charset=utf-8")
         if parsed.path == "/__index.js":
             return self._send_bytes(INDEX_JS, "application/javascript; charset=utf-8")
+        if parsed.path == "/__highlights.js":
+            return self._send_bytes(HIGHLIGHTS_JS, "application/javascript; charset=utf-8")
+        if parsed.path == "/__highlights":
+            qs = urllib.parse.parse_qs(parsed.query)
+            rel = qs.get("path", [""])[0]
+            if not rel:
+                self.send_error(400, "Missing path")
+                return
+            rel = urllib.parse.unquote(rel)
+            abs_path = safe_join(rel)
+            if not abs_path or not os.path.isfile(abs_path):
+                self.send_error(404, "File not found")
+                return
+            highlights_path = _find_highlight_json(abs_path)
+            if not highlights_path or not os.path.isfile(highlights_path):
+                self.send_error(404, "Highlights not found")
+                return
+            try:
+                with open(highlights_path, "rb") as fh:
+                    data = fh.read()
+            except OSError:
+                self.send_error(500, "Could not read highlights")
+                return
+            return self._send_bytes(data, "application/json; charset=utf-8", {"Cache-Control": "no-store"})
 
         # HTML pages: inject overlay unless ?raw=1.
         rel_path = parsed.path.lstrip("/")

@@ -409,3 +409,89 @@ def test_compute_bump_mtime_uses_current_base(monkeypatch):
 
     assert first == 1_000_000_000 + 1
     assert second == 1_000_010_000 + 1
+
+
+def test_highlights_route_serves_json(tmp_path, monkeypatch):
+    sd = _load_serve_docs("serve_docs_highlights")
+
+    serve_dir = tmp_path / "serve"
+    html_dir = serve_dir / "Posts" / "Posts 2024"
+    html_dir.mkdir(parents=True)
+    html_file = html_dir / "Doc.html"
+    html_file.write_text("<html></html>", encoding="utf-8")
+
+    highlights_dir = html_dir / "highlights"
+    highlights_dir.mkdir(parents=True)
+    encoded = urllib.parse.quote(html_file.name, safe="~!*()'")
+    highlight_file = highlights_dir / f"{encoded}.json"
+    highlight_file.write_text('{"highlights":[{"id":"h1","text":"Demo"}]}\n', encoding="utf-8")
+
+    monkeypatch.setattr(sd, "SERVE_DIR", str(serve_dir), raising=False)
+
+    rel_path = "Posts/Posts 2024/Doc.html"
+    req_path = f"/__highlights?path={urllib.parse.quote(rel_path)}"
+
+    class Dummy(sd.HTMLOnlyRequestHandler):
+        def __init__(self):
+            self.path = req_path
+            self.command = "GET"
+            self.requestline = f"GET {req_path} HTTP/1.1"
+            self.headers = {}
+            self.rfile = io.BytesIO()
+            self.wfile = io.BytesIO()
+            self._sent = {"status": None}
+            self.client_address = ("127.0.0.1", 0)
+
+        def send_response(self, code, message=None):  # type: ignore[override]
+            self._sent["status"] = code
+
+        def send_header(self, key, value):  # type: ignore[override]
+            pass
+
+        def end_headers(self):  # type: ignore[override]
+            pass
+
+    h = Dummy()
+    h.do_GET()
+
+    assert h._sent["status"] == 200
+    payload = h.wfile.getvalue().decode("utf-8")
+    assert '"highlights"' in payload
+
+
+def test_html_includes_highlights_script(tmp_path, monkeypatch):
+    sd = _load_serve_docs("serve_docs_highlights_inject")
+
+    serve_dir = tmp_path / "serve"
+    serve_dir.mkdir()
+    html_file = serve_dir / "doc.html"
+    html_file.write_text("<html><body>Doc</body></html>", encoding="utf-8")
+
+    monkeypatch.setattr(sd, "SERVE_DIR", str(serve_dir), raising=False)
+
+    class Dummy(sd.HTMLOnlyRequestHandler):
+        def __init__(self):
+            self.path = f"/{html_file.name}"
+            self.command = "GET"
+            self.requestline = f"GET /{html_file.name} HTTP/1.1"
+            self.headers = {}
+            self.rfile = io.BytesIO()
+            self.wfile = io.BytesIO()
+            self._sent = {"status": None}
+            self.client_address = ("127.0.0.1", 0)
+
+        def send_response(self, code, message=None):  # type: ignore[override]
+            self._sent["status"] = code
+
+        def send_header(self, key, value):  # type: ignore[override]
+            pass
+
+        def end_headers(self):  # type: ignore[override]
+            pass
+
+    h = Dummy()
+    h.do_GET()
+
+    assert h._sent["status"] == 200
+    html = h.wfile.getvalue().decode("utf-8")
+    assert "/__highlights.js" in html
