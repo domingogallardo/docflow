@@ -13,6 +13,9 @@ from utils.tweet_to_markdown import (
     _quoted_url_from_graphql_id,
     _wait_for_tweet_detail,
     PlaywrightTimeoutError,
+    _expand_show_more,
+    _read_article_text,
+    _resolve_thread_context,
     _select_thread_indices,
     _extract_thread_ids_from_payload,
     _build_single_tweet_markdown,
@@ -351,6 +354,229 @@ def test_wait_for_tweet_detail_returns_none_on_bad_json():
             return FakeContext(resp)
 
     assert _wait_for_tweet_detail(FakePage(), 100) is None
+
+
+def test_expand_show_more_clicks_buttons_and_waits():
+    clicked: list[int | None] = []
+    waits: list[int] = []
+
+    class FakeButton:
+        def __init__(self, bucket):
+            self.bucket = bucket
+
+        def click(self, timeout=None):
+            self.bucket.append(timeout)
+
+    class FakeLocator:
+        def __init__(self, count, bucket):
+            self._count = count
+            self._bucket = bucket
+
+        def count(self):
+            return self._count
+
+        def nth(self, idx):
+            return FakeButton(self._bucket)
+
+    class FakeArticle:
+        def get_by_role(self, role, name, exact):
+            if role == "button" and name == "Show more" and exact:
+                return FakeLocator(2, clicked)
+            return FakeLocator(0, clicked)
+
+        def locator(self, selector):
+            raise AssertionError("fallback should not be used")
+
+    class FakePage:
+        def wait_for_timeout(self, wait_ms):
+            waits.append(wait_ms)
+
+    _expand_show_more(FakeArticle(), FakePage(), wait_ms=123)
+    assert len(clicked) == 2
+    assert waits == [123, 123]
+
+
+def test_expand_show_more_uses_text_fallback():
+    clicked: list[int | None] = []
+    waits: list[int] = []
+
+    class FakeButton:
+        def __init__(self, bucket):
+            self.bucket = bucket
+
+        def click(self, timeout=None):
+            self.bucket.append(timeout)
+
+    class FakeLocator:
+        def __init__(self, count, bucket):
+            self._count = count
+            self._bucket = bucket
+
+        def count(self):
+            return self._count
+
+        def nth(self, idx):
+            return FakeButton(self._bucket)
+
+    class FakeArticle:
+        def get_by_role(self, role, name, exact):
+            return FakeLocator(0, clicked)
+
+        def locator(self, selector):
+            if selector == 'text="Show more"':
+                return FakeLocator(1, clicked)
+            return FakeLocator(0, clicked)
+
+    class FakePage:
+        def wait_for_timeout(self, wait_ms):
+            waits.append(wait_ms)
+
+    _expand_show_more(FakeArticle(), FakePage(), wait_ms=50)
+    assert len(clicked) == 1
+    assert waits == [50]
+
+
+def test_resolve_thread_context_prefers_like_metadata():
+    result = _resolve_thread_context(
+        like_author_handle="@like",
+        like_time_text="2h",
+        like_time_datetime="2026-01-10T12:00:00.000Z",
+        target_author_handle="@target",
+        target_time_text="1h",
+        target_time_datetime="2026-01-10T13:00:00.000Z",
+    )
+    assert result == ("@like", "2h", "2026-01-10T12:00:00.000Z")
+
+
+def test_resolve_thread_context_falls_back_to_target():
+    result = _resolve_thread_context(
+        like_author_handle=None,
+        like_time_text=None,
+        like_time_datetime=None,
+        target_author_handle="@target",
+        target_time_text="1h",
+        target_time_datetime="2026-01-10T13:00:00.000Z",
+    )
+    assert result == ("@target", "1h", "2026-01-10T13:00:00.000Z")
+
+
+def test_read_article_text_retries_on_timeout(monkeypatch):
+    calls = {"first": 0, "second": 0}
+
+    class FakeArticle:
+        def __init__(self, key):
+            self.key = key
+
+        def inner_text(self, timeout=None):
+            calls[self.key] += 1
+            if self.key == "first":
+                raise PlaywrightTimeoutError("timeout")
+            return "ok"
+
+        def text_content(self, timeout=None):
+            return None
+
+        def evaluate(self, script):
+            return "ok-eval"
+
+    class FakePage:
+        def wait_for_timeout(self, wait_ms):
+            return None
+
+    refreshed = FakeArticle("second")
+
+    def fake_locate(page, tweet_url, timeout_ms=15000):
+        assert tweet_url == "https://x.com/user/status/1"
+        return refreshed
+
+    monkeypatch.setattr("utils.tweet_to_markdown._locate_tweet_article", fake_locate)
+    monkeypatch.setattr("utils.tweet_to_markdown._expand_show_more", lambda *args, **kwargs: None)
+
+    result = _read_article_text(
+        FakeArticle("first"),
+        "https://x.com/user/status/1",
+        page=FakePage(),
+        timeout_ms=10,
+    )
+    assert result == "ok"
+    assert calls == {"first": 1, "second": 1}
+
+
+def test_read_article_text_uses_text_content_fallback():
+    class FakeArticle:
+        def inner_text(self, timeout=None):
+            raise PlaywrightTimeoutError("timeout")
+
+        def text_content(self, timeout=None):
+            return "fallback"
+
+        def evaluate(self, script):
+            return "ok-eval"
+
+    result = _read_article_text(
+        FakeArticle(),
+        "https://x.com/user/status/1",
+        page=None,
+        timeout_ms=10,
+    )
+    assert result == "fallback"
+
+
+def test_read_article_text_uses_page_evaluate_fallback():
+    class FakeArticle:
+        def inner_text(self, timeout=None):
+            raise PlaywrightTimeoutError("timeout")
+
+        def text_content(self, timeout=None):
+            raise PlaywrightTimeoutError("timeout")
+
+        def evaluate(self, script):
+            return "ok-eval"
+
+    class FakePage:
+        def locator(self, selector):
+            assert selector == "a[href*='/status/1']"
+            return FakeLocator()
+
+    class FakeLocator:
+        def __init__(self):
+            self.first = self
+
+        def evaluate(self, script):
+            return "evaluated"
+
+    result = _read_article_text(
+        FakeArticle(),
+        "https://x.com/user/status/1",
+        page=FakePage(),
+        timeout_ms=10,
+    )
+    assert result == "evaluated"
+
+
+def test_read_article_text_uses_anchor_handle_first():
+    class FakeArticle:
+        def inner_text(self, timeout=None):
+            raise PlaywrightTimeoutError("timeout")
+
+        def text_content(self, timeout=None):
+            return None
+
+        def evaluate(self, script):
+            return "ok-eval"
+
+    class FakeHandle:
+        def evaluate(self, script):
+            return "from-handle"
+
+    result = _read_article_text(
+        FakeArticle(),
+        "https://x.com/user/status/1",
+        page=None,
+        anchor_handle=FakeHandle(),
+        timeout_ms=10,
+    )
+    assert result == "from-handle"
 
 
 

@@ -62,10 +62,20 @@ STAT_NUMBER_RE = re.compile(r"^\d[\d.,]*(?:\s?[kmbKMB])?$")
 TIME_RE = re.compile(r"\b\d{1,2}:\d{2}\b")
 QUOTE_MARKERS = {"quote"}
 QUOTE_MARKERS_JS = ", ".join(f'"{m}"' for m in sorted(QUOTE_MARKERS))
+SHOW_MORE_LABELS = (
+    "Show more",
+    "Mostrar más",
+    "Mostrar mais",
+    "Ver más",
+    "Ver mais",
+    "Read more",
+    "Leer más",
+)
 THREAD_MAX_MINUTES = 24 * 60
 THREAD_MARKER_RE = re.compile(r"\bthread\b|\bhilo\b", re.IGNORECASE)
 WAIT_MS = 1000
 TWEET_DETAIL_WAIT_MS = 5000
+SHOW_MORE_WAIT_MS = 600
 
 
 @dataclass(frozen=True)
@@ -184,6 +194,129 @@ def _wait_for_tweet_detail(page, timeout_ms: int) -> object | None:
         return None
 
 
+def _expand_show_more(article, page, *, wait_ms: int = SHOW_MORE_WAIT_MS) -> None:
+    """Click inline "Show more" buttons to expand truncated tweet text."""
+    if article is None or page is None:
+        return
+    clicked = False
+    for label in SHOW_MORE_LABELS:
+        try:
+            buttons = article.get_by_role("button", name=label, exact=True)
+        except Exception:
+            continue
+        try:
+            count = buttons.count()
+        except Exception:
+            continue
+        for idx in range(count):
+            try:
+                buttons.nth(idx).click(timeout=2000)
+                clicked = True
+                if wait_ms > 0:
+                    page.wait_for_timeout(wait_ms)
+            except Exception:
+                continue
+
+    if clicked:
+        return
+
+    for label in SHOW_MORE_LABELS:
+        try:
+            nodes = article.locator(f'text="{label}"')
+        except Exception:
+            continue
+        try:
+            count = nodes.count()
+        except Exception:
+            continue
+        for idx in range(count):
+            try:
+                nodes.nth(idx).click(timeout=2000)
+                if wait_ms > 0:
+                    page.wait_for_timeout(wait_ms)
+            except Exception:
+                continue
+
+
+def _read_article_text(
+    article,
+    tweet_url: str,
+    *,
+    page=None,
+    anchor_handle=None,
+    timeout_ms: int = 15000,
+) -> str:
+    tweet_id = _status_id_from_url(tweet_url)
+    current = article
+    last_exc: PlaywrightTimeoutError | None = None
+
+    for _ in range(3):
+        if anchor_handle is not None:
+            try:
+                text = anchor_handle.evaluate(
+                    "el => el.closest('article, div[data-testid=\"tweet\"]').innerText"
+                )
+                if text:
+                    return text
+            except Exception:
+                pass
+        if page is not None and tweet_id:
+            evaluated = _evaluate_article_text(page, tweet_id)
+            if evaluated:
+                return evaluated
+        try:
+            return current.inner_text(timeout=timeout_ms)
+        except PlaywrightTimeoutError as exc:
+            last_exc = exc
+            try:
+                content = current.text_content(timeout=5000)
+            except PlaywrightTimeoutError:
+                content = None
+            if content:
+                return content
+            if page is None:
+                break
+            _wait_with_log(page, WAIT_MS, "retry tweet text")
+            refreshed = _locate_tweet_article(page, tweet_url, timeout_ms=timeout_ms)
+            if refreshed is None:
+                break
+            _expand_show_more(refreshed, page)
+            current = refreshed
+
+    if current is not None:
+        try:
+            return current.evaluate("el => el.innerText")
+        except Exception:
+            pass
+    if last_exc:
+        raise last_exc
+    raise RuntimeError("Could not read tweet text.")
+
+
+def _anchor_handle_for_tweet(page, tweet_url: str):
+    if page is None:
+        return None
+    tweet_id = _status_id_from_url(tweet_url)
+    if not tweet_id:
+        return None
+    selector = f"a[href*='/status/{tweet_id}']"
+    try:
+        return page.locator(selector).first.element_handle()
+    except Exception:
+        return None
+
+
+def _evaluate_article_text(page, tweet_id: str) -> str | None:
+    if page is None or not tweet_id:
+        return None
+    script = """el => el.closest('article, div[data-testid="tweet"]').innerText"""
+    try:
+        selector = f"a[href*='/status/{tweet_id}']"
+        return page.locator(selector).first.evaluate(script)
+    except Exception:
+        return None
+
+
 def _parse_iso_datetime(value: str | None) -> datetime | None:
     if not value:
         return None
@@ -245,6 +378,21 @@ def _extract_time_details(article) -> tuple[str | None, str | None]:
         time_text = ""
     time_datetime = time_el.get_attribute("datetime")
     return (time_text or None), time_datetime
+
+
+def _resolve_thread_context(
+    like_author_handle: str | None,
+    like_time_text: str | None,
+    like_time_datetime: str | None,
+    target_author_handle: str | None,
+    target_time_text: str | None,
+    target_time_datetime: str | None,
+) -> tuple[str | None, str | None, str | None]:
+    return (
+        like_author_handle or target_author_handle,
+        like_time_text or target_time_text,
+        like_time_datetime or target_time_datetime,
+    )
 
 
 def _extract_article_status_url(article, author_handle: str | None) -> str | None:
@@ -755,12 +903,12 @@ def _extract_tweet_parts(
     article,
     tweet_url: str,
     *,
+    page=None,
     quoted_status_id: str | None = None,
 ) -> TweetParts:
+    anchor_handle = _anchor_handle_for_tweet(page, tweet_url) if page is not None else None
     author_name, author_handle = _extract_author_details(article)
-
-    raw_text = article.inner_text()
-    body_text = strip_tweet_stats(rebuild_urls_from_lines(raw_text).strip())
+    external_link = _extract_primary_link(article, tweet_url)
 
     quoted_tweet_url = None
     if quoted_status_id:
@@ -768,17 +916,14 @@ def _extract_tweet_parts(
     if not quoted_tweet_url:
         quoted_tweet_url = _extract_quoted_tweet_url(article, tweet_url)
 
-    has_quote_marker = _has_quote_marker(body_text)
-    body_text = _insert_quote_separator(
-        body_text,
-        quoted_tweet_url if has_quote_marker and quoted_tweet_url else None,
-    )
+    root_handle = None
+    try:
+        root_handle = article.element_handle()
+    except PlaywrightTimeoutError:
+        root_handle = None
 
-    image_urls_main: List[str] = []
-    image_urls_quoted: List[str] = []
+    image_candidates: List[tuple[object, str]] = []
     seen: set[str] = set()
-    external_link = _extract_primary_link(article, tweet_url)
-    root_handle = article.element_handle()
     for img in article.locator("img").all():
         src = img.get_attribute("src")
         candidate = None
@@ -792,10 +937,32 @@ def _extract_tweet_parts(
                     candidate = parts[-1].split(" ")[0]
         if candidate and candidate not in seen:
             seen.add(candidate)
-            if has_quote_marker and root_handle and _is_after_quote_marker(img, root_handle):
-                image_urls_quoted.append(candidate)
-            else:
-                image_urls_main.append(candidate)
+            image_candidates.append((img, candidate))
+
+    if page is not None:
+        _expand_show_more(article, page)
+
+    raw_text = _read_article_text(
+        article,
+        tweet_url,
+        page=page,
+        anchor_handle=anchor_handle,
+    )
+    body_text = strip_tweet_stats(rebuild_urls_from_lines(raw_text).strip())
+
+    has_quote_marker = _has_quote_marker(body_text)
+    body_text = _insert_quote_separator(
+        body_text,
+        quoted_tweet_url if has_quote_marker and quoted_tweet_url else None,
+    )
+
+    image_urls_main: List[str] = []
+    image_urls_quoted: List[str] = []
+    for img, candidate in image_candidates:
+        if has_quote_marker and root_handle and _is_after_quote_marker(img, root_handle):
+            image_urls_quoted.append(candidate)
+        else:
+            image_urls_main.append(candidate)
 
     avatar_url, media_urls = _split_image_urls(image_urls_main)
     _, quoted_media_urls = _split_image_urls(image_urls_quoted)
@@ -898,7 +1065,7 @@ def fetch_tweet_markdown(
                 "It may require login or be unavailable."
             )
 
-        parts = _extract_tweet_parts(article, url, quoted_status_id=quoted_status["id"])
+        parts = _extract_tweet_parts(article, url, page=page, quoted_status_id=quoted_status["id"])
         filename = _build_filename(url, parts.author_handle)
         markdown = _build_single_tweet_markdown(parts, url)
 
@@ -943,11 +1110,19 @@ def fetch_tweet_thread_markdown(
                 "It may require login or be unavailable."
             )
 
-        target_parts = _extract_tweet_parts(article, url, quoted_status_id=quoted_status["id"])
-        _, target_time_datetime = _extract_time_details(article)
+        target_parts = _extract_tweet_parts(article, url, page=page, quoted_status_id=quoted_status["id"])
+        target_time_text, target_time_datetime = _extract_time_details(article)
+        effective_author_handle, effective_time_text, effective_time_datetime = _resolve_thread_context(
+            like_author_handle,
+            like_time_text,
+            like_time_datetime,
+            target_parts.author_handle,
+            target_time_text,
+            target_time_datetime,
+        )
         filename = _build_filename(url, target_parts.author_handle)
 
-        if not (like_author_handle and like_time_text):
+        if not effective_author_handle or not (effective_time_text or effective_time_datetime):
             browser.close()
             return _build_single_tweet_markdown(target_parts, url), filename
 
@@ -959,8 +1134,8 @@ def fetch_tweet_thread_markdown(
         thread_marker = _has_thread_marker(article)
         thread_ids = _extract_thread_ids_from_payload(
             thread_payload,
-            author_handle=like_author_handle or target_parts.author_handle,
-            anchor_time_datetime=target_time_datetime or like_time_datetime,
+            author_handle=effective_author_handle,
+            anchor_time_datetime=effective_time_datetime,
         )
 
         articles = page.locator("article")
@@ -972,8 +1147,8 @@ def fetch_tweet_thread_markdown(
                 thread_marker = _has_thread_marker(article)
                 thread_ids = _extract_thread_ids_from_payload(
                     thread_payload,
-                    author_handle=like_author_handle or target_parts.author_handle,
-                    anchor_time_datetime=target_time_datetime or like_time_datetime,
+                    author_handle=effective_author_handle,
+                    anchor_time_datetime=effective_time_datetime,
                 )
                 articles = page.locator("article")
                 total = articles.count()
@@ -1000,16 +1175,16 @@ def fetch_tweet_thread_markdown(
         selected_indices = _select_thread_indices(
             entries,
             target_idx,
-            author_handle=like_author_handle,
-            time_text=like_time_text,
-            anchor_time_datetime=target_time_datetime or like_time_datetime,
+            author_handle=effective_author_handle,
+            time_text=effective_time_text,
+            anchor_time_datetime=effective_time_datetime,
         )
 
         if thread_ids and target_id:
             if target_id in thread_ids:
                 target_idx = thread_ids.index(target_id)
         if thread_ids and len(thread_ids) > len(selected_indices):
-            primary_handle = target_parts.author_handle or like_author_handle
+            primary_handle = effective_author_handle
             handle_slug = (primary_handle or "").lstrip("@")
             thread_parts: List[tuple[str | None, TweetParts]] = []
             for rest_id in thread_ids:
@@ -1026,20 +1201,20 @@ def fetch_tweet_thread_markdown(
                 art = _locate_tweet_article(page, section_url)
                 if art is None:
                     continue
-                parts = _extract_tweet_parts(art, section_url)
+                parts = _extract_tweet_parts(art, section_url, page=page)
                 thread_parts.append((section_url, parts))
         else:
             if len(selected_indices) <= 1:
                 browser.close()
                 return _build_single_tweet_markdown(target_parts, url), filename
 
-            primary_handle = target_parts.author_handle or like_author_handle
+            primary_handle = effective_author_handle
             thread_parts = []
             for idx in selected_indices:
                 art = articles.nth(idx)
                 section_url = url if idx == target_idx else _extract_article_status_url(art, primary_handle)
                 extract_url = section_url or url
-                parts = target_parts if idx == target_idx else _extract_tweet_parts(art, extract_url)
+                parts = target_parts if idx == target_idx else _extract_tweet_parts(art, extract_url, page=page)
                 thread_parts.append((section_url, parts))
 
         if len(thread_parts) <= 1:
@@ -1047,7 +1222,7 @@ def fetch_tweet_thread_markdown(
             return _build_single_tweet_markdown(target_parts, url), filename
 
         print(f"🧵 Hilo descargado ({len(thread_parts)} tweets).")
-        author_handle = target_parts.author_handle or like_author_handle
+        author_handle = effective_author_handle
         title = _build_title(target_parts.author_name, author_handle, kind="Thread")
         count = len(thread_parts)
         front_matter = [
@@ -1120,11 +1295,13 @@ def main() -> None:
     args = parse_args()
     output_dir: Path = args.output_dir.expanduser()
     output_dir.mkdir(parents=True, exist_ok=True)
+    storage_state = cfg.TWEET_LIKES_STATE if cfg.TWEET_LIKES_STATE.exists() else None
 
     try:
-        markdown, auto_filename = fetch_tweet_markdown(
+        markdown, auto_filename = fetch_tweet_thread_markdown(
             args.url,
             headless=args.headless,
+            storage_state=storage_state,
         )
     except PlaywrightTimeoutError as exc:
         raise SystemExit(f"❌ Timeout loading the tweet: {exc}") from exc
