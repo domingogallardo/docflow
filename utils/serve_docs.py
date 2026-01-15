@@ -138,6 +138,39 @@ def fmt_ts(ts: float) -> str:
     return f"{t.tm_year}-{MONTHS[t.tm_mon-1]}-{t.tm_mday:02d} {t.tm_hour:02d}:{t.tm_min:02d}"
 
 
+def _is_visible_filename(name: str) -> bool:
+    lowered = name.lower()
+    return lowered.endswith((".html", ".htm", ".pdf"))
+
+
+def _dir_has_visible_entries(path: str, cache: dict[str, bool]) -> bool:
+    cached = cache.get(path)
+    if cached is not None:
+        return cached
+    try:
+        with os.scandir(path) as it:
+            for entry in it:
+                name = entry.name
+                if name.startswith("."):
+                    continue
+                try:
+                    if entry.is_dir(follow_symlinks=False):
+                        if _dir_has_visible_entries(entry.path, cache):
+                            cache[path] = True
+                            return True
+                    else:
+                        if _is_visible_filename(name):
+                            cache[path] = True
+                            return True
+                except OSError:
+                    continue
+    except OSError:
+        cache[path] = True
+        return True
+    cache[path] = False
+    return False
+
+
 def _entry_classes(bumped: bool, published: bool, highlighted: bool) -> str:
     classes: list[str] = []
     if bumped:
@@ -550,11 +583,18 @@ class HTMLOnlyRequestHandler(SimpleHTTPRequestHandler):
     def list_directory(self, path):
         try:
             entries: list[tuple[float, os.DirEntry[str], os.stat_result]] = []
+            dir_cache: dict[str, bool] = {}
             with os.scandir(path) as it:
                 for entry in it:
                     try:
                         st = entry.stat()
                     except FileNotFoundError:
+                        continue
+                    try:
+                        if entry.is_dir(follow_symlinks=False):
+                            if not _dir_has_visible_entries(entry.path, dir_cache):
+                                continue
+                    except OSError:
                         continue
                     entries.append((st.st_mtime, entry, st))
         except OSError:
