@@ -5,7 +5,7 @@ docflow automates **collect -> process -> prioritize (bump) -> read -> publish -
 ## ✨ Highlights
 - Single pipeline for Instapaper, Snipd, PDFs, images, Markdown, and X likes (`Tweets/Tweets <YEAR>/`).
 - Local overlay (`utils/serve_docs.py`) to bump/unbump, publish/unpublish (copies to `web/public/read/` + deploy), or delete.
-- Sync public highlights into `Posts/Posts <YEAR>/highlights/` and inject invisible markers into local `.md` (overlapping highlights are consolidated) after `bin/docflow.sh` (manual: `python utils/sync_public_highlights.py --base-url https://...`).
+- Sync public highlights into `Posts/Posts <YEAR>/highlights/` and inject invisible markers into local `.md` (overlapping highlights are consolidated) after `bin/docflow.sh` (manual: `python utils/sync_public_highlights.py --base-url https://...`). When the pipeline and highlights sync succeed, it regenerates `web/public/read/read.html` and runs `web/deploy.sh` only if the index changed.
 - Deploy to your domain via `web/deploy.sh`: generates a static `/read/` index ordered by `mtime`.
 - History log (`Incoming/processed_history.txt`) and utilities for AI titles, Markdown cleanup, and quote capture.
 - Routing is tag-based: tweets/podcasts/Instapaper are tagged, and generic Markdown is any `.md` without a `source:` tag.
@@ -45,6 +45,8 @@ docflow automates **collect -> process -> prioritize (bump) -> read -> publish -
    # To unify cron and manual execution (loads ~/.docflow_env if it exists):
    bash bin/docflow.sh all
    # Also syncs public highlights into Posts/Posts <YEAR>/highlights/.
+   # If the pipeline + highlights sync succeed, it regenerates web/public/read/read.html.
+   # It runs web/deploy.sh only if read.html changed (requires REMOTE_USER/REMOTE_HOST).
    ```
 3. Review locally with the overlay (bump/unbump, publish/unpublish, delete):
    ```bash
@@ -80,7 +82,10 @@ docflow automates **collect -> process -> prioritize (bump) -> read -> publish -
 - Generic Markdown: any `.md` in `Incoming/` without a `source:` tag.
 
 ## 🌐 Publish on your domain (`/read/`)
-- Run `web/deploy.sh` (from `web/`) to generate a static index ordered by `mtime` and upload to the web container.
+- Run `web/deploy.sh` (from `web/`) to generate a static `read.html` index ordered by `mtime` and upload to the web container.
+- `/read/` should serve `read.html` (autoindex off) via Nginx `index read.html` + `try_files`.
+- The index shows 🟡 for items with highlight JSON in `Posts/Posts <YEAR>/highlights/`.
+- If you run `utils/build_read_index.py` outside the repo, ensure it can resolve `BASE_DIR` (via `config.py` or `DOCFLOW_BASE_DIR`).
 - Use BasicAuth on the host if you want private access (configurable via env vars in `deploy.sh`).
 - Verify after deploy:
   ```bash

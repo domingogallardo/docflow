@@ -15,11 +15,14 @@ import html
 import os
 import sys
 import time
+from pathlib import Path
+import importlib.util
 from typing import Iterable, List, Tuple
 from urllib.parse import quote
 
 
 MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
+BASE_DIR_ENV = "DOCFLOW_BASE_DIR"
 
 
 def fmt_date(ts: float) -> str:
@@ -55,20 +58,84 @@ def _icon_for(name: str) -> str:
     return ""
 
 
-def _render_list_item(name: str, mtime: float) -> str:
+def _get_base_dir() -> Path | None:
+    env_value = os.getenv(BASE_DIR_ENV)
+    if env_value:
+        return Path(env_value).expanduser()
+    try:
+        from config import BASE_DIR  # local import to avoid hard dependency in tests
+    except Exception:
+        BASE_DIR = None
+    if BASE_DIR is not None:
+        return BASE_DIR
+    try:
+        repo_root = Path(__file__).resolve().parents[1]
+        config_path = repo_root / "config.py"
+        if not config_path.is_file():
+            return None
+        spec = importlib.util.spec_from_file_location("docflow_config", config_path)
+        module = importlib.util.module_from_spec(spec)  # type: ignore[arg-type]
+        assert spec and spec.loader
+        spec.loader.exec_module(module)  # type: ignore[union-attr]
+        base_dir = getattr(module, "BASE_DIR", None)
+        return Path(base_dir) if base_dir else None
+    except Exception:
+        return None
+
+
+def _load_highlight_index(base_dir: Path | None) -> set[str]:
+    if base_dir is None:
+        return set()
+    posts_root = base_dir / "Posts"
+    if not posts_root.is_dir():
+        return set()
+    highlight_files: set[str] = set()
+    try:
+        for entry in posts_root.iterdir():
+            if not entry.is_dir():
+                continue
+            name = entry.name
+            if not name.startswith("Posts "):
+                continue
+            suffix = name[6:]
+            if len(suffix) != 4 or not suffix.isdigit():
+                continue
+            highlights_dir = entry / "highlights"
+            if not highlights_dir.is_dir():
+                continue
+            for item in highlights_dir.iterdir():
+                if item.is_file() and item.suffix.lower() == ".json":
+                    highlight_files.add(item.name)
+    except Exception:
+        return set()
+    return highlight_files
+
+
+def _highlight_icon(name: str, highlight_files: set[str]) -> str:
+    if not highlight_files:
+        return ""
+    encoded = quote(name, safe="~!*()'")
+    if f"{encoded}.json" in highlight_files:
+        return '<span class="file-icon hl-icon" aria-hidden="true">🟡</span> '
+    return ""
+
+
+def _render_list_item(name: str, mtime: float, highlight_files: set[str]) -> str:
     href = quote(name)
     esc = html.escape(name)
     icon = _icon_for(name)
+    highlight_icon = _highlight_icon(name, highlight_files)
     d = fmt_date(mtime)
-    return f'<li>{icon}<a href="{href}" title="{esc}">{esc}</a> — {d}</li>'
+    return f'<li>{icon}{highlight_icon}<a href="{href}" title="{esc}">{esc}</a> — {d}</li>'
 
 
-def build_html(dir_path: str, entries: List[Tuple[float, str]]) -> str:
+def build_html(dir_path: str, entries: List[Tuple[float, str]], highlight_files: set[str] | None = None) -> str:
     if not entries:
         list_html = "<ul></ul>"
     else:
         list_parts: List[str] = []
         current_year: int | None = None
+        highlight_files = highlight_files or set()
         for mtime, name in entries:
             year = time.localtime(mtime).tm_year
             if year != current_year:
@@ -76,7 +143,7 @@ def build_html(dir_path: str, entries: List[Tuple[float, str]]) -> str:
                     list_parts.append("</ul>")
                 list_parts.append(f"<h2>{year}</h2><ul>")
                 current_year = year
-            list_parts.append(_render_list_item(name, mtime))
+            list_parts.append(_render_list_item(name, mtime, highlight_files))
         list_parts.append("</ul>")
         list_html = "\n".join(list_parts)
 
@@ -139,7 +206,8 @@ def main(argv: list[str]) -> int:
 
     print("🧾 Generating web/public/read/read.html…")
     entries = load_entries(dir_path, allowed_exts=(".html", ".htm", ".pdf"))
-    html_doc = build_html(dir_path, entries)
+    highlight_files = _load_highlight_index(_get_base_dir())
+    html_doc = build_html(dir_path, entries, highlight_files)
     out_path = os.path.join(dir_path, "read.html")
     with open(out_path, "w", encoding="utf-8") as f:
         f.write(html_doc)

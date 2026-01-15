@@ -138,6 +138,42 @@ def test_directory_index_pdf_actions_and_publish_detection(tmp_path, monkeypatch
             break
 
 
+def test_directory_index_marks_highlighted_html(tmp_path, monkeypatch):
+    sd = _load_serve_docs("serve_docs_highlight_list")
+
+    serve_dir = tmp_path / "serve"
+    html_dir = serve_dir / "Posts" / "Posts 2024"
+    html_dir.mkdir(parents=True)
+    html_file = html_dir / "Doc.html"
+    html_file.write_text("<html></html>", encoding="utf-8")
+    html_plain = html_dir / "DocSinHighlight.html"
+    html_plain.write_text("<html></html>", encoding="utf-8")
+
+    highlights_dir = html_dir / "highlights"
+    highlights_dir.mkdir(parents=True)
+    encoded = urllib.parse.quote(html_file.name, safe="~!*()'")
+    highlight_file = highlights_dir / f"{encoded}.json"
+    highlight_file.write_text('{"highlights":[{"id":"h1","text":"Demo"}]}\n', encoding="utf-8")
+
+    monkeypatch.setattr(sd, "SERVE_DIR", str(serve_dir), raising=False)
+
+    h = _make_dummy_handler(sd.HTMLOnlyRequestHandler)
+    h.path = "/Posts/Posts 2024/"
+    h.list_directory(str(html_dir))
+    data = h.wfile.getvalue().decode("utf-8")
+
+    assert "Doc.html" in data
+    for line in data.splitlines():
+        if "Doc.html" in line:
+            assert "🟡" in line
+            break
+
+    for line in data.splitlines():
+        if "DocSinHighlight.html" in line:
+            assert "🟡" not in line
+            break
+
+
 def test_unbump_published_file_via_post(tmp_path, monkeypatch):
     sd = _load_serve_docs("serve_docs_post")
 

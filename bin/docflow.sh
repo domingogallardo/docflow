@@ -16,6 +16,29 @@ REPO_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
 cd "${REPO_DIR}"
 
 PYTHON_BIN="${PYTHON_BIN:-python3}"
+DEPLOY_SCRIPT="${DEPLOY_SCRIPT:-${REPO_DIR}/web/deploy.sh}"
+
+file_hash() {
+  local path="$1"
+  if [ ! -f "${path}" ]; then
+    echo ""
+    return 0
+  fi
+  "${PYTHON_BIN}" - "${path}" <<'PY' || true
+import hashlib
+import sys
+from pathlib import Path
+
+path = Path(sys.argv[1])
+if not path.is_file():
+    raise SystemExit(0)
+h = hashlib.sha256()
+with path.open("rb") as fh:
+    for chunk in iter(lambda: fh.read(1024 * 1024), b""):
+        h.update(chunk)
+print(h.hexdigest())
+PY
+}
 
 YEAR_SOURCE="system_year"
 YEAR="$(date +%Y)"
@@ -58,8 +81,69 @@ set -e
 
 echo "[$(date -Iseconds)] Docflow: highlights sync exit=${sync_status}"
 
+should_deploy=0
+if [ "${status}" -eq 0 ] && [ "${sync_status}" -eq 0 ]; then
+  should_deploy=1
+else
+  echo "[$(date -Iseconds)] Docflow: skip deploy (process exit=${status}, highlights exit=${sync_status})"
+fi
+
+build_status=0
+read_changed=0
+if [ "${should_deploy}" -eq 1 ]; then
+  if [ -d "web/public/read" ]; then
+    read_html="web/public/read/read.html"
+    prev_hash="$(file_hash "${read_html}")"
+    set +e
+    "${PYTHON_BIN}" utils/build_read_index.py "web/public/read"
+    build_status=$?
+    set -e
+    echo "[$(date -Iseconds)] Docflow: read.html build exit=${build_status}"
+    if [ "${build_status}" -eq 0 ]; then
+      next_hash="$(file_hash "${read_html}")"
+      if [ "${prev_hash}" != "${next_hash}" ]; then
+        read_changed=1
+        echo "[$(date -Iseconds)] Docflow: read.html changed"
+      else
+        echo "[$(date -Iseconds)] Docflow: read.html unchanged"
+      fi
+    fi
+  else
+    build_status=1
+    echo "[$(date -Iseconds)] Docflow: read.html build skipped (missing web/public/read)"
+  fi
+else
+  echo "[$(date -Iseconds)] Docflow: read.html build skipped (process exit=${status}, highlights exit=${sync_status})"
+fi
+
+deploy_status=0
+if [ "${should_deploy}" -eq 1 ] && [ "${build_status}" -eq 0 ] && [ "${read_changed}" -eq 1 ]; then
+  if [ -x "${DEPLOY_SCRIPT}" ]; then
+    set +e
+    "${DEPLOY_SCRIPT}"
+    deploy_status=$?
+    set -e
+    echo "[$(date -Iseconds)] Docflow: deploy exit=${deploy_status}"
+  else
+    deploy_status=1
+    echo "[$(date -Iseconds)] Docflow: deploy script not executable: ${DEPLOY_SCRIPT}"
+  fi
+elif [ "${should_deploy}" -eq 1 ] && [ "${build_status}" -ne 0 ]; then
+  echo "[$(date -Iseconds)] Docflow: deploy skipped (read.html build exit=${build_status})"
+elif [ "${should_deploy}" -eq 1 ]; then
+  echo "[$(date -Iseconds)] Docflow: deploy skipped (read.html unchanged)"
+else
+  echo "[$(date -Iseconds)] Docflow: deploy skipped (process exit=${status}, highlights exit=${sync_status})"
+fi
+
 final_status="${status}"
 if [ "${final_status}" -eq 0 ] && [ "${sync_status}" -ne 0 ]; then
   final_status="${sync_status}"
+fi
+if [ "${final_status}" -eq 0 ] && [ "${build_status}" -ne 0 ]; then
+  final_status="${build_status}"
+fi
+if [ "${final_status}" -eq 0 ] && [ "${deploy_status}" -ne 0 ]; then
+  final_status="${deploy_status}"
 fi
 exit "${final_status}"

@@ -1,6 +1,7 @@
 from pathlib import Path
 import os
 import subprocess
+from urllib.parse import quote
 
 def test_gen_index_creates_read_html(tmp_path):
     # Create test files.
@@ -20,5 +21,37 @@ def test_gen_index_creates_read_html(tmp_path):
     assert not (tmp_path / "index.html").exists()
     content = read_file.read_text(encoding="utf-8")
     assert "read.html" not in content
-    assert '<span class="file-icon html-icon" aria-hidden="true">📄</span> <a href="a.html" title="a.html">a.html</a> — ' in content
-    assert '<span class="file-icon pdf-icon" aria-hidden="true">📕</span> <a href="b.pdf" title="b.pdf">b.pdf</a> — ' in content
+    for line in content.splitlines():
+        if 'href="a.html"' in line:
+            assert "📄" in line
+            assert "a.html</a> — " in line
+            break
+    else:
+        raise AssertionError("No se encontro la entrada de a.html")
+    for line in content.splitlines():
+        if 'href="b.pdf"' in line:
+            assert "📕" in line
+            assert "b.pdf</a> — " in line
+            break
+    else:
+        raise AssertionError("No se encontro la entrada de b.pdf")
+
+
+def test_build_read_index_marks_highlighted_html():
+    import importlib.util
+    import pathlib
+    path = pathlib.Path('utils/build_read_index.py')
+    spec = importlib.util.spec_from_file_location('build_read_index_hl', path)
+    mod = importlib.util.module_from_spec(spec)
+    assert spec and spec.loader
+    spec.loader.exec_module(mod)  # type: ignore
+    entries = [(0.0, 'doc1.html')]
+    encoded = quote('doc1.html', safe="~!*()'")
+    highlights = {f"{encoded}.json"}
+    html = mod.build_html('web/public/read', entries, highlight_files=highlights)
+    for line in html.splitlines():
+        if 'href="doc1.html"' in line:
+            assert "🟡" in line
+            break
+    else:
+        raise AssertionError("No se encontro la entrada de doc1.html")
