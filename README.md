@@ -1,6 +1,6 @@
 # 📚 docflow - Personal Documentation Pipeline (short version)
 
-docflow automates **collect -> process -> prioritize (bump) -> read -> publish -> mark as completed** for your documents (articles, podcasts, Markdown, PDFs, and tweets) in a yearly structure.
+docflow automates **collect -> process -> prioritize (bump) -> read -> publish -> mark as highlighted** for your documents (articles, podcasts, Markdown, PDFs, and tweets) in a yearly structure.
 
 ## ✨ Highlights
 - Single pipeline for Instapaper, Snipd, PDFs, images, Markdown, and X likes (`Tweets/Tweets <YEAR>/`).
