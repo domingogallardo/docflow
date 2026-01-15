@@ -515,12 +515,10 @@ class HTMLOnlyRequestHandler(SimpleHTTPRequestHandler):
                 return
             return self._send_bytes(data, "application/json; charset=utf-8", {"Cache-Control": "no-store"})
 
-        # HTML pages: inject overlay unless ?raw=1.
+        # HTML pages: inject overlay.
         rel_path = parsed.path.lstrip("/")
-        qs = urllib.parse.parse_qs(parsed.query)
-        raw = qs.get("raw", ["0"])[0] == "1"
 
-        if rel_path and rel_path.lower().endswith(".html") and not raw:
+        if rel_path and rel_path.lower().endswith(".html"):
             rel_fs = urllib.parse.unquote(rel_path)
             abs_path = safe_join(rel_fs)
             if abs_path and os.path.exists(abs_path):

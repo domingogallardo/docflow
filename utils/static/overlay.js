@@ -81,7 +81,6 @@
   }
   function render(){
     bar.innerHTML = '';
-    bar.appendChild(el('strong', null, '📄 ' + rel));
     const btn = el('button', null, bumped ? 'Unbump' : 'Bump');
     btn.addEventListener('click', async ()=>{
       if(deleting) return;
@@ -115,8 +114,6 @@
       del.addEventListener('click', removeFile);
     }
     bar.appendChild(del);
-    const raw = el('a', {href:'?raw=1', title:'View without overlay'}, 'raw');
-    bar.appendChild(raw); bar.appendChild(msg);
   }
   function isEditingTarget(t){ return t && (t.tagName==='INPUT' || t.tagName==='TEXTAREA' || t.isContentEditable); }
   const bar = el('div', {id:'dg-overlay'});
