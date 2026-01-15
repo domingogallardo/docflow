@@ -144,14 +144,14 @@ def test_directory_index_marks_highlighted_html(tmp_path, monkeypatch):
     serve_dir = tmp_path / "serve"
     html_dir = serve_dir / "Posts" / "Posts 2024"
     html_dir.mkdir(parents=True)
-    html_file = html_dir / "Doc.html"
+    html_file = html_dir / "Doc (Sample).html"
     html_file.write_text("<html></html>", encoding="utf-8")
     html_plain = html_dir / "DocSinHighlight.html"
     html_plain.write_text("<html></html>", encoding="utf-8")
 
     highlights_dir = html_dir / "highlights"
     highlights_dir.mkdir(parents=True)
-    encoded = urllib.parse.quote(html_file.name, safe="~!*()'")
+    encoded = urllib.parse.quote(html_file.name)
     highlight_file = highlights_dir / f"{encoded}.json"
     highlight_file.write_text('{"highlights":[{"id":"h1","text":"Demo"}]}\n', encoding="utf-8")
 

@@ -45,13 +45,13 @@ def test_build_read_index_marks_highlighted_html():
     mod = importlib.util.module_from_spec(spec)
     assert spec and spec.loader
     spec.loader.exec_module(mod)  # type: ignore
-    entries = [(0.0, 'doc1.html')]
-    encoded = quote('doc1.html', safe="~!*()'")
+    entries = [(0.0, 'doc(1).html')]
+    encoded = quote('doc(1).html')
     highlights = {f"{encoded}.json"}
     html = mod.build_html('web/public/read', entries, highlight_files=highlights)
     for line in html.splitlines():
-        if 'href="doc1.html"' in line:
+        if 'href="doc(1).html"' in line:
             assert "🟡" in line
             break
     else:
-        raise AssertionError("No se encontro la entrada de doc1.html")
+        raise AssertionError("No se encontro la entrada de doc(1).html")

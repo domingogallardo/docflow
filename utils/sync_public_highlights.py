@@ -629,27 +629,34 @@ def sync_public_highlights(
         updated_at_text = str(payload.get("updated_at") or "").strip()
         updated_at = parse_remote_updated_at(updated_at_text)
 
+        highlights = payload.get("highlights") or []
+        if not isinstance(highlights, list):
+            highlights = []
+        has_highlights = bool(highlights)
+
         files_state = state.setdefault("files", {})
         entry = files_state.get(remote_name, {})
         entry_updated_at = parse_remote_updated_at(entry.get("remote_updated_at"))
 
         dest_file = dest_dir / remote_name
         downloaded = False
+        entry_empty = bool(entry.get("empty"))
         if (
             updated_at
             and entry_updated_at
             and updated_at <= entry_updated_at
-            and dest_file.exists()
+            and (dest_file.exists() or entry_empty)
         ):
             summary.skipped += 1
         else:
-            text = raw_text
-            if not text.endswith("\n"):
-                text += "\n"
-            tmp_path = dest_file.with_suffix(dest_file.suffix + ".tmp")
-            tmp_path.write_text(text, encoding="utf-8")
-            tmp_path.replace(dest_file)
-            downloaded = True
+            if highlights:
+                text = raw_text
+                if not text.endswith("\n"):
+                    text += "\n"
+                tmp_path = dest_file.with_suffix(dest_file.suffix + ".tmp")
+                tmp_path.write_text(text, encoding="utf-8")
+                tmp_path.replace(dest_file)
+                downloaded = True
 
         html_changed = False
         html_etag = None
@@ -664,10 +671,6 @@ def sync_public_highlights(
             if html_etag or html_last_modified:
                 if html_etag != entry.get("html_etag") or html_last_modified != entry.get("html_last_modified"):
                     html_changed = True
-
-        highlights = payload.get("highlights") or []
-        if not isinstance(highlights, list):
-            highlights = []
 
         md_path = None
         md_text = None
@@ -710,6 +713,14 @@ def sync_public_highlights(
                     summary.md_updated += 1
                     _log(f"📝 Resaltados actualizados: {md_path.name}")
 
+        if not has_highlights:
+            if dest_file.exists():
+                try:
+                    dest_file.unlink()
+                    _log(f"🧹 Sin subrayados, eliminado: {remote_name}")
+                except OSError as exc:
+                    summary.errors += 1
+                    _log(f"❌ No se pudo eliminar {remote_name}: {exc}")
         entry.update(
             {
                 "remote_updated_at": updated_at_text,
@@ -718,6 +729,7 @@ def sync_public_highlights(
                 "local_file": remote_name,
                 "bytes": len(raw_text.encode("utf-8")),
                 "etag": etag,
+                "empty": not has_highlights,
             }
         )
         if html_etag is not None:

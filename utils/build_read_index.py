@@ -111,12 +111,27 @@ def _load_highlight_index(base_dir: Path | None) -> set[str]:
     return highlight_files
 
 
+def _highlight_name_candidates(name: str) -> list[str]:
+    candidates = [
+        quote(name),
+        quote(name, safe="~!*()'"),
+    ]
+    deduped: list[str] = []
+    seen = set()
+    for item in candidates:
+        if item in seen:
+            continue
+        seen.add(item)
+        deduped.append(item)
+    return deduped
+
+
 def _highlight_icon(name: str, highlight_files: set[str]) -> str:
     if not highlight_files:
         return ""
-    encoded = quote(name, safe="~!*()'")
-    if f"{encoded}.json" in highlight_files:
-        return '<span class="file-icon hl-icon" aria-hidden="true">🟡</span> '
+    for encoded in _highlight_name_candidates(name):
+        if f"{encoded}.json" in highlight_files:
+            return '<span class="file-icon hl-icon" aria-hidden="true">🟡</span> '
     return ""
 
 
