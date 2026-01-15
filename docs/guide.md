@@ -98,7 +98,7 @@ PORT=8000 SERVE_DIR="/path/to/⭐️ Documentación" python utils/serve_docs.py
 - **Delete** permanently removes the HTML/PDF (and any associated Markdown) from the local library.
 
 5) **Publish to the public web (`/read/`)**  
-From the overlay, **Publish** copies the `.html` or `.pdf` to `web/public/read/` and triggers the **deploy** (`web/deploy.sh`). The deploy builds the Nginx image, uploads assets to the remote server, and serves `/read/` with an index **ordered by date (mtime desc)**. You can set `REMOTE_USER`/`REMOTE_HOST` via the environment.
+From the overlay, **Publish** copies the `.html` or `.pdf` to `web/public/read/` and triggers the **deploy** (`web/deploy.sh`). The deploy builds the Nginx image, uploads assets to the remote server, and serves `/read/` using the static `read.html` index **ordered by date (mtime desc)**. You can set `REMOTE_USER`/`REMOTE_HOST` via the environment.
 
 6) **Capture quotes and highlights on published pages**  
 On `/read/`, a floating **❝ Copy quote** button is injected. When you select text, it copies a **Markdown** quote with a link that includes **Text Fragments** (`#:~:text=`). This makes it easy to paste quotes directly into Obsidian while keeping the jump to the exact position. The overlay also shows **Subrayar**, which saves highlights to `/data/highlights/<file>.json` (visible across browsers). Hold **Alt** or **Shift** and click a highlight to remove it. (*Script*: `article.js`).
@@ -109,7 +109,7 @@ When you finish reading, you can keep the document published or unpublish it; `/
 8) **Infrastructure and verification**  
 Deployment uses **double Nginx**: a TLS proxy on the **host** and Nginx **inside the container** serving static files; `/data/` allows PUT with BasicAuth (host-mounted). Verify `/read/` with `curl` after deploy (commands below).
 
-> Tip: if you want to preview the index without deploying, use `python utils/build_read_index.py`; deploy will regenerate it anyway.
+> Tip: if you want to preview the index without deploying, use `python utils/build_read_index.py`; deploy will regenerate it anyway. When running from `web/` or cron, set `DOCFLOW_BASE_DIR` if needed.
 
 ---
 
@@ -130,7 +130,10 @@ Deployment uses **double Nginx**: a TLS proxy on the **host** and Nginx **inside
 ## Web publishing (`/read/`) and `read.html`
 
 - The deploy **generates** `read.html` as a single listing **ordered by mtime desc** with all HTML/PDFs in `web/public/read/`.
-- Served by the container's Nginx with *autoindex* enabled (see **readme-infra.md**).
+- `/read/` should serve `read.html` directly (autoindex **off**), with Nginx configured as `index read.html; try_files $uri $uri/ /read/read.html;`.
+- The index adds a 🟡 marker for files that have highlight JSON in `Posts/Posts <YEAR>/highlights/`.
+- If you run `utils/build_read_index.py` outside the repo root, ensure it can resolve `BASE_DIR` (via `config.py` or `DOCFLOW_BASE_DIR`).
+- `bin/docflow.sh all` runs sync → rebuild `read.html` → deploy when `process_documents.py` and the highlights sync exit `0` and `REMOTE_USER`/`REMOTE_HOST` are set. The deploy runs only if `read.html` changed in that execution.
 
 Quick verification:
 ```bash
@@ -175,7 +178,7 @@ HTPASSWD_USER=editor
 HTPASSWD_PSS='password'
 ```
 
-`bin/docflow.sh` carga `~/.docflow_env` si existe. Valores actuales (no sensibles):
+`bin/docflow.sh` carga `~/.docflow_env` si existe. It also runs `web/deploy.sh` after syncing highlights and rebuilding `read.html` only when the pipeline and sync succeed, and only if `read.html` changed (requires `REMOTE_USER`/`REMOTE_HOST`). Valores actuales (no sensibles):
 - `BUMP_YEARS`: 100
 - `DEPLOY_SCRIPT`: /Users/domingo/Programacion/Python/docflow/web/deploy.sh
 - `DOCPIPE_YEAR`: 2026

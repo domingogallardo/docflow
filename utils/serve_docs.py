@@ -138,12 +138,14 @@ def fmt_ts(ts: float) -> str:
     return f"{t.tm_year}-{MONTHS[t.tm_mon-1]}-{t.tm_mday:02d} {t.tm_hour:02d}:{t.tm_min:02d}"
 
 
-def _entry_classes(bumped: bool, published: bool) -> str:
+def _entry_classes(bumped: bool, published: bool, highlighted: bool) -> str:
     classes: list[str] = []
     if bumped:
         classes.append("dg-bump")
     if published:
         classes.append("dg-pub")
+    if highlighted:
+        classes.append("dg-hl")
     return f" class=\"{' '.join(classes)}\"" if classes else ""
 
 
@@ -188,21 +190,23 @@ def _render_list_entry(entry: os.DirEntry[str], now: float, st: os.stat_result) 
     link = urllib.parse.quote(display_name)
     rel_from_root = os.path.relpath(entry.path, SERVE_DIR)
     type_icon = ""
+    highlighted = False
     if not is_dir:
         lowered = entry.name.lower()
         if lowered.endswith((".html", ".htm")):
             type_icon = "📄 "
+            highlighted = _find_highlight_json(entry.path) is not None
         elif lowered.endswith(".pdf"):
             type_icon = "📕 "
         else:
             return None  # ignore files that are not HTML/PDF
 
-    prefix = ("🔥 " if bumped else "") + ("🟢 " if published else "") + type_icon
+    prefix = ("🔥 " if bumped else "") + ("🟢 " if published else "") + ("🟡 " if highlighted else "") + type_icon
     date_html = f"<span class='dg-date'> — {fmt_ts(mtime)}</span>"
     actions_html = ""
     if entry.name.lower().endswith(".pdf"):
         actions_html = _pdf_actions_html(rel_from_root, bumped, published)
-    cls_attr = _entry_classes(bumped, published)
+    cls_attr = _entry_classes(bumped, published, highlighted)
     return f"<li{cls_attr}><span>{prefix}<a href=\"{link}\">{html.escape(display_name)}</a>{date_html}</span>{actions_html}</li>"
 
 
@@ -581,7 +585,7 @@ class HTMLOnlyRequestHandler(SimpleHTTPRequestHandler):
         )
 
         rows: list[str] = [head_html, f"<h2>Index of {html.escape(displaypath)}</h2>"]
-        rows.append("<div class='dg-legend'>🔥 bumped · 🟢 published</div><hr><ul class='dg-index'>")
+        rows.append("<div class='dg-legend'>🔥 bumped · 🟢 published · 🟡 highlight</div><hr><ul class='dg-index'>")
 
         if displaypath != "/":
             parent = os.path.dirname(displaypath.rstrip("/"))
