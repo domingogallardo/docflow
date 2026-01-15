@@ -174,6 +174,40 @@ def test_directory_index_marks_highlighted_html(tmp_path, monkeypatch):
             break
 
 
+def test_directory_index_skips_empty_dirs(tmp_path, monkeypatch):
+    sd = _load_serve_docs("serve_docs_empty_dirs")
+
+    serve_dir = tmp_path / "serve"
+    serve_dir.mkdir()
+
+    empty_dir = serve_dir / "Empty"
+    empty_dir.mkdir()
+
+    md_only = serve_dir / "Notes"
+    md_only.mkdir()
+    (md_only / "note.md").write_text("note", encoding="utf-8")
+
+    nested = serve_dir / "Nested" / "Inner"
+    nested.mkdir(parents=True)
+    (nested / "doc.html").write_text("<html></html>", encoding="utf-8")
+
+    visible = serve_dir / "Visible"
+    visible.mkdir()
+    (visible / "doc.html").write_text("<html></html>", encoding="utf-8")
+
+    monkeypatch.setattr(sd, "SERVE_DIR", str(serve_dir), raising=False)
+
+    h = _make_dummy_handler(sd.HTMLOnlyRequestHandler)
+    h.path = "/"
+    h.list_directory(str(serve_dir))
+    data = h.wfile.getvalue().decode("utf-8")
+
+    assert "Empty/" not in data
+    assert "Notes/" not in data
+    assert "Nested/" in data
+    assert "Visible/" in data
+
+
 def test_unbump_published_file_via_post(tmp_path, monkeypatch):
     sd = _load_serve_docs("serve_docs_post")
 
