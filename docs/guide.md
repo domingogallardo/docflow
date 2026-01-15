@@ -101,7 +101,7 @@ PORT=8000 SERVE_DIR="/path/to/⭐️ Documentación" python utils/serve_docs.py
 From the overlay, **Publish** copies the `.html` or `.pdf` to `web/public/read/` and triggers the **deploy** (`web/deploy.sh`). The deploy builds the Nginx image, uploads assets to the remote server, and serves `/read/` using the static `read.html` index **ordered by date (mtime desc)**. You can set `REMOTE_USER`/`REMOTE_HOST` via the environment.
 
 6) **Capture quotes and highlights on published pages**  
-On `/read/`, a floating **❝ Copy quote** button is injected. When you select text, it copies a **Markdown** quote with a link that includes **Text Fragments** (`#:~:text=`). This makes it easy to paste quotes directly into Obsidian while keeping the jump to the exact position. The overlay also shows **Subrayar**, which saves highlights to `/data/highlights/<file>.json` (visible across browsers). Hold **Alt** or **Shift** and click a highlight to remove it. (*Script*: `article.js`).
+On `/read/`, a floating **❝ Copy quote** button is injected. When you select text, it copies a **Markdown** quote with a link that includes **Text Fragments** (`#:~:text=`). This makes it easy to paste quotes directly into Obsidian while keeping the jump to the exact position. The overlay also shows **Highlight**, which saves highlights to `/data/highlights/<file>.json` (visible across browsers). Hold **Alt** or **Shift** and click a highlight to remove it. (*Script*: `article.js`).
 
 7) **Close the loop**  
 When you finish reading, you can keep the document published or unpublish it; `/read/` is a single date-ordered listing.
@@ -149,7 +149,7 @@ curl -s https://<your_domain>/read/ | head -n 40
 - Select text and copy a **Markdown** quote with a link that includes `#:~:text=` to jump to the exact position.  
 - It preserves links and emphasis from the selected fragment, converting them to Markdown before copying.  
 - The button only appears when there is selected text and shows a success/error *toast*.
-- The overlay also includes **Subrayar**, which saves highlights to `/data/highlights/<file>.json` (visible across browsers).
+- The overlay also includes **Highlight**, which saves highlights to `/data/highlights/<file>.json` (visible across browsers).
 - Hold **Alt** or **Shift** and click a highlight to remove it.
 - iOS/iPadOS: selection is captured early so it isn't lost when tapping the button. If the clipboard fails (e.g., private browsing), you'll see an error toast; fragment navigation is handled by the browser.
 
@@ -178,7 +178,7 @@ HTPASSWD_USER=editor
 HTPASSWD_PSS='password'
 ```
 
-`bin/docflow.sh` carga `~/.docflow_env` si existe. It also runs `web/deploy.sh` after syncing highlights and rebuilding `read.html` only when the pipeline and sync succeed, and only if `read.html` changed (requires `REMOTE_USER`/`REMOTE_HOST`). Valores actuales (no sensibles):
+`bin/docflow.sh` loads `~/.docflow_env` if it exists. It also runs `web/deploy.sh` after syncing highlights and rebuilding `read.html` only when the pipeline and sync succeed, and only if `read.html` changed (requires `REMOTE_USER`/`REMOTE_HOST`). Current values (non-sensitive):
 - `BUMP_YEARS`: 100
 - `DEPLOY_SCRIPT`: /Users/domingo/Programacion/Python/docflow/web/deploy.sh
 - `DOCPIPE_YEAR`: 2026
@@ -195,7 +195,7 @@ HTPASSWD_PSS='password'
 - `TWEET_LIKES_STATE`: /Users/domingo/Programacion/Python/docflow/x_state.json
 - `TWEET_LIKES_URL`: https://x.com/domingogallardo/likes
 
-Variables confidenciales (no se listan los valores):
+Sensitive variables (values not listed):
 - `HTPASSWD_PSS`
 - `INSTAPAPER_PASSWORD`
 - `INSTAPAPER_USERNAME`
@@ -208,7 +208,7 @@ Variables confidenciales (no se listan los valores):
 - **Process**: `process_documents.py`, `instapaper_processor.py`, `podcast_processor.py`, `pdf_processor.py`.  
 - **Read/prioritize/publish (local)**: `utils/serve_docs.py` (overlay + actions), `utils/bump.applescript`, `utils/un-bump.applescript`.  
 - **Publish (remote)**: `web/deploy.sh` (generates `read.html` by mtime desc as a single listing).  
-- **Capture quotes/highlights in `/read/`**: `article.js` (**❝ Copy quote** + **Subrayar**, Markdown + `#:~:text=`, highlights via `/data/highlights/`).  
+- **Capture quotes/highlights in `/read/`**: `article.js` (**❝ Copy quote** + **Highlight**, Markdown + `#:~:text=`, highlights via `/data/highlights/`).  
 - **Sync public highlights → local**: runs after `bin/docflow.sh` via `utils/sync_public_highlights.py --base-url https://<your_domain>` (stores JSON in `Posts/Posts <YEAR>/highlights/`, injects invisible markers in the matching `.md` and consolidates overlaps, and writes `sync_state.json`).  
 - **Preview index without deploy**: `utils/build_read_index.py`.
 

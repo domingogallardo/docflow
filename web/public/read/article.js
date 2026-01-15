@@ -714,9 +714,9 @@
     var highlightBtn = document.createElement('button');
     highlightBtn.id = 'articlejs-highlight-btn';
     highlightBtn.type = 'button';
-    highlightBtn.textContent = 'Subrayar';
-    highlightBtn.setAttribute('aria-label', 'Underline selected text');
-    highlightBtn.title = 'Underline selected text';
+    highlightBtn.textContent = 'Highlight';
+    highlightBtn.setAttribute('aria-label', 'Highlight selected text');
+    highlightBtn.title = 'Highlight selected text';
     highlightBtn.setAttribute('data-articlejs-ui', '1');
     highlightBtn.style.cssText = [
       'position:fixed',
