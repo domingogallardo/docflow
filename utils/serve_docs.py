@@ -100,13 +100,13 @@ def _find_highlight_json(abs_html_path: str) -> str | None:
     name = os.path.basename(abs_html_path)
     if not name:
         return None
-    encoded = urllib.parse.quote(name, safe="~!*()'")
     posts_root = os.path.join(SERVE_DIR, "Posts")
     year = _extract_year_from_path(abs_html_path)
     if year:
-        candidate = os.path.join(posts_root, f"Posts {year}", "highlights", f"{encoded}.json")
-        if os.path.isfile(candidate):
-            return candidate
+        for encoded in _highlight_name_candidates(name):
+            candidate = os.path.join(posts_root, f"Posts {year}", "highlights", f"{encoded}.json")
+            if os.path.isfile(candidate):
+                return candidate
     if not os.path.isdir(posts_root):
         return None
     years: list[int] = []
@@ -122,9 +122,10 @@ def _find_highlight_json(abs_html_path: str) -> str | None:
     except Exception:
         return None
     for year in sorted(set(years), reverse=True):
-        candidate = os.path.join(posts_root, f"Posts {year}", "highlights", f"{encoded}.json")
-        if os.path.isfile(candidate):
-            return candidate
+        for encoded in _highlight_name_candidates(name):
+            candidate = os.path.join(posts_root, f"Posts {year}", "highlights", f"{encoded}.json")
+            if os.path.isfile(candidate):
+                return candidate
     return None
 
 
@@ -141,6 +142,21 @@ def fmt_ts(ts: float) -> str:
 def _is_visible_filename(name: str) -> bool:
     lowered = name.lower()
     return lowered.endswith((".html", ".htm", ".pdf"))
+
+
+def _highlight_name_candidates(name: str) -> list[str]:
+    candidates = [
+        urllib.parse.quote(name),
+        urllib.parse.quote(name, safe="~!*()'"),
+    ]
+    deduped: list[str] = []
+    seen = set()
+    for item in candidates:
+        if item in seen:
+            continue
+        seen.add(item)
+        deduped.append(item)
+    return deduped
 
 
 def _dir_has_visible_entries(path: str, cache: dict[str, bool]) -> bool:

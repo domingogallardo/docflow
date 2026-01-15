@@ -373,6 +373,60 @@ def test_sync_preserves_md_mtime(tmp_path):
     assert int(md_path.stat().st_mtime) == future_mtime
 
 
+def test_sync_removes_empty_highlights_json(tmp_path):
+    import sync_public_highlights as sph
+
+    base_dir = tmp_path / "Library"
+    local_dir = base_dir / "Posts" / "Posts 2024"
+    local_dir.mkdir(parents=True)
+    html_path = local_dir / "Doc.html"
+    html_path.write_text("<html></html>", encoding="utf-8")
+    md_path = local_dir / "Doc.md"
+    md_path.write_text(
+        "Intro <!-- docflow:highlight id=h1 -->Alpha<!-- /docflow:highlight --> End\n",
+        encoding="utf-8",
+    )
+
+    remote_name = "Doc.html.json"
+    payload = {
+        "version": 1,
+        "updated_at": "2025-01-01T10:00:00Z",
+        "highlights": [],
+    }
+    raw_text = json.dumps(payload)
+
+    highlights_dir = base_dir / "Posts" / "Posts 2024" / "highlights"
+    highlights_dir.mkdir(parents=True, exist_ok=True)
+    stored = highlights_dir / remote_name
+    stored.write_text('{"highlights":[{"text":"Alpha"}]}\n', encoding="utf-8")
+
+    def fake_listing(_: str) -> str:
+        return f'<a href="{remote_name}">{remote_name}</a>'
+
+    def fake_json(_: str) -> tuple[str, dict, str | None]:
+        return raw_text, payload, '"etag-1"'
+
+    def fake_head(_: str) -> tuple[str | None, str | None]:
+        return "etag-1", None
+
+    summary = sph.sync_public_highlights(
+        base_url="https://example.com",
+        highlights_path="/data/highlights/",
+        base_dir=base_dir,
+        default_year=2024,
+        listing_fetcher=fake_listing,
+        json_fetcher=fake_json,
+        html_head_fetcher=fake_head,
+    )
+
+    assert summary.errors == 0
+    assert not stored.exists()
+    updated = md_path.read_text(encoding="utf-8")
+    assert "<!-- docflow:highlight" not in updated
+    state = json.loads((highlights_dir / "sync_state.json").read_text(encoding="utf-8"))
+    assert state["files"][remote_name]["empty"] is True
+
+
 def test_apply_highlight_markers_handles_links():
     import sync_public_highlights as sph
 
