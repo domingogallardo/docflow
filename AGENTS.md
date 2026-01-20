@@ -65,7 +65,8 @@ Notes for agents
 - Use type hints where practical and module-level docstrings.
 - Modules: `snake_case.py` (e.g., `podcast_processor.py`); classes: `CamelCase` (e.g., `PodcastProcessor`).
 - Reuse centralized helpers in `utils.py` (e.g., `markdown_to_html_body`, `wrap_html`, `get_base_css`).
-- Keep console messages consistent (Spanish text + emoji), no excessive logging.
+- Keep console messages consistent (English text + emoji), no excessive logging.
+- All script messages must be English only.
 
 ## Testing Guidelines
 - Framework: `pytest`. Add unit tests for new behavior and edge cases.

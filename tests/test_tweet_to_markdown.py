@@ -12,6 +12,7 @@ from utils.tweet_to_markdown import (
     _find_quoted_status_id,
     _quoted_url_from_graphql_id,
     _wait_for_tweet_detail,
+    _detect_access_issue,
     PlaywrightTimeoutError,
     _expand_show_more,
     _read_article_text,
@@ -696,3 +697,45 @@ def test_extract_thread_ids_from_payload_filters_author_and_time():
         anchor_time_datetime="2026-01-08T12:00:00.000Z",
     )
     assert ids == ["111"]
+
+
+def test_detect_access_issue_flags_login_url():
+    class FakeLocator:
+        def __init__(self, count=0):
+            self._count = count
+
+        def count(self):
+            return self._count
+
+    class FakePage:
+        def __init__(self, url):
+            self.url = url
+
+        def locator(self, selector):
+            return FakeLocator(0)
+
+    page = FakePage("https://x.com/i/flow/login")
+    assert _detect_access_issue(page) == "X requires login (login wall)."
+
+
+def test_detect_access_issue_flags_unavailable_text():
+    class FakeLocator:
+        def __init__(self, count=0):
+            self._count = count
+
+        def count(self):
+            return self._count
+
+    class FakePage:
+        def __init__(self, hits):
+            self.url = "https://x.com/someone/status/1"
+            self._hits = hits
+
+        def locator(self, selector):
+            return FakeLocator(self._hits.get(selector, 0))
+
+    page = FakePage({"text=This Post is unavailable": 1})
+    assert (
+        _detect_access_issue(page)
+        == "Tweet unavailable (deleted, protected, or restricted)."
+    )

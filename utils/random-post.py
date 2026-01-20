@@ -76,9 +76,9 @@ def _copy_selection(html_path: Path, md_path: Path) -> Path:
         encoding="utf-8",
     )
 
-    print("📦 Copia creada en Pulse:")
+    print("📦 Copy created in Pulse:")
     print(f"  - {destination}")
-    print(f"📝 Referencia guardada en: {url_stub}")
+    print(f"📝 Reference saved to: {url_stub}")
     return destination.parent
 
 

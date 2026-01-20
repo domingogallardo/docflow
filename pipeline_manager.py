@@ -42,6 +42,7 @@ class DocumentProcessor:
         self.tweets_dest = self._year_dir("Tweets")
         self.processed_history = self.incoming / "processed_history.txt"
         self.tweets_processed = self.incoming / "tweets_processed.txt"
+        self.tweets_failed = self.incoming / "tweets_failed.txt"
 
         self.pdf_processor = PDFProcessor(self.incoming, self.pdfs_dest)
         self.instapaper_processor = InstapaperProcessor(self.incoming, self.posts_dest)
@@ -63,28 +64,42 @@ class DocumentProcessor:
 
     def process_tweet_urls(self) -> List[Path]:
         """Fetch recent likes from X and generate Markdown in Incoming/."""
+        failed_urls = self._load_failed_urls()
+        processed_urls = self._load_processed_urls()
+        processed_set = set(processed_urls)
+        pending_failed = {url: None for url in failed_urls if url not in processed_set}
+        likes_error = False
+
         try:
             likes = self._fetch_like_items()
         except Exception as exc:
             print(f"🐦 Could not read X likes: {exc}")
+            likes = []
+            likes_error = True
+
+        if not likes and not pending_failed:
+            self._write_failed_urls(list(pending_failed.keys()))
+            if not likes_error:
+                print("🐦 No new tweets in your likes")
             return []
 
-        if not likes:
-            print("🐦 No new tweets in your likes")
-            return []
-
-        processed_urls = self._load_processed_urls()
-        processed_set = set(processed_urls)
         fresh_likes = [like for like in likes if like.url not in processed_set]
+        fresh_url_set = {like.url for like in fresh_likes}
+        retry_urls = [url for url in pending_failed.keys() if url not in fresh_url_set]
 
-        if not fresh_likes:
+        if not fresh_likes and not retry_urls:
+            self._write_failed_urls(list(pending_failed.keys()))
             print("🐦 No new likes pending (everything is already processed).")
             return []
 
+        if retry_urls:
+            print(f"🐦 Retrying {len(retry_urls)} failed tweet(s).")
+
         generated: List[Path] = []
         written_urls: List[str] = []
+        queue: List[LikeTweet] = list(fresh_likes) + [LikeTweet(url=url) for url in retry_urls]
 
-        for like in fresh_likes:
+        for like in queue:
             try:
                 markdown, filename = fetch_tweet_thread_markdown(
                     like.url,
@@ -96,16 +111,19 @@ class DocumentProcessor:
                 )
             except Exception as exc:
                 print(f"❌ Error processing {like.url}: {exc}")
+                pending_failed.setdefault(like.url, None)
                 continue
 
             destination = self._unique_destination(self.incoming / filename)
             destination.write_text(markdown, encoding="utf-8")
             generated.append(destination)
             written_urls.append(like.url)
+            pending_failed.pop(like.url, None)
             print(f"🐦 Tweet saved as {destination.name}")
 
         if written_urls:
             self._append_processed_urls(written_urls)
+        self._write_failed_urls(list(pending_failed.keys()))
 
         return generated
 
@@ -140,6 +158,22 @@ class DocumentProcessor:
             return []
         lines = [line.strip() for line in path.read_text(encoding="utf-8").splitlines()]
         return [line for line in lines if line]
+
+    def _load_failed_urls(self) -> List[str]:
+        path = self.tweets_failed
+        if not path.exists():
+            return []
+        lines = [line.strip() for line in path.read_text(encoding="utf-8").splitlines()]
+        return [line for line in lines if line]
+
+    def _write_failed_urls(self, urls: List[str]) -> None:
+        path = self.tweets_failed
+        if not urls:
+            if path.exists():
+                path.unlink()
+            return
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text("\n".join(urls) + "\n", encoding="utf-8")
 
     def _append_processed_urls(self, urls: List[str]) -> None:
         path = self.tweets_processed

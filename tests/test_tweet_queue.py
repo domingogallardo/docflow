@@ -65,6 +65,41 @@ def test_process_tweet_urls_handles_fetch_error(tmp_path, monkeypatch):
     assert created == []
 
 
+def test_process_tweet_urls_records_failed_download(tmp_path, monkeypatch):
+    processor, _ = prepare_processor(tmp_path)
+    url = "https://x.com/user/status/1"
+    mock_likes(monkeypatch, [url])
+
+    with patch("pipeline_manager.fetch_tweet_thread_markdown", side_effect=RuntimeError("boom")):
+        created = processor.process_tweet_urls()
+
+    assert created == []
+    assert processor.tweets_failed.exists()
+    assert processor.tweets_failed.read_text(encoding="utf-8") == url + "\n"
+    assert not processor.tweets_processed.exists()
+
+
+def test_process_tweet_urls_retries_failed_on_next_run(tmp_path, monkeypatch):
+    processor, incoming = prepare_processor(tmp_path)
+    url = "https://x.com/user/status/99"
+    processor.tweets_failed.write_text(url + "\n", encoding="utf-8")
+    mock_likes(monkeypatch, [])
+
+    with patch(
+        "pipeline_manager.fetch_tweet_thread_markdown",
+        return_value=(
+            "---\nsource: tweet\n---\n\n# T\n\n[View on X](https://x.com/99)\n",
+            "Tweet - user-99.md",
+        ),
+    ):
+        created = processor.process_tweet_urls()
+
+    assert len(created) == 1
+    assert (incoming / "Tweet - user-99.md").exists()
+    assert processor.tweets_processed.read_text(encoding="utf-8") == url + "\n"
+    assert not processor.tweets_failed.exists()
+
+
 def test_process_tweets_pipeline_runs_markdown_subset(tmp_path, monkeypatch):
     processor, _ = prepare_processor(tmp_path)
     mock_likes(monkeypatch, ["https://x.com/user/status/1"])

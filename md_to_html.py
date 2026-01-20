@@ -36,7 +36,7 @@ def convert_md_to_html():
             
             # Save HTML.
             html_path.write_text(full_html, encoding="utf-8")
-            print(f"✅ HTML generado: {html_path.name}")
+            print(f"✅ HTML generated: {html_path.name}")
             
         except Exception as e:
             print(f"❌ Error converting {md_file.name}: {e}")

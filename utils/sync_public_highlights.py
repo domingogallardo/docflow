@@ -586,12 +586,12 @@ def sync_public_highlights(
     html_head_fetcher = html_head_fetcher or (lambda url: fetch_html_head(url, timeout=timeout))
 
     listing_url = urljoin(base_url + "/", highlights_path.lstrip("/"))
-    _log(f"🔎 Buscando subrayados en {listing_url}")
+    _log(f"🔎 Looking for highlights at {listing_url}")
     html_text = listing_fetcher(listing_url)
     remote_files = extract_links_from_autoindex(html_text)
     summary.total = len(remote_files)
     if not remote_files:
-        _log("⚠️  No se encontraron subrayados en el listado.")
+        _log("⚠️  No highlights found in the listing.")
         return summary
 
     year_index, fallback_paths, known_names = build_local_html_index(base_dir)
@@ -608,7 +608,7 @@ def sync_public_highlights(
         )
         if not has_local:
             summary.missing_local += 1
-            _log(f"⚠️  No se encontro local para {decoded_name}; usando {year}.")
+            _log(f"⚠️  No local match for {decoded_name}; using {year}.")
 
         dest_dir = base_dir / "Posts" / f"Posts {year}" / "highlights"
         dest_dir.mkdir(parents=True, exist_ok=True)
@@ -623,7 +623,7 @@ def sync_public_highlights(
             raw_text, payload, etag = json_fetcher(remote_url)
         except Exception as exc:
             summary.errors += 1
-            _log(f"❌ Error al descargar {remote_name}: {exc}")
+            _log(f"❌ Error downloading {remote_name}: {exc}")
             continue
 
         updated_at_text = str(payload.get("updated_at") or "").strip()
@@ -667,7 +667,7 @@ def sync_public_highlights(
             try:
                 html_etag, html_last_modified = html_head_fetcher(public_html_url)
             except Exception as exc:
-                _log(f"⚠️  No se pudo comprobar HTML publicado {decoded_name}: {exc}")
+                _log(f"⚠️  Could not check published HTML for {decoded_name}: {exc}")
             if html_etag or html_last_modified:
                 if html_etag != entry.get("html_etag") or html_last_modified != entry.get("html_last_modified"):
                     html_changed = True
@@ -695,10 +695,10 @@ def sync_public_highlights(
         if should_update_md:
             if html_path is None:
                 summary.md_missing += 1
-                _log(f"⚠️  No se encontro HTML local para actualizar MD: {decoded_name}")
+                _log(f"⚠️  No local HTML found to update MD: {decoded_name}")
             elif md_path is None:
                 summary.md_missing += 1
-                _log(f"⚠️  No existe MD para actualizar: {html_path.with_suffix('.md').name}")
+                _log(f"⚠️  No MD file to update: {html_path.with_suffix('.md').name}")
             else:
                 if md_text is None:
                     md_text = md_path.read_text(encoding="utf-8")
@@ -711,16 +711,16 @@ def sync_public_highlights(
                     except Exception:
                         pass
                     summary.md_updated += 1
-                    _log(f"📝 Resaltados actualizados: {md_path.name}")
+                    _log(f"📝 Highlights updated: {md_path.name}")
 
         if not has_highlights:
             if dest_file.exists():
                 try:
                     dest_file.unlink()
-                    _log(f"🧹 Sin subrayados, eliminado: {remote_name}")
+                    _log(f"🧹 No highlights, deleted: {remote_name}")
                 except OSError as exc:
                     summary.errors += 1
-                    _log(f"❌ No se pudo eliminar {remote_name}: {exc}")
+                    _log(f"❌ Could not delete {remote_name}: {exc}")
         entry.update(
             {
                 "remote_updated_at": updated_at_text,
@@ -753,39 +753,39 @@ def sync_public_highlights(
 
 def main(argv: Iterable[str]) -> int:
     parser = argparse.ArgumentParser(
-        description="Sincroniza los subrayados publicos hacia Posts/Posts <YEAR>/highlights/.",
+        description="Sync public highlights into Posts/Posts <YEAR>/highlights/.",
     )
     parser.add_argument(
         "--base-url",
         default=derive_base_url(),
-        help="Base URL del sitio (ej. https://domingogallardo.com).",
+        help="Site base URL (e.g., https://domingogallardo.com).",
     )
     parser.add_argument(
         "--highlights-path",
         default=os.getenv("HIGHLIGHTS_PATH", DEFAULT_HIGHLIGHTS_PATH),
-        help="Ruta del listado de highlights (default: /data/highlights/).",
+        help="Highlights listing path (default: /data/highlights/).",
     )
     parser.add_argument(
         "--base-dir",
         default=str(cfg.BASE_DIR),
-        help="Directorio base local (default: config.BASE_DIR).",
+        help="Local base directory (default: config.BASE_DIR).",
     )
     parser.add_argument(
         "--year",
         type=int,
         default=cfg.get_default_year(),
-        help="Ano por defecto si no se encuentra el HTML local.",
+        help="Default year if local HTML is not found.",
     )
     parser.add_argument(
         "--timeout",
         type=int,
         default=20,
-        help="Timeout HTTP en segundos.",
+        help="HTTP timeout in seconds.",
     )
     args = parser.parse_args(list(argv))
 
     if not args.base_url:
-        _log("❌ Falta --base-url o HIGHLIGHTS_BASE_URL.")
+        _log("❌ Missing --base-url or HIGHLIGHTS_BASE_URL.")
         return 2
 
     base_url = normalize_base_url(args.base_url)
@@ -800,17 +800,17 @@ def main(argv: Iterable[str]) -> int:
             timeout=args.timeout,
         )
     except Exception as exc:
-        _log(f"❌ Error al sincronizar: {exc}")
+        _log(f"❌ Error syncing: {exc}")
         return 1
 
     _log(
-        "📌 Resultado: "
-        f"{summary.downloaded} descargados, "
-        f"{summary.skipped} omitidos, "
-        f"{summary.md_updated} md actualizados, "
-        f"{summary.md_missing} md ausentes, "
-        f"{summary.missing_local} sin local, "
-        f"{summary.errors} errores."
+        "📌 Result: "
+        f"{summary.downloaded} downloaded, "
+        f"{summary.skipped} skipped, "
+        f"{summary.md_updated} md updated, "
+        f"{summary.md_missing} md missing, "
+        f"{summary.missing_local} missing local, "
+        f"{summary.errors} errors."
     )
     return 0 if summary.errors == 0 else 1
 
