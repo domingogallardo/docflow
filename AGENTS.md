@@ -54,6 +54,7 @@ Notes for agents
 - If the server is reachable and you have approval, you can run `web/deploy.sh` directly; otherwise provide the exact command for the user to run.
 - To preview the index locally without deploying, run: `python utils/build_read_index.py` (single list ordered by mtime).
 - Local overlay (`utils/serve_docs.py`) offers Bump/Unbump/Publish/Unpublish.
+- **Important:** Preserve file `mtime` whenever editing existing content. If a script rewrites HTML/MD, restore `mtime` afterward (use `st_birthtime` on macOS as the source of truth, or capture and reapply the original `mtime`). This keeps chronological ordering stable.
 
 ## Instapaper Starred & Bump
 - Star marking: to highlight an Instapaper article, add a star (⭐) at the beginning of its title in Instapaper.
