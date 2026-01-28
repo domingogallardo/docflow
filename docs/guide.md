@@ -98,7 +98,7 @@ PORT=8000 SERVE_DIR="/path/to/⭐️ Documentación" python utils/serve_docs.py
 - **Delete** permanently removes the HTML/PDF (and any associated Markdown) from the local library.
 
 5) **Publish to the public web (`/read/`)**  
-From the overlay, **Publish** copies the `.html` or `.pdf` to `web/public/read/` and triggers the **deploy** (`web/deploy.sh`). The deploy builds the Nginx image, uploads assets to the remote server, and serves `/read/` using the static `read.html` index **ordered by date (mtime desc)**. You can set `REMOTE_USER`/`REMOTE_HOST` via the environment.
+From the overlay, **Publish** copies the `.html` or `.pdf` to `web/public/read/` and triggers the **deploy** (`web/deploy.sh`). The deploy builds the Nginx image, uploads assets to the remote server, and serves `/read/` using the static `read.html` index **ordered by date (mtime desc)**. If `PERSONAL_WEB_DIR` is set, deploy assembles the base site from that repo and overlays `/read` from docflow. For a manual deploy, use `bin/publish_web.sh` to load `~/.docflow_env` and run the deploy.
 
 6) **Capture quotes and highlights on published pages**  
 On `/read/`, a floating **❝ Copy quote** button is injected. When you select text, it copies a **Markdown** quote with a link that includes **Text Fragments** (`#:~:text=`). This makes it easy to paste quotes directly into Obsidian while keeping the jump to the exact position. The overlay also shows **Highlight**, which saves highlights to `/data/highlights/<file>.json` (visible across browsers). Hold **Alt** or **Shift** and click a highlight to remove it. (*Script*: `article.js`).
@@ -130,6 +130,7 @@ Deployment uses **double Nginx**: a TLS proxy on the **host** and Nginx **inside
 ## Web publishing (`/read/`) and `read.html`
 
 - The deploy **generates** `read.html` as a single listing **ordered by mtime desc** with all HTML/PDFs in `web/public/read/`.
+- If `PERSONAL_WEB_DIR` is set, deploy uses `<PERSONAL_WEB_DIR>/public` for the base site and overlays `/read` from this repo.
 - `/read/` should serve `read.html` directly (autoindex **off**), with Nginx configured as `index read.html; try_files $uri $uri/ /read/read.html;`.
 - The index adds a 🟡 marker for files that have highlight JSON in `Posts/Posts <YEAR>/highlights/`.
 - If you run `utils/build_read_index.py` outside the repo root, ensure it can resolve `BASE_DIR` (via `config.py` or `DOCFLOW_BASE_DIR`).
@@ -166,6 +167,7 @@ INSTAPAPER_PASSWORD=...        # optional
 # Publishing/Deploy
 REMOTE_USER=root
 REMOTE_HOST=1.2.3.4
+PERSONAL_WEB_DIR=/path/to/personal-web
 HIGHLIGHTS_BASE_URL=https://<your_domain>
 
 # Local server

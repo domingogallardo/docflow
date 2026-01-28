@@ -23,8 +23,12 @@ certbot certificates
 ## Deploy and clean
 
 ```bash
-# Deploy (bundles public/ and nginx.conf, rebuilds container)
-REMOTE_USER=root REMOTE_HOST=<SERVER_IP> bash web/deploy.sh
+# Deploy (bundles staged public/ and nginx.conf, rebuilds container)
+bash bin/publish_web.sh
+# Or call deploy directly:
+# REMOTE_USER=root REMOTE_HOST=<SERVER_IP> bash web/deploy.sh
+# Optional: use personal site repo as base
+# PERSONAL_WEB_DIR=/path/to/personal-web REMOTE_USER=root REMOTE_HOST=<SERVER_IP> bash web/deploy.sh
 # Note: deploy.sh cleans remote /opt/web-domingo/public before extracting to avoid stale files.
 ```
 

@@ -15,7 +15,7 @@ Production site: https://domingogallardo.com
 > - In local docker-compose, `/data` is mounted **read-only** (safe by default); the deploy script mounts `/data` **read-write** on the server.
 > - The included `web/nginx.conf` serves `/read/` (HTML+PDF) using nginx **autoindex** by default. The static `read.html` index is generated on deploy and is available at `/read/read.html`. If you want `/read/` to show that static index by default, add `index read.html;` inside the container Nginx `location /read/`. The container uses `server_name localhost`.
 > - The `read.html` listing is a single block ordered by mtime desc with all HTML/PDFs in `web/public/read/`.
-- Public assets under `web/public/` are **not** versioned in the public repo (ignored via `.gitignore`), except minimal essentials like `web/public/read/article.js` (quote button).
+- Public assets under `web/public/` are **not** versioned in the public repo (ignored via `.gitignore`), except minimal essentials like `web/public/read/article.js` (quote button). The base site can live in a separate repo and be injected at deploy time via `PERSONAL_WEB_DIR`.
 
 ---
 
@@ -37,7 +37,7 @@ Adjusting the modification time (mtime) lets you \"bump\" items so they rise to 
 
 - Ubuntu LTS host with root/SSH access.
 - DNS A/AAAA records for `<YOUR_DOMAIN>` and `www.<YOUR_DOMAIN>` pointing to your server.
-- A Git repo with your static site under `public/`, plus the Docker and Nginx configs from this README.
+- A Git repo with your static site under `public/`, plus the Docker and Nginx configs from this README. (You can keep the personal site in a separate repo and point `PERSONAL_WEB_DIR` at it.)
 
 > Keep host packages updated regularly: `sudo apt update && sudo apt -y upgrade`.
 
@@ -297,10 +297,13 @@ Use `web/deploy.sh`. It bundles the app, uploads it, and rebuilds/restarts the c
 - Usage:
   - `env REMOTE_USER=root REMOTE_HOST=<SERVER_IP> bash web/deploy.sh`
   - Optional BasicAuth update: set `HTPASSWD_USER` and `HTPASSWD_PSS` (see 6.1).
+  - Optional base site: set `PERSONAL_WEB_DIR=/path/to/personal-web` (deploy will use its `public/` as the base site).
 
 - What it does (summary):
   - Generates `read.html` for `/public/read` (HTML+PDF) as **a single mtime-desc listing**. Note: by default, `/read/` shows nginx autoindex; this file is served at `/read/read.html`. If you want it to be the default index, add `index read.html;` inside the container Nginx `location /read/`.
-  - Bundles `web/Dockerfile`, `web/nginx.conf`, and `web/public/` (excluding `.DS_Store` and AppleDouble).
+  - Bundles `web/Dockerfile`, `web/nginx.conf`, and a staged `public/` directory (excluding `.DS_Store` and AppleDouble).
+    - If `PERSONAL_WEB_DIR` is set, the staged `public/` comes from `<PERSONAL_WEB_DIR>/public` plus `/read` from this repo.
+    - Otherwise it uses `web/public/` directly.
   - Ensures remote paths under `/opt/web-domingo` and uploads the bundle.
   - Cleans any previous `/opt/web-domingo/public` before extracting to avoid stale files.
   - (Optional) creates/updates `/opt/web-domingo/nginx/.htpasswd` on the host if `HTPASSWD_USER` and `HTPASSWD_PSS` are provided (bcrypt via `htpasswd -iB`).

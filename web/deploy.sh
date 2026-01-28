@@ -12,11 +12,70 @@ fi
 
 REMOTE_PATH="/opt/web-domingo"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PERSONAL_WEB_DIR="${PERSONAL_WEB_DIR:-}"
+DOCFLOW_PUBLIC_DIR="$SCRIPT_DIR/public"
+DOCFLOW_READ_DIR="$DOCFLOW_PUBLIC_DIR/read"
+
+cleanup() {
+  if [[ -n "${STAGING_DIR:-}" && -d "$STAGING_DIR" ]]; then
+    rm -rf "$STAGING_DIR"
+  fi
+}
+trap cleanup EXIT
+
+copy_tree() {
+  local src="$1"
+  local dest="$2"
+
+  if command -v rsync >/dev/null 2>&1; then
+    rsync -a --delete "$src"/ "$dest"/
+  else
+    rm -rf "$dest"
+    mkdir -p "$dest"
+    cp -R "$src"/. "$dest"/
+  fi
+}
 
 # Generate read.html for /read (combined HTML+PDF) with the repo generator.
 echo "🧾 Generating static listing (mtime desc)…"
 PYTHON_BIN="python3"; command -v python3 >/dev/null 2>&1 || PYTHON_BIN=python
-"$PYTHON_BIN" "$SCRIPT_DIR/../utils/build_read_index.py" "$SCRIPT_DIR/public/read"
+"$PYTHON_BIN" "$SCRIPT_DIR/../utils/build_read_index.py" "$DOCFLOW_READ_DIR"
+
+STAGING_DIR="$(mktemp -d)"
+PUBLIC_STAGING="$STAGING_DIR/public"
+mkdir -p "$PUBLIC_STAGING"
+
+if [[ -n "$PERSONAL_WEB_DIR" ]]; then
+  PERSONAL_PUBLIC_DIR="$PERSONAL_WEB_DIR/public"
+  if [[ ! -d "$PERSONAL_PUBLIC_DIR" ]]; then
+    echo "❌ Error: PERSONAL_WEB_DIR does not contain a public/ directory."
+    echo "  PERSONAL_WEB_DIR=$PERSONAL_WEB_DIR"
+    exit 1
+  fi
+
+  echo "📁 Staging personal site from $PERSONAL_PUBLIC_DIR..."
+  if command -v rsync >/dev/null 2>&1; then
+    rsync -a --delete --exclude 'read/' "$PERSONAL_PUBLIC_DIR"/ "$PUBLIC_STAGING"/
+  else
+    copy_tree "$PERSONAL_PUBLIC_DIR" "$PUBLIC_STAGING"
+    rm -rf "$PUBLIC_STAGING/read"
+  fi
+else
+  echo "ℹ️ PERSONAL_WEB_DIR not set; using $DOCFLOW_PUBLIC_DIR as base."
+  copy_tree "$DOCFLOW_PUBLIC_DIR" "$PUBLIC_STAGING"
+fi
+
+echo "📚 Staging /read from docflow..."
+rm -rf "$PUBLIC_STAGING/read"
+mkdir -p "$PUBLIC_STAGING/read"
+if command -v rsync >/dev/null 2>&1; then
+  rsync -a --delete "$DOCFLOW_READ_DIR"/ "$PUBLIC_STAGING/read"/
+else
+  copy_tree "$DOCFLOW_READ_DIR" "$PUBLIC_STAGING/read"
+fi
+
+cp "$SCRIPT_DIR/Dockerfile" "$STAGING_DIR/Dockerfile"
+cp "$SCRIPT_DIR/nginx.conf" "$STAGING_DIR/nginx.conf"
 
 echo "📦 Packaging files (without macOS metadata)..."
 # Avoid xattrs and AppleDouble files (.DS_Store, ._*). On macOS (bsdtar),
@@ -28,7 +87,7 @@ fi
 COPYFILE_DISABLE=1 tar $CREATE_FLAGS \
   --exclude='.DS_Store' \
   --exclude='._*' \
-  -C "$SCRIPT_DIR" \
+  -C "$STAGING_DIR" \
   -czf "$SCRIPT_DIR/deploy.tar.gz" \
   Dockerfile \
   nginx.conf \

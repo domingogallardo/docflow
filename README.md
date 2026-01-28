@@ -6,7 +6,7 @@ docflow automates **collect -> process -> prioritize (bump) -> read -> publish -
 - Single pipeline for Instapaper, Snipd, PDFs, images, Markdown, and X likes (`Tweets/Tweets <YEAR>/`).
 - Local overlay (`utils/serve_docs.py`) to bump/unbump, publish/unpublish (copies to `web/public/read/` + deploy), or delete.
 - Sync public highlights into `Posts/Posts <YEAR>/highlights/` and inject invisible markers into local `.md` (overlapping highlights are consolidated) after `bin/docflow.sh` (manual: `python utils/sync_public_highlights.py --base-url https://...`). When the pipeline and highlights sync succeed, it regenerates `web/public/read/read.html` and runs `web/deploy.sh` only if the index changed.
-- Deploy to your domain via `web/deploy.sh`: generates a static `/read/` index ordered by `mtime`.
+- Deploy to your domain via `web/deploy.sh`: generates a static `/read/` index ordered by `mtime` and can assemble the base site from a separate repo via `PERSONAL_WEB_DIR`.
 - History log (`Incoming/processed_history.txt`) and utilities for AI titles, Markdown cleanup, and quote capture.
 - Routing is tag-based: tweets/podcasts/Instapaper are tagged, and generic Markdown is any `.md` without a `source:` tag.
 
@@ -54,8 +54,9 @@ docflow automates **collect -> process -> prioritize (bump) -> read -> publish -
    ```
 4. Deploy to `/read/` when ready:
    ```bash
-   (cd web && ./deploy.sh)
+   bash bin/publish_web.sh
    ```
+   If your personal site lives in a separate repo, set `PERSONAL_WEB_DIR=/path/to/personal-web`.
 5. Quick tests:
    ```bash
    pytest -q
@@ -83,6 +84,8 @@ docflow automates **collect -> process -> prioritize (bump) -> read -> publish -
 
 ## 🌐 Publish on your domain (`/read/`)
 - Run `web/deploy.sh` (from `web/`) to generate a static `read.html` index ordered by `mtime` and upload to the web container.
+- Or run `bin/publish_web.sh` to load `~/.docflow_env`, validate env vars, and call `web/deploy.sh`.
+- If `PERSONAL_WEB_DIR` is set, deploy assembles `/public` from that repo and overlays `/read` from this repo.
 - `/read/` should serve `read.html` (autoindex off) via Nginx `index read.html` + `try_files`.
 - The index shows 🟡 for items with highlight JSON in `Posts/Posts <YEAR>/highlights/`.
 - If you run `utils/build_read_index.py` outside the repo, ensure it can resolve `BASE_DIR` (via `config.py` or `DOCFLOW_BASE_DIR`).
