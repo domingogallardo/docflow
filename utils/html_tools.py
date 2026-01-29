@@ -96,11 +96,20 @@ def add_margins_to_html_files(directory: Path, file_filter=None):
                 parent = img.parent
                 if parent and parent.name == "a" and parent.get("href") == src:
                     classes = list(parent.get("class") or [])
+                    if not classes and parent.has_attr("class_"):
+                        legacy = parent.get("class_")
+                        if isinstance(legacy, list):
+                            classes = legacy
+                        elif legacy:
+                            classes = [str(legacy)]
+                        parent.attrs.pop("class_", None)
                     if "image-zoom" not in classes:
                         classes.append("image-zoom")
+                    if classes:
                         parent["class"] = classes
                     continue
-                link = soup.new_tag("a", href=src, target="_blank", rel="noopener", class_="image-zoom")
+                link = soup.new_tag("a", href=src, target="_blank", rel="noopener")
+                link["class"] = ["image-zoom"]
                 img.replace_with(link)
                 link.append(img)
 
