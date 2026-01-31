@@ -11,6 +11,12 @@ from playwright.sync_api import TimeoutError as PlaywrightTimeoutError, sync_pla
 
 DEFAULT_LIKES_URL = "https://x.com/domingogallardo/likes"
 DEFAULT_MAX_TWEETS = 100
+LOGIN_WALL_HINTS = (
+    "/i/flow/login",
+    "/login",
+    "/i/flow/signup",
+    "/account/access",
+)
 STEALTH_SNIPPET = """
 Object.defineProperty(navigator, 'webdriver', {get: () => undefined});
 window.chrome = window.chrome || { runtime: {} };
@@ -34,6 +40,27 @@ class LikeTweet:
 
 def _log(message: str) -> None:
     print(message)
+
+
+def _wait_for_likes_articles(page, *, likes_url: str, retries: int = 1) -> bool:
+    for attempt in range(retries + 1):
+        try:
+            page.wait_for_selector("article", timeout=15000)
+            return True
+        except PlaywrightTimeoutError:
+            current_url = page.url or ""
+            if any(hint in current_url for hint in LOGIN_WALL_HINTS):
+                _log("   ⚠️  Login wall detected; the session may be expired.")
+                return False
+            if attempt < retries:
+                _log("   🔁 No articles yet; retrying likes page load...")
+                try:
+                    page.goto(likes_url, wait_until="domcontentloaded", timeout=60000)
+                except Exception:
+                    pass
+                continue
+            _log("   ⚠️  No articles detected; the session may not be active.")
+            return False
 
 
 def _is_status_href(href: str | None) -> bool:
@@ -162,10 +189,7 @@ def collect_likes_from_page(
     """Copy of the logic used by interactive scripts to extract likes."""
     _log(f"▶️  Trying to load {likes_url}…")
     page.goto(likes_url, wait_until="domcontentloaded", timeout=60000)
-    try:
-        page.wait_for_selector("article", timeout=15000)
-    except PlaywrightTimeoutError:
-        _log("   ⚠️  No articles detected; the session may not be active.")
+    if not _wait_for_likes_articles(page, likes_url=likes_url):
         return False, 0, [], False, _normalize_stop_url(stop_at_url)
 
     collected: List[str] = []
@@ -224,10 +248,7 @@ def collect_like_items_from_page(
     """Load likes and return the liked tweets with metadata."""
     _log(f"▶️  Trying to load {likes_url}…")
     page.goto(likes_url, wait_until="domcontentloaded", timeout=60000)
-    try:
-        page.wait_for_selector("article", timeout=15000)
-    except PlaywrightTimeoutError:
-        _log("   ⚠️  No articles detected; the session may not be active.")
+    if not _wait_for_likes_articles(page, likes_url=likes_url):
         return False, 0, [], False, _normalize_stop_url(stop_at_url)
 
     collected: List[LikeTweet] = []
