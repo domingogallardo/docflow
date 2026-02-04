@@ -35,10 +35,14 @@ from typing import Optional
 # Paths relative to the repo (for publishing).
 SCRIPT_DIR = os.path.abspath(os.path.dirname(__file__))
 REPO_ROOT = os.path.abspath(os.path.join(SCRIPT_DIR, os.pardir))
-DEPLOY_SCRIPT = os.getenv(
-    "DEPLOY_SCRIPT",
-    os.path.join(REPO_ROOT, "web", "deploy.sh"),
-)
+_DEFAULT_PUBLISH_SCRIPT = os.path.join(REPO_ROOT, "bin", "publish_web.sh")
+_DEFAULT_DEPLOY_SCRIPT = os.path.join(REPO_ROOT, "web", "deploy.sh")
+DEPLOY_SCRIPT = os.getenv("DEPLOY_SCRIPT")
+if not DEPLOY_SCRIPT:
+    if os.path.isfile(_DEFAULT_PUBLISH_SCRIPT) and os.access(_DEFAULT_PUBLISH_SCRIPT, os.X_OK):
+        DEPLOY_SCRIPT = _DEFAULT_PUBLISH_SCRIPT
+    else:
+        DEPLOY_SCRIPT = _DEFAULT_DEPLOY_SCRIPT
 PUBLIC_READS_DIR = os.getenv(
     "PUBLIC_READS_DIR",
     os.path.join(REPO_ROOT, "web", "public", "read"),
