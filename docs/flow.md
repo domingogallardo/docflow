@@ -68,7 +68,7 @@ The overlay:
 - lists documents ordered by `mtime`,
 - allows **Bump (b)**, **Unbump (u)**, **Publish (p)**, **Unpublish (d)**, and **Delete**,
 - **Bump/Unbump** adjusts the local file `mtime` so it moves in the listing,
-- **Publish/Unpublish** copies/removes the file in `web/public/read/` and runs `web/deploy.sh`,
+- **Publish/Unpublish** copies/removes the file in `web/public/read/` and runs `bin/publish_web.sh`,
 - is the point where you decide what goes to the web.
 
 All inputs A-D converge here.
@@ -83,8 +83,7 @@ When a document is ready:
 2. Run:
 
    ```bash
-   cd web
-   ./deploy.sh
+   bash bin/publish_web.sh
    ```
 
    The script:
@@ -121,7 +120,7 @@ In Obsidian:
    - converts new likes to Markdown/HTML and moves them to `Tweets/Tweets 2025/`.
 3. Open the local server (`serve_docs.py`) and view the tweet as a page.
 4. Click **Publish**.
-5. Run `web/deploy.sh`.
+5. Run `bin/publish_web.sh`.
 6. Open the public URL in `domingogallardo.com/read/...` and copy the paragraph into Obsidian from there.
 
 ---
@@ -130,7 +129,7 @@ In Obsidian:
 
 - **No tweets were processed**: check whether the URL is commented out with `#` or if it is already in `Incoming/tweets_processed.txt`.
 - **It does not appear in the overlay**: verify the processor moved it to the yearly folder under `BASE_DIR` and that `serve_docs.py` points there.
-- **I see it locally but not on the web**: you need to run `web/deploy.sh`.
+- **I see it locally but not on the web**: you need to run `bin/publish_web.sh`.
 - **Years are getting mixed**: verify the `--year` you pass to the processor and the one in `config.py`.
 
 ---
@@ -151,7 +150,7 @@ Inputs:
   utils/serve_docs.py (overlay, review, publish)
             │
             ▼
-  web/deploy.sh  →  domingogallardo.com (/read/)
+  bin/publish_web.sh  →  domingogallardo.com (/read/)
             │
             ▼
           Obsidian

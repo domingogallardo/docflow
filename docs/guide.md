@@ -98,7 +98,7 @@ PORT=8000 SERVE_DIR="/path/to/⭐️ Documentación" python utils/serve_docs.py
 - **Delete** permanently removes the HTML/PDF (and any associated Markdown) from the local library.
 
 5) **Publish to the public web (`/read/`)**  
-From the overlay, **Publish** copies the `.html` or `.pdf` to `web/public/read/` and triggers the **deploy** (`web/deploy.sh`). The deploy builds the Nginx image, uploads assets to the remote server, and serves `/read/` using the static `read.html` index **ordered by date (mtime desc)**. If `PERSONAL_WEB_DIR` is set, deploy assembles the base site from that repo and overlays `/read` from docflow. For a manual deploy, use `bin/publish_web.sh` to load `~/.docflow_env` and run the deploy.
+From the overlay, **Publish** copies the `.html` or `.pdf` to `web/public/read/` and triggers the **deploy** (`bin/publish_web.sh`). The deploy builds the Nginx image, uploads assets to the remote server, and serves `/read/` using the static `read.html` index **ordered by date (mtime desc)**. If `PERSONAL_WEB_DIR` is set, deploy assembles the base site from that repo and overlays `/read` from docflow. For a manual deploy, use `bin/publish_web.sh` to load `~/.docflow_env` and run the deploy.
 
 6) **Capture quotes and highlights on published pages**  
 On `/read/`, a floating **❝ Copy quote** button is injected. When you select text, it copies a **Markdown** quote with a link that includes **Text Fragments** (`#:~:text=`). This makes it easy to paste quotes directly into Obsidian while keeping the jump to the exact position. The overlay also shows **Highlight**, which saves highlights to `/data/highlights/<file>.json` (visible across browsers). Hold **Alt** or **Shift** and click a highlight to remove it. (*Script*: `article.js`).
@@ -123,7 +123,7 @@ Deployment uses **double Nginx**: a TLS proxy on the **host** and Nginx **inside
   - `BUMP_YEARS` (years in the future for bumping; default 100)
   - Local publishing:
     - `PUBLIC_READS_DIR` (default `web/public/read`)
-    - `DEPLOY_SCRIPT` (default `web/deploy.sh`)
+    - `DEPLOY_SCRIPT` (default `bin/publish_web.sh`)
 
 ---
 
@@ -182,7 +182,7 @@ HTPASSWD_PSS='password'
 
 `bin/docflow.sh` loads `~/.docflow_env` if it exists. It also runs `web/deploy.sh` after syncing highlights and rebuilding `read.html` only when the pipeline and sync succeed, and only if `read.html` changed (requires `REMOTE_USER`/`REMOTE_HOST`). Current values (non-sensitive):
 - `BUMP_YEARS`: 100
-- `DEPLOY_SCRIPT`: /Users/domingo/Programacion/Python/docflow/web/deploy.sh
+- `DEPLOY_SCRIPT`: /Users/domingo/Programacion/Python/docflow/bin/publish_web.sh
 - `DOCPIPE_YEAR`: 2026
 - `HIGHLIGHTS_BASE_URL`: https://domingogallardo.com
 - `HIGHLIGHTS_PATH`: /data/highlights/
