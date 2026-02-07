@@ -23,12 +23,12 @@ This repository automates collecting and organizing personal documents (Instapap
 ## Deploy & Verify (Web)
 - Remote deploy: `env REMOTE_USER=root REMOTE_HOST=<SERVER_IP> bash web/deploy.sh`
 - What it does:
-  - Generates a minimal static index for `/public/read` (HTML + PDF), ordered by mtime desc (bumps first), with entries like: `FileName — YYYY-Mon-DD HH:MM`.
+  - Generates a static `read.html` index for `/public/read` (HTML + PDF), ordered by mtime desc (bumps first), grouped by year, with entries like: `FileName — YYYY-Mon-DD HH:MM`.
   - Optionally updates host BasicAuth when `HTPASSWD_USER` and `HTPASSWD_PSS` are set (bcrypt generated on host; no secrets in Git).
   - Bundles `web/Dockerfile`, `web/nginx.conf`, and `web/public/` and deploys to `/opt/web-domingo` on the remote host.
   - Rebuilds and runs the container `web-domingo` on port 8080.
 - Nginx inside the container:
-- `/read/` serves a static `index.html` (no dynamic directory listing module).
+- `/read/` serves a static `read.html` (no dynamic directory listing module).
   - `/data/` keeps WebDAV-like PUT enabled; listing is via `autoindex on;` (unchanged).
 Public checks:
 - `curl -I https://domingogallardo.com/read/` (200 OK)
@@ -52,14 +52,22 @@ Notes for agents
 - Do not touch `/data/` auth or methods; `/read/` is a static listing now.
 - Note: the old directory-listing CSS is not used anymore by these static indexes.
 - If the server is reachable and you have approval, you can run `web/deploy.sh` directly; otherwise provide the exact command for the user to run.
-- To preview the index locally without deploying, run: `python utils/build_read_index.py` (single list ordered by mtime).
+- To preview the index locally without deploying, run: `python utils/build_read_index.py` (generates `read.html` in `web/public/read`, grouped by year and ordered by mtime).
 - Local overlay (`utils/serve_docs.py`) offers Bump/Unbump/Publish/Unpublish.
 - **Important:** Preserve file `mtime` whenever editing existing content. If a script rewrites HTML/MD, restore `mtime` afterward (use `st_birthtime` on macOS as the source of truth, or capture and reapply the original `mtime`). This keeps chronological ordering stable.
 
-## Instapaper Starred & Bump
-- Star marking: to highlight an Instapaper article, add a star (⭐) at the beginning of its title in Instapaper.
-- Propagation: the pipeline normalizes the title (removes the star for naming), adds `data-instapaper-starred="true"` and `<meta name="instapaper-starred" content="true">` to HTML, and `instapaper_starred: true` front matter to Markdown.
-- Auto-bump: starred Instapaper HTML files are automatically bumped (their `mtime` is set to the future) so they sort to the top in date-ordered listings. The local server `utils/serve_docs.py` highlights bumped files (🔥) and allows Unbump from the overlay.
+### Fast path for article location (avoid full-disk search)
+- For issues referencing article URLs (for example `http://localhost:8000/Posts/Posts%202026/...html`), do **not** search the whole home directory first.
+- Resolve `BASE_DIR` from `config.py` and map directly:
+  - Local downloaded file: `"$BASE_DIR/Posts/Posts <YEAR>/<decoded filename>.html"`
+  - Public web copy in repo: `web/public/read/<decoded filename>.html`
+- Decode URL-encoded names (`%20`, `%2C`, etc.) before checking paths.
+- Search scope order:
+  1. Exact path from URL under `BASE_DIR`
+  2. Exact basename in `web/public/read/`
+  3. Narrow search under `"$BASE_DIR/Posts"` only
+  4. Narrow search under repo only
+- Avoid commands like `find /Users/...` unless the user explicitly asks for a full-system search or canonical paths fail.
 
 ## Coding Style & Naming
 - Python 3.10+; 4-space indentation; keep functions small and cohesive.
