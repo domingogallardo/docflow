@@ -13,6 +13,7 @@ systemctl is-active docker
 docker ps --format 'table {{.Names}}\t{{.Status}}\t{{.Ports}}'
 
 # Endpoints (public HTTPS)
+curl -ksI https://domingogallardo.com/ | head -n1       # expect 200
 curl -ksI https://domingogallardo.com/read/ | head -n1   # expect 200
 curl -ksI https://domingogallardo.com/posts/ | head -n1  # expect 404
 
@@ -23,13 +24,15 @@ certbot certificates
 ## Deploy and clean
 
 ```bash
+# Production safety precheck (do this before publish/deploy)
+test -d "${PERSONAL_WEB_DIR}/public" || { echo "Missing PERSONAL_WEB_DIR/public"; exit 1; }
+
 # Deploy (bundles staged public/ and nginx.conf, rebuilds container)
-bash bin/publish_web.sh
+PERSONAL_WEB_DIR=/path/to/personal-web bash bin/publish_web.sh
 # Or call deploy directly:
-# REMOTE_USER=root REMOTE_HOST=<SERVER_IP> bash web/deploy.sh
-# Optional: use personal site repo as base
 # PERSONAL_WEB_DIR=/path/to/personal-web REMOTE_USER=root REMOTE_HOST=<SERVER_IP> bash web/deploy.sh
 # Note: deploy.sh cleans remote /opt/web-domingo/public before extracting to avoid stale files.
+# If PERSONAL_WEB_DIR is omitted, the base site falls back to docflow/web/public (typically only /read).
 ```
 
 Preview the `/read/` index locally (single list, ordered by mtime):

@@ -13,7 +13,7 @@ Production site: https://domingogallardo.com
 > - Provided files: `web/Dockerfile`, `web/nginx.conf`, `web/docker-compose.yml`, `web/deploy.sh`.
 > - Names/paths used here: container name `web-domingo`, remote path `/opt/web-domingo` (matches `web/deploy.sh`).
 > - In local docker-compose, `/data` is mounted **read-only** (safe by default); the deploy script mounts `/data` **read-write** on the server.
-> - The included `web/nginx.conf` serves `/read/` (HTML+PDF) using nginx **autoindex** by default. The static `read.html` index is generated on deploy and is available at `/read/read.html`. If you want `/read/` to show that static index by default, add `index read.html;` inside the container Nginx `location /read/`. The container uses `server_name localhost`.
+> - The included `web/nginx.conf` serves `/read/` (HTML+PDF) with `index read.html` and `try_files ... /read/read.html` (autoindex off). The static `read.html` index is generated on deploy. The container uses `server_name localhost`.
 > - The `read.html` listing is a single block ordered by mtime desc with all HTML/PDFs in `web/public/read/`.
 - Public assets under `web/public/` are **not** versioned in the public repo (ignored via `.gitignore`), except minimal essentials like `web/public/read/article.js` (quote button). The base site can live in a separate repo and be injected at deploy time via `PERSONAL_WEB_DIR`.
 
@@ -25,7 +25,7 @@ Production site: https://domingogallardo.com
   - Terminates **HTTPS** (Let's Encrypt), redirects HTTP->HTTPS, and **reverse-proxies** to the app on `localhost:8080`.
 - **[APP] Nginx in a Docker container**  
   - Serves **static** content from the image (`/usr/share/nginx/html`).  
-- Exposes **/read** (HTML+PDF) with nginx autoindex; the static `read.html` index (ordered by mtime desc) is generated at deploy and served at `/read/read.html` unless you configure `index read.html;` in `location /read/`.
+- Exposes **/read** (HTML+PDF) using static `read.html` (ordered by mtime desc) generated at deploy.
   - Provides **/data** for simple edits via **HTTP PUT** (no delete) protected by **BasicAuth** using a host-mounted `.htpasswd`.
 
 **Why order by mtime?**  
@@ -295,15 +295,15 @@ services:
 Use `web/deploy.sh`. It bundles the app, uploads it, and rebuilds/restarts the container on the remote host.
 
 - Usage:
-  - `env REMOTE_USER=root REMOTE_HOST=<SERVER_IP> bash web/deploy.sh`
+  - `env PERSONAL_WEB_DIR=/path/to/personal-web REMOTE_USER=root REMOTE_HOST=<SERVER_IP> bash web/deploy.sh`
   - Optional BasicAuth update: set `HTPASSWD_USER` and `HTPASSWD_PSS` (see 6.1).
-  - Optional base site: set `PERSONAL_WEB_DIR=/path/to/personal-web` (deploy will use its `public/` as the base site).
+  - Production safety: require `PERSONAL_WEB_DIR` so deploy uses `<PERSONAL_WEB_DIR>/public` as base site.
 
 - What it does (summary):
-  - Generates `read.html` for `/public/read` (HTML+PDF) as **a single mtime-desc listing**. Note: by default, `/read/` shows nginx autoindex; this file is served at `/read/read.html`. If you want it to be the default index, add `index read.html;` inside the container Nginx `location /read/`.
+  - Generates `read.html` for `/public/read` (HTML+PDF) as **a single mtime-desc listing** and serves it as the default for `/read/`.
   - Bundles `web/Dockerfile`, `web/nginx.conf`, and a staged `public/` directory (excluding `.DS_Store` and AppleDouble).
     - If `PERSONAL_WEB_DIR` is set, the staged `public/` comes from `<PERSONAL_WEB_DIR>/public` plus `/read` from this repo.
-    - Otherwise it uses `web/public/` directly.
+    - Otherwise it uses `web/public/` directly (this fallback is not safe for production personal-site deploys).
   - Ensures remote paths under `/opt/web-domingo` and uploads the bundle.
   - Cleans any previous `/opt/web-domingo/public` before extracting to avoid stale files.
   - (Optional) creates/updates `/opt/web-domingo/nginx/.htpasswd` on the host if `HTPASSWD_USER` and `HTPASSWD_PSS` are provided (bcrypt via `htpasswd -iB`).

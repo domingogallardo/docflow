@@ -21,16 +21,19 @@ This repository automates collecting and organizing personal documents (Instapap
 - Targeted tests: `pytest tests/test_podcast_processor.py -q`
 
 ## Deploy & Verify (Web)
-- Remote deploy: `env REMOTE_USER=root REMOTE_HOST=<SERVER_IP> bash web/deploy.sh`
+- Remote deploy (production-safe): `env PERSONAL_WEB_DIR=/path/to/personal-web REMOTE_USER=root REMOTE_HOST=<SERVER_IP> bash web/deploy.sh`
 - What it does:
   - Generates a static `read.html` index for `/public/read` (HTML + PDF), ordered by mtime desc (bumps first), grouped by year, with entries like: `FileName — YYYY-Mon-DD HH:MM`.
   - Optionally updates host BasicAuth when `HTPASSWD_USER` and `HTPASSWD_PSS` are set (bcrypt generated on host; no secrets in Git).
   - Bundles `web/Dockerfile`, `web/nginx.conf`, and `web/public/` and deploys to `/opt/web-domingo` on the remote host.
+  - If `PERSONAL_WEB_DIR` is missing, deploy uses `docflow/web/public` as base site (only `/read`), which can leave the personal site root empty.
   - Rebuilds and runs the container `web-domingo` on port 8080.
 - Nginx inside the container:
 - `/read/` serves a static `read.html` (no dynamic directory listing module).
   - `/data/` keeps WebDAV-like PUT enabled; listing is via `autoindex on;` (unchanged).
 Public checks:
+- `curl -I https://domingogallardo.com/` (200 OK)
+- `curl -I https://domingogallardo.com/blog/` (200 OK)
 - `curl -I https://domingogallardo.com/read/` (200 OK)
 - `curl -s https://domingogallardo.com/read/ | head -n 40` (simple UL with "Name — Date", future items at the top)
 
@@ -52,6 +55,8 @@ Notes for agents
 - Do not touch `/data/` auth or methods; `/read/` is a static listing now.
 - Note: the old directory-listing CSS is not used anymore by these static indexes.
 - If the server is reachable and you have approval, you can run `web/deploy.sh` directly; otherwise provide the exact command for the user to run.
+- For `domingogallardo.com` production deploys, require `PERSONAL_WEB_DIR` to be set and valid before running deploy (`test -d "$PERSONAL_WEB_DIR/public"`).
+- Canonical local value in this environment: `/Users/domingo/Programacion/personal-web`.
 - To preview the index locally without deploying, run: `python utils/build_read_index.py` (generates `read.html` in `web/public/read`, grouped by year and ordered by mtime).
 - Local overlay (`utils/serve_docs.py`) offers Bump/Unbump/Publish/Unpublish.
 - **Important:** Preserve file `mtime` whenever editing existing content. If a script rewrites HTML/MD, restore `mtime` afterward (use `st_birthtime` on macOS as the source of truth, or capture and reapply the original `mtime`). This keeps chronological ordering stable.

@@ -87,8 +87,9 @@ When a document is ready:
    ```
 
    The script:
-   - regenerates `web/public/read/index.html` ordered by `mtime`,
+   - regenerates `web/public/read/read.html` ordered by `mtime`,
    - uploads everything to `/opt/web-domingo/` and restarts the `web-domingo` container that serves on port 8080.
+   - must run with `PERSONAL_WEB_DIR` set in production, so the base site is taken from your personal-web repo and `/read` is overlaid from docflow.
 
 From this point on, that document is the **official source**: it is the one you will use in Obsidian.
 
