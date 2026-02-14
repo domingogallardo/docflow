@@ -17,6 +17,7 @@ cd "${REPO_DIR}"
 
 PYTHON_BIN="${PYTHON_BIN:-python3}"
 DEPLOY_SCRIPT="${DEPLOY_SCRIPT:-${REPO_DIR}/web/deploy.sh}"
+TWEET_CONSOLIDATE_SCRIPT="${TWEET_CONSOLIDATE_SCRIPT:-${REPO_DIR}/bin/build_tweet_consolidated.sh}"
 
 file_hash() {
   local path="$1"
@@ -67,12 +68,38 @@ done
 
 echo "[$(date -Iseconds)] Docflow: year=${YEAR} (${YEAR_SOURCE})"
 
+run_tweet_consolidated=0
+for arg in "$@"; do
+  if [ "${arg}" = "all" ]; then
+    run_tweet_consolidated=1
+    break
+  fi
+done
+
 set +e
 "${PYTHON_BIN}" process_documents.py "$@"
 status=$?
 set -e
 
 echo "[$(date -Iseconds)] Docflow: finished exit=${status}"
+
+tweet_consolidated_status=0
+if [ "${status}" -eq 0 ] && [ "${run_tweet_consolidated}" -eq 1 ]; then
+  if [ -x "${TWEET_CONSOLIDATE_SCRIPT}" ]; then
+    set +e
+    "${TWEET_CONSOLIDATE_SCRIPT}" --yesterday
+    tweet_consolidated_status=$?
+    set -e
+    echo "[$(date -Iseconds)] Docflow: tweet consolidated exit=${tweet_consolidated_status}"
+  else
+    tweet_consolidated_status=1
+    echo "[$(date -Iseconds)] Docflow: tweet consolidated script not executable: ${TWEET_CONSOLIDATE_SCRIPT}"
+  fi
+elif [ "${run_tweet_consolidated}" -eq 1 ]; then
+  echo "[$(date -Iseconds)] Docflow: tweet consolidated skipped (process exit=${status})"
+else
+  echo "[$(date -Iseconds)] Docflow: tweet consolidated skipped (target is not 'all')"
+fi
 
 set +e
 "${PYTHON_BIN}" utils/sync_public_highlights.py --year "${YEAR}"
@@ -137,6 +164,9 @@ else
 fi
 
 final_status="${status}"
+if [ "${final_status}" -eq 0 ] && [ "${tweet_consolidated_status}" -ne 0 ]; then
+  final_status="${tweet_consolidated_status}"
+fi
 if [ "${final_status}" -eq 0 ] && [ "${sync_status}" -ne 0 ]; then
   final_status="${sync_status}"
 fi
