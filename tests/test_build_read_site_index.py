@@ -40,7 +40,7 @@ def test_write_site_read_index_uses_published_state(tmp_path: Path):
     assert (base / "_site" / "read" / "article.js").exists()
 
 
-def test_write_site_read_index_generates_tweets_year_pages(tmp_path: Path):
+def test_write_site_read_index_keeps_tweets_in_main_list_and_removes_old_tweet_pages(tmp_path: Path):
     base = tmp_path / "base"
     tweets_dir = base / "Tweets" / "Tweets 2026"
     tweets_dir.mkdir(parents=True)
@@ -49,16 +49,16 @@ def test_write_site_read_index_generates_tweets_year_pages(tmp_path: Path):
     tweet_html.write_text("<html><body>tweets</body></html>", encoding="utf-8")
     site_state.publish_path(base, "Tweets/Tweets 2026/Consolidado Tweets 2026-01-02.html")
 
+    stale_pages_dir = base / "_site" / "read" / "tweets"
+    stale_pages_dir.mkdir(parents=True)
+    (stale_pages_dir / "2026.html").write_text("<p>stale</p>", encoding="utf-8")
+
     out = build_read_index.write_site_read_index(base)
     content = out.read_text(encoding="utf-8")
 
-    assert '<a href="/read/tweets/2026.html">2026</a> (1)' not in content
+    assert "/tweets/raw/Tweets%202026/Consolidado%20Tweets%202026-01-02.html" in content
     assert "<h2>Tweets</h2>" not in content
-    year_page = base / "_site" / "read" / "tweets" / "2026.html"
-    assert year_page.exists()
-    year_content = year_page.read_text(encoding="utf-8")
-    assert "/tweets/raw/Tweets%202026/Consolidado%20Tweets%202026-01-02.html" in year_content
-    assert "</a> · " not in year_content
+    assert not stale_pages_dir.exists()
 
 
 def test_site_read_uses_bump_state_for_order_without_touching_mtime(tmp_path: Path):
