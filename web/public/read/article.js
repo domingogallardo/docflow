@@ -2,7 +2,7 @@
  * - Discreet overlay actions (copy quote + highlight)
  * - Console API: ArticleJS.active / ArticleJS.ping()
  * - Quote capture helpers with Text Fragments and Markdown
- * - Highlights persisted to /data/highlights/
+ * - Highlights persisted to local /api/highlights or legacy /data/highlights/
  */
 (function () {
   var version = '1.1.0';
@@ -296,6 +296,49 @@
     return encodeURIComponent(name);
   }
 
+  function getLocalRawRelPath() {
+    try {
+      var taggedScript = document.querySelector('script[src$="/read/article.js"][data-docflow-path]');
+      if (taggedScript) {
+        var taggedPath = taggedScript.getAttribute('data-docflow-path') || '';
+        if (taggedPath) return taggedPath;
+      }
+    } catch (_) {}
+
+    var pathname = '';
+    try { pathname = String(location.pathname || ''); } catch (_) { pathname = ''; }
+    if (!pathname) return '';
+
+    var prefixes = [
+      { prefix: '/posts/raw/', root: 'Posts/' },
+      { prefix: '/tweets/raw/', root: 'Tweets/' },
+      { prefix: '/incoming/raw/', root: 'Incoming/' },
+      { prefix: '/pdfs/raw/', root: 'Pdfs/' },
+      { prefix: '/images/raw/', root: 'Images/' },
+      { prefix: '/podcasts/raw/', root: 'Podcasts/' },
+      { prefix: '/files/raw/', root: '' }
+    ];
+
+    for (var i = 0; i < prefixes.length; i++) {
+      var item = prefixes[i];
+      if (pathname.indexOf(item.prefix) !== 0) continue;
+      var tail = pathname.slice(item.prefix.length);
+      if (!tail) return '';
+      try { tail = decodeURIComponent(tail); } catch (_) {}
+      tail = String(tail || '').replace(/^\/+/, '');
+      if (!tail) return '';
+      return item.root + tail;
+    }
+
+    return '';
+  }
+
+  function getLocalHighlightStoreUrl() {
+    var relPath = getLocalRawRelPath();
+    if (!relPath) return '';
+    return '/api/highlights?path=' + encodeURIComponent(relPath);
+  }
+
   function getHighlightStoreUrl() {
     var key = getHighlightKey();
     if (!key) return '';
@@ -526,8 +569,25 @@
   var highlightState = { loaded: false, highlights: [] };
 
   function readHighlights() {
+    if (!window.fetch) return Promise.resolve(null);
+
+    var localUrl = getLocalHighlightStoreUrl();
+    if (localUrl) {
+      return fetch(localUrl, { method: 'GET', cache: 'no-store' })
+        .then(function(res) {
+          if (res.status === 404) return null;
+          if (!res.ok) throw new Error('load failed');
+          return res.text();
+        })
+        .then(function(text) {
+          if (!text) return null;
+          try { return JSON.parse(text); } catch (_) { return null; }
+        })
+        .catch(function() { return null; });
+    }
+
     var url = getHighlightStoreUrl();
-    if (!url || !window.fetch) return Promise.resolve(null);
+    if (!url) return Promise.resolve(null);
     return fetch(url, { method: 'GET', cache: 'no-store', credentials: 'include' })
       .then(function(res) {
         if (res.status === 404) return null;
@@ -542,8 +602,7 @@
   }
 
   function writeHighlights(highlights) {
-    var url = getHighlightStoreUrl();
-    if (!url || !window.fetch) return Promise.resolve(false);
+    if (!window.fetch) return Promise.resolve(false);
     var payload = {
       version: 1,
       url: baseUrlWithoutHash(),
@@ -551,6 +610,22 @@
       updated_at: nowIso(),
       highlights: highlights || []
     };
+
+    var localUrl = getLocalHighlightStoreUrl();
+    if (localUrl) {
+      return fetch(localUrl, {
+        method: 'PUT',
+        cache: 'no-store',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      }).then(function(res) {
+        if (!res.ok) throw new Error('save failed');
+        return true;
+      });
+    }
+
+    var url = getHighlightStoreUrl();
+    if (!url) return Promise.resolve(false);
     return fetch(url, {
       method: 'PUT',
       cache: 'no-store',

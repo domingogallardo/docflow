@@ -1,6 +1,7 @@
 from pathlib import Path
 
 from utils import build_browse_index
+from utils import highlight_store
 from utils import site_state
 
 
@@ -20,6 +21,11 @@ def test_build_browse_site_generates_indexes_and_actions(tmp_path: Path):
 
     site_state.publish_path(base, "Posts/Posts 2026/doc.html")
     site_state.set_bumped_path(base, "Posts/Posts 2026/doc.html", original_mtime=10.0, bumped_mtime=20.0)
+    highlight_store.save_highlights_for_path(
+        base,
+        "Posts/Posts 2026/doc.html",
+        {"highlights": [{"id": "h1", "text": "Doc"}]},
+    )
 
     counts = build_browse_index.build_browse_site(base)
 
@@ -45,6 +51,7 @@ def test_build_browse_site_generates_indexes_and_actions(tmp_path: Path):
     assert "Sample Title" not in content
     assert " · Sample Title" not in content
     assert "🟢" in content
+    assert "🟡" in content
     assert "doc.md" not in content
     assert 'data-api-action="unpublish"' not in content
     assert 'data-api-action="unbump"' not in content

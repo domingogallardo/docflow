@@ -1,6 +1,7 @@
 from pathlib import Path
 
 from utils import build_read_index
+from utils import highlight_store
 from utils import site_state
 
 
@@ -14,6 +15,11 @@ def test_write_site_read_index_uses_published_state(tmp_path: Path):
 
     site_state.publish_path(base, "Posts/Posts 2026/doc.html")
     site_state.set_bumped_path(base, "Posts/Posts 2026/doc.html", original_mtime=1.0, bumped_mtime=2.0)
+    highlight_store.save_highlights_for_path(
+        base,
+        "Posts/Posts 2026/doc.html",
+        {"highlights": [{"id": "h1", "text": "Doc"}]},
+    )
 
     out = build_read_index.write_site_read_index(base)
 
@@ -25,6 +31,7 @@ def test_write_site_read_index_uses_published_state(tmp_path: Path):
     assert "</a> · " not in content
     assert "<h1>Read</h1>" in content
     assert "Docflow" in content
+    assert "🟡" in content
     assert "Posts/Posts 2026/doc.html" not in content
     assert "data-api-action" not in content
     assert (base / "_site" / "read" / "article.js").exists()

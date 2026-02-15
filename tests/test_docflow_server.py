@@ -6,6 +6,7 @@ import threading
 import time
 from pathlib import Path
 from http.server import ThreadingHTTPServer
+from urllib.parse import quote
 
 from utils import docflow_server
 from utils.site_state import get_bumped_entry, is_published
@@ -40,6 +41,18 @@ def _get(port: int, path: str) -> tuple[int, str]:
         conn.request("GET", path)
         res = conn.getresponse()
         return res.status, res.read().decode("utf-8", errors="ignore")
+    finally:
+        conn.close()
+
+
+def _put_json(port: int, path: str, payload: dict[str, object]) -> tuple[int, dict]:
+    conn = http.client.HTTPConnection("127.0.0.1", port, timeout=5)
+    try:
+        body = json.dumps(payload)
+        conn.request("PUT", path, body=body, headers={"Content-Type": "application/json"})
+        res = conn.getresponse()
+        data = json.loads(res.read().decode("utf-8"))
+        return res.status, data
     finally:
         conn.close()
 
@@ -107,7 +120,48 @@ def test_raw_route_serves_library_file(tmp_path: Path):
         assert status == 200
         assert "Raw Doc" in body
         assert "dg-overlay" in body
+        assert '/read/article.js' in body
         assert "/api/publish" in body or "data-published" in body
+    finally:
+        server.shutdown()
+        server.server_close()
+
+
+def test_api_highlights_roundtrip_and_rebuild_markers(tmp_path: Path):
+    base = tmp_path / "base"
+    posts = base / "Posts" / "Posts 2026"
+    posts.mkdir(parents=True)
+    html = posts / "doc.html"
+    html.write_text("<html><body>Raw Doc</body></html>", encoding="utf-8")
+
+    rel_path = "Posts/Posts 2026/doc.html"
+    encoded = quote(rel_path, safe="")
+
+    server, port = _start_server(base)
+    try:
+        status, body = _get(port, f"/api/highlights?path={encoded}")
+        assert status == 200
+        payload = json.loads(body)
+        assert payload["path"] == rel_path
+        assert payload["highlights"] == []
+
+        status, payload = _put_json(
+            port,
+            f"/api/highlights?path={encoded}",
+            {"highlights": [{"id": "h1", "text": "Raw Doc"}]},
+        )
+        assert status == 200
+        assert payload["path"] == rel_path
+        assert payload["highlights"][0]["text"] == "Raw Doc"
+
+        status, body = _get(port, f"/api/highlights?path={encoded}")
+        assert status == 200
+        payload = json.loads(body)
+        assert payload["highlights"][0]["id"] == "h1"
+
+        browse_status, browse_html = _get(port, "/browse/posts/Posts%202026/")
+        assert browse_status == 200
+        assert "🟡" in browse_html
     finally:
         server.shutdown()
         server.server_close()

@@ -28,6 +28,7 @@ if __package__ in (None, ""):
         sys.path.insert(0, str(_REPO_ROOT))
 
 from utils.site_paths import raw_url_for_rel_path, resolve_base_dir, resolve_library_path, site_root
+from utils.highlight_store import has_highlights_for_path
 from utils.site_state import list_published, load_bump_state
 
 MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
@@ -290,24 +291,9 @@ class SiteReadItem(NamedTuple):
 
 
 def _is_site_highlighted(base_dir: Path, rel_path: str) -> bool:
-    rel_parts = Path(rel_path).parts
-    if len(rel_parts) < 3:
+    if not Path(rel_path).name.lower().endswith((".html", ".htm")):
         return False
-    if rel_parts[0] != "Posts":
-        return False
-    if not rel_parts[-1].lower().endswith((".html", ".htm")):
-        return False
-
-    post_dir = base_dir / Path(*rel_parts[:-1])
-    highlights_dir = post_dir / "highlights"
-    if not highlights_dir.is_dir():
-        return False
-
-    filename = rel_parts[-1]
-    for encoded in _highlight_name_candidates(filename):
-        if (highlights_dir / f"{encoded}.json").is_file():
-            return True
-    return False
+    return has_highlights_for_path(base_dir, rel_path)
 
 
 def collect_site_read_items(base_dir: Path) -> list[SiteReadItem]:

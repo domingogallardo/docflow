@@ -22,6 +22,7 @@ if __package__ in (None, ""):
         sys.path.insert(0, str(_REPO_ROOT))
 
 from utils.site_paths import library_roots, raw_url_for_rel_path, rel_path_from_abs, resolve_base_dir, site_root
+from utils.highlight_store import has_highlights_for_path
 from utils.site_state import load_bump_state, list_published
 
 MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
@@ -94,40 +95,11 @@ def _icon_for_filename(name: str) -> str:
     return ""
 
 
-def _highlight_name_candidates(name: str) -> list[str]:
-    candidates = [
-        quote(name),
-        quote(name, safe="~!*()'"),
-    ]
-    deduped: list[str] = []
-    seen = set()
-    for item in candidates:
-        if item in seen:
-            continue
-        seen.add(item)
-        deduped.append(item)
-    return deduped
-
-
 def _is_highlighted(base_dir: Path, rel_path: str) -> bool:
-    rel_parts = Path(rel_path).parts
-    if len(rel_parts) < 3 or rel_parts[0] != "Posts":
-        return False
-
-    low_name = rel_parts[-1].lower()
+    low_name = Path(rel_path).name.lower()
     if not low_name.endswith((".html", ".htm")):
         return False
-
-    parent = base_dir / Path(*rel_parts[:-1])
-    highlights_dir = parent / "highlights"
-    if not highlights_dir.is_dir():
-        return False
-
-    filename = rel_parts[-1]
-    for encoded in _highlight_name_candidates(filename):
-        if (highlights_dir / f"{encoded}.json").is_file():
-            return True
-    return False
+    return has_highlights_for_path(base_dir, rel_path)
 
 
 def _entry_classes(entry: BrowseEntry) -> str:

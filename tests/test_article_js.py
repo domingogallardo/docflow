@@ -15,4 +15,5 @@ def test_article_js_includes_highlights():
     import pathlib
     content = pathlib.Path('web/public/read/article.js').read_text(encoding='utf-8')
     assert 'articlejs-highlight-btn' in content
+    assert '/api/highlights?path=' in content
     assert '/data/highlights/' in content

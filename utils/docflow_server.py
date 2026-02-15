@@ -21,7 +21,7 @@ from pathlib import Path
 import sys
 import threading
 import time
-from urllib.parse import urlparse, unquote
+from urllib.parse import parse_qs, urlparse, unquote
 
 # Support direct execution: `python utils/docflow_server.py ...`
 if __package__ in (None, ""):
@@ -40,6 +40,7 @@ from utils.site_paths import (
     site_root,
 )
 from utils.site_state import get_bumped_entry, is_published, pop_bumped_path, publish_path, set_bumped_path, unpublish_path
+from utils.highlight_store import load_highlights_for_path, save_highlights_for_path
 
 
 class ApiError(Exception):
@@ -134,6 +135,16 @@ class DocflowApp:
     def api_rebuild(self) -> dict[str, object]:
         self.rebuild()
         return {"rebuilt": True}
+
+    def api_get_highlights(self, rel_path: str) -> dict[str, object]:
+        normalized, _ = self._resolve_existing_file(rel_path)
+        return load_highlights_for_path(self.base_dir, normalized)
+
+    def api_put_highlights(self, rel_path: str, payload: dict[str, object]) -> dict[str, object]:
+        normalized, _ = self._resolve_existing_file(rel_path)
+        saved = save_highlights_for_path(self.base_dir, normalized, payload)
+        self.rebuild()
+        return saved
 
     def handle_api(self, action: str, payload: dict[str, object]) -> dict[str, object]:
         action = action.strip("/")
@@ -301,10 +312,14 @@ OVERLAY_JS = """
 
 def _inject_html_overlay(*, html_text: str, rel_path: str, published: bool, bumped: bool) -> bytes:
     path_attr = html.escape(rel_path, quote=True)
+    article_js = ""
+    if "/read/article.js" not in html_text:
+        article_js = f"<script defer src=\"/read/article.js\" data-docflow-path=\"{path_attr}\"></script>"
     tags = (
-        f"<style>{OVERLAY_CSS}</style>"
-        f"<script defer data-path=\"{path_attr}\" data-published=\"{'1' if published else '0'}\" "
-        f"data-bumped=\"{'1' if bumped else '0'}\">{OVERLAY_JS}</script>"
+        article_js
+        + f"<style>{OVERLAY_CSS}</style>"
+        + f"<script defer data-path=\"{path_attr}\" data-published=\"{'1' if published else '0'}\" "
+        + f"data-bumped=\"{'1' if bumped else '0'}\">{OVERLAY_JS}</script>"
     )
     lower = html_text.lower()
     idx = lower.rfind("</body>")
@@ -352,11 +367,30 @@ def _parse_json_body(handler: BaseHTTPRequestHandler) -> dict[str, object]:
     return payload
 
 
+def _get_query_path(parsed) -> str:
+    query = parse_qs(parsed.query)
+    value = query.get("path", [""])[0]
+    if not isinstance(value, str) or not value.strip():
+        raise ApiError(400, "Query parameter 'path' is required")
+    return value
+
+
 def make_handler(app: DocflowApp):
     class DocflowHandler(BaseHTTPRequestHandler):
         def do_GET(self) -> None:  # type: ignore[override]
             parsed = urlparse(self.path)
             path = parsed.path
+
+            if path == "/api/highlights":
+                try:
+                    rel_path = _get_query_path(parsed)
+                    payload = app.api_get_highlights(rel_path)
+                    _send_json(self, 200, payload)
+                except ApiError as exc:
+                    _send_json(self, exc.status, {"ok": False, "error": exc.message})
+                except Exception as exc:
+                    _send_json(self, 500, {"ok": False, "error": str(exc)})
+                return
 
             if path.startswith("/api/"):
                 _send_json(self, 405, {"ok": False, "error": "Use POST for API endpoints"})
@@ -394,10 +428,29 @@ def make_handler(app: DocflowApp):
                 return
 
             action = parsed.path[len("/api/") :]
+            if action == "highlights":
+                _send_json(self, 405, {"ok": False, "error": "Use GET/PUT for /api/highlights"})
+                return
             try:
                 payload = _parse_json_body(self)
                 data = app.handle_api(action, payload)
                 _send_json(self, 200, {"ok": True, "data": data})
+            except ApiError as exc:
+                _send_json(self, exc.status, {"ok": False, "error": exc.message})
+            except Exception as exc:
+                _send_json(self, 500, {"ok": False, "error": str(exc)})
+
+        def do_PUT(self) -> None:  # type: ignore[override]
+            parsed = urlparse(self.path)
+            if parsed.path != "/api/highlights":
+                _send_json(self, 404, {"ok": False, "error": "Unknown endpoint"})
+                return
+
+            try:
+                rel_path = _get_query_path(parsed)
+                payload = _parse_json_body(self)
+                data = app.api_put_highlights(rel_path, payload)
+                _send_json(self, 200, data)
             except ApiError as exc:
                 _send_json(self, exc.status, {"ok": False, "error": exc.message})
             except Exception as exc:
