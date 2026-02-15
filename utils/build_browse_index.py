@@ -47,6 +47,7 @@ class BrowseItem:
     published: bool
     bumped: bool
     highlighted: bool
+    sort_mtime: float | None = None
 
 
 @dataclass(frozen=True)
@@ -60,6 +61,7 @@ class BrowseEntry:
     published: bool = False
     bumped: bool = False
     highlighted: bool = False
+    sort_mtime: float | None = None
 
 
 def fmt_date(ts: float) -> str:
@@ -149,6 +151,12 @@ def _render_entry(entry: BrowseEntry) -> str:
     return (
         f"<li{cls_attr}><span>{prefix}<a href=\"{entry.href}\">{esc_name}</a>{date_html}</span>{actions}</li>"
     )
+
+
+def _sort_mtime(entry: BrowseEntry) -> float:
+    if entry.sort_mtime is not None:
+        return entry.sort_mtime
+    return entry.mtime
 
 
 def _base_head(title: str) -> str:
@@ -263,6 +271,7 @@ def _scan_directory(
                                 name=name,
                                 href=f"{_safe_quote_component(name)}/",
                                 mtime=st.st_mtime,
+                                sort_mtime=st.st_mtime,
                                 is_dir=True,
                                 icon="📁 ",
                             )
@@ -284,13 +293,15 @@ def _scan_directory(
                         bumped_mtime = float(bump_entry.get("bumped_mtime"))
                     except Exception:
                         bumped_mtime = None
-                effective_mtime = bumped_mtime if bumped_mtime is not None else st.st_mtime
+                display_mtime = st.st_mtime
+                effective_mtime = bumped_mtime if bumped_mtime is not None else display_mtime
                 bumped = bumped_mtime is not None
                 entries.append(
                     BrowseEntry(
                         name=name,
                         href=raw_url_for_rel_path(rel),
-                        mtime=effective_mtime,
+                        mtime=display_mtime,
+                        sort_mtime=effective_mtime,
                         is_dir=False,
                         icon=_icon_for_filename(name),
                         rel_path=rel,
@@ -302,7 +313,7 @@ def _scan_directory(
     except OSError:
         return [], [], 0
 
-    entries.sort(key=lambda item: item.mtime, reverse=True)
+    entries.sort(key=_sort_mtime, reverse=True)
     child_dirs.sort()
     return entries, child_dirs, file_count
 
@@ -387,12 +398,13 @@ def _write_browse_home(base_dir: Path, category_roots: dict[str, Path], counts: 
                 name=f"{label} ({count})",
                 href=f"{category}/",
                 mtime=mtime,
+                sort_mtime=mtime,
                 is_dir=True,
                 icon="📁 ",
             )
         )
 
-    entries.sort(key=lambda item: item.mtime, reverse=True)
+    entries.sort(key=_sort_mtime, reverse=True)
     html_doc = _render_directory_page(
         title="Index of /browse/",
         display_path="/browse/",
@@ -516,19 +528,21 @@ def collect_category_items(base_dir: Path, category: str) -> list[BrowseItem]:
                 bumped_mtime = float(bump_entry.get("bumped_mtime"))
             except Exception:
                 bumped_mtime = None
-        effective_mtime = bumped_mtime if bumped_mtime is not None else st.st_mtime
+        display_mtime = st.st_mtime
+        effective_mtime = bumped_mtime if bumped_mtime is not None else display_mtime
         items.append(
             BrowseItem(
                 rel_path=rel,
                 name=path.name,
-                mtime=effective_mtime,
+                mtime=display_mtime,
+                sort_mtime=effective_mtime,
                 published=rel in published_set,
                 bumped=bumped_mtime is not None,
                 highlighted=_is_highlighted(base_dir, rel),
             )
         )
 
-    items.sort(key=lambda item: item.mtime, reverse=True)
+    items.sort(key=lambda item: (item.sort_mtime if item.sort_mtime is not None else item.mtime), reverse=True)
     return items
 
 

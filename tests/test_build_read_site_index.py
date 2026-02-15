@@ -1,3 +1,4 @@
+import os
 from pathlib import Path
 
 from utils import build_read_index
@@ -66,6 +67,8 @@ def test_site_read_uses_bump_state_for_order_without_touching_mtime(tmp_path: Pa
     second = posts / "b.html"
     first.write_text("<html><body>A</body></html>", encoding="utf-8")
     second.write_text("<html><body>B</body></html>", encoding="utf-8")
+    os.utime(first, (1_700_000_100, 1_700_000_100))
+    os.utime(second, (1_700_000_000, 1_700_000_000))
 
     site_state.publish_path(base, "Posts/Posts 2026/a.html")
     site_state.publish_path(base, "Posts/Posts 2026/b.html")
@@ -78,6 +81,8 @@ def test_site_read_uses_bump_state_for_order_without_touching_mtime(tmp_path: Pa
 
     assert content.find("b.html") < content.find("a.html")
     assert abs(second.stat().st_mtime - mtime_b_before) < 0.001
+    assert build_read_index.fmt_date(mtime_b_before) in content
+    assert build_read_index.fmt_date(9_999_999_999.0) not in content
 
 
 def test_build_read_index_legacy_mode_still_generates_read_html(tmp_path: Path):

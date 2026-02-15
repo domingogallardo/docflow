@@ -287,6 +287,7 @@ class SiteReadItem(NamedTuple):
     rel_path: str
     name: str
     mtime: float
+    sort_mtime: float
     highlighted: bool
 
 
@@ -317,17 +318,19 @@ def collect_site_read_items(base_dir: Path) -> list[SiteReadItem]:
                 bumped_mtime = float(bump_entry.get("bumped_mtime"))
             except Exception:
                 bumped_mtime = None
-        effective_mtime = bumped_mtime if bumped_mtime is not None else st.st_mtime
+        display_mtime = st.st_mtime
+        effective_mtime = bumped_mtime if bumped_mtime is not None else display_mtime
         items.append(
             SiteReadItem(
                 rel_path=rel,
                 name=abs_path.name,
-                mtime=effective_mtime,
+                mtime=display_mtime,
+                sort_mtime=effective_mtime,
                 highlighted=_is_site_highlighted(base_dir, rel),
             )
         )
 
-    items.sort(key=lambda item: item.mtime, reverse=True)
+    items.sort(key=lambda item: item.sort_mtime, reverse=True)
     return items
 
 
@@ -398,7 +401,7 @@ def _collect_site_tweet_years(base_dir: Path, items: list[SiteReadItem]) -> dict
         by_year[int(year_text)].append(item)
 
     for year in by_year:
-        by_year[year].sort(key=lambda it: it.mtime, reverse=True)
+        by_year[year].sort(key=lambda it: it.sort_mtime, reverse=True)
 
     return dict(sorted(by_year.items(), key=lambda kv: kv[0], reverse=True))
 

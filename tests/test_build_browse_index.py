@@ -1,3 +1,4 @@
+import os
 from pathlib import Path
 
 from utils import build_browse_index
@@ -79,6 +80,8 @@ def test_browse_uses_bump_state_for_order_without_touching_mtime(tmp_path: Path)
     second = posts / "b.html"
     first.write_text("<html><title>A</title><body>A</body></html>", encoding="utf-8")
     second.write_text("<html><title>B</title><body>B</body></html>", encoding="utf-8")
+    os.utime(first, (1_700_000_100, 1_700_000_100))
+    os.utime(second, (1_700_000_000, 1_700_000_000))
 
     site_state.publish_path(base, "Posts/Posts 2026/a.html")
     site_state.publish_path(base, "Posts/Posts 2026/b.html")
@@ -92,6 +95,8 @@ def test_browse_uses_bump_state_for_order_without_touching_mtime(tmp_path: Path)
 
     assert html.find("b.html") < html.find("a.html")
     assert abs(second.stat().st_mtime - mtime_b_before) < 0.001
+    assert build_browse_index.fmt_date(mtime_b_before) in html
+    assert build_browse_index.fmt_date(9_999_999_999.0) not in html
 
 
 def test_tweets_listing_hides_secondary_title_text(tmp_path: Path):
