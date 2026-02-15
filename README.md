@@ -22,7 +22,7 @@ Tweet flow across both sites:
 - `bin/docflow.sh all` calls `bin/build_tweet_consolidated.sh --yesterday`.
 - `bin/build_tweet_consolidated.sh` calls `utils/build_daily_tweet_consolidated.py` to generate daily consolidated files in the `sitio biblioteca`.
 - `utils/sync_tweets_public.py` copies consolidated files from the library into the published site under `web/public/read/tweets/<YEAR>/`.
-- `utils/build_tweets_index.py` generates static index pages in the `sitio publicado` (`web/public/read/tweets/read.html` and `web/public/read/tweets/<YEAR>.html`) that link to those yearly folders.
+- `utils/build_tweets_index.py` generates yearly static index pages in the `sitio publicado` (`web/public/read/tweets/<YEAR>.html`) that link to consolidated files for each year.
 - `web/deploy.sh` publishes what exists under `web/public/read/`.
 
 ## ✨ Highlights

@@ -1,7 +1,6 @@
 """Generate static tweet consolidated indexes under web/public/read/tweets.
 
 Produces:
-- read.html (years index)
 - <YEAR>.html (consolidated entries for each year)
 
 Source files are discovered from BASE_DIR/Tweets/Tweets <YEAR>/Consolidado Tweets *.html
@@ -135,28 +134,6 @@ def discover_consolidated_by_year(base_dir: Path | None) -> dict[int, list[Tweet
     return dict(sorted(discovered.items(), key=lambda kv: kv[0], reverse=True))
 
 
-def render_years_html(index: dict[int, list[TweetFile]]) -> str:
-    if not index:
-        body = "<p>No consolidated tweets found.</p>"
-    else:
-        lines = ["<ul>"]
-        for year in index:
-            lines.append(f'<li><a href="{year}.html">{year}</a> ({len(index[year])})</li>')
-        lines.append("</ul>")
-        body = "\n".join(lines)
-
-    return (
-        '<!DOCTYPE html><html><head><meta charset="utf-8">'
-        '<meta name="viewport" content="width=device-width">'
-        '<script src="/read/article.js" defer></script>'
-        '<title>Tweets</title></head><body>'
-        '<h1>Tweets</h1>'
-        f"{body}"
-        '<p><a href="/read/">← Back to Read</a></p>'
-        '</body></html>'
-    )
-
-
 def render_year_html(year: int, files: list[TweetFile]) -> str:
     if not files:
         list_html = "<p>No consolidated tweets found for this year.</p>"
@@ -179,16 +156,16 @@ def render_year_html(year: int, files: list[TweetFile]) -> str:
         f'<title>Tweets {year}</title></head><body>'
         f'<h1>Tweets {year}</h1>'
         f"{list_html}"
-        '<p><a href="/read/tweets/read.html">← Back to Tweets</a></p>'
+        '<p><a href="/read/">← Back to Read</a></p>'
         '</body></html>'
     )
 
 
 def write_indexes(output_dir: Path, index: dict[int, list[TweetFile]]) -> None:
     output_dir.mkdir(parents=True, exist_ok=True)
-
-    years_html = render_years_html(index)
-    (output_dir / "read.html").write_text(years_html, encoding="utf-8")
+    years_index_path = output_dir / "read.html"
+    if years_index_path.exists():
+        years_index_path.unlink()
 
     for year, files in index.items():
         (output_dir / f"{year}.html").write_text(render_year_html(year, files), encoding="utf-8")

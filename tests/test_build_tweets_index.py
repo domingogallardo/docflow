@@ -30,8 +30,10 @@ def test_discover_consolidated_by_year_sorts_desc(tmp_path: Path) -> None:
     assert [f.name for f in index[2026]] == [newer.name, older.name]
 
 
-def test_write_indexes_generates_root_and_year_pages(tmp_path: Path) -> None:
+def test_write_indexes_generates_year_pages_and_removes_legacy_root(tmp_path: Path) -> None:
     output = tmp_path / "out"
+    output.mkdir(parents=True)
+    (output / "read.html").write_text("stale", encoding="utf-8")
     index = {
         2026: [
             mod.TweetFile(name="Consolidado Tweets 2026-01-02.html", mtime=2_000, tweet_count=12),
@@ -44,11 +46,9 @@ def test_write_indexes_generates_root_and_year_pages(tmp_path: Path) -> None:
 
     mod.write_indexes(output, index)
 
-    root = (output / "read.html").read_text(encoding="utf-8")
     y2026 = (output / "2026.html").read_text(encoding="utf-8")
 
-    assert '<a href="2026.html">2026</a> (2)' in root
-    assert '<a href="2025.html">2025</a> (1)' in root
+    assert not (output / "read.html").exists()
     assert 'href="2026/Tweets%202026-01-02.html"' in y2026
     assert 'href="2026/Tweets%202026-01-01.html"' in y2026
     assert "Tweets 2026-01-02.html" in y2026
@@ -56,6 +56,7 @@ def test_write_indexes_generates_root_and_year_pages(tmp_path: Path) -> None:
     assert "(12 tweets)" in y2026
     assert "(1 tweet)" in y2026
     assert " — " not in y2026
+    assert 'href="/read/"' in y2026
 
 
 def test_extract_tweet_count_from_summary_block(tmp_path: Path) -> None:
