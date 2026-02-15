@@ -43,6 +43,7 @@ def test_build_browse_site_generates_indexes_and_actions(tmp_path: Path):
 
     content = posts_year_page.read_text(encoding="utf-8")
     assert "Sample Title" in content
+    assert "🟢" in content
     assert "doc.md" not in content
     assert 'data-api-action="unpublish"' not in content
     assert 'data-api-action="unbump"' not in content

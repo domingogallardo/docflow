@@ -213,7 +213,6 @@ def _base_head(title: str) -> str:
         ".dg-index li{padding:2px 6px;border-radius:6px;margin:2px 0;display:flex;justify-content:space-between;align-items:center;gap:10px}"
         ".dg-bump{background:#fff6e5}"
         ".dg-pub a{color:#0a7;font-weight:600}"
-        ".dg-hl a{color:#8a6d00}"
         ".dg-legend{color:#666;font:13px -apple-system,system-ui,Segoe UI,Roboto,Helvetica,Arial;margin-bottom:6px}"
         ".dg-nav{color:#666;font:13px -apple-system,system-ui,Segoe UI,Roboto,Helvetica,Arial;margin-bottom:8px}"
         ".dg-nav a{text-decoration:none;color:#0a7}"

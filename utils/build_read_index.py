@@ -16,6 +16,7 @@ import os
 import re
 import sys
 import time
+from collections import defaultdict
 from pathlib import Path
 from typing import Iterable, List, NamedTuple, Tuple
 from urllib.parse import quote
@@ -27,7 +28,7 @@ if __package__ in (None, ""):
         sys.path.insert(0, str(_REPO_ROOT))
 
 from utils.site_paths import raw_url_for_rel_path, resolve_base_dir, resolve_library_path, site_root
-from utils.site_state import list_bumped, list_published
+from utils.site_state import list_published
 
 MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
 BASE_DIR_ENV = "DOCFLOW_BASE_DIR"
@@ -281,11 +282,10 @@ def build_html(dir_path: str, entries: List[Tuple[float, str]], highlight_files:
 
 # -------- New site mode --------
 
-class ReadItem(NamedTuple):
+class SiteReadItem(NamedTuple):
     rel_path: str
+    name: str
     mtime: float
-    published: bool
-    bumped: bool
     highlighted: bool
 
 
@@ -310,11 +310,10 @@ def _is_site_highlighted(base_dir: Path, rel_path: str) -> bool:
     return False
 
 
-def collect_site_read_items(base_dir: Path) -> list[ReadItem]:
+def collect_site_read_items(base_dir: Path) -> list[SiteReadItem]:
     published = list_published(base_dir)
-    bumped = list_bumped(base_dir)
 
-    items: list[ReadItem] = []
+    items: list[SiteReadItem] = []
     for rel in sorted(published):
         try:
             abs_path = resolve_library_path(base_dir, rel)
@@ -323,11 +322,10 @@ def collect_site_read_items(base_dir: Path) -> list[ReadItem]:
         if not abs_path.is_file():
             continue
         items.append(
-            ReadItem(
+            SiteReadItem(
                 rel_path=rel,
+                name=abs_path.name,
                 mtime=abs_path.stat().st_mtime,
-                published=True,
-                bumped=rel in bumped,
                 highlighted=_is_site_highlighted(base_dir, rel),
             )
         )
@@ -336,20 +334,129 @@ def collect_site_read_items(base_dir: Path) -> list[ReadItem]:
     return items
 
 
-def _site_actions(item: ReadItem) -> str:
-    path_attr = html.escape(item.rel_path, quote=True)
-    bump_action = "unbump" if item.bumped else "bump"
-    bump_label = "Unbump" if item.bumped else "Bump"
+def _site_ascii_footer() -> str:
+    owner_url = html.escape(_owner_url(), quote=True)
+    owner_name = html.escape(DEFAULT_OWNER_NAME)
+    return f'''<style>
+  .ascii-head {{ margin-top: 28px; color: #666; font-size: 14px; }}
+  .owner-copy {{
+    margin: 10px 0 0;
+    color: #666;
+    font-size: 14px;
+  }}
+  pre.ascii-logo {{
+    margin: 10px 0 0;
+    color: #666;
+    line-height: 1.05;
+    font-size: 12px;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+    white-space: pre;
+  }}
+  .file-icon {{
+    font-size: 0.85em;
+    vertical-align: baseline;
+    display: inline-block;
+    transform: translateY(-0.05em);
+  }}
+</style>
+<div class="ascii-head"><a href="https://github.com/domingogallardo/docflow" target="_blank" rel="noopener">Docflow</a></div>
+<p class="owner-copy">© <a href="{owner_url}" target="_blank" rel="noopener">{owner_name}</a></p>
+<pre class="ascii-logo" aria-hidden="true">         _
+        /^\\
+        |-|
+        |D|
+        |O|
+        |C|
+        |F|
+        |L|
+        |O|
+        |W|
+       /| |\\
+      /_| |_\\
+        /_\\
+       /___\\
+      /_/ \\_\\
+</pre>'''
 
-    return (
-        f'<button data-api-action="{bump_action}" data-docflow-path="{path_attr}">{bump_label}</button>'
-        f'<button data-api-action="unpublish" data-docflow-path="{path_attr}">Unpublish</button>'
-    )
+
+def _collect_site_tweet_years(base_dir: Path, items: list[SiteReadItem]) -> dict[int, list[SiteReadItem]]:
+    by_year: dict[int, list[SiteReadItem]] = defaultdict(list)
+    for item in items:
+        rel = Path(item.rel_path)
+        parts = rel.parts
+        if len(parts) < 3:
+            continue
+        if parts[0] != "Tweets":
+            continue
+        year_part = parts[1]
+        if not year_part.startswith("Tweets "):
+            continue
+        year_text = year_part[7:]
+        if len(year_text) != 4 or not year_text.isdigit():
+            continue
+        if not item.name.lower().endswith((".html", ".htm")):
+            continue
+        if not (item.name.startswith("Consolidado Tweets ") or item.name.startswith("Tweets ")):
+            continue
+        by_year[int(year_text)].append(item)
+
+    for year in by_year:
+        by_year[year].sort(key=lambda it: it.mtime, reverse=True)
+
+    return dict(sorted(by_year.items(), key=lambda kv: kv[0], reverse=True))
 
 
-def build_site_read_html(items: list[ReadItem]) -> str:
+def _render_site_tweets_section(tweets_by_year: dict[int, list[SiteReadItem]]) -> str:
+    if not tweets_by_year:
+        return "<h2>Tweets</h2><ul></ul>"
+    lines = ["<h2>Tweets</h2><ul>"]
+    for year, items in tweets_by_year.items():
+        lines.append(f'<li><a href="/read/tweets/{year}.html">{year}</a> ({len(items)})</li>')
+    lines.append("</ul>")
+    return "\n".join(lines)
+
+
+def _write_site_tweets_year_pages(out_dir: Path, tweets_by_year: dict[int, list[SiteReadItem]]) -> None:
+    tweets_dir = out_dir / "tweets"
+    tweets_dir.mkdir(parents=True, exist_ok=True)
+
+    for year, items in tweets_by_year.items():
+        if not items:
+            list_html = "<ul></ul>"
+        else:
+            lines = ["<ul>"]
+            for item in items:
+                href = raw_url_for_rel_path(item.rel_path)
+                esc = html.escape(item.name)
+                lines.append(f'<li><a href="{href}" title="{esc}">{esc}</a> — {fmt_date(item.mtime)}</li>')
+            lines.append("</ul>")
+            list_html = "\n".join(lines)
+
+        html_doc = (
+            '<!DOCTYPE html><html><head><meta charset="utf-8">'
+            '<meta name="viewport" content="width=device-width">'
+            '<script src="/read/article.js" defer></script>'
+            f'<title>Tweets {year}</title></head><body>'
+            f'<h1>Tweets {year}</h1>'
+            f"{list_html}"
+            '<p><a href="/read/">← Back to Read</a></p>'
+            "</body></html>"
+        )
+        (tweets_dir / f"{year}.html").write_text(html_doc, encoding="utf-8")
+
+
+def _copy_site_read_assets(out_dir: Path) -> None:
+    repo_root = Path(__file__).resolve().parents[1]
+    source = repo_root / "web" / "public" / "read" / "article.js"
+    if not source.is_file():
+        return
+    target = out_dir / "article.js"
+    target.write_text(source.read_text(encoding="utf-8"), encoding="utf-8")
+
+
+def build_site_read_html(items: list[SiteReadItem], tweets_by_year: dict[int, list[SiteReadItem]]) -> str:
     if not items:
-        body = "<p>No published items yet.</p>"
+        list_html = "<ul></ul>"
     else:
         lines: list[str] = []
         current_year: int | None = None
@@ -358,41 +465,31 @@ def build_site_read_html(items: list[ReadItem]) -> str:
             if year != current_year:
                 if current_year is not None:
                     lines.append("</ul>")
-                lines.append(f"<h2>{year}</h2><ul class=\"dg-list\">")
+                lines.append(f"<h2>{year}</h2><ul>")
                 current_year = year
 
-            badges = []
-            if item.published:
-                badges.append("🟢 published")
-            if item.bumped:
-                badges.append("🔥 bumped")
-            if item.highlighted:
-                badges.append("🟡 highlighted")
-            badge_text = " · ".join(badges) if badges else "-"
             href = raw_url_for_rel_path(item.rel_path)
+            icon = _icon_for(item.name)
+            hl_icon = '<span class="file-icon hl-icon" aria-hidden="true">🟡</span> ' if item.highlighted else ""
+            esc_name = html.escape(item.name)
             lines.append(
-                "<li>"
-                f"<div><a href=\"{href}\" target=\"_blank\" rel=\"noopener\">{html.escape(Path(item.rel_path).name)}</a>"
-                f"<div class=\"dg-sub\">{html.escape(item.rel_path)}</div>"
-                f"<div class=\"dg-sub\">{fmt_date(item.mtime)} · {html.escape(badge_text)}</div></div>"
-                f"<div class=\"dg-actions\">{_site_actions(item)}</div>"
-                "</li>"
+                f'<li>{icon}{hl_icon}<a href="{href}" title="{esc_name}">{esc_name}</a> — {fmt_date(item.mtime)}</li>'
             )
 
         if current_year is not None:
             lines.append("</ul>")
-        body = "\n".join(lines)
+        list_html = "\n".join(lines)
 
     return (
-        "<!DOCTYPE html><html><head><meta charset=\"utf-8\">"
-        "<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">"
-        "<link rel=\"stylesheet\" href=\"/assets/site.css\">"
-        "<script src=\"/assets/actions.js\" defer></script>"
-        "<title>Read</title></head><body>"
-        "<header><h1>Read</h1><nav><a href=\"/\">Home</a> · <a href=\"/browse/\">Browse</a> · "
-        "<a href=\"/read/\">Read</a></nav></header>"
-        f"<main>{body}<p><button data-api-action=\"rebuild\">Rebuild all indexes</button></p></main>"
-        "</body></html>"
+        '<!DOCTYPE html><html><head><meta charset="utf-8">'
+        '<meta name="viewport" content="width=device-width">'
+        '<script src="/read/article.js" defer></script>'
+        '<title>Read</title></head><body>'
+        '<h1>Read</h1>'
+        + _render_site_tweets_section(tweets_by_year)
+        + list_html
+        + _site_ascii_footer()
+        + "</body></html>"
     )
 
 
@@ -400,9 +497,13 @@ def write_site_read_index(base_dir: Path, output_dir: Path | None = None) -> Pat
     out_dir = output_dir or (site_root(base_dir) / "read")
     out_dir.mkdir(parents=True, exist_ok=True)
 
-    html_doc = build_site_read_html(collect_site_read_items(base_dir))
+    items = collect_site_read_items(base_dir)
+    tweets_by_year = _collect_site_tweet_years(base_dir, items)
+    html_doc = build_site_read_html(items, tweets_by_year)
     out_path = out_dir / "index.html"
     out_path.write_text(html_doc, encoding="utf-8")
+    _write_site_tweets_year_pages(out_dir, tweets_by_year)
+    _copy_site_read_assets(out_dir)
     return out_path
 
 

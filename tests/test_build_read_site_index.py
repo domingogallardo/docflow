@@ -22,9 +22,29 @@ def test_write_site_read_index_uses_published_state(tmp_path: Path):
 
     content = out.read_text(encoding="utf-8")
     assert "/posts/raw/Posts%202026/doc.html" in content
-    assert 'data-api-action="unpublish"' in content
-    assert 'data-api-action="unbump"' in content
-    assert "Posts/Posts 2026/doc.html" in content
+    assert "<h1>Read</h1>" in content
+    assert "Docflow" in content
+    assert "Posts/Posts 2026/doc.html" not in content
+    assert "data-api-action" not in content
+    assert (base / "_site" / "read" / "article.js").exists()
+
+
+def test_write_site_read_index_generates_tweets_year_pages(tmp_path: Path):
+    base = tmp_path / "base"
+    tweets_dir = base / "Tweets" / "Tweets 2026"
+    tweets_dir.mkdir(parents=True)
+
+    tweet_html = tweets_dir / "Consolidado Tweets 2026-01-02.html"
+    tweet_html.write_text("<html><body>tweets</body></html>", encoding="utf-8")
+    site_state.publish_path(base, "Tweets/Tweets 2026/Consolidado Tweets 2026-01-02.html")
+
+    out = build_read_index.write_site_read_index(base)
+    content = out.read_text(encoding="utf-8")
+
+    assert '<a href="/read/tweets/2026.html">2026</a> (1)' in content
+    year_page = base / "_site" / "read" / "tweets" / "2026.html"
+    assert year_page.exists()
+    assert "/tweets/raw/Tweets%202026/Consolidado%20Tweets%202026-01-02.html" in year_page.read_text(encoding="utf-8")
 
 
 def test_build_read_index_legacy_mode_still_generates_read_html(tmp_path: Path):
