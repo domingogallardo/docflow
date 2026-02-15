@@ -39,9 +39,9 @@ copy_tree() {
 # Generate read.html for /read (combined HTML+PDF) with the repo generator.
 echo "🧾 Generating static listing (mtime desc)…"
 PYTHON_BIN="python3"; command -v python3 >/dev/null 2>&1 || PYTHON_BIN=python
-"$PYTHON_BIN" "$SCRIPT_DIR/../utils/build_read_index.py" "$DOCFLOW_READ_DIR"
 "$PYTHON_BIN" "$SCRIPT_DIR/../utils/sync_tweets_public.py" --output-dir "$DOCFLOW_READ_DIR/tweets"
 "$PYTHON_BIN" "$SCRIPT_DIR/../utils/build_tweets_index.py" --output-dir "$DOCFLOW_READ_DIR/tweets"
+"$PYTHON_BIN" "$SCRIPT_DIR/../utils/build_read_index.py" "$DOCFLOW_READ_DIR"
 
 STAGING_DIR="$(mktemp -d)"
 PUBLIC_STAGING="$STAGING_DIR/public"

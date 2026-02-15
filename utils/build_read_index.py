@@ -154,6 +154,46 @@ def _owner_url() -> str:
     return DEFAULT_OWNER_URL
 
 
+def _tweet_year_items(dir_path: str) -> list[tuple[int, int]]:
+    tweets_root = Path(dir_path) / "tweets"
+    if not tweets_root.is_dir():
+        return []
+
+    items: list[tuple[int, int]] = []
+    for child in tweets_root.iterdir():
+        if not child.is_dir():
+            continue
+        name = child.name
+        if len(name) != 4 or not name.isdigit():
+            continue
+        count = 0
+        for entry in child.iterdir():
+            if not entry.is_file():
+                continue
+            low = entry.name.lower()
+            if not entry.name.startswith("Consolidado Tweets "):
+                continue
+            if low.endswith((".html", ".htm")):
+                count += 1
+        if count > 0:
+            items.append((int(name), count))
+
+    items.sort(key=lambda x: x[0], reverse=True)
+    return items
+
+
+def _render_tweets_section(dir_path: str) -> str:
+    years = _tweet_year_items(dir_path)
+    if not years:
+        return "<h2>Tweets</h2><ul></ul>"
+
+    lines = ["<h2>Tweets</h2><ul>"]
+    for year, count in years:
+        lines.append(f'<li><a href="/read/tweets/{year}.html">{year}</a> ({count})</li>')
+    lines.append("</ul>")
+    return "\n".join(lines)
+
+
 def build_html(dir_path: str, entries: List[Tuple[float, str]], highlight_files: set[str] | None = None) -> str:
     if not entries:
         list_html = "<ul></ul>"
@@ -174,11 +214,7 @@ def build_html(dir_path: str, entries: List[Tuple[float, str]], highlight_files:
 
     owner_url = html.escape(_owner_url(), quote=True)
     owner_name = html.escape(DEFAULT_OWNER_NAME)
-    sections_html = (
-        '<h2>Sections</h2><ul>'
-        '<li><a href="/read/tweets/">Tweets</a></li>'
-        '</ul>'
-    )
+    tweets_html = _render_tweets_section(dir_path)
 
     ascii_open = f'''<style>
   .ascii-head {{ margin-top: 28px; color: #666; font-size: 14px; }}
@@ -227,7 +263,7 @@ def build_html(dir_path: str, entries: List[Tuple[float, str]], highlight_files:
         '<script src="/read/article.js" defer></script>'
         '<title>Read</title></head><body>'
         '<h1>Read</h1>'
-        + sections_html
+        + tweets_html
         + list_html
         + ascii_open
         + '</body></html>'

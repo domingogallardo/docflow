@@ -7,6 +7,13 @@ def test_gen_index_creates_read_html(tmp_path):
     # Create test files.
     (tmp_path / "a.html").write_text("<p>A</p>", encoding="utf-8")
     (tmp_path / "b.pdf").write_bytes(b"%PDF-1.4\n")
+    tweets_2026 = tmp_path / "tweets" / "2026"
+    tweets_2025 = tmp_path / "tweets" / "2025"
+    tweets_2026.mkdir(parents=True)
+    tweets_2025.mkdir(parents=True)
+    (tweets_2026 / "Consolidado Tweets 2026-01-02.html").write_text("x", encoding="utf-8")
+    (tweets_2026 / "Consolidado Tweets 2026-01-01.html").write_text("x", encoding="utf-8")
+    (tweets_2025 / "Consolidado Tweets 2025-12-31.html").write_text("x", encoding="utf-8")
 
     repo_root = Path(__file__).resolve().parents[1]
     builder = repo_root / "utils" / "build_read_index.py"
@@ -21,7 +28,10 @@ def test_gen_index_creates_read_html(tmp_path):
     assert not (tmp_path / "index.html").exists()
     content = read_file.read_text(encoding="utf-8")
     assert "read.html" not in content
-    assert '<a href="/read/tweets/">Tweets</a>' in content
+    assert "<h2>Tweets</h2>" in content
+    assert '<a href="/read/tweets/2026.html">2026</a> (2)' in content
+    assert '<a href="/read/tweets/2025.html">2025</a> (1)' in content
+    assert "Sections" not in content
     assert 'href="https://domingogallardo.com/"' in content
     for line in content.splitlines():
         if 'href="a.html"' in line:
