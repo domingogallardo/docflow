@@ -145,7 +145,7 @@ State schema (versioned JSON, local-only):
    # Also syncs public highlights into Posts/Posts <YEAR>/highlights/.
    # If the pipeline + highlights sync succeed, it regenerates web/public/read/read.html.
    # It runs web/deploy.sh only if read.html changed (requires REMOTE_USER/REMOTE_HOST).
-   # It also rebuilds local intranet indexes in BASE_DIR/_site (browse + read).
+   # It also rebuilds local intranet browse index in BASE_DIR/_site/browse.
    ```
 3. Review locally with the overlay (bump/unbump, publish/unpublish, delete):
    ```bash

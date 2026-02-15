@@ -170,7 +170,6 @@ else
 fi
 
 intranet_browse_status=0
-intranet_read_status=0
 intranet_status=0
 if [ "${status}" -eq 0 ]; then
   if [ -n "${INTRANET_BASE_DIR}" ] && [ -d "${INTRANET_BASE_DIR}" ]; then
@@ -179,14 +178,7 @@ if [ "${status}" -eq 0 ]; then
     intranet_browse_status=$?
     set -e
     echo "[$(date -Iseconds)] Docflow: intranet browse build exit=${intranet_browse_status}"
-
-    set +e
-    "${PYTHON_BIN}" utils/build_read_index.py --base-dir "${INTRANET_BASE_DIR}"
-    intranet_read_status=$?
-    set -e
-    echo "[$(date -Iseconds)] Docflow: intranet read build exit=${intranet_read_status}"
-
-    if [ "${intranet_browse_status}" -ne 0 ] || [ "${intranet_read_status}" -ne 0 ]; then
+    if [ "${intranet_browse_status}" -ne 0 ]; then
       intranet_status=1
     fi
   else
