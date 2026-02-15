@@ -1,25 +1,33 @@
-"""Generate the static web/public/read/read.html index with year headings.
+"""Read index generators.
 
-- List files (HTML/PDF) ordered by mtime desc.
-- Entries are grouped by year with <h2> headings.
-
-Usage:
-    python utils/build_read_index.py [DIRECTORY]
-
-If DIRECTORY is not specified, "web/public/read" is assumed relative to CWD.
+Two supported modes:
+- Legacy mode: `python utils/build_read_index.py [DIRECTORY]`
+  Generates `read.html` from files inside DIRECTORY (web/public/read compatible).
+- Site mode (new): `python utils/build_read_index.py --base-dir <BASE_DIR>`
+  Generates `_site/read/index.html` from `state/published.json`.
 """
 
 from __future__ import annotations
 
+import argparse
 import html
+import importlib.util
 import os
+import re
 import sys
 import time
 from pathlib import Path
-import importlib.util
-from typing import Iterable, List, Tuple
+from typing import Iterable, List, NamedTuple, Tuple
 from urllib.parse import quote
 
+# Support direct execution: `python utils/build_read_index.py ...`
+if __package__ in (None, ""):
+    _REPO_ROOT = Path(__file__).resolve().parents[1]
+    if str(_REPO_ROOT) not in sys.path:
+        sys.path.insert(0, str(_REPO_ROOT))
+
+from utils.site_paths import raw_url_for_rel_path, resolve_base_dir, resolve_library_path, site_root
+from utils.site_state import list_bumped, list_published
 
 MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
 BASE_DIR_ENV = "DOCFLOW_BASE_DIR"
@@ -36,7 +44,7 @@ def fmt_date(ts: float) -> str:
 def load_entries(dir_path: str, allowed_exts: Iterable[str]) -> List[Tuple[float, str]]:
     entries: List[Tuple[float, str]] = []
     for name in os.listdir(dir_path):
-        if name.startswith('.'):
+        if name.startswith("."):
             continue
         path = os.path.join(dir_path, name)
         if not os.path.isfile(path):
@@ -271,22 +279,174 @@ def build_html(dir_path: str, entries: List[Tuple[float, str]], highlight_files:
     return html_doc
 
 
-def main(argv: list[str]) -> int:
-    if len(argv) > 2:
-        print("Usage: python utils/build_read_index.py [DIRECTORY]", file=sys.stderr)
-        return 2
-    dir_path = argv[1] if len(argv) == 2 else os.path.join("web", "public", "read")
+# -------- New site mode --------
+
+class ReadItem(NamedTuple):
+    rel_path: str
+    mtime: float
+    published: bool
+    bumped: bool
+    highlighted: bool
+
+
+def _is_site_highlighted(base_dir: Path, rel_path: str) -> bool:
+    rel_parts = Path(rel_path).parts
+    if len(rel_parts) < 3:
+        return False
+    if rel_parts[0] != "Posts":
+        return False
+    if not rel_parts[-1].lower().endswith((".html", ".htm")):
+        return False
+
+    post_dir = base_dir / Path(*rel_parts[:-1])
+    highlights_dir = post_dir / "highlights"
+    if not highlights_dir.is_dir():
+        return False
+
+    filename = rel_parts[-1]
+    for encoded in _highlight_name_candidates(filename):
+        if (highlights_dir / f"{encoded}.json").is_file():
+            return True
+    return False
+
+
+def collect_site_read_items(base_dir: Path) -> list[ReadItem]:
+    published = list_published(base_dir)
+    bumped = list_bumped(base_dir)
+
+    items: list[ReadItem] = []
+    for rel in sorted(published):
+        try:
+            abs_path = resolve_library_path(base_dir, rel)
+        except Exception:
+            continue
+        if not abs_path.is_file():
+            continue
+        items.append(
+            ReadItem(
+                rel_path=rel,
+                mtime=abs_path.stat().st_mtime,
+                published=True,
+                bumped=rel in bumped,
+                highlighted=_is_site_highlighted(base_dir, rel),
+            )
+        )
+
+    items.sort(key=lambda item: item.mtime, reverse=True)
+    return items
+
+
+def _site_actions(item: ReadItem) -> str:
+    path_attr = html.escape(item.rel_path, quote=True)
+    bump_action = "unbump" if item.bumped else "bump"
+    bump_label = "Unbump" if item.bumped else "Bump"
+
+    return (
+        f'<button data-api-action="{bump_action}" data-docflow-path="{path_attr}">{bump_label}</button>'
+        f'<button data-api-action="unpublish" data-docflow-path="{path_attr}">Unpublish</button>'
+    )
+
+
+def build_site_read_html(items: list[ReadItem]) -> str:
+    if not items:
+        body = "<p>No published items yet.</p>"
+    else:
+        lines: list[str] = []
+        current_year: int | None = None
+        for item in items:
+            year = time.localtime(item.mtime).tm_year
+            if year != current_year:
+                if current_year is not None:
+                    lines.append("</ul>")
+                lines.append(f"<h2>{year}</h2><ul class=\"dg-list\">")
+                current_year = year
+
+            badges = []
+            if item.published:
+                badges.append("🟢 published")
+            if item.bumped:
+                badges.append("🔥 bumped")
+            if item.highlighted:
+                badges.append("🟡 highlighted")
+            badge_text = " · ".join(badges) if badges else "-"
+            href = raw_url_for_rel_path(item.rel_path)
+            lines.append(
+                "<li>"
+                f"<div><a href=\"{href}\" target=\"_blank\" rel=\"noopener\">{html.escape(Path(item.rel_path).name)}</a>"
+                f"<div class=\"dg-sub\">{html.escape(item.rel_path)}</div>"
+                f"<div class=\"dg-sub\">{fmt_date(item.mtime)} · {html.escape(badge_text)}</div></div>"
+                f"<div class=\"dg-actions\">{_site_actions(item)}</div>"
+                "</li>"
+            )
+
+        if current_year is not None:
+            lines.append("</ul>")
+        body = "\n".join(lines)
+
+    return (
+        "<!DOCTYPE html><html><head><meta charset=\"utf-8\">"
+        "<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">"
+        "<link rel=\"stylesheet\" href=\"/assets/site.css\">"
+        "<script src=\"/assets/actions.js\" defer></script>"
+        "<title>Read</title></head><body>"
+        "<header><h1>Read</h1><nav><a href=\"/\">Home</a> · <a href=\"/browse/\">Browse</a> · "
+        "<a href=\"/read/\">Read</a></nav></header>"
+        f"<main>{body}<p><button data-api-action=\"rebuild\">Rebuild all indexes</button></p></main>"
+        "</body></html>"
+    )
+
+
+def write_site_read_index(base_dir: Path, output_dir: Path | None = None) -> Path:
+    out_dir = output_dir or (site_root(base_dir) / "read")
+    out_dir.mkdir(parents=True, exist_ok=True)
+
+    html_doc = build_site_read_html(collect_site_read_items(base_dir))
+    out_path = out_dir / "index.html"
+    out_path.write_text(html_doc, encoding="utf-8")
+    return out_path
+
+
+# -------- CLI --------
+
+def _legacy_main(dir_path: str) -> int:
     if not os.path.isdir(dir_path):
         print(f"❌ Directory not found: {dir_path}", file=sys.stderr)
         return 1
 
-    print("🧾 Generating web/public/read/read.html…")
+    print(f"🧾 Generating {dir_path}/read.html…")
     entries = load_entries(dir_path, allowed_exts=(".html", ".htm", ".pdf"))
     highlight_files = _load_highlight_index(_get_base_dir())
     html_doc = build_html(dir_path, entries, highlight_files)
     out_path = os.path.join(dir_path, "read.html")
     with open(out_path, "w", encoding="utf-8") as f:
         f.write(html_doc)
+    print(f"✓ Generated {out_path}")
+    return 0
+
+
+def parse_args(argv: list[str]) -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description="Build Read index pages.")
+    parser.add_argument("legacy_dir", nargs="?", help="Legacy target directory to generate read.html")
+    parser.add_argument("--base-dir", help="BASE_DIR for new _site/read generation")
+    parser.add_argument("--output-dir", help="Output dir for new mode (default BASE_DIR/_site/read)")
+    parser.add_argument("--mode", choices=("auto", "legacy", "site"), default="auto")
+    return parser.parse_args(argv)
+
+
+def main(argv: list[str]) -> int:
+    args = parse_args(argv[1:])
+
+    mode = args.mode
+    if mode == "auto":
+        mode = "legacy" if args.legacy_dir else "site"
+
+    if mode == "legacy":
+        dir_path = args.legacy_dir if args.legacy_dir else os.path.join("web", "public", "read")
+        return _legacy_main(dir_path)
+
+    base_dir = resolve_base_dir(args.base_dir)
+    out_dir = Path(args.output_dir).expanduser() if args.output_dir else None
+    out_path = write_site_read_index(base_dir, out_dir)
     print(f"✓ Generated {out_path}")
     return 0
 
