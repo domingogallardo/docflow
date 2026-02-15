@@ -472,7 +472,15 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--host", default=os.getenv("DOCFLOW_HOST", "127.0.0.1"))
     parser.add_argument("--port", type=int, default=int(os.getenv("DOCFLOW_PORT", "8088")))
     parser.add_argument("--bump-years", type=int, default=int(os.getenv("DOCFLOW_BUMP_YEARS", "100")))
-    parser.add_argument("--no-rebuild-on-start", action="store_true")
+    parser.set_defaults(rebuild_on_start=False)
+    parser.add_argument(
+        "--rebuild-on-start",
+        dest="rebuild_on_start",
+        action="store_true",
+        help="Rebuild browse/read static pages before serving.",
+    )
+    # Backward compatibility: previously this was the explicit opt-out flag.
+    parser.add_argument("--no-rebuild-on-start", dest="rebuild_on_start", action="store_false", help=argparse.SUPPRESS)
     return parser.parse_args()
 
 
@@ -481,7 +489,7 @@ def main() -> int:
     base_dir = resolve_base_dir(args.base_dir)
 
     app = DocflowApp(base_dir, bump_years=args.bump_years)
-    if not args.no_rebuild_on_start:
+    if args.rebuild_on_start:
         app.rebuild()
 
     handler_cls = make_handler(app)

@@ -52,7 +52,8 @@ Current local-first intranet behavior for docflow.
   - `PUT /api/highlights?path=<rel_path>`
 
 Rebuild strategy:
-- On server start: full `browse + read`.
+- On server start: no rebuild by default.
+- Optional startup rebuild with `--rebuild-on-start`.
 - On per-file actions (publish/bump/highlights):
   - Partial rebuild for `browse` (affected directory branch only).
   - Full rebuild for `read`.
@@ -72,6 +73,8 @@ Recommended:
 
 ```bash
 python utils/docflow_server.py --base-dir "/Users/domingo/⭐️ Documentación" --host 127.0.0.1 --port 8088
+# optional full rebuild before serving
+python utils/docflow_server.py --base-dir "/Users/domingo/⭐️ Documentación" --rebuild-on-start
 tailscale serve --bg 8088
 tailscale serve status
 ```

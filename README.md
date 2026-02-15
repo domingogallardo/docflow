@@ -47,8 +47,10 @@ Build and run:
 python utils/build_browse_index.py --base-dir "/Users/domingo/⭐️ Documentación"
 python utils/build_read_index.py --base-dir "/Users/domingo/⭐️ Documentación"
 
-# Run one local server (HTML/assets/raw files + API actions)
+# Run one local server (HTML/assets/raw files + API actions, no startup rebuild by default)
 python utils/docflow_server.py --base-dir "/Users/domingo/⭐️ Documentación" --host 127.0.0.1 --port 8088
+# Optional: force full rebuild on startup
+python utils/docflow_server.py --base-dir "/Users/domingo/⭐️ Documentación" --rebuild-on-start
 ```
 
 Expose to your tailnet (iPhone/iPad access, without public internet ports):
@@ -68,7 +70,8 @@ Main API actions:
 - `PUT /api/highlights?path=Posts/Posts%202026/file.html` (JSON payload)
 
 Rebuild behavior in intranet mode:
-- On server start: full `browse + read`.
+- On server start: no rebuild by default.
+- Optional startup rebuild with `--rebuild-on-start`.
 - On per-file actions (`publish`, `unpublish`, `bump`, `unbump`, highlights save): partial `browse` rebuild (affected branch) + full `read` rebuild.
 
 Raw file routes served directly from `BASE_DIR`:
