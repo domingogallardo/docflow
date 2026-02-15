@@ -9,6 +9,7 @@ from __future__ import annotations
 import argparse
 import html
 import os
+import re
 import shutil
 import time
 from dataclasses import dataclass
@@ -45,6 +46,7 @@ CATEGORY_LABELS = {
 }
 
 SKIP_DIR_NAMES = {"highlights", "__pycache__"}
+YEAR_SUFFIX_RE = re.compile(r"(\d{4})$")
 
 
 @dataclass(frozen=True)
@@ -143,10 +145,10 @@ def _actions_html(entry: BrowseEntry) -> str:
     )
 
 
-def _render_entry(entry: BrowseEntry) -> str:
+def _render_entry(entry: BrowseEntry, *, show_date: bool = True) -> str:
     display_name = entry.name + ("/" if entry.is_dir else "")
     esc_name = html.escape(display_name)
-    date_html = f"<span class='dg-date'> — {fmt_date(entry.mtime)}</span>"
+    date_html = f"<span class='dg-date'> — {fmt_date(entry.mtime)}</span>" if show_date else ""
 
     prefix = (
         ("🔥 " if entry.bumped else "")
@@ -191,7 +193,14 @@ def _base_head(title: str) -> str:
     )
 
 
-def _render_directory_page(*, title: str, display_path: str, entries: list[BrowseEntry], parent_href: str | None) -> str:
+def _render_directory_page(
+    *,
+    title: str,
+    display_path: str,
+    entries: list[BrowseEntry],
+    parent_href: str | None,
+    show_dates: bool = True,
+) -> str:
     rows: list[str] = [_base_head(title)]
     rows.append("<div class='dg-nav'><a href='/'>Home</a> · <a href='/browse/'>Browse</a> · <a href='/read/'>Read</a></div>")
     rows.append(f"<h2>Index of {html.escape(display_path)}</h2>")
@@ -201,7 +210,7 @@ def _render_directory_page(*, title: str, display_path: str, entries: list[Brows
         rows.append(f'<li><a href="{parent_href}">../</a></li>')
 
     for entry in entries:
-        rows.append(_render_entry(entry))
+        rows.append(_render_entry(entry, show_date=show_dates))
 
     rows.append("</ul><hr></body></html>")
     return "\n".join(rows)
@@ -391,6 +400,8 @@ def _write_category_directory_page(
         bump_items=bump_items,
         visibility_cache=visibility_cache,
     )
+    if category == "pdfs" and rel_dir == Path("."):
+        entries = _sort_root_year_entries(entries)
 
     display_path = _display_path_for_category_dir(category, rel_dir)
     html_doc = _render_directory_page(
@@ -401,6 +412,33 @@ def _write_category_directory_page(
     )
     (out_dir / "index.html").write_text(html_doc, encoding="utf-8")
     return child_dirs, direct_files
+
+
+def _extract_entry_year(entry: BrowseEntry) -> int | None:
+    if not entry.is_dir:
+        return None
+    match = YEAR_SUFFIX_RE.search(entry.name)
+    if not match:
+        return None
+    try:
+        return int(match.group(1))
+    except ValueError:
+        return None
+
+
+def _sort_root_year_entries(entries: list[BrowseEntry]) -> list[BrowseEntry]:
+    year_dirs: list[tuple[int, BrowseEntry]] = []
+    others: list[BrowseEntry] = []
+    for entry in entries:
+        year = _extract_entry_year(entry)
+        if year is None:
+            others.append(entry)
+        else:
+            year_dirs.append((year, entry))
+
+    year_dirs.sort(key=lambda item: item[0], reverse=True)
+    others.sort(key=_sort_mtime, reverse=True)
+    return [entry for _, entry in year_dirs] + others
 
 
 def _write_category_tree(
@@ -461,12 +499,12 @@ def _write_browse_home(base_dir: Path, category_roots: dict[str, Path], counts: 
             )
         )
 
-    entries.sort(key=_sort_mtime, reverse=True)
     html_doc = _render_directory_page(
         title="Index of /browse/",
         display_path="/browse/",
         entries=entries,
         parent_href="/",
+        show_dates=False,
     )
     html_doc = html_doc.replace(
         "</ul><hr></body></html>",

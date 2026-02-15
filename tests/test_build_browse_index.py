@@ -79,6 +79,10 @@ def test_build_browse_site_generates_indexes_and_actions(tmp_path: Path):
     browse_home_content = browse_home.read_text(encoding="utf-8")
     assert "Incoming" not in browse_home_content
     assert "Podcasts (1)" in browse_home_content
+    assert "Posts (1)</a><span class='dg-date'>" not in browse_home_content
+    assert "Tweets (0)</a><span class='dg-date'>" not in browse_home_content
+    assert browse_home_content.find("Posts (1)") < browse_home_content.find("Tweets (0)")
+    assert browse_home_content.find("Posts (1)") < browse_home_content.find("Pdfs (1)")
 
 
 def test_collect_category_items_handles_missing_dirs(tmp_path: Path):
@@ -132,6 +136,22 @@ def test_tweets_listing_hides_secondary_title_text(tmp_path: Path):
 
     assert "Tweet Title Extra" not in content
     assert " · Tweet Title Extra" not in content
+
+
+def test_pdfs_root_is_sorted_by_year_desc(tmp_path: Path):
+    base = tmp_path / "base"
+    pdfs_2024 = base / "Pdfs" / "Pdfs 2024"
+    pdfs_2026 = base / "Pdfs" / "Pdfs 2026"
+    pdfs_2024.mkdir(parents=True)
+    pdfs_2026.mkdir(parents=True)
+    (pdfs_2024 / "older.pdf").write_bytes(b"%PDF-1.4\n")
+    (pdfs_2026 / "newer.pdf").write_bytes(b"%PDF-1.4\n")
+
+    build_browse_index.build_browse_site(base)
+
+    root_page = base / "_site" / "browse" / "pdfs" / "index.html"
+    content = root_page.read_text(encoding="utf-8")
+    assert content.find("Pdfs 2026/") < content.find("Pdfs 2024/")
 
 
 def test_rebuild_browse_for_path_updates_only_target_branch(tmp_path: Path):
