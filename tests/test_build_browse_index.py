@@ -42,7 +42,8 @@ def test_build_browse_site_generates_indexes_and_actions(tmp_path: Path):
     assert "Posts 2026/" in root_content
 
     content = posts_year_page.read_text(encoding="utf-8")
-    assert "Sample Title" in content
+    assert "Sample Title" not in content
+    assert " · Sample Title" not in content
     assert "🟢" in content
     assert "doc.md" not in content
     assert 'data-api-action="unpublish"' not in content
@@ -84,3 +85,20 @@ def test_browse_uses_bump_state_for_order_without_touching_mtime(tmp_path: Path)
 
     assert html.find("b.html") < html.find("a.html")
     assert abs(second.stat().st_mtime - mtime_b_before) < 0.001
+
+
+def test_tweets_listing_hides_secondary_title_text(tmp_path: Path):
+    base = tmp_path / "base"
+    tweets = base / "Tweets" / "Tweets 2026"
+    tweets.mkdir(parents=True)
+
+    tweet = tweets / "Consolidado Tweets 2026-01-02.html"
+    tweet.write_text("<html><title>Tweet Title Extra</title><body>Tweets</body></html>", encoding="utf-8")
+    site_state.publish_path(base, "Tweets/Tweets 2026/Consolidado Tweets 2026-01-02.html")
+
+    build_browse_index.build_browse_site(base)
+    year_page = base / "_site" / "browse" / "tweets" / "Tweets 2026" / "index.html"
+    content = year_page.read_text(encoding="utf-8")
+
+    assert "Tweet Title Extra" not in content
+    assert " · Tweet Title Extra" not in content

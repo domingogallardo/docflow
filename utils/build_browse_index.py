@@ -185,9 +185,6 @@ def _render_entry(entry: BrowseEntry) -> str:
     display_name = entry.name + ("/" if entry.is_dir else "")
     esc_name = html.escape(display_name)
     date_html = f"<span class='dg-date'> — {fmt_date(entry.mtime)}</span>"
-    title_html = ""
-    if entry.title and not entry.is_dir:
-        title_html = f"<span class='dg-title'> · {html.escape(entry.title)}</span>"
 
     prefix = (
         ("🔥 " if entry.bumped else "")
@@ -198,7 +195,7 @@ def _render_entry(entry: BrowseEntry) -> str:
     cls_attr = _entry_classes(entry)
     actions = _actions_html(entry)
     return (
-        f"<li{cls_attr}><span>{prefix}<a href=\"{entry.href}\">{esc_name}</a>{title_html}{date_html}</span>{actions}</li>"
+        f"<li{cls_attr}><span>{prefix}<a href=\"{entry.href}\">{esc_name}</a>{date_html}</span>{actions}</li>"
     )
 
 
@@ -220,7 +217,6 @@ def _base_head(title: str) -> str:
         ".dg-actions button, .dg-actions a, .dg-rebuild{padding:2px 6px;border:1px solid #ccc;border-radius:6px;background:#f7f7f7;text-decoration:none;color:#333;font:12px -apple-system,system-ui,Segoe UI,Roboto,Helvetica,Arial;cursor:pointer}"
         ".dg-actions button[disabled], .dg-actions a[disabled], .dg-rebuild[disabled]{opacity:.6;pointer-events:none}"
         ".dg-date{color:#666;margin-left:10px;white-space:nowrap}"
-        ".dg-title{color:#666}"
         "</style>"
         "<script src='/assets/actions.js' defer></script>"
         "</head><body>"
