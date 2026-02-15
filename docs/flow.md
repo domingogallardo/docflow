@@ -2,6 +2,8 @@
 
 This document describes how each content type enters, is processed, and is published in your system, based on the real behavior of `process_documents.py`, `pipeline_manager.py`, the `serve_docs.py` overlay, and the deployment to `domingogallardo.com`. Part of the structure is in the original document that already lists the four inputs (Instapaper, Snipd, Incoming, and X likes).
 
+For the current local intranet mode (`utils/docflow_server.py`, generated `_site`, local API/state), use `intranet-mode.md` as the canonical reference. This file focuses on the legacy overlay + public deploy flow.
+
 ---
 
 ## 0. Prerequisites and environment

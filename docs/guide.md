@@ -1,6 +1,8 @@
 # docflow - Extended guide
 
 > This document expands the short README. It keeps the operational details for working with docflow day to day. The infra and TLS guide is in **readme-infra.md**.
+>
+> Current local-first mode is documented in **`intranet-mode.md`** (`utils/docflow_server.py`, `_site`, local API/state). This guide remains useful for the legacy overlay/public deploy flow.
 
 ## Table of contents
 - [docflow - Extended guide](#docflow---extended-guide)

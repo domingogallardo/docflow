@@ -8,7 +8,8 @@ docflow works with two different sites:
 1. `sitio biblioteca` (local source of truth)
 - What it is: your local document library under `BASE_DIR` (from `config.py`).
 - Main path: `BASE_DIR` (for example, `/Users/domingo/⭐️ Documentación`).
-- Served locally by: `python utils/serve_docs.py` (overlay for bump/publish/unpublish).
+- Current local intranet server: `python utils/docflow_server.py --base-dir "/path/to/BASE_DIR"` (serves `_site` + API).
+- Legacy local overlay (still available): `python utils/serve_docs.py`.
 - Tweet consolidated files are created here:
   - `BASE_DIR/Tweets/Tweets <YEAR>/Consolidado Tweets YYYY-MM-DD.{md,html}`.
 
@@ -36,6 +37,8 @@ You can run docflow as a local intranet from your MacBook (source of truth = `BA
 - Local state:
   - `BASE_DIR/state/published.json`
   - `BASE_DIR/state/bump.json`
+  - `BASE_DIR/state/highlights/...`
+- In intranet mode, bump is state-based (`bump.json`) and does not modify file `mtime`.
 
 Build and run:
 
@@ -55,12 +58,18 @@ tailscale serve --bg 8088
 tailscale serve status
 ```
 
-Main API actions (POST JSON):
+Main API actions:
 - `/api/publish` `{ "path": "Posts/Posts 2026/file.html" }`
 - `/api/unpublish` `{ "path": "Posts/Posts 2026/file.html" }`
 - `/api/bump` `{ "path": "Posts/Posts 2026/file.html" }`
 - `/api/unbump` `{ "path": "Posts/Posts 2026/file.html" }`
 - `/api/rebuild` `{}`
+- `GET /api/highlights?path=Posts/Posts%202026/file.html`
+- `PUT /api/highlights?path=Posts/Posts%202026/file.html` (JSON payload)
+
+Rebuild behavior in intranet mode:
+- On server start: full `browse + read`.
+- On per-file actions (`publish`, `unpublish`, `bump`, `unbump`, highlights save): partial `browse` rebuild (affected branch) + full `read` rebuild.
 
 Raw file routes served directly from `BASE_DIR`:
 - `/posts/raw/<path>` -> `BASE_DIR/Posts/<path>`
@@ -146,8 +155,9 @@ State schema (versioned JSON, local-only):
    # If the pipeline + highlights sync succeed, it regenerates web/public/read/read.html.
    # It runs web/deploy.sh only if read.html changed (requires REMOTE_USER/REMOTE_HOST).
    # It also rebuilds local intranet browse index in BASE_DIR/_site/browse.
+   # It does not rebuild local intranet read index.
    ```
-3. Review locally with the overlay (bump/unbump, publish/unpublish, delete):
+3. Review locally with the legacy overlay (optional; intranet mode uses `docflow_server.py`):
    ```bash
    PORT=8000 SERVE_DIR="/path/to/⭐️ Documentación" python utils/serve_docs.py
    ```
@@ -213,6 +223,7 @@ State schema (versioned JSON, local-only):
   ```
 
 ## 📚 Documentation
+- `docs/intranet-mode.md` - canonical local intranet mode (`_site`, `docflow_server.py`, API, rebuild strategy, tailscale).
 - `docs/guide.md` - full operating guide (commands, overlay, quotes, troubleshooting).
 - `docs/flow.md` - end-to-end flow (inputs, pipeline, publishing, and Obsidian).
 - `docs/readme-infra.md` - deployment and hardening (Docker/Nginx, TLS, BasicAuth).
