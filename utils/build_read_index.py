@@ -454,7 +454,7 @@ def _copy_site_read_assets(out_dir: Path) -> None:
     target.write_text(source.read_text(encoding="utf-8"), encoding="utf-8")
 
 
-def build_site_read_html(items: list[SiteReadItem], tweets_by_year: dict[int, list[SiteReadItem]]) -> str:
+def build_site_read_html(items: list[SiteReadItem]) -> str:
     if not items:
         list_html = "<ul></ul>"
     else:
@@ -486,9 +486,7 @@ def build_site_read_html(items: list[SiteReadItem], tweets_by_year: dict[int, li
         '<script src="/read/article.js" defer></script>'
         '<title>Read</title></head><body>'
         '<h1>Read</h1>'
-        + _render_site_tweets_section(tweets_by_year)
         + list_html
-        + _site_ascii_footer()
         + "</body></html>"
     )
 
@@ -499,7 +497,7 @@ def write_site_read_index(base_dir: Path, output_dir: Path | None = None) -> Pat
 
     items = collect_site_read_items(base_dir)
     tweets_by_year = _collect_site_tweet_years(base_dir, items)
-    html_doc = build_site_read_html(items, tweets_by_year)
+    html_doc = build_site_read_html(items)
     out_path = out_dir / "index.html"
     out_path.write_text(html_doc, encoding="utf-8")
     _write_site_tweets_year_pages(out_dir, tweets_by_year)

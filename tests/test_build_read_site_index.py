@@ -31,7 +31,9 @@ def test_write_site_read_index_uses_published_state(tmp_path: Path):
     assert "/posts/raw/Posts%202026/doc.html" in content
     assert "</a> · " not in content
     assert "<h1>Read</h1>" in content
-    assert "Docflow" in content
+    assert "<h2>Tweets</h2>" not in content
+    assert "github.com/domingogallardo/docflow" not in content
+    assert "domingogallardo.com" not in content
     assert "🟡" in content
     assert "Posts/Posts 2026/doc.html" not in content
     assert "data-api-action" not in content
@@ -50,7 +52,8 @@ def test_write_site_read_index_generates_tweets_year_pages(tmp_path: Path):
     out = build_read_index.write_site_read_index(base)
     content = out.read_text(encoding="utf-8")
 
-    assert '<a href="/read/tweets/2026.html">2026</a> (1)' in content
+    assert '<a href="/read/tweets/2026.html">2026</a> (1)' not in content
+    assert "<h2>Tweets</h2>" not in content
     year_page = base / "_site" / "read" / "tweets" / "2026.html"
     assert year_page.exists()
     year_content = year_page.read_text(encoding="utf-8")
