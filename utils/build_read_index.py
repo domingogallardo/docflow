@@ -171,7 +171,7 @@ def _tweet_year_items(dir_path: str) -> list[tuple[int, int]]:
             if not entry.is_file():
                 continue
             low = entry.name.lower()
-            if not entry.name.startswith("Consolidado Tweets "):
+            if not (entry.name.startswith("Consolidado Tweets ") or entry.name.startswith("Tweets ")):
                 continue
             if low.endswith((".html", ".htm")):
                 count += 1

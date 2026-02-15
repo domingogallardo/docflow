@@ -4,7 +4,7 @@ Copies files from:
   BASE_DIR/Tweets/Tweets <YEAR>/Consolidado Tweets *.html
 
 To:
-  web/public/read/tweets/<YEAR>/Consolidado Tweets *.html
+  web/public/read/tweets/<YEAR>/Tweets *.html
 
 The sync removes stale consolidated files in the destination and preserves source
 mtime using copy2.
@@ -35,10 +35,10 @@ class SyncStats:
     removed_dirs: int = 0
 
 
-def _is_consolidated_html(path: Path) -> bool:
+def _is_published_tweet_html(path: Path) -> bool:
     if not path.is_file():
         return False
-    if not path.name.startswith("Consolidado Tweets "):
+    if not (path.name.startswith("Consolidado Tweets ") or path.name.startswith("Tweets ")):
         return False
     return path.suffix.lower() in (".html", ".htm")
 
@@ -70,7 +70,7 @@ def sync_consolidated_tweets(base_dir: Path, output_dir: Path) -> SyncStats:
 
     # Remove legacy flat consolidated files from the tweets root.
     for child in output_dir.iterdir():
-        if _is_consolidated_html(child):
+        if _is_published_tweet_html(child):
             child.unlink()
             removed_files += 1
 
@@ -85,15 +85,16 @@ def sync_consolidated_tweets(base_dir: Path, output_dir: Path) -> SyncStats:
             src_path = src_year_dir / item.name
             if not src_path.is_file():
                 continue
-            keep_names.add(item.name)
-            dst_path = year_dir / item.name
+            dst_name = tweets_index.published_tweet_name(item.name)
+            keep_names.add(dst_name)
+            dst_path = year_dir / dst_name
             if _copy_if_needed(src_path, dst_path):
                 copied += 1
             else:
                 skipped += 1
 
         for child in year_dir.iterdir():
-            if _is_consolidated_html(child) and child.name not in keep_names:
+            if _is_published_tweet_html(child) and child.name not in keep_names:
                 child.unlink()
                 removed_files += 1
 

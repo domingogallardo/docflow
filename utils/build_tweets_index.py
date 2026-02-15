@@ -88,6 +88,12 @@ def _extract_tweet_count(path: Path) -> int:
     return len(_ENTRY_ARTICLE_RE.findall(text))
 
 
+def published_tweet_name(source_name: str) -> str:
+    if source_name.startswith("Consolidado "):
+        return source_name[len("Consolidado ") :]
+    return source_name
+
+
 def discover_consolidated_by_year(base_dir: Path | None) -> dict[int, list[TweetFile]]:
     if base_dir is None:
         return {}
@@ -157,8 +163,9 @@ def render_year_html(year: int, files: list[TweetFile]) -> str:
     else:
         lines = ["<ul>"]
         for item in files:
-            esc = html.escape(item.name)
-            encoded_name = quote(item.name, safe="~!*()'")
+            published_name = published_tweet_name(item.name)
+            esc = html.escape(published_name)
+            encoded_name = quote(published_name, safe="~!*()'")
             href = f"{year}/{encoded_name}"
             tweet_word = "tweet" if item.tweet_count == 1 else "tweets"
             lines.append(f'<li><a href="{href}" title="{esc}">{esc}</a> ({item.tweet_count} {tweet_word})</li>')

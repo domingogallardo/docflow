@@ -32,8 +32,8 @@ def test_sync_consolidated_tweets_copies_by_year_and_cleans_stale(tmp_path: Path
 
     stats = mod.sync_consolidated_tweets(base_dir, output_dir)
 
-    copied_2026 = output_dir / "2026" / "Consolidado Tweets 2026-01-02.html"
-    copied_2025 = output_dir / "2025" / "Consolidado Tweets 2025-12-31.html"
+    copied_2026 = output_dir / "2026" / "Tweets 2026-01-02.html"
+    copied_2025 = output_dir / "2025" / "Tweets 2025-12-31.html"
     assert copied_2026.is_file()
     assert copied_2025.is_file()
     assert int(copied_2026.stat().st_mtime) == 2_000
@@ -43,6 +43,21 @@ def test_sync_consolidated_tweets_copies_by_year_and_cleans_stale(tmp_path: Path
     assert stats.copied == 3
     assert stats.removed_files == 2
     assert stats.removed_dirs == 1
+
+
+def test_sync_consolidated_tweets_removes_legacy_consolidado_names(tmp_path: Path) -> None:
+    base_dir = tmp_path / "base"
+    y2026 = base_dir / "Tweets" / "Tweets 2026"
+    _write_consolidated(y2026 / "Consolidado Tweets 2026-01-02.html", "2026-new", 2_000)
+
+    output_dir = tmp_path / "public" / "read" / "tweets"
+    legacy_name = output_dir / "2026" / "Consolidado Tweets 2026-01-02.html"
+    _write_consolidated(legacy_name, "legacy", 1)
+
+    mod.sync_consolidated_tweets(base_dir, output_dir)
+
+    assert not legacy_name.exists()
+    assert (output_dir / "2026" / "Tweets 2026-01-02.html").is_file()
 
 
 def test_sync_consolidated_tweets_is_idempotent(tmp_path: Path) -> None:

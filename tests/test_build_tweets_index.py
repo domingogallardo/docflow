@@ -49,8 +49,10 @@ def test_write_indexes_generates_root_and_year_pages(tmp_path: Path) -> None:
 
     assert '<a href="2026.html">2026</a> (2)' in root
     assert '<a href="2025.html">2025</a> (1)' in root
-    assert 'href="2026/Consolidado%20Tweets%202026-01-02.html"' in y2026
-    assert 'href="2026/Consolidado%20Tweets%202026-01-01.html"' in y2026
+    assert 'href="2026/Tweets%202026-01-02.html"' in y2026
+    assert 'href="2026/Tweets%202026-01-01.html"' in y2026
+    assert "Tweets 2026-01-02.html" in y2026
+    assert "Consolidado Tweets" not in y2026
     assert "(12 tweets)" in y2026
     assert "(1 tweet)" in y2026
     assert " — " not in y2026
