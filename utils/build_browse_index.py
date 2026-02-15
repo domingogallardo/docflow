@@ -9,6 +9,7 @@ from __future__ import annotations
 import argparse
 import html
 import os
+import shutil
 import time
 from dataclasses import dataclass
 from pathlib import Path
@@ -27,13 +28,13 @@ from utils.site_state import load_bump_state, list_published
 
 MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
 
-CATEGORY_KEYS = ("incoming", "posts", "tweets", "pdfs", "images")
+CATEGORY_KEYS = ("posts", "tweets", "pdfs", "images", "podcasts")
 CATEGORY_LABELS = {
-    "incoming": "Incoming",
     "posts": "Posts",
     "tweets": "Tweets",
     "pdfs": "Pdfs",
     "images": "Images",
+    "podcasts": "Podcasts",
 }
 
 SKIP_DIR_NAMES = {"highlights", "__pycache__"}
@@ -549,16 +550,20 @@ def collect_category_items(base_dir: Path, category: str) -> list[BrowseItem]:
 def _category_roots(base_dir: Path) -> dict[str, Path]:
     roots = library_roots(base_dir)
     return {
-        "incoming": roots["incoming"],
         "posts": roots["posts"],
         "tweets": roots["tweets"],
         "pdfs": roots["pdfs"],
         "images": roots["images"],
+        "podcasts": roots["podcasts"],
     }
 
 
 def build_browse_site(base_dir: Path) -> dict[str, int]:
     ensure_assets(base_dir)
+    browse_dir = site_root(base_dir) / "browse"
+    incoming_dir = browse_dir / "incoming"
+    if incoming_dir.exists():
+        shutil.rmtree(incoming_dir)
 
     published_set = list_published(base_dir)
     bump_state = load_bump_state(base_dir)

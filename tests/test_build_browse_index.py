@@ -19,6 +19,14 @@ def test_build_browse_site_generates_indexes_and_actions(tmp_path: Path):
     pdfs.mkdir(parents=True)
     pdf = pdfs / "paper.pdf"
     pdf.write_bytes(b"%PDF-1.4\n")
+    podcasts = base / "Podcasts" / "Podcasts 2026"
+    podcasts.mkdir(parents=True)
+    podcast_html = podcasts / "episode.html"
+    podcast_html.write_text("<html><body>Podcast episode</body></html>", encoding="utf-8")
+
+    stale_incoming = base / "_site" / "browse" / "incoming"
+    stale_incoming.mkdir(parents=True)
+    (stale_incoming / "index.html").write_text("<p>stale incoming</p>", encoding="utf-8")
 
     site_state.publish_path(base, "Posts/Posts 2026/doc.html")
     site_state.set_bumped_path(base, "Posts/Posts 2026/doc.html", original_mtime=10.0, bumped_mtime=20.0)
@@ -32,18 +40,23 @@ def test_build_browse_site_generates_indexes_and_actions(tmp_path: Path):
 
     assert counts["posts"] == 1
     assert counts["pdfs"] == 1
+    assert counts["podcasts"] == 1
+    assert "incoming" not in counts
 
     browse_home = base / "_site" / "browse" / "index.html"
     posts_root_page = base / "_site" / "browse" / "posts" / "index.html"
     posts_year_page = base / "_site" / "browse" / "posts" / "Posts 2026" / "index.html"
     pdfs_year_page = base / "_site" / "browse" / "pdfs" / "Pdfs 2026" / "index.html"
+    podcasts_year_page = base / "_site" / "browse" / "podcasts" / "Podcasts 2026" / "index.html"
     assets_js = base / "_site" / "assets" / "actions.js"
 
     assert browse_home.exists()
     assert posts_root_page.exists()
     assert posts_year_page.exists()
     assert pdfs_year_page.exists()
+    assert podcasts_year_page.exists()
     assert assets_js.exists()
+    assert not stale_incoming.exists()
 
     root_content = posts_root_page.read_text(encoding="utf-8")
     assert "Posts 2026/" in root_content
@@ -61,6 +74,10 @@ def test_build_browse_site_generates_indexes_and_actions(tmp_path: Path):
     pdf_content = pdfs_year_page.read_text(encoding="utf-8")
     assert 'data-api-action="publish"' in pdf_content or 'data-api-action="unpublish"' in pdf_content
     assert 'data-api-action="bump"' in pdf_content or 'data-api-action="unbump"' in pdf_content
+
+    browse_home_content = browse_home.read_text(encoding="utf-8")
+    assert "Incoming" not in browse_home_content
+    assert "Podcasts (1)" in browse_home_content
 
 
 def test_collect_category_items_handles_missing_dirs(tmp_path: Path):
