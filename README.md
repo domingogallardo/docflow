@@ -25,6 +25,77 @@ Tweet flow across both sites:
 - `utils/build_tweets_index.py` generates yearly static index pages in the `sitio publicado` (`web/public/read/tweets/<YEAR>.html`) that link to consolidated files for each year.
 - `web/deploy.sh` publishes what exists under `web/public/read/`.
 
+## 🏠 Local intranet mode (single server, no Docker required)
+You can run docflow as a local intranet from your MacBook (source of truth = `BASE_DIR`) with one Python process:
+
+- Static output root:
+  - `BASE_DIR/_site/index.html`
+  - `BASE_DIR/_site/browse/...`
+  - `BASE_DIR/_site/read/...`
+  - `BASE_DIR/_site/assets/...`
+- Local state:
+  - `BASE_DIR/state/published.json`
+  - `BASE_DIR/state/bump.json`
+
+Build and run:
+
+```bash
+# Rebuild browse/read static pages into BASE_DIR/_site
+python utils/build_browse_index.py --base-dir "/Users/domingo/⭐️ Documentación"
+python utils/build_read_index.py --base-dir "/Users/domingo/⭐️ Documentación"
+
+# Run one local server (HTML/assets/raw files + API actions)
+python utils/docflow_server.py --base-dir "/Users/domingo/⭐️ Documentación" --host 127.0.0.1 --port 8088
+```
+
+Expose to your tailnet (iPhone/iPad access, without public internet ports):
+
+```bash
+tailscale serve --bg 8088
+tailscale serve status
+```
+
+Main API actions (POST JSON):
+- `/api/publish` `{ "path": "Posts/Posts 2026/file.html" }`
+- `/api/unpublish` `{ "path": "Posts/Posts 2026/file.html" }`
+- `/api/bump` `{ "path": "Posts/Posts 2026/file.html" }`
+- `/api/unbump` `{ "path": "Posts/Posts 2026/file.html" }`
+- `/api/rebuild` `{}`
+
+Raw file routes served directly from `BASE_DIR`:
+- `/posts/raw/<path>` -> `BASE_DIR/Posts/<path>`
+- `/pdfs/raw/<path>` -> `BASE_DIR/Pdfs/<path>`
+- `/images/raw/<path>` -> `BASE_DIR/Images/<path>`
+- `/tweets/raw/<path>` -> `BASE_DIR/Tweets/<path>`
+- `/incoming/raw/<path>` -> `BASE_DIR/Incoming/<path>`
+- `/files/raw/<path>` -> `BASE_DIR/<path>` (fallback)
+
+State schema (versioned JSON, local-only):
+
+```json
+{
+  "version": 1,
+  "items": {
+    "Posts/Posts 2026/file.html": {
+      "published_at": "2026-02-15T18:10:00Z"
+    }
+  }
+}
+```
+
+```json
+{
+  "version": 1,
+  "items": {
+    "Posts/Posts 2026/file.html": {
+      "original_mtime": 1739614200.0,
+      "bumped_mtime": 4910000001.0,
+      "updated_at": "2026-02-15T18:12:00Z"
+    }
+  }
+}
+```
+
 ## ✨ Highlights
 - Single pipeline for Instapaper, Snipd, PDFs, images, Markdown, and X likes (`Tweets/Tweets <YEAR>/`).
 - Daily tweet consolidated files (`Consolidado Tweets YYYY-MM-DD.{md,html}`) with full tweet/thread content, images, preserved links, and file `mtime` set to *(last tweet of the day + 60s)* so listings stay interleaved chronologically.

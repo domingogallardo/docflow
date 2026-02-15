@@ -1,25 +1,35 @@
-"""Generate the static web/public/read/read.html index with year headings.
+"""Read index generators.
 
-- List files (HTML/PDF) ordered by mtime desc.
-- Entries are grouped by year with <h2> headings.
-
-Usage:
-    python utils/build_read_index.py [DIRECTORY]
-
-If DIRECTORY is not specified, "web/public/read" is assumed relative to CWD.
+Two supported modes:
+- Legacy mode: `python utils/build_read_index.py [DIRECTORY]`
+  Generates `read.html` from files inside DIRECTORY (web/public/read compatible).
+- Site mode (new): `python utils/build_read_index.py --base-dir <BASE_DIR>`
+  Generates `_site/read/index.html` from `state/published.json`.
 """
 
 from __future__ import annotations
 
+import argparse
 import html
+import importlib.util
 import os
+import re
+import shutil
 import sys
 import time
 from pathlib import Path
-import importlib.util
-from typing import Iterable, List, Tuple
+from typing import Iterable, List, NamedTuple, Tuple
 from urllib.parse import quote
 
+# Support direct execution: `python utils/build_read_index.py ...`
+if __package__ in (None, ""):
+    _REPO_ROOT = Path(__file__).resolve().parents[1]
+    if str(_REPO_ROOT) not in sys.path:
+        sys.path.insert(0, str(_REPO_ROOT))
+
+from utils.site_paths import raw_url_for_rel_path, resolve_base_dir, resolve_library_path, site_root
+from utils.highlight_store import has_highlights_for_path
+from utils.site_state import list_published, load_bump_state
 
 MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
 BASE_DIR_ENV = "DOCFLOW_BASE_DIR"
@@ -36,7 +46,7 @@ def fmt_date(ts: float) -> str:
 def load_entries(dir_path: str, allowed_exts: Iterable[str]) -> List[Tuple[float, str]]:
     entries: List[Tuple[float, str]] = []
     for name in os.listdir(dir_path):
-        if name.startswith('.'):
+        if name.startswith("."):
             continue
         path = os.path.join(dir_path, name)
         if not os.path.isfile(path):
@@ -271,22 +281,161 @@ def build_html(dir_path: str, entries: List[Tuple[float, str]], highlight_files:
     return html_doc
 
 
-def main(argv: list[str]) -> int:
-    if len(argv) > 2:
-        print("Usage: python utils/build_read_index.py [DIRECTORY]", file=sys.stderr)
-        return 2
-    dir_path = argv[1] if len(argv) == 2 else os.path.join("web", "public", "read")
+# -------- New site mode --------
+
+class SiteReadItem(NamedTuple):
+    rel_path: str
+    name: str
+    mtime: float
+    sort_mtime: float
+    highlighted: bool
+
+
+def _is_site_highlighted(base_dir: Path, rel_path: str) -> bool:
+    if not Path(rel_path).name.lower().endswith((".html", ".htm")):
+        return False
+    return has_highlights_for_path(base_dir, rel_path)
+
+
+def collect_site_read_items(base_dir: Path) -> list[SiteReadItem]:
+    published = list_published(base_dir)
+    bump_state = load_bump_state(base_dir)
+    bump_items = bump_state.get("items", {}) if isinstance(bump_state.get("items", {}), dict) else {}
+
+    items: list[SiteReadItem] = []
+    for rel in sorted(published):
+        try:
+            abs_path = resolve_library_path(base_dir, rel)
+        except Exception:
+            continue
+        if not abs_path.is_file():
+            continue
+        st = abs_path.stat()
+        bump_entry = bump_items.get(rel)
+        bumped_mtime = None
+        if isinstance(bump_entry, dict):
+            try:
+                bumped_mtime = float(bump_entry.get("bumped_mtime"))
+            except Exception:
+                bumped_mtime = None
+        display_mtime = st.st_mtime
+        effective_mtime = bumped_mtime if bumped_mtime is not None else display_mtime
+        items.append(
+            SiteReadItem(
+                rel_path=rel,
+                name=abs_path.name,
+                mtime=display_mtime,
+                sort_mtime=effective_mtime,
+                highlighted=_is_site_highlighted(base_dir, rel),
+            )
+        )
+
+    items.sort(key=lambda item: item.sort_mtime, reverse=True)
+    return items
+
+
+def _copy_site_read_assets(out_dir: Path) -> None:
+    repo_root = Path(__file__).resolve().parents[1]
+    source = repo_root / "web" / "public" / "read" / "article.js"
+    if not source.is_file():
+        return
+    target = out_dir / "article.js"
+    target.write_text(source.read_text(encoding="utf-8"), encoding="utf-8")
+
+
+def build_site_read_html(items: list[SiteReadItem]) -> str:
+    if not items:
+        list_html = "<ul></ul>"
+    else:
+        lines: list[str] = []
+        current_year: int | None = None
+        for item in items:
+            year = time.localtime(item.mtime).tm_year
+            if year != current_year:
+                if current_year is not None:
+                    lines.append("</ul>")
+                lines.append(f"<h2>{year}</h2><ul>")
+                current_year = year
+
+            href = raw_url_for_rel_path(item.rel_path)
+            icon = _icon_for(item.name)
+            hl_icon = '<span class="file-icon hl-icon" aria-hidden="true">🟡</span> ' if item.highlighted else ""
+            esc_name = html.escape(item.name)
+            lines.append(
+                f'<li>{icon}{hl_icon}<a href="{href}" title="{esc_name}">{esc_name}</a> — {fmt_date(item.mtime)}</li>'
+            )
+
+        if current_year is not None:
+            lines.append("</ul>")
+        list_html = "\n".join(lines)
+
+    return (
+        '<!DOCTYPE html><html><head><meta charset="utf-8">'
+        '<meta name="viewport" content="width=device-width">'
+        '<script src="/read/article.js" defer></script>'
+        '<title>Read</title></head><body>'
+        '<h1>Read</h1>'
+        + list_html
+        + "</body></html>"
+    )
+
+
+def write_site_read_index(base_dir: Path, output_dir: Path | None = None) -> Path:
+    out_dir = output_dir or (site_root(base_dir) / "read")
+    out_dir.mkdir(parents=True, exist_ok=True)
+    tweets_pages_dir = out_dir / "tweets"
+    if tweets_pages_dir.exists():
+        shutil.rmtree(tweets_pages_dir)
+
+    items = collect_site_read_items(base_dir)
+    html_doc = build_site_read_html(items)
+    out_path = out_dir / "index.html"
+    out_path.write_text(html_doc, encoding="utf-8")
+    _copy_site_read_assets(out_dir)
+    return out_path
+
+
+# -------- CLI --------
+
+def _legacy_main(dir_path: str) -> int:
     if not os.path.isdir(dir_path):
         print(f"❌ Directory not found: {dir_path}", file=sys.stderr)
         return 1
 
-    print("🧾 Generating web/public/read/read.html…")
+    print(f"🧾 Generating {dir_path}/read.html…")
     entries = load_entries(dir_path, allowed_exts=(".html", ".htm", ".pdf"))
     highlight_files = _load_highlight_index(_get_base_dir())
     html_doc = build_html(dir_path, entries, highlight_files)
     out_path = os.path.join(dir_path, "read.html")
     with open(out_path, "w", encoding="utf-8") as f:
         f.write(html_doc)
+    print(f"✓ Generated {out_path}")
+    return 0
+
+
+def parse_args(argv: list[str]) -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description="Build Read index pages.")
+    parser.add_argument("legacy_dir", nargs="?", help="Legacy target directory to generate read.html")
+    parser.add_argument("--base-dir", help="BASE_DIR for new _site/read generation")
+    parser.add_argument("--output-dir", help="Output dir for new mode (default BASE_DIR/_site/read)")
+    parser.add_argument("--mode", choices=("auto", "legacy", "site"), default="auto")
+    return parser.parse_args(argv)
+
+
+def main(argv: list[str]) -> int:
+    args = parse_args(argv[1:])
+
+    mode = args.mode
+    if mode == "auto":
+        mode = "legacy" if args.legacy_dir else "site"
+
+    if mode == "legacy":
+        dir_path = args.legacy_dir if args.legacy_dir else os.path.join("web", "public", "read")
+        return _legacy_main(dir_path)
+
+    base_dir = resolve_base_dir(args.base_dir)
+    out_dir = Path(args.output_dir).expanduser() if args.output_dir else None
+    out_path = write_site_read_index(base_dir, out_dir)
     print(f"✓ Generated {out_path}")
     return 0
 
