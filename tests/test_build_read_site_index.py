@@ -22,6 +22,7 @@ def test_write_site_read_index_uses_published_state(tmp_path: Path):
 
     content = out.read_text(encoding="utf-8")
     assert "/posts/raw/Posts%202026/doc.html" in content
+    assert "</a> · " not in content
     assert "<h1>Read</h1>" in content
     assert "Docflow" in content
     assert "Posts/Posts 2026/doc.html" not in content
@@ -44,7 +45,9 @@ def test_write_site_read_index_generates_tweets_year_pages(tmp_path: Path):
     assert '<a href="/read/tweets/2026.html">2026</a> (1)' in content
     year_page = base / "_site" / "read" / "tweets" / "2026.html"
     assert year_page.exists()
-    assert "/tweets/raw/Tweets%202026/Consolidado%20Tweets%202026-01-02.html" in year_page.read_text(encoding="utf-8")
+    year_content = year_page.read_text(encoding="utf-8")
+    assert "/tweets/raw/Tweets%202026/Consolidado%20Tweets%202026-01-02.html" in year_content
+    assert "</a> · " not in year_content
 
 
 def test_site_read_uses_bump_state_for_order_without_touching_mtime(tmp_path: Path):

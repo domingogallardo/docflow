@@ -9,7 +9,6 @@ from __future__ import annotations
 import argparse
 import html
 import os
-import re
 import time
 from dataclasses import dataclass
 from pathlib import Path
@@ -37,14 +36,12 @@ CATEGORY_LABELS = {
 }
 
 SKIP_DIR_NAMES = {"highlights", "__pycache__"}
-_TITLE_RE = re.compile(r"<title[^>]*>(.*?)</title>", re.IGNORECASE | re.DOTALL)
 
 
 @dataclass(frozen=True)
 class BrowseItem:
     rel_path: str
     name: str
-    title: str | None
     mtime: float
     published: bool
     bumped: bool
@@ -59,7 +56,6 @@ class BrowseEntry:
     is_dir: bool
     icon: str
     rel_path: str | None = None
-    title: str | None = None
     published: bool = False
     bumped: bool = False
     highlighted: bool = False
@@ -132,22 +128,6 @@ def _is_highlighted(base_dir: Path, rel_path: str) -> bool:
         if (highlights_dir / f"{encoded}.json").is_file():
             return True
     return False
-
-
-def _guess_title(path: Path) -> str | None:
-    suffix = path.suffix.lower()
-    if suffix in {".html", ".htm"}:
-        try:
-            text = path.read_text(encoding="utf-8", errors="ignore")
-        except Exception:
-            return None
-        match = _TITLE_RE.search(text)
-        if not match:
-            return None
-        title = re.sub(r"\s+", " ", match.group(1)).strip()
-        return title or None
-
-    return None
 
 
 def _entry_classes(entry: BrowseEntry) -> str:
@@ -342,7 +322,6 @@ def _scan_directory(
                         is_dir=False,
                         icon=_icon_for_filename(name),
                         rel_path=rel,
-                        title=_guess_title(abs_path),
                         published=rel in published_set,
                         bumped=bumped,
                         highlighted=_is_highlighted(base_dir, rel),
@@ -570,7 +549,6 @@ def collect_category_items(base_dir: Path, category: str) -> list[BrowseItem]:
             BrowseItem(
                 rel_path=rel,
                 name=path.name,
-                title=_guess_title(path),
                 mtime=effective_mtime,
                 published=rel in published_set,
                 bumped=bumped_mtime is not None,
