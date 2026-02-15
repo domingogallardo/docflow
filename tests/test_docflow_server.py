@@ -105,6 +105,25 @@ def test_raw_route_serves_library_file(tmp_path: Path):
         status, body = _get(port, "/posts/raw/Posts%202026/doc.html")
         assert status == 200
         assert "Raw Doc" in body
+        assert "dg-overlay" in body
+        assert "/api/publish" in body or "data-published" in body
+    finally:
+        server.shutdown()
+        server.server_close()
+
+
+def test_raw_pdf_route_has_no_overlay_injection(tmp_path: Path):
+    base = tmp_path / "base"
+    pdfs = base / "Pdfs" / "Pdfs 2026"
+    pdfs.mkdir(parents=True)
+    pdf = pdfs / "doc.pdf"
+    pdf.write_bytes(b"%PDF-1.4\\n%test\\n")
+
+    server, port = _start_server(base)
+    try:
+        status, body = _get(port, "/pdfs/raw/Pdfs%202026/doc.pdf")
+        assert status == 200
+        assert "dg-overlay" not in body
     finally:
         server.shutdown()
         server.server_close()

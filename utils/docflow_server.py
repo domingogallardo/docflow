@@ -10,6 +10,7 @@ Features:
 from __future__ import annotations
 
 import argparse
+import html
 import json
 import mimetypes
 import os
@@ -29,8 +30,16 @@ if __package__ in (None, ""):
         sys.path.insert(0, str(_REPO_ROOT))
 
 from utils import build_browse_index, build_read_index
-from utils.site_paths import PathValidationError, normalize_rel_path, resolve_base_dir, resolve_library_path, resolve_raw_path, site_root
-from utils.site_state import get_bumped_entry, pop_bumped_path, publish_path, set_bumped_path, unpublish_path
+from utils.site_paths import (
+    PathValidationError,
+    normalize_rel_path,
+    rel_path_from_abs,
+    resolve_base_dir,
+    resolve_library_path,
+    resolve_raw_path,
+    site_root,
+)
+from utils.site_state import get_bumped_entry, is_published, pop_bumped_path, publish_path, set_bumped_path, unpublish_path
 
 
 class ApiError(Exception):
@@ -213,6 +222,135 @@ def _send_file(handler: BaseHTTPRequestHandler, path: Path) -> None:
     handler.wfile.write(data)
 
 
+OVERLAY_CSS = """
+#dg-overlay {
+  position: fixed;
+  right: 16px;
+  bottom: 16px;
+  z-index: 2147483000;
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  padding: 8px;
+  border: 1px solid #cfcfcf;
+  border-radius: 10px;
+  background: #ffffff;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.15);
+  font: 12px -apple-system,system-ui,Segoe UI,Roboto,Helvetica,Arial;
+}
+#dg-overlay button {
+  padding: 4px 8px;
+  border: 1px solid #bfbfbf;
+  border-radius: 6px;
+  background: #f6f6f6;
+  color: #333;
+  cursor: pointer;
+}
+#dg-overlay button[disabled] {
+  opacity: .6;
+  cursor: default;
+}
+""".strip()
+
+
+OVERLAY_JS = """
+(function() {
+  const script = document.currentScript;
+  const relPath = script.getAttribute('data-path') || '';
+  if (!relPath) return;
+
+  let bumped = script.getAttribute('data-bumped') === '1';
+  let published = script.getAttribute('data-published') === '1';
+  let busy = false;
+
+  function callApi(action, path) {
+    const body = path ? { path } : {};
+    return fetch(`/api/${action}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body)
+    });
+  }
+
+  function makeButton(label, action) {
+    const button = document.createElement('button');
+    button.textContent = label;
+    button.addEventListener('click', async () => {
+      if (busy) return;
+      busy = true;
+      render();
+      try {
+        const res = await callApi(action, relPath);
+        if (!res.ok) {
+          alert(`Action failed: ${action}`);
+          busy = false;
+          render();
+          return;
+        }
+        if (action === 'bump') bumped = true;
+        if (action === 'unbump') bumped = false;
+        if (action === 'publish') published = true;
+        if (action === 'unpublish') published = false;
+        window.location.reload();
+      } catch (error) {
+        alert(`Action error: ${action}`);
+        busy = false;
+        render();
+      }
+    });
+    return button;
+  }
+
+  function render() {
+    bar.innerHTML = '';
+    bar.appendChild(makeButton(bumped ? 'Unbump' : 'Bump', bumped ? 'unbump' : 'bump'));
+    bar.appendChild(makeButton(published ? 'Unpublish' : 'Publish', published ? 'unpublish' : 'publish'));
+    if (busy) {
+      for (const btn of bar.querySelectorAll('button')) btn.setAttribute('disabled', '');
+    }
+  }
+
+  const bar = document.createElement('div');
+  bar.id = 'dg-overlay';
+  document.addEventListener('DOMContentLoaded', () => {
+    document.body.appendChild(bar);
+    render();
+  });
+})();
+""".strip()
+
+
+def _inject_html_overlay(*, html_text: str, rel_path: str, published: bool, bumped: bool) -> bytes:
+    path_attr = html.escape(rel_path, quote=True)
+    tags = (
+        f"<style>{OVERLAY_CSS}</style>"
+        f"<script defer data-path=\"{path_attr}\" data-published=\"{'1' if published else '0'}\" "
+        f"data-bumped=\"{'1' if bumped else '0'}\">{OVERLAY_JS}</script>"
+    )
+    lower = html_text.lower()
+    idx = lower.rfind("</body>")
+    merged = html_text + tags if idx == -1 else html_text[:idx] + tags + html_text[idx:]
+    return merged.encode("utf-8", "surrogateescape")
+
+
+def _send_overlay_html(handler: BaseHTTPRequestHandler, app: DocflowApp, abs_path: Path, rel_path: str) -> None:
+    try:
+        text = abs_path.read_text(encoding="utf-8", errors="surrogateescape")
+    except Exception:
+        _send_file(handler, abs_path)
+        return
+
+    published = is_published(app.base_dir, rel_path)
+    bumped = get_bumped_entry(app.base_dir, rel_path) is not None
+    payload = _inject_html_overlay(html_text=text, rel_path=rel_path, published=published, bumped=bumped)
+
+    handler.send_response(HTTPStatus.OK)
+    handler.send_header("Content-Type", "text/html; charset=utf-8")
+    handler.send_header("Content-Length", str(len(payload)))
+    handler.end_headers()
+    handler.wfile.write(payload)
+
+
 def _parse_json_body(handler: BaseHTTPRequestHandler) -> dict[str, object]:
     raw_len = handler.headers.get("Content-Length", "0")
     try:
@@ -248,7 +386,11 @@ def make_handler(app: DocflowApp):
             raw_target = resolve_raw_path(app.base_dir, path)
             if raw_target is not None:
                 if raw_target.is_file():
-                    _send_file(self, raw_target)
+                    if raw_target.suffix.lower() in (".html", ".htm"):
+                        rel_path = rel_path_from_abs(app.base_dir, raw_target)
+                        _send_overlay_html(self, app, raw_target, rel_path)
+                    else:
+                        _send_file(self, raw_target)
                     return
                 _send_json(self, 404, {"ok": False, "error": "Raw file not found"})
                 return

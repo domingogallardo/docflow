@@ -36,7 +36,6 @@ CATEGORY_LABELS = {
     "images": "Images",
 }
 
-IMAGE_EXTS = {".png", ".jpg", ".jpeg", ".gif", ".webp", ".svg", ".heic"}
 SKIP_DIR_NAMES = {"highlights", "__pycache__"}
 _TITLE_RE = re.compile(r"<title[^>]*>(.*?)</title>", re.IGNORECASE | re.DOTALL)
 
@@ -84,21 +83,19 @@ def _skip_directory(name: str) -> bool:
 
 
 def _is_visible_file_name(name: str) -> bool:
-    return not _is_hidden_name(name)
+    if _is_hidden_name(name):
+        return False
+    lower = name.lower()
+    return lower.endswith((".html", ".htm", ".pdf"))
 
 
 def _icon_for_filename(name: str) -> str:
     lower = name.lower()
-    suffix = Path(name).suffix.lower()
     if lower.endswith(".pdf"):
         return "📕 "
     if lower.endswith((".html", ".htm")):
         return "📄 "
-    if suffix in IMAGE_EXTS:
-        return "🖼️ "
-    if lower.endswith(".md"):
-        return "📝 "
-    return "📦 "
+    return ""
 
 
 def _highlight_name_candidates(name: str) -> list[str]:
@@ -150,16 +147,6 @@ def _guess_title(path: Path) -> str | None:
         title = re.sub(r"\s+", " ", match.group(1)).strip()
         return title or None
 
-    if suffix == ".md":
-        try:
-            with path.open("r", encoding="utf-8", errors="ignore") as fh:
-                for line in fh:
-                    stripped = line.strip()
-                    if stripped.startswith("#"):
-                        return stripped.lstrip("# ").strip() or None
-        except Exception:
-            return None
-
     return None
 
 
@@ -176,6 +163,8 @@ def _entry_classes(entry: BrowseEntry) -> str:
 
 def _actions_html(entry: BrowseEntry) -> str:
     if entry.is_dir or not entry.rel_path:
+        return ""
+    if not entry.name.lower().endswith(".pdf"):
         return ""
 
     pub_action = "unpublish" if entry.published else "publish"

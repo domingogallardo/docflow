@@ -10,6 +10,8 @@ def test_build_browse_site_generates_indexes_and_actions(tmp_path: Path):
     posts.mkdir(parents=True)
     html = posts / "doc.html"
     html.write_text("<html><title>Sample Title</title><body>Doc</body></html>", encoding="utf-8")
+    md = posts / "doc.md"
+    md.write_text("# Markdown sibling\\n", encoding="utf-8")
 
     pdfs = base / "Pdfs" / "Pdfs 2026"
     pdfs.mkdir(parents=True)
@@ -27,11 +29,13 @@ def test_build_browse_site_generates_indexes_and_actions(tmp_path: Path):
     browse_home = base / "_site" / "browse" / "index.html"
     posts_root_page = base / "_site" / "browse" / "posts" / "index.html"
     posts_year_page = base / "_site" / "browse" / "posts" / "Posts 2026" / "index.html"
+    pdfs_year_page = base / "_site" / "browse" / "pdfs" / "Pdfs 2026" / "index.html"
     assets_js = base / "_site" / "assets" / "actions.js"
 
     assert browse_home.exists()
     assert posts_root_page.exists()
     assert posts_year_page.exists()
+    assert pdfs_year_page.exists()
     assert assets_js.exists()
 
     root_content = posts_root_page.read_text(encoding="utf-8")
@@ -39,9 +43,14 @@ def test_build_browse_site_generates_indexes_and_actions(tmp_path: Path):
 
     content = posts_year_page.read_text(encoding="utf-8")
     assert "Sample Title" in content
-    assert 'data-api-action="unpublish"' in content
-    assert 'data-api-action="unbump"' in content
+    assert "doc.md" not in content
+    assert 'data-api-action="unpublish"' not in content
+    assert 'data-api-action="unbump"' not in content
     assert '/posts/raw/Posts%202026/doc.html' in content
+
+    pdf_content = pdfs_year_page.read_text(encoding="utf-8")
+    assert 'data-api-action="publish"' in pdf_content or 'data-api-action="unpublish"' in pdf_content
+    assert 'data-api-action="bump"' in pdf_content or 'data-api-action="unbump"' in pdf_content
 
 
 def test_collect_category_items_handles_missing_dirs(tmp_path: Path):
