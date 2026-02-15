@@ -225,8 +225,8 @@ def _send_file(handler: BaseHTTPRequestHandler, path: Path) -> None:
 OVERLAY_CSS = """
 #dg-overlay {
   position: fixed;
-  right: 16px;
-  bottom: 16px;
+  right: 12px;
+  top: 12px;
   z-index: 2147483000;
   display: flex;
   gap: 8px;
