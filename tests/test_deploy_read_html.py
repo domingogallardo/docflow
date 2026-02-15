@@ -21,6 +21,8 @@ def test_gen_index_creates_read_html(tmp_path):
     assert not (tmp_path / "index.html").exists()
     content = read_file.read_text(encoding="utf-8")
     assert "read.html" not in content
+    assert '<a href="/read/tweets/">Tweets</a>' in content
+    assert 'href="https://domingogallardo.com/"' in content
     for line in content.splitlines():
         if 'href="a.html"' in line:
             assert "📄" in line
@@ -55,3 +57,16 @@ def test_build_read_index_marks_highlighted_html():
             break
     else:
         raise AssertionError("No se encontro la entrada de doc(1).html")
+
+
+def test_build_read_index_owner_url_override(monkeypatch):
+    import importlib.util
+    import pathlib
+    path = pathlib.Path('utils/build_read_index.py')
+    spec = importlib.util.spec_from_file_location('build_read_index_owner', path)
+    mod = importlib.util.module_from_spec(spec)
+    assert spec and spec.loader
+    spec.loader.exec_module(mod)  # type: ignore
+    monkeypatch.setenv("DOCFLOW_OWNER_URL", "https://example.com/")
+    html = mod.build_html('web/public/read', [])
+    assert 'href="https://example.com/"' in html

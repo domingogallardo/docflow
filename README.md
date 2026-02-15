@@ -2,6 +2,29 @@
 
 docflow automates **collect -> process -> prioritize (bump) -> read -> publish -> mark as highlighted** for your documents (articles, podcasts, Markdown, PDFs, and tweets) in a yearly structure.
 
+## 🧭 Two-site model (important)
+docflow works with two different sites:
+
+1. `sitio biblioteca` (local source of truth)
+- What it is: your local document library under `BASE_DIR` (from `config.py`).
+- Main path: `BASE_DIR` (for example, `/Users/domingo/⭐️ Documentación`).
+- Served locally by: `python utils/serve_docs.py` (overlay for bump/publish/unpublish).
+- Tweet consolidated files are created here:
+  - `BASE_DIR/Tweets/Tweets <YEAR>/Consolidado Tweets YYYY-MM-DD.{md,html}`.
+
+2. `sitio publicado` (web output)
+- What it is: static files inside this repo that are deployed to your web server.
+- Main path: `web/public/read/`.
+- Served in production by Nginx at `/read/` (for example, `https://domingogallardo.com/read/`).
+- Deployed by: `bash web/deploy.sh` (or `bash bin/publish_web.sh` wrapper).
+
+Tweet flow across both sites:
+- `bin/docflow.sh all` calls `bin/build_tweet_consolidated.sh --yesterday`.
+- `bin/build_tweet_consolidated.sh` calls `utils/build_daily_tweet_consolidated.py` to generate daily consolidated files in the `sitio biblioteca`.
+- `utils/sync_tweets_public.py` copies consolidated files from the library into the published site under `web/public/read/tweets/<YEAR>/`.
+- `utils/build_tweets_index.py` generates static index pages in the `sitio publicado` (`web/public/read/tweets/read.html` and `web/public/read/tweets/<YEAR>.html`) that link to those yearly folders.
+- `web/deploy.sh` publishes what exists under `web/public/read/`.
+
 ## ✨ Highlights
 - Single pipeline for Instapaper, Snipd, PDFs, images, Markdown, and X likes (`Tweets/Tweets <YEAR>/`).
 - Daily tweet consolidated files (`Consolidado Tweets YYYY-MM-DD.{md,html}`) with full tweet/thread content, images, preserved links, and file `mtime` set to *(last tweet of the day + 60s)* so listings stay interleaved chronologically.

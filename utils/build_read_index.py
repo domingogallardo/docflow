@@ -23,6 +23,9 @@ from urllib.parse import quote
 
 MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
 BASE_DIR_ENV = "DOCFLOW_BASE_DIR"
+OWNER_URL_ENV = "DOCFLOW_OWNER_URL"
+DEFAULT_OWNER_URL = "https://domingogallardo.com/"
+DEFAULT_OWNER_NAME = "Domingo Gallardo"
 
 
 def fmt_date(ts: float) -> str:
@@ -136,12 +139,19 @@ def _highlight_icon(name: str, highlight_files: set[str]) -> str:
 
 
 def _render_list_item(name: str, mtime: float, highlight_files: set[str]) -> str:
-    href = quote(name)
+    href = quote(name, safe="~!*()'")
     esc = html.escape(name)
     icon = _icon_for(name)
     highlight_icon = _highlight_icon(name, highlight_files)
     d = fmt_date(mtime)
     return f'<li>{icon}{highlight_icon}<a href="{href}" title="{esc}">{esc}</a> — {d}</li>'
+
+
+def _owner_url() -> str:
+    value = os.getenv(OWNER_URL_ENV, "").strip()
+    if value:
+        return value
+    return DEFAULT_OWNER_URL
 
 
 def build_html(dir_path: str, entries: List[Tuple[float, str]], highlight_files: set[str] | None = None) -> str:
@@ -162,26 +172,40 @@ def build_html(dir_path: str, entries: List[Tuple[float, str]], highlight_files:
         list_parts.append("</ul>")
         list_html = "\n".join(list_parts)
 
-    ascii_open = r'''<style>
-  .ascii-head { margin-top: 28px; color: #666; font-size: 14px; }
-  pre.ascii-logo {
+    owner_url = html.escape(_owner_url(), quote=True)
+    owner_name = html.escape(DEFAULT_OWNER_NAME)
+    sections_html = (
+        '<h2>Sections</h2><ul>'
+        '<li><a href="/read/tweets/">Tweets</a></li>'
+        '</ul>'
+    )
+
+    ascii_open = f'''<style>
+  .ascii-head {{ margin-top: 28px; color: #666; font-size: 14px; }}
+  .owner-copy {{
+    margin: 10px 0 0;
+    color: #666;
+    font-size: 14px;
+  }}
+  pre.ascii-logo {{
     margin: 10px 0 0;
     color: #666;
     line-height: 1.05;
     font-size: 12px;
     font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
     white-space: pre;
-  }
-  .file-icon {
+  }}
+  .file-icon {{
     font-size: 0.85em;
     vertical-align: baseline;
     display: inline-block;
     transform: translateY(-0.05em);
-  }
+  }}
 </style>
 <div class="ascii-head"><a href="https://github.com/domingogallardo/docflow" target="_blank" rel="noopener">Docflow</a></div>
+<p class="owner-copy">© <a href="{owner_url}" target="_blank" rel="noopener">{owner_name}</a></p>
 <pre class="ascii-logo" aria-hidden="true">         _
-        /^\
+        /^\\
         |-|
         |D|
         |O|
@@ -190,11 +214,11 @@ def build_html(dir_path: str, entries: List[Tuple[float, str]], highlight_files:
         |L|
         |O|
         |W|
-       /| |\
-      /_| |_\
-        /_\
-       /___\
-      /_/ \_\
+       /| |\\
+      /_| |_\\
+        /_\\
+       /___\\
+      /_/ \\_\\
 </pre>'''
 
     html_doc = (
@@ -203,6 +227,7 @@ def build_html(dir_path: str, entries: List[Tuple[float, str]], highlight_files:
         '<script src="/read/article.js" defer></script>'
         '<title>Read</title></head><body>'
         '<h1>Read</h1>'
+        + sections_html
         + list_html
         + ascii_open
         + '</body></html>'
