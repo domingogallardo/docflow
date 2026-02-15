@@ -60,3 +60,27 @@ def test_collect_category_items_handles_missing_dirs(tmp_path: Path):
 
     items = build_browse_index.collect_category_items(base, "images")
     assert items == []
+
+
+def test_browse_uses_bump_state_for_order_without_touching_mtime(tmp_path: Path):
+    base = tmp_path / "base"
+    posts = base / "Posts" / "Posts 2026"
+    posts.mkdir(parents=True)
+
+    first = posts / "a.html"
+    second = posts / "b.html"
+    first.write_text("<html><title>A</title><body>A</body></html>", encoding="utf-8")
+    second.write_text("<html><title>B</title><body>B</body></html>", encoding="utf-8")
+
+    site_state.publish_path(base, "Posts/Posts 2026/a.html")
+    site_state.publish_path(base, "Posts/Posts 2026/b.html")
+
+    mtime_b_before = second.stat().st_mtime
+    site_state.set_bumped_path(base, "Posts/Posts 2026/b.html", original_mtime=mtime_b_before, bumped_mtime=9_999_999_999.0)
+
+    build_browse_index.build_browse_site(base)
+    year_page = base / "_site" / "browse" / "posts" / "Posts 2026" / "index.html"
+    html = year_page.read_text(encoding="utf-8")
+
+    assert html.find("b.html") < html.find("a.html")
+    assert abs(second.stat().st_mtime - mtime_b_before) < 0.001

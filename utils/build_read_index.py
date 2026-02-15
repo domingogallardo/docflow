@@ -28,7 +28,7 @@ if __package__ in (None, ""):
         sys.path.insert(0, str(_REPO_ROOT))
 
 from utils.site_paths import raw_url_for_rel_path, resolve_base_dir, resolve_library_path, site_root
-from utils.site_state import list_published
+from utils.site_state import list_published, load_bump_state
 
 MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
 BASE_DIR_ENV = "DOCFLOW_BASE_DIR"
@@ -312,6 +312,8 @@ def _is_site_highlighted(base_dir: Path, rel_path: str) -> bool:
 
 def collect_site_read_items(base_dir: Path) -> list[SiteReadItem]:
     published = list_published(base_dir)
+    bump_state = load_bump_state(base_dir)
+    bump_items = bump_state.get("items", {}) if isinstance(bump_state.get("items", {}), dict) else {}
 
     items: list[SiteReadItem] = []
     for rel in sorted(published):
@@ -321,11 +323,20 @@ def collect_site_read_items(base_dir: Path) -> list[SiteReadItem]:
             continue
         if not abs_path.is_file():
             continue
+        st = abs_path.stat()
+        bump_entry = bump_items.get(rel)
+        bumped_mtime = None
+        if isinstance(bump_entry, dict):
+            try:
+                bumped_mtime = float(bump_entry.get("bumped_mtime"))
+            except Exception:
+                bumped_mtime = None
+        effective_mtime = bumped_mtime if bumped_mtime is not None else st.st_mtime
         items.append(
             SiteReadItem(
                 rel_path=rel,
                 name=abs_path.name,
-                mtime=abs_path.stat().st_mtime,
+                mtime=effective_mtime,
                 highlighted=_is_site_highlighted(base_dir, rel),
             )
         )

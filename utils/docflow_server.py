@@ -78,25 +78,6 @@ class DocflowApp:
         base = _add_years(datetime.now().replace(microsecond=0), self.bump_years)
         return float(int(base.timestamp()) + counter)
 
-    def _related_paths(self, abs_path: Path) -> list[Path]:
-        paths: list[Path] = [abs_path]
-        suffix = abs_path.suffix.lower()
-        if suffix in (".html", ".htm"):
-            candidate = abs_path.with_suffix(".md")
-            if candidate.is_file():
-                paths.append(candidate)
-        elif suffix == ".md":
-            for ext in (".html", ".htm"):
-                candidate = abs_path.with_suffix(ext)
-                if candidate.is_file():
-                    paths.append(candidate)
-        return paths
-
-    def _set_mtime(self, abs_path: Path, mtime: float) -> None:
-        for path in self._related_paths(abs_path):
-            st = path.stat()
-            os.utime(path, (st.st_atime, mtime))
-
     def _resolve_existing_file(self, rel_path: str) -> tuple[str, Path]:
         try:
             normalized = normalize_rel_path(rel_path)
@@ -131,7 +112,6 @@ class DocflowApp:
         original_mtime = float(entry.get("original_mtime", st.st_mtime)) if entry else float(st.st_mtime)
         bumped_mtime = self._next_bump_mtime()
 
-        self._set_mtime(abs_path, bumped_mtime)
         set_bumped_path(
             self.base_dir,
             normalized,
@@ -142,13 +122,12 @@ class DocflowApp:
         return {"path": normalized, "bumped_mtime": bumped_mtime}
 
     def api_unbump(self, rel_path: str) -> dict[str, object]:
-        normalized, abs_path = self._resolve_existing_file(rel_path)
+        normalized, _ = self._resolve_existing_file(rel_path)
         entry = pop_bumped_path(self.base_dir, normalized)
         if entry is None:
             raise ApiError(409, f"Path is not bumped: {normalized}")
 
         original_mtime = float(entry.get("original_mtime", time.time()))
-        self._set_mtime(abs_path, original_mtime)
         self.rebuild()
         return {"path": normalized, "restored_mtime": original_mtime}
 

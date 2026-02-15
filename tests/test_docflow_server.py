@@ -77,10 +77,11 @@ def test_api_bump_unbump_roundtrip(tmp_path: Path):
 
     server, port = _start_server(base)
     try:
+        mtime_before_bump = html.stat().st_mtime
         status, payload = _post_json(port, "/api/bump", {"path": "Posts/Posts 2026/doc.html"})
         assert status == 200
         assert payload["ok"] is True
-        assert html.stat().st_mtime > time.time()
+        assert abs(html.stat().st_mtime - mtime_before_bump) < 0.001
         assert get_bumped_entry(base, "Posts/Posts 2026/doc.html") is not None
 
         status, payload = _post_json(port, "/api/unbump", {"path": "Posts/Posts 2026/doc.html"})

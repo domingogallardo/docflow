@@ -47,6 +47,29 @@ def test_write_site_read_index_generates_tweets_year_pages(tmp_path: Path):
     assert "/tweets/raw/Tweets%202026/Consolidado%20Tweets%202026-01-02.html" in year_page.read_text(encoding="utf-8")
 
 
+def test_site_read_uses_bump_state_for_order_without_touching_mtime(tmp_path: Path):
+    base = tmp_path / "base"
+    posts = base / "Posts" / "Posts 2026"
+    posts.mkdir(parents=True)
+
+    first = posts / "a.html"
+    second = posts / "b.html"
+    first.write_text("<html><body>A</body></html>", encoding="utf-8")
+    second.write_text("<html><body>B</body></html>", encoding="utf-8")
+
+    site_state.publish_path(base, "Posts/Posts 2026/a.html")
+    site_state.publish_path(base, "Posts/Posts 2026/b.html")
+
+    mtime_b_before = second.stat().st_mtime
+    site_state.set_bumped_path(base, "Posts/Posts 2026/b.html", original_mtime=mtime_b_before, bumped_mtime=9_999_999_999.0)
+
+    out = build_read_index.write_site_read_index(base)
+    content = out.read_text(encoding="utf-8")
+
+    assert content.find("b.html") < content.find("a.html")
+    assert abs(second.stat().st_mtime - mtime_b_before) < 0.001
+
+
 def test_build_read_index_legacy_mode_still_generates_read_html(tmp_path: Path):
     (tmp_path / "a.html").write_text("<p>A</p>", encoding="utf-8")
 

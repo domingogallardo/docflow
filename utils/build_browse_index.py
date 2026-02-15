@@ -23,7 +23,7 @@ if __package__ in (None, ""):
         sys.path.insert(0, str(_REPO_ROOT))
 
 from utils.site_paths import library_roots, raw_url_for_rel_path, rel_path_from_abs, resolve_base_dir, site_root
-from utils.site_state import list_bumped, list_published
+from utils.site_state import load_bump_state, list_published
 
 MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
 
@@ -282,8 +282,7 @@ def _scan_directory(
     base_dir: Path,
     abs_dir: Path,
     published_set: set[str],
-    bumped_set: set[str],
-    now_ts: float,
+    bump_items: dict[str, dict],
     visibility_cache: dict[str, bool],
 ) -> tuple[list[BrowseEntry], list[str], int]:
     entries: list[BrowseEntry] = []
@@ -330,12 +329,20 @@ def _scan_directory(
                 file_count += 1
                 abs_path = Path(fs_entry.path)
                 rel = rel_path_from_abs(base_dir, abs_path)
-                bumped = rel in bumped_set or st.st_mtime > now_ts
+                bump_entry = bump_items.get(rel)
+                bumped_mtime = None
+                if isinstance(bump_entry, dict):
+                    try:
+                        bumped_mtime = float(bump_entry.get("bumped_mtime"))
+                    except Exception:
+                        bumped_mtime = None
+                effective_mtime = bumped_mtime if bumped_mtime is not None else st.st_mtime
+                bumped = bumped_mtime is not None
                 entries.append(
                     BrowseEntry(
                         name=name,
                         href=raw_url_for_rel_path(rel),
-                        mtime=st.st_mtime,
+                        mtime=effective_mtime,
                         is_dir=False,
                         icon=_icon_for_filename(name),
                         rel_path=rel,
@@ -359,13 +366,12 @@ def _write_category_tree(
     category: str,
     category_root: Path,
     published_set: set[str],
-    bumped_set: set[str],
+    bump_items: dict[str, dict],
 ) -> int:
     out_root = site_root(base_dir) / "browse" / category
     out_root.mkdir(parents=True, exist_ok=True)
 
     visibility_cache: dict[str, bool] = {}
-    now_ts = time.time()
 
     if not category_root.is_dir():
         html_doc = _render_directory_page(
@@ -386,8 +392,7 @@ def _write_category_tree(
             base_dir=base_dir,
             abs_dir=abs_dir,
             published_set=published_set,
-            bumped_set=bumped_set,
-            now_ts=now_ts,
+            bump_items=bump_items,
             visibility_cache=visibility_cache,
         )
 
@@ -542,8 +547,8 @@ def collect_category_items(base_dir: Path, category: str) -> list[BrowseItem]:
         return []
 
     published_set = list_published(base_dir)
-    bumped_set = list_bumped(base_dir)
-    now_ts = time.time()
+    bump_state = load_bump_state(base_dir)
+    bump_items = bump_state.get("items", {}) if isinstance(bump_state.get("items", {}), dict) else {}
 
     items: list[BrowseItem] = []
     for path in root.rglob("*"):
@@ -557,14 +562,22 @@ def collect_category_items(base_dir: Path, category: str) -> list[BrowseItem]:
 
         rel = rel_path_from_abs(base_dir, path)
         st = path.stat()
+        bump_entry = bump_items.get(rel)
+        bumped_mtime = None
+        if isinstance(bump_entry, dict):
+            try:
+                bumped_mtime = float(bump_entry.get("bumped_mtime"))
+            except Exception:
+                bumped_mtime = None
+        effective_mtime = bumped_mtime if bumped_mtime is not None else st.st_mtime
         items.append(
             BrowseItem(
                 rel_path=rel,
                 name=path.name,
                 title=_guess_title(path),
-                mtime=st.st_mtime,
+                mtime=effective_mtime,
                 published=rel in published_set,
-                bumped=(rel in bumped_set or st.st_mtime > now_ts),
+                bumped=bumped_mtime is not None,
                 highlighted=_is_highlighted(base_dir, rel),
             )
         )
@@ -588,7 +601,8 @@ def build_browse_site(base_dir: Path) -> dict[str, int]:
     ensure_assets(base_dir)
 
     published_set = list_published(base_dir)
-    bumped_set = list_bumped(base_dir)
+    bump_state = load_bump_state(base_dir)
+    bump_items = bump_state.get("items", {}) if isinstance(bump_state.get("items", {}), dict) else {}
     roots = _category_roots(base_dir)
 
     counts: dict[str, int] = {}
@@ -598,7 +612,7 @@ def build_browse_site(base_dir: Path) -> dict[str, int]:
             category=category,
             category_root=roots[category],
             published_set=published_set,
-            bumped_set=bumped_set,
+            bump_items=bump_items,
         )
 
     _write_browse_home(base_dir, roots, counts)
