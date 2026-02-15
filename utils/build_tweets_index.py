@@ -13,6 +13,7 @@ import argparse
 import html
 import importlib.util
 import os
+import re
 import time
 from dataclasses import dataclass
 from pathlib import Path
@@ -27,6 +28,7 @@ BASE_DIR_ENV = "DOCFLOW_BASE_DIR"
 class TweetFile:
     name: str
     mtime: float
+    tweet_count: int = 0
 
 
 def fmt_date(ts: float) -> str:
@@ -64,6 +66,28 @@ def resolve_base_dir(cli_base_dir: str | None) -> Path | None:
         return None
 
 
+_TOTAL_FILES_RE = re.compile(r"Total de ficheros:\s*<strong>\s*(\d+)\s*</strong>", re.IGNORECASE)
+_TOTAL_FILES_ALT_RE = re.compile(r"Total files:\s*<strong>\s*(\d+)\s*</strong>", re.IGNORECASE)
+_ENTRY_ARTICLE_RE = re.compile(r'<article\b[^>]*\bclass=["\'][^"\']*\bdg-entry\b[^"\']*["\']', re.IGNORECASE)
+
+
+def _extract_tweet_count(path: Path) -> int:
+    try:
+        text = path.read_text(encoding="utf-8", errors="ignore")
+    except Exception:
+        return 0
+
+    for pattern in (_TOTAL_FILES_RE, _TOTAL_FILES_ALT_RE):
+        match = pattern.search(text)
+        if match:
+            try:
+                return int(match.group(1))
+            except Exception:
+                break
+
+    return len(_ENTRY_ARTICLE_RE.findall(text))
+
+
 def discover_consolidated_by_year(base_dir: Path | None) -> dict[int, list[TweetFile]]:
     if base_dir is None:
         return {}
@@ -90,7 +114,13 @@ def discover_consolidated_by_year(base_dir: Path | None) -> dict[int, list[Tweet
                 continue
             if not low_name.endswith((".html", ".htm")):
                 continue
-            items.append(TweetFile(name=item.name, mtime=item.stat().st_mtime))
+            items.append(
+                TweetFile(
+                    name=item.name,
+                    mtime=item.stat().st_mtime,
+                    tweet_count=_extract_tweet_count(item),
+                )
+            )
 
         if items:
             items.sort(key=lambda it: it.mtime, reverse=True)
@@ -130,7 +160,8 @@ def render_year_html(year: int, files: list[TweetFile]) -> str:
             esc = html.escape(item.name)
             encoded_name = quote(item.name, safe="~!*()'")
             href = f"{year}/{encoded_name}"
-            lines.append(f'<li><a href="{href}" title="{esc}">{esc}</a> — {fmt_date(item.mtime)}</li>')
+            tweet_word = "tweet" if item.tweet_count == 1 else "tweets"
+            lines.append(f'<li><a href="{href}" title="{esc}">{esc}</a> ({item.tweet_count} {tweet_word})</li>')
         lines.append("</ul>")
         list_html = "\n".join(lines)
 

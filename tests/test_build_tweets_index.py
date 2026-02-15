@@ -34,11 +34,11 @@ def test_write_indexes_generates_root_and_year_pages(tmp_path: Path) -> None:
     output = tmp_path / "out"
     index = {
         2026: [
-            mod.TweetFile(name="Consolidado Tweets 2026-01-02.html", mtime=2_000),
-            mod.TweetFile(name="Consolidado Tweets 2026-01-01.html", mtime=1_000),
+            mod.TweetFile(name="Consolidado Tweets 2026-01-02.html", mtime=2_000, tweet_count=12),
+            mod.TweetFile(name="Consolidado Tweets 2026-01-01.html", mtime=1_000, tweet_count=1),
         ],
         2025: [
-            mod.TweetFile(name="Consolidado Tweets 2025-12-31.html", mtime=500),
+            mod.TweetFile(name="Consolidado Tweets 2025-12-31.html", mtime=500, tweet_count=5),
         ],
     }
 
@@ -51,6 +51,31 @@ def test_write_indexes_generates_root_and_year_pages(tmp_path: Path) -> None:
     assert '<a href="2025.html">2025</a> (1)' in root
     assert 'href="2026/Consolidado%20Tweets%202026-01-02.html"' in y2026
     assert 'href="2026/Consolidado%20Tweets%202026-01-01.html"' in y2026
+    assert "(12 tweets)" in y2026
+    assert "(1 tweet)" in y2026
+    assert " — " not in y2026
+
+
+def test_extract_tweet_count_from_summary_block(tmp_path: Path) -> None:
+    html_path = tmp_path / "Consolidado Tweets 2026-02-13.html"
+    html_path.write_text(
+        "<ul><li>Total de ficheros: <strong>54</strong></li></ul>",
+        encoding="utf-8",
+    )
+
+    assert mod._extract_tweet_count(html_path) == 54
+
+
+def test_extract_tweet_count_falls_back_to_entry_articles(tmp_path: Path) -> None:
+    html_path = tmp_path / "Consolidado Tweets 2026-02-13.html"
+    html_path.write_text(
+        '<article class="dg-entry"></article>'
+        '<article class="card dg-entry extra"></article>'
+        '<article class="other"></article>',
+        encoding="utf-8",
+    )
+
+    assert mod._extract_tweet_count(html_path) == 2
 
 
 def test_resolve_base_dir_prefers_cli(tmp_path: Path, monkeypatch) -> None:
