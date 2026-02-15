@@ -72,6 +72,10 @@ class DocflowApp:
         build_browse_index.build_browse_site(self.base_dir)
         build_read_index.write_site_read_index(self.base_dir)
 
+    def rebuild_for_path(self, rel_path: str) -> None:
+        build_browse_index.rebuild_browse_for_path(self.base_dir, rel_path)
+        build_read_index.write_site_read_index(self.base_dir)
+
     def _next_bump_mtime(self) -> float:
         with self._bump_lock:
             self._bump_counter += 1
@@ -96,13 +100,13 @@ class DocflowApp:
     def api_publish(self, rel_path: str) -> dict[str, object]:
         normalized, _ = self._resolve_existing_file(rel_path)
         changed = publish_path(self.base_dir, normalized)
-        self.rebuild()
+        self.rebuild_for_path(normalized)
         return {"changed": changed, "path": normalized}
 
     def api_unpublish(self, rel_path: str) -> dict[str, object]:
         normalized = normalize_rel_path(rel_path)
         changed = unpublish_path(self.base_dir, normalized)
-        self.rebuild()
+        self.rebuild_for_path(normalized)
         return {"changed": changed, "path": normalized}
 
     def api_bump(self, rel_path: str) -> dict[str, object]:
@@ -119,7 +123,7 @@ class DocflowApp:
             original_mtime=original_mtime,
             bumped_mtime=bumped_mtime,
         )
-        self.rebuild()
+        self.rebuild_for_path(normalized)
         return {"path": normalized, "bumped_mtime": bumped_mtime}
 
     def api_unbump(self, rel_path: str) -> dict[str, object]:
@@ -129,7 +133,7 @@ class DocflowApp:
             raise ApiError(409, f"Path is not bumped: {normalized}")
 
         original_mtime = float(entry.get("original_mtime", time.time()))
-        self.rebuild()
+        self.rebuild_for_path(normalized)
         return {"path": normalized, "restored_mtime": original_mtime}
 
     def api_rebuild(self) -> dict[str, object]:
@@ -143,7 +147,7 @@ class DocflowApp:
     def api_put_highlights(self, rel_path: str, payload: dict[str, object]) -> dict[str, object]:
         normalized, _ = self._resolve_existing_file(rel_path)
         saved = save_highlights_for_path(self.base_dir, normalized, payload)
-        self.rebuild()
+        self.rebuild_for_path(normalized)
         return saved
 
     def handle_api(self, action: str, payload: dict[str, object]) -> dict[str, object]:

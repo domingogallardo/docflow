@@ -22,7 +22,14 @@ if __package__ in (None, ""):
     if str(_REPO_ROOT) not in sys.path:
         sys.path.insert(0, str(_REPO_ROOT))
 
-from utils.site_paths import library_roots, raw_url_for_rel_path, rel_path_from_abs, resolve_base_dir, site_root
+from utils.site_paths import (
+    library_roots,
+    normalize_rel_path,
+    raw_url_for_rel_path,
+    rel_path_from_abs,
+    resolve_base_dir,
+    site_root,
+)
 from utils.highlight_store import has_highlights_for_path
 from utils.site_state import load_bump_state, list_published
 
@@ -234,6 +241,47 @@ def _dir_has_visible_entries(path: Path, cache: dict[str, bool]) -> bool:
     return False
 
 
+def _category_for_root_segment(segment: str) -> str | None:
+    mapping = {
+        "Posts": "posts",
+        "Tweets": "tweets",
+        "Pdfs": "pdfs",
+        "PDFs": "pdfs",
+        "Images": "images",
+        "Podcasts": "podcasts",
+    }
+    return mapping.get(segment)
+
+
+def _category_and_rel_dir(rel_path: str) -> tuple[str | None, Path | None]:
+    normalized = normalize_rel_path(rel_path)
+    parts = Path(normalized).parts
+    if not parts:
+        return None, None
+
+    category = _category_for_root_segment(parts[0])
+    if category is None:
+        return None, None
+
+    tail_parts = parts[1:]
+    if not tail_parts:
+        return category, Path(".")
+    return category, Path(*tail_parts).parent
+
+
+def _display_path_for_category_dir(category: str, rel_dir: Path) -> str:
+    if rel_dir == Path("."):
+        return f"/browse/{category}/"
+    return f"/browse/{category}/{rel_dir.as_posix()}/"
+
+
+def _cleanup_legacy_incoming_dir(base_dir: Path) -> None:
+    browse_dir = site_root(base_dir) / "browse"
+    incoming_dir = browse_dir / "incoming"
+    if incoming_dir.exists():
+        shutil.rmtree(incoming_dir)
+
+
 def _scan_directory(
     *,
     base_dir: Path,
@@ -319,6 +367,42 @@ def _scan_directory(
     return entries, child_dirs, file_count
 
 
+def _write_category_directory_page(
+    *,
+    base_dir: Path,
+    category: str,
+    category_root: Path,
+    rel_dir: Path,
+    published_set: set[str],
+    bump_items: dict[str, dict],
+    visibility_cache: dict[str, bool],
+) -> tuple[list[str], int]:
+    out_root = site_root(base_dir) / "browse" / category
+    out_root.mkdir(parents=True, exist_ok=True)
+
+    abs_dir = category_root / rel_dir
+    out_dir = out_root / rel_dir
+    out_dir.mkdir(parents=True, exist_ok=True)
+
+    entries, child_dirs, direct_files = _scan_directory(
+        base_dir=base_dir,
+        abs_dir=abs_dir,
+        published_set=published_set,
+        bump_items=bump_items,
+        visibility_cache=visibility_cache,
+    )
+
+    display_path = _display_path_for_category_dir(category, rel_dir)
+    html_doc = _render_directory_page(
+        title=f"Index of {display_path}",
+        display_path=display_path,
+        entries=entries,
+        parent_href="../",
+    )
+    (out_dir / "index.html").write_text(html_doc, encoding="utf-8")
+    return child_dirs, direct_files
+
+
 def _write_category_tree(
     *,
     base_dir: Path,
@@ -327,46 +411,18 @@ def _write_category_tree(
     published_set: set[str],
     bump_items: dict[str, dict],
 ) -> int:
-    out_root = site_root(base_dir) / "browse" / category
-    out_root.mkdir(parents=True, exist_ok=True)
-
     visibility_cache: dict[str, bool] = {}
 
-    if not category_root.is_dir():
-        html_doc = _render_directory_page(
-            title=f"Index of /browse/{category}/",
-            display_path=f"/browse/{category}/",
-            entries=[],
-            parent_href="../",
-        )
-        (out_root / "index.html").write_text(html_doc, encoding="utf-8")
-        return 0
-
     def walk(rel_dir: Path) -> int:
-        abs_dir = category_root / rel_dir
-        out_dir = out_root / rel_dir
-        out_dir.mkdir(parents=True, exist_ok=True)
-
-        entries, child_dirs, direct_files = _scan_directory(
+        child_dirs, direct_files = _write_category_directory_page(
             base_dir=base_dir,
-            abs_dir=abs_dir,
+            category=category,
+            category_root=category_root,
+            rel_dir=rel_dir,
             published_set=published_set,
             bump_items=bump_items,
             visibility_cache=visibility_cache,
         )
-
-        if rel_dir == Path("."):
-            display_path = f"/browse/{category}/"
-        else:
-            display_path = f"/browse/{category}/{rel_dir.as_posix()}/"
-
-        html_doc = _render_directory_page(
-            title=f"Index of {display_path}",
-            display_path=display_path,
-            entries=entries,
-            parent_href="../",
-        )
-        (out_dir / "index.html").write_text(html_doc, encoding="utf-8")
 
         total_files = direct_files
         for child in child_dirs:
@@ -558,12 +614,64 @@ def _category_roots(base_dir: Path) -> dict[str, Path]:
     }
 
 
+def rebuild_browse_for_path(base_dir: Path, rel_path: str) -> dict[str, object]:
+    """Incremental browse rebuild for one affected library file path.
+
+    Rebuilds only the containing directory and its ancestors in the matching category.
+    Falls back to full rebuild for unsupported paths.
+    """
+    ensure_assets(base_dir)
+    _cleanup_legacy_incoming_dir(base_dir)
+
+    try:
+        normalized = normalize_rel_path(rel_path)
+    except Exception:
+        counts = build_browse_site(base_dir)
+        return {"mode": "full", "reason": "invalid_path", "counts": counts}
+
+    category, rel_dir = _category_and_rel_dir(normalized)
+    if category is None or rel_dir is None:
+        counts = build_browse_site(base_dir)
+        return {"mode": "full", "reason": "unsupported_root", "counts": counts}
+
+    published_set = list_published(base_dir)
+    bump_state = load_bump_state(base_dir)
+    bump_items = bump_state.get("items", {}) if isinstance(bump_state.get("items", {}), dict) else {}
+    roots = _category_roots(base_dir)
+    category_root = roots[category]
+    visibility_cache: dict[str, bool] = {}
+
+    dirs_to_update: list[Path] = []
+    cursor = rel_dir
+    while True:
+        dirs_to_update.append(cursor)
+        if cursor == Path("."):
+            break
+        cursor = cursor.parent
+
+    updated_paths: list[str] = []
+    for target_rel_dir in dirs_to_update:
+        _write_category_directory_page(
+            base_dir=base_dir,
+            category=category,
+            category_root=category_root,
+            rel_dir=target_rel_dir,
+            published_set=published_set,
+            bump_items=bump_items,
+            visibility_cache=visibility_cache,
+        )
+        updated_paths.append(_display_path_for_category_dir(category, target_rel_dir))
+
+    return {
+        "mode": "partial",
+        "category": category,
+        "updated": updated_paths,
+    }
+
+
 def build_browse_site(base_dir: Path) -> dict[str, int]:
     ensure_assets(base_dir)
-    browse_dir = site_root(base_dir) / "browse"
-    incoming_dir = browse_dir / "incoming"
-    if incoming_dir.exists():
-        shutil.rmtree(incoming_dir)
+    _cleanup_legacy_incoming_dir(base_dir)
 
     published_set = list_published(base_dir)
     bump_state = load_bump_state(base_dir)

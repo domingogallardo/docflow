@@ -182,3 +182,32 @@ def test_raw_pdf_route_has_no_overlay_injection(tmp_path: Path):
     finally:
         server.shutdown()
         server.server_close()
+
+
+def test_publish_does_not_rewrite_unrelated_browse_branch(tmp_path: Path):
+    base = tmp_path / "base"
+    posts_2025 = base / "Posts" / "Posts 2025"
+    posts_2026 = base / "Posts" / "Posts 2026"
+    posts_2025.mkdir(parents=True)
+    posts_2026.mkdir(parents=True)
+
+    (posts_2025 / "old.html").write_text("<html><body>Old</body></html>", encoding="utf-8")
+    (posts_2026 / "new.html").write_text("<html><body>New</body></html>", encoding="utf-8")
+
+    server, port = _start_server(base)
+    try:
+        untouched_page = base / "_site" / "browse" / "posts" / "Posts 2025" / "index.html"
+        untouched_mtime_before = untouched_page.stat().st_mtime
+
+        time.sleep(1.1)
+        status, payload = _post_json(port, "/api/publish", {"path": "Posts/Posts 2026/new.html"})
+        assert status == 200
+        assert payload["ok"] is True
+
+        assert abs(untouched_page.stat().st_mtime - untouched_mtime_before) < 0.001
+        status, html = _get(port, "/browse/posts/Posts%202026/")
+        assert status == 200
+        assert "🟢" in html
+    finally:
+        server.shutdown()
+        server.server_close()

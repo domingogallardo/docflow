@@ -1,4 +1,5 @@
 import os
+import time
 from pathlib import Path
 
 from utils import build_browse_index
@@ -131,3 +132,31 @@ def test_tweets_listing_hides_secondary_title_text(tmp_path: Path):
 
     assert "Tweet Title Extra" not in content
     assert " · Tweet Title Extra" not in content
+
+
+def test_rebuild_browse_for_path_updates_only_target_branch(tmp_path: Path):
+    base = tmp_path / "base"
+    posts_2025 = base / "Posts" / "Posts 2025"
+    posts_2026 = base / "Posts" / "Posts 2026"
+    posts_2025.mkdir(parents=True)
+    posts_2026.mkdir(parents=True)
+
+    old_doc = posts_2025 / "old.html"
+    new_doc = posts_2026 / "new.html"
+    old_doc.write_text("<html><body>Old</body></html>", encoding="utf-8")
+    new_doc.write_text("<html><body>New</body></html>", encoding="utf-8")
+
+    build_browse_index.build_browse_site(base)
+    untouched_page = base / "_site" / "browse" / "posts" / "Posts 2025" / "index.html"
+    target_page = base / "_site" / "browse" / "posts" / "Posts 2026" / "index.html"
+    untouched_mtime_before = untouched_page.stat().st_mtime
+
+    site_state.publish_path(base, "Posts/Posts 2026/new.html")
+    time.sleep(1.1)
+    result = build_browse_index.rebuild_browse_for_path(base, "Posts/Posts 2026/new.html")
+
+    assert result["mode"] == "partial"
+    assert result["category"] == "posts"
+    assert "/browse/posts/Posts 2026/" in result["updated"]
+    assert "🟢" in target_page.read_text(encoding="utf-8")
+    assert abs(untouched_page.stat().st_mtime - untouched_mtime_before) < 0.001
