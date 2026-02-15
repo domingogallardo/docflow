@@ -130,6 +130,7 @@ State schema (versioned JSON, local-only):
    export TWEET_LIKES_STATE=/path/to/x_state.json  # required if you process X likes
    export TWEET_LIKES_MAX=50                           # optional, scroll limit
    export HIGHLIGHTS_BASE_URL=https://your-domain.com  # required for highlight sync in bin/docflow.sh
+   export INTRANET_BASE_DIR="/Users/domingo/⭐️ Documentación"  # optional override for local _site rebuild
    ```
 2. Run the full pipeline (you can pass `--year`):
    ```bash
@@ -144,6 +145,7 @@ State schema (versioned JSON, local-only):
    # Also syncs public highlights into Posts/Posts <YEAR>/highlights/.
    # If the pipeline + highlights sync succeed, it regenerates web/public/read/read.html.
    # It runs web/deploy.sh only if read.html changed (requires REMOTE_USER/REMOTE_HOST).
+   # It also rebuilds local intranet indexes in BASE_DIR/_site (browse + read).
    ```
 3. Review locally with the overlay (bump/unbump, publish/unpublish, delete):
    ```bash

@@ -18,6 +18,12 @@ cd "${REPO_DIR}"
 PYTHON_BIN="${PYTHON_BIN:-python3}"
 DEPLOY_SCRIPT="${DEPLOY_SCRIPT:-${REPO_DIR}/web/deploy.sh}"
 TWEET_CONSOLIDATE_SCRIPT="${TWEET_CONSOLIDATE_SCRIPT:-${REPO_DIR}/bin/build_tweet_consolidated.sh}"
+DEFAULT_INTRASITE_BASE_DIR="$("${PYTHON_BIN}" - <<'PY' 2>/dev/null || true
+import config as cfg
+print(cfg.BASE_DIR)
+PY
+)"
+INTRANET_BASE_DIR="${INTRANET_BASE_DIR:-${DEFAULT_INTRASITE_BASE_DIR}}"
 
 file_hash() {
   local path="$1"
@@ -163,6 +169,34 @@ else
   echo "[$(date -Iseconds)] Docflow: deploy skipped (process exit=${status}, highlights exit=${sync_status})"
 fi
 
+intranet_browse_status=0
+intranet_read_status=0
+intranet_status=0
+if [ "${status}" -eq 0 ]; then
+  if [ -n "${INTRANET_BASE_DIR}" ] && [ -d "${INTRANET_BASE_DIR}" ]; then
+    set +e
+    "${PYTHON_BIN}" utils/build_browse_index.py --base-dir "${INTRANET_BASE_DIR}"
+    intranet_browse_status=$?
+    set -e
+    echo "[$(date -Iseconds)] Docflow: intranet browse build exit=${intranet_browse_status}"
+
+    set +e
+    "${PYTHON_BIN}" utils/build_read_index.py --base-dir "${INTRANET_BASE_DIR}"
+    intranet_read_status=$?
+    set -e
+    echo "[$(date -Iseconds)] Docflow: intranet read build exit=${intranet_read_status}"
+
+    if [ "${intranet_browse_status}" -ne 0 ] || [ "${intranet_read_status}" -ne 0 ]; then
+      intranet_status=1
+    fi
+  else
+    intranet_status=1
+    echo "[$(date -Iseconds)] Docflow: intranet build skipped (invalid INTRANET_BASE_DIR='${INTRANET_BASE_DIR}')"
+  fi
+else
+  echo "[$(date -Iseconds)] Docflow: intranet build skipped (process exit=${status})"
+fi
+
 final_status="${status}"
 if [ "${final_status}" -eq 0 ] && [ "${tweet_consolidated_status}" -ne 0 ]; then
   final_status="${tweet_consolidated_status}"
@@ -175,5 +209,8 @@ if [ "${final_status}" -eq 0 ] && [ "${build_status}" -ne 0 ]; then
 fi
 if [ "${final_status}" -eq 0 ] && [ "${deploy_status}" -ne 0 ]; then
   final_status="${deploy_status}"
+fi
+if [ "${final_status}" -eq 0 ] && [ "${intranet_status}" -ne 0 ]; then
+  final_status="${intranet_status}"
 fi
 exit "${final_status}"
