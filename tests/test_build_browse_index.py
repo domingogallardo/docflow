@@ -25,14 +25,19 @@ def test_build_browse_site_generates_indexes_and_actions(tmp_path: Path):
     assert counts["pdfs"] == 1
 
     browse_home = base / "_site" / "browse" / "index.html"
-    posts_page = base / "_site" / "browse" / "posts" / "index.html"
+    posts_root_page = base / "_site" / "browse" / "posts" / "index.html"
+    posts_year_page = base / "_site" / "browse" / "posts" / "Posts 2026" / "index.html"
     assets_js = base / "_site" / "assets" / "actions.js"
 
     assert browse_home.exists()
-    assert posts_page.exists()
+    assert posts_root_page.exists()
+    assert posts_year_page.exists()
     assert assets_js.exists()
 
-    content = posts_page.read_text(encoding="utf-8")
+    root_content = posts_root_page.read_text(encoding="utf-8")
+    assert "Posts 2026/" in root_content
+
+    content = posts_year_page.read_text(encoding="utf-8")
     assert "Sample Title" in content
     assert 'data-api-action="unpublish"' in content
     assert 'data-api-action="unbump"' in content
