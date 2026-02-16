@@ -36,7 +36,7 @@ def test_empty_highlights_remove_canonical_file(tmp_path: Path):
     assert highlight_store.has_highlights_for_path(base, rel) is False
 
 
-def test_load_does_not_use_legacy_posts_highlights(tmp_path: Path):
+def test_load_does_not_use_old_posts_highlights(tmp_path: Path):
     base = tmp_path / "base"
     year_dir = base / "Posts" / "Posts 2026"
     year_dir.mkdir(parents=True)
@@ -48,8 +48,8 @@ def test_load_does_not_use_legacy_posts_highlights(tmp_path: Path):
     from urllib.parse import quote
 
     encoded = quote("Doc (Sample).html")
-    legacy = highlights_dir / f"{encoded}.json"
-    legacy.write_text('{"highlights": [{"id": "h1", "text": "legacy"}]}\n', encoding="utf-8")
+    old_file = highlights_dir / f"{encoded}.json"
+    old_file.write_text('{"highlights": [{"id": "h1", "text": "old"}]}\n', encoding="utf-8")
 
     payload = highlight_store.load_highlights_for_path(base, rel)
     assert payload["path"] == rel

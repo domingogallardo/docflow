@@ -161,7 +161,7 @@ def write_site_read_index(base_dir: Path, output_dir: Path | None = None) -> Pat
     out_dir = output_dir or (site_root(base_dir) / "read")
     out_dir.mkdir(parents=True, exist_ok=True)
 
-    # Cleanup old legacy-generated tweet pages.
+    # Cleanup obsolete tweet pages from older read index layouts.
     tweets_pages_dir = out_dir / "tweets"
     if tweets_pages_dir.exists():
         shutil.rmtree(tweets_pages_dir)

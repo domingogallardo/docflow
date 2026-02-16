@@ -97,11 +97,11 @@ def add_margins_to_html_files(directory: Path, file_filter=None):
                 if parent and parent.name == "a" and parent.get("href") == src:
                     classes = list(parent.get("class") or [])
                     if not classes and parent.has_attr("class_"):
-                        legacy = parent.get("class_")
-                        if isinstance(legacy, list):
-                            classes = legacy
-                        elif legacy:
-                            classes = [str(legacy)]
+                        class_attr = parent.get("class_")
+                        if isinstance(class_attr, list):
+                            classes = class_attr
+                        elif class_attr:
+                            classes = [str(class_attr)]
                         parent.attrs.pop("class_", None)
                     if "image-zoom" not in classes:
                         classes.append("image-zoom")

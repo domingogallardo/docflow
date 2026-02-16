@@ -284,7 +284,7 @@ def _display_path_for_category_dir(category: str, rel_dir: Path) -> str:
     return f"/browse/{category}/{rel_dir.as_posix()}/"
 
 
-def _cleanup_legacy_incoming_dir(base_dir: Path) -> None:
+def _cleanup_obsolete_incoming_dir(base_dir: Path) -> None:
     browse_dir = site_root(base_dir) / "browse"
     incoming_dir = browse_dir / "incoming"
     if incoming_dir.exists():
@@ -659,7 +659,7 @@ def rebuild_browse_for_path(base_dir: Path, rel_path: str) -> dict[str, object]:
     Falls back to full rebuild for unsupported paths.
     """
     ensure_assets(base_dir)
-    _cleanup_legacy_incoming_dir(base_dir)
+    _cleanup_obsolete_incoming_dir(base_dir)
 
     try:
         normalized = normalize_rel_path(rel_path)
@@ -709,7 +709,7 @@ def rebuild_browse_for_path(base_dir: Path, rel_path: str) -> dict[str, object]:
 
 def build_browse_site(base_dir: Path) -> dict[str, int]:
     ensure_assets(base_dir)
-    _cleanup_legacy_incoming_dir(base_dir)
+    _cleanup_obsolete_incoming_dir(base_dir)
 
     published_set = list_published(base_dir)
     bump_state = load_bump_state(base_dir)
