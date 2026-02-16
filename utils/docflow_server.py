@@ -314,7 +314,33 @@ OVERLAY_JS = """
 """.strip()
 
 
+def _ensure_viewport_meta(html_text: str) -> str:
+    lower = html_text.lower()
+    if 'name="viewport"' in lower or "name='viewport'" in lower:
+        return html_text
+
+    viewport = '<meta name="viewport" content="width=device-width, initial-scale=1">'
+    head_start = lower.find("<head")
+    if head_start != -1:
+        head_end = lower.find(">", head_start)
+        if head_end != -1:
+            return html_text[: head_end + 1] + viewport + html_text[head_end + 1 :]
+
+    html_start = lower.find("<html")
+    if html_start != -1:
+        html_end = lower.find(">", html_start)
+        if html_end != -1:
+            return html_text[: html_end + 1] + f"<head>{viewport}</head>" + html_text[html_end + 1 :]
+
+    body_start = lower.find("<body")
+    if body_start != -1:
+        return html_text[:body_start] + f"<head>{viewport}</head>" + html_text[body_start:]
+
+    return f"<head>{viewport}</head>{html_text}"
+
+
 def _inject_html_overlay(*, html_text: str, rel_path: str, published: bool, bumped: bool) -> bytes:
+    html_text = _ensure_viewport_meta(html_text)
     path_attr = html.escape(rel_path, quote=True)
     article_js = ""
     if "/read/article.js" not in html_text:

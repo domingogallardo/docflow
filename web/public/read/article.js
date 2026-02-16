@@ -11,6 +11,33 @@
   function baseUrlWithoutHash() {
     try { return String(location.href).split('#')[0]; } catch (_) { return ''; }
   }
+  function currentPathname() {
+    try { return String(location.pathname || ''); } catch (_) { return ''; }
+  }
+  function isReadIndexLikePage() {
+    var path = currentPathname();
+    if (!path) return false;
+    if (path === '/read' || path === '/read/') return true;
+    if (path === '/read/tweets' || path === '/read/tweets/') return true;
+    if (path.endsWith('/read.html') || path.endsWith('/read/index.html')) return true;
+    if (/^\/read\/tweets\/\d{4}\.html$/.test(path)) return true;
+    return false;
+  }
+  function ensureMobileReadingTypography() {
+    if (isReadIndexLikePage()) return;
+    if (!document) return;
+    var id = 'articlejs-reading-type-style';
+    if (document.getElementById(id)) return;
+    var style = document.createElement('style');
+    style.id = id;
+    style.textContent = [
+      '@media (max-width: 900px) {',
+      '  html { font-size: 110%; }',
+      '}'
+    ].join('\n');
+    var head = document.head || document.documentElement;
+    if (head) head.appendChild(style);
+  }
   function normalizeWhitespace(value) {
     return String(value || '').replace(/\s+/g, ' ').trim();
   }
@@ -963,6 +990,7 @@
     console.debug('[article-js] active', version);
   }
   function initArticleUi() {
+    ensureMobileReadingTypography();
     ensureOverlay();
     initHighlights();
   }

@@ -121,6 +121,7 @@ def test_raw_route_serves_library_file(tmp_path: Path):
         assert "Raw Doc" in body
         assert "dg-overlay" in body
         assert '/read/article.js' in body
+        assert 'name="viewport"' in body
         assert "/api/publish" in body or "data-published" in body
     finally:
         server.shutdown()

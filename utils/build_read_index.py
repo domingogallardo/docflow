@@ -43,6 +43,8 @@ READ_BASE_STYLE = (
     "h1{margin:6px 0 10px;font-weight:600}"
     "h2{margin:16px 0 10px;font-weight:600}"
     "ul{margin-top:0}"
+    ".dg-nav{color:#666;font:13px -apple-system,system-ui,Segoe UI,Roboto,Helvetica,Arial;margin-bottom:8px}"
+    ".dg-nav a{text-decoration:none;color:#0a7}"
     ".file-icon{font-size:0.85em;vertical-align:baseline;display:inline-block;transform:translateY(-0.05em)}"
 )
 
@@ -190,7 +192,7 @@ def _tweet_year_items(dir_path: str) -> list[tuple[int, int]]:
             if not entry.is_file():
                 continue
             low = entry.name.lower()
-            if not (entry.name.startswith("Consolidado Tweets ") or entry.name.startswith("Tweets ")):
+            if not entry.name.startswith(("Tweets ", "Consolidado Tweets ", "Consolidados Tweets ")):
                 continue
             if low.endswith((".html", ".htm")):
                 count += 1
@@ -379,6 +381,7 @@ def build_site_read_html(items: list[SiteReadItem]) -> str:
         f"<style>{READ_BASE_STYLE}</style>"
         '<script src="/read/article.js" defer></script>'
         '<title>Read</title></head><body>'
+        '<div class="dg-nav"><a href="/">Home</a> · <a href="/browse/">Browse</a> · <a href="/read/">Read</a></div>'
         '<h1>Read</h1>'
         + list_html
         + "</body></html>"

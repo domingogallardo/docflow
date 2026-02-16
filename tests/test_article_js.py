@@ -17,3 +17,4 @@ def test_article_js_includes_highlights():
     assert 'articlejs-highlight-btn' in content
     assert '/api/highlights?path=' in content
     assert '/data/highlights/' in content
+    assert 'articlejs-reading-type-style' in content

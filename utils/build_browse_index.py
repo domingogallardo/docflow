@@ -171,7 +171,7 @@ def _sort_mtime(entry: BrowseEntry) -> float:
 
 def _base_head(title: str) -> str:
     return (
-        f"<html><head><meta charset='utf-8'><title>{html.escape(title)}</title>"
+        f"<html><head><meta charset='utf-8'><meta name='viewport' content='width=device-width, initial-scale=1'><title>{html.escape(title)}</title>"
         "<style>"
         "body{margin:14px 18px;font:14px -apple-system,system-ui,Segoe UI,Roboto,Helvetica,Arial;color:#222}"
         "h2{margin:6px 0 10px;font-weight:600}"
@@ -518,7 +518,7 @@ def write_site_home(base_dir: Path) -> Path:
     out_dir.mkdir(parents=True, exist_ok=True)
 
     html_doc = (
-        "<html><head><meta charset='utf-8'><title>Docflow</title>"
+        "<html><head><meta charset='utf-8'><meta name='viewport' content='width=device-width, initial-scale=1'><title>Docflow</title>"
         "<style>body{margin:14px 18px;font:14px -apple-system,system-ui,Segoe UI,Roboto,Helvetica,Arial;color:#222}"
         "h1{margin:6px 0 10px;font-weight:600}a{color:#0a7;text-decoration:none}"
         ".dg-actions button{padding:2px 6px;border:1px solid #ccc;border-radius:6px;background:#f7f7f7;color:#333;font:12px -apple-system,system-ui,Segoe UI,Roboto,Helvetica,Arial;cursor:pointer}"
