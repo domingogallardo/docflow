@@ -70,7 +70,7 @@ python utils/build_read_index.py --base-dir "/Users/domingo/⭐️ Documentació
 4. Run local server:
 
 ```bash
-python utils/docflow_server.py --base-dir "/Users/domingo/⭐️ Documentación" --host 127.0.0.1 --port 8088
+python utils/docflow_server.py --base-dir "/Users/domingo/⭐️ Documentación" --host 127.0.0.1 --port 8080
 ```
 
 Optional full rebuild at startup:
@@ -96,7 +96,7 @@ cat > ~/Library/LaunchAgents/com.domingo.docflow.intranet.plist <<'PLIST'
     <string>/Users/domingo/Programacion/Python/docflow/utils/docflow_server.py</string>
     <string>--base-dir</string><string>/Users/domingo/⭐️ Documentación</string>
     <string>--host</string><string>127.0.0.1</string>
-    <string>--port</string><string>8088</string>
+    <string>--port</string><string>8080</string>
     <string>--rebuild-on-start</string>
   </array>
   <key>WorkingDirectory</key><string>/Users/domingo/Programacion/Python/docflow</string>
@@ -110,6 +110,45 @@ PLIST
 
 launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.domingo.docflow.intranet.plist
 launchctl kickstart -k gui/$(id -u)/com.domingo.docflow.intranet
+```
+
+### Tailscale access (tailnet only)
+
+Expose intranet via Tailscale to your tailnet:
+
+```bash
+tailscale up
+tailscale serve --bg 8080
+tailscale serve status
+```
+
+### Auto-start Tailscale serve on macOS
+
+Use a second `LaunchAgent` so login starts Tailscale and reapplies `serve`:
+
+```bash
+cat > ~/Library/LaunchAgents/com.domingo.tailscale.autostart.plist <<'PLIST'
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key><string>com.domingo.tailscale.autostart</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/bin/zsh</string>
+    <string>-lc</string>
+    <string>tailscale up && tailscale serve --bg 8080</string>
+  </array>
+  <key>RunAtLoad</key><true/>
+  <key>KeepAlive</key><false/>
+  <key>StandardOutPath</key><string>/Users/domingo/Library/Logs/docflow/tailscale.autostart.out.log</string>
+  <key>StandardErrorPath</key><string>/Users/domingo/Library/Logs/docflow/tailscale.autostart.err.log</string>
+</dict>
+</plist>
+PLIST
+
+launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.domingo.tailscale.autostart.plist
+launchctl kickstart -k gui/$(id -u)/com.domingo.tailscale.autostart
 ```
 
 ## Unified runner (`bin/docflow.sh`)
