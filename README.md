@@ -21,7 +21,7 @@ docflow works with two different sites:
 
 Tweet flow across both sites:
 - `bin/docflow.sh all` calls `bin/build_tweet_consolidated.sh --yesterday`.
-- `bin/build_tweet_consolidated.sh` calls `utils/build_daily_tweet_consolidated.py` to generate daily consolidated files in the `sitio biblioteca`.
+- `bin/build_tweet_consolidated.sh` calls `utils/build_daily_tweet_consolidated.py` to generate daily consolidated files in the `sitio biblioteca` and then removes source tweet files included in the consolidated day.
 - `utils/sync_tweets_public.py` copies consolidated files from the library into the published site under `web/public/read/tweets/<YEAR>/`.
 - `utils/build_tweets_index.py` generates yearly static index pages in the `sitio publicado` (`web/public/read/tweets/<YEAR>.html`) that link to consolidated files for each year.
 - `web/deploy.sh` publishes what exists under `web/public/read/`.
@@ -110,7 +110,7 @@ State schema (versioned JSON, local-only):
 
 ## ✨ Highlights
 - Single pipeline for Instapaper, Snipd, PDFs, images, Markdown, and X likes (`Tweets/Tweets <YEAR>/`).
-- Daily tweet consolidated files (`Tweets YYYY-MM-DD.{md,html}`) with full tweet/thread content, images, preserved links, and file `mtime` set to *(last tweet of the day + 60s)* so listings stay interleaved chronologically.
+- Daily tweet consolidated files (`Tweets YYYY-MM-DD.{md,html}`) with full tweet/thread content, images, preserved links, file `mtime` set to *(last tweet of the day + 60s)* so listings stay interleaved chronologically, and source daily tweet files removed after consolidation.
 - Local overlay (`utils/serve_docs.py`) to bump/unbump, publish/unpublish (copies to `web/public/read/` + deploy), or delete.
 - Sync public highlights into `Posts/Posts <YEAR>/highlights/` and inject invisible markers into local `.md` (overlapping highlights are consolidated) after `bin/docflow.sh` (manual: `python utils/sync_public_highlights.py --base-url https://...`). When the pipeline and highlights sync succeed, it regenerates `web/public/read/read.html` and runs `web/deploy.sh` only if the index changed.
 - Deploy to your domain via `web/deploy.sh`: generates a static `/read/` index ordered by `mtime` and assembles the base site from a separate repo via `PERSONAL_WEB_DIR` (required for production deploys).

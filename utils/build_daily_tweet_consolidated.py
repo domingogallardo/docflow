@@ -445,6 +445,38 @@ def _set_mtime(path: Path, mtime: float) -> None:
     os.utime(path, (st.st_atime, mtime))
 
 
+def _path_key(path: Path) -> str:
+    return str(path.resolve())
+
+
+def _delete_consolidated_sources(
+    files: Iterable[Path],
+    *,
+    keep_paths: Iterable[Path] = (),
+) -> tuple[int, int]:
+    keep = {_path_key(path) for path in keep_paths}
+    deleted_md = 0
+    deleted_html = 0
+
+    for md_path in files:
+        if _path_key(md_path) in keep:
+            continue
+        if md_path.is_file():
+            md_path.unlink()
+            deleted_md += 1
+
+        html_path = md_path.with_suffix(".html")
+        if html_path == md_path:
+            continue
+        if _path_key(html_path) in keep:
+            continue
+        if html_path.is_file():
+            html_path.unlink()
+            deleted_html += 1
+
+    return deleted_md, deleted_html
+
+
 def _render_markdown(day: str, entries: Iterable[TweetEntry]) -> str:
     entry_list = list(entries)
     thread_total = sum(1 for entry in entry_list if entry.kind.startswith("Thread"))
@@ -550,9 +582,12 @@ def main() -> int:
     _set_mtime(md_path, consolidated_mtime)
     _set_mtime(html_path, consolidated_mtime)
 
+    deleted_md, deleted_html = _delete_consolidated_sources(files, keep_paths=(md_path, html_path))
+
     print(f"✅ Consolidated Markdown generated: {md_path}")
     print(f"✅ Consolidated HTML generated: {html_path}")
     print(f"🧾 Entries included: {len(entries)}")
+    print(f"🧹 Source tweets removed: {deleted_md} Markdown + {deleted_html} HTML")
     return 0
 
 
