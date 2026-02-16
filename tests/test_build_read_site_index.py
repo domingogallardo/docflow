@@ -35,6 +35,8 @@ def test_write_site_read_index_uses_published_state(tmp_path: Path):
     assert "github.com/domingogallardo/docflow" not in content
     assert "domingogallardo.com" not in content
     assert "🟡" in content
+    assert "🔥" in content
+    assert 'class="dg-bump"' in content
     assert "Posts/Posts 2026/doc.html" not in content
     assert "data-api-action" not in content
     assert (base / "_site" / "read" / "article.js").exists()
@@ -85,6 +87,8 @@ def test_site_read_uses_bump_state_for_order_without_touching_mtime(tmp_path: Pa
     assert content.find("b.html") < content.find("a.html")
     assert abs(second.stat().st_mtime - mtime_b_before) < 0.001
     assert " — " not in content
+    assert "🔥" in content
+    assert 'class="dg-bump"' in content
 
 
 def test_build_read_index_cli_generates_site_index(tmp_path: Path):

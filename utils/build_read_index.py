@@ -26,6 +26,9 @@ READ_BASE_STYLE = (
     "h1{margin:6px 0 10px;font-weight:600}"
     "h2{margin:16px 0 10px;font-weight:600}"
     "ul{margin-top:0}"
+    ".dg-read-list{list-style:none;padding-left:0}"
+    ".dg-read-list li{padding:2px 6px;border-radius:6px;margin:2px 0}"
+    ".dg-bump{background:#fff6e5}"
     ".dg-nav{color:#666;font:13px -apple-system,system-ui,Segoe UI,Roboto,Helvetica,Arial;margin-bottom:8px}"
     ".dg-nav a{text-decoration:none;color:#0a7}"
     ".file-icon{font-size:0.85em;vertical-align:baseline;display:inline-block;transform:translateY(-0.05em)}"
@@ -38,6 +41,7 @@ class SiteReadItem(NamedTuple):
     mtime: float
     sort_mtime: float
     highlighted: bool
+    bumped: bool
 
 def _icon_for(name: str) -> str:
     lower = name.lower()
@@ -89,6 +93,7 @@ def collect_site_read_items(base_dir: Path) -> list[SiteReadItem]:
                 mtime=display_mtime,
                 sort_mtime=effective_mtime,
                 highlighted=_is_site_highlighted(base_dir, rel),
+                bumped=bumped_mtime is not None,
             )
         )
 
@@ -99,16 +104,18 @@ def collect_site_read_items(base_dir: Path) -> list[SiteReadItem]:
 
 def build_site_read_html(items: list[SiteReadItem]) -> str:
     if not items:
-        list_html = "<ul></ul>"
+        list_html = '<ul class="dg-read-list"></ul>'
     else:
-        lines: list[str] = ["<ul>"]
+        lines: list[str] = ['<ul class="dg-read-list">']
         for item in items:
             href = raw_url_for_rel_path(item.rel_path)
             icon = _icon_for(item.name)
+            bump_icon = '<span class="file-icon bump-icon" aria-hidden="true">🔥</span> ' if item.bumped else ""
             hl_icon = '<span class="file-icon hl-icon" aria-hidden="true">🟡</span> ' if item.highlighted else ""
             esc_name = html.escape(item.name)
+            li_class = ' class="dg-bump"' if item.bumped else ""
             lines.append(
-                f'<li>{icon}{hl_icon}<a href="{href}" title="{esc_name}">{esc_name}</a></li>'
+                f'<li{li_class}>{bump_icon}{hl_icon}{icon}<a href="{href}" title="{esc_name}">{esc_name}</a></li>'
             )
         lines.append("</ul>")
         list_html = "\n".join(lines)
