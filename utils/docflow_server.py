@@ -4,7 +4,7 @@
 Features:
 - Serves generated site files from BASE_DIR/_site
 - Serves raw files from BASE_DIR via dedicated routes (/posts/raw/..., /pdfs/raw/...)
-- Exposes API actions under /api/* (publish, unpublish, bump, unbump, delete, rebuild)
+- Exposes API actions under /api/* (publish, unpublish, bump, unbump, delete, rebuild, rebuild-file)
 """
 
 from __future__ import annotations
@@ -29,7 +29,7 @@ if __package__ in (None, ""):
     if str(_REPO_ROOT) not in sys.path:
         sys.path.insert(0, str(_REPO_ROOT))
 
-from utils import build_browse_index, build_read_index
+from utils import add_margins_to_html_files, build_browse_index, build_read_index, markdown_to_html
 from utils.site_paths import (
     PathValidationError,
     normalize_rel_path,
@@ -225,6 +225,47 @@ class DocflowApp:
             "redirect": _browse_parent_url_for_rel_path(normalized),
         }
 
+    def _resolve_markdown_html_pair(self, rel_path: str) -> tuple[str, Path, str, Path]:
+        normalized, abs_path = self._resolve_existing_file(rel_path)
+        suffix = abs_path.suffix.lower()
+
+        if suffix in {".html", ".htm"}:
+            html_rel = normalized
+            html_abs = abs_path
+            md_abs = abs_path.with_suffix(".md")
+            md_rel = normalize_rel_path(str(Path(normalized).with_suffix(".md")))
+        elif suffix == ".md":
+            md_rel = normalized
+            md_abs = abs_path
+            html_abs = abs_path.with_suffix(".html")
+            html_rel = normalize_rel_path(str(Path(normalized).with_suffix(".html")))
+        else:
+            raise ApiError(400, "Rebuild is only supported for .md/.html files")
+
+        if not md_abs.is_file():
+            raise ApiError(404, f"Associated Markdown file not found: {md_rel}")
+
+        return md_rel, md_abs, html_rel, html_abs
+
+    def api_rebuild_file(self, rel_path: str) -> dict[str, object]:
+        md_rel, md_abs, html_rel, html_abs = self._resolve_markdown_html_pair(rel_path)
+
+        try:
+            md_text = md_abs.read_text(encoding="utf-8", errors="replace")
+            full_html = markdown_to_html(md_text, title=md_abs.stem)
+            html_abs.write_text(full_html, encoding="utf-8")
+
+            html_abs_resolved = html_abs.resolve()
+            add_margins_to_html_files(
+                html_abs.parent,
+                file_filter=lambda candidate: candidate.resolve() == html_abs_resolved,
+            )
+        except Exception as exc:
+            raise ApiError(500, f"Could not rebuild HTML from Markdown: {exc}") from exc
+
+        self.rebuild_for_path(html_rel)
+        return {"rebuilt": True, "path": html_rel, "markdown": md_rel}
+
     def api_rebuild(self) -> dict[str, object]:
         self.rebuild()
         return {"rebuilt": True}
@@ -258,6 +299,8 @@ class DocflowApp:
             return self.api_unbump(raw_path)
         if action == "delete":
             return self.api_delete(raw_path)
+        if action == "rebuild-file":
+            return self.api_rebuild_file(raw_path)
 
         raise ApiError(404, f"Unknown API action: {action}")
 
@@ -406,6 +449,7 @@ OVERLAY_JS = """
     bar.innerHTML = '';
     bar.appendChild(makeButton(bumped ? 'Unbump' : 'Bump', bumped ? 'unbump' : 'bump'));
     bar.appendChild(makeButton(published ? 'Unpublish' : 'Publish', published ? 'unpublish' : 'publish'));
+    bar.appendChild(makeButton('Rebuild', 'rebuild-file'));
     bar.appendChild(makeButton('Delete', 'delete'));
     if (busy) {
       for (const btn of bar.querySelectorAll('button')) btn.setAttribute('disabled', '');

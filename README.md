@@ -185,6 +185,7 @@ INTRANET_BASE_DIR="/path/to/base" bash bin/docflow.sh all
   - `POST /api/unbump`
   - `POST /api/delete`
   - `POST /api/rebuild`
+  - `POST /api/rebuild-file`
   - `GET /api/highlights?path=<rel_path>`
   - `PUT /api/highlights?path=<rel_path>`
 

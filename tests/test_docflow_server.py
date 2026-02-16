@@ -175,7 +175,56 @@ def test_raw_route_serves_library_file(tmp_path: Path):
         assert '/read/article.js' in body
         assert 'name="viewport"' in body
         assert "/api/publish" in body or "data-published" in body
+        assert "Rebuild" in body
         assert "Delete" in body
+    finally:
+        server.shutdown()
+        server.server_close()
+
+
+def test_api_rebuild_file_recreates_html_from_markdown(tmp_path: Path):
+    base = tmp_path / "base"
+    posts = base / "Posts" / "Posts 2026"
+    posts.mkdir(parents=True)
+
+    html = posts / "doc.html"
+    html.write_text("<html><body>Old HTML</body></html>", encoding="utf-8")
+    md = posts / "doc.md"
+    md.write_text("# Fresh Title\n\nUpdated body.\n", encoding="utf-8")
+
+    rel_path = "Posts/Posts 2026/doc.html"
+
+    server, port = _start_server(base)
+    try:
+        status, payload = _post_json(port, "/api/rebuild-file", {"path": rel_path})
+        assert status == 200
+        assert payload["ok"] is True
+        assert payload["data"]["rebuilt"] is True
+        assert payload["data"]["path"] == rel_path
+        assert payload["data"]["markdown"] == "Posts/Posts 2026/doc.md"
+
+        rebuilt_html = html.read_text(encoding="utf-8")
+        assert "Fresh Title" in rebuilt_html
+        assert "Updated body." in rebuilt_html
+    finally:
+        server.shutdown()
+        server.server_close()
+
+
+def test_api_rebuild_file_requires_associated_markdown(tmp_path: Path):
+    base = tmp_path / "base"
+    posts = base / "Posts" / "Posts 2026"
+    posts.mkdir(parents=True)
+
+    html = posts / "doc.html"
+    html.write_text("<html><body>Only HTML</body></html>", encoding="utf-8")
+
+    server, port = _start_server(base)
+    try:
+        status, payload = _post_json(port, "/api/rebuild-file", {"path": "Posts/Posts 2026/doc.html"})
+        assert status == 404
+        assert payload["ok"] is False
+        assert "Associated Markdown file not found" in payload["error"]
     finally:
         server.shutdown()
         server.server_close()

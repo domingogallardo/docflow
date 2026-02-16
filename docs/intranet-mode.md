@@ -49,6 +49,7 @@ Local state under `BASE_DIR/state`:
   - `POST /api/unbump`
   - `POST /api/delete`
   - `POST /api/rebuild`
+  - `POST /api/rebuild-file`
   - `GET /api/highlights?path=<rel_path>`
   - `PUT /api/highlights?path=<rel_path>`
 
@@ -58,6 +59,7 @@ Local state under `BASE_DIR/state`:
 - Per-file API actions trigger:
   - partial browse rebuild for the affected branch
   - full read rebuild
+- `POST /api/rebuild-file` rebuilds one HTML file from its sibling Markdown (`.md`) and then refreshes browse/read.
 - `POST /api/rebuild` triggers full browse + read rebuild.
 
 ## `bin/docflow.sh all`
