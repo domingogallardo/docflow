@@ -16,6 +16,7 @@ This repository automates collecting and organizing personal documents (Instapap
 - Run full pipeline: `python process_documents.py all --year 2026`
 - Selective run: `python process_documents.py pdfs md`
 - Tweet queue: `python process_documents.py tweets`
+- Create/refresh X likes state: `python utils/create_x_state.py --state-path /Users/<you>/.secrets/docflow/x_state.json`
 - Build intranet browse index: `python utils/build_browse_index.py --base-dir "/path/to/BASE_DIR"`
 - Build intranet read index: `python utils/build_read_index.py --base-dir "/path/to/BASE_DIR"`
 - Run intranet server: `python utils/docflow_server.py --base-dir "/path/to/BASE_DIR" --port 8088`
@@ -87,4 +88,5 @@ Useful setup (new environment):
 - Do not commit secrets.
 - Use env vars for credentials: `OPENAI_API_KEY`, `INSTAPAPER_USERNAME`, `INSTAPAPER_PASSWORD`.
 - Optional year override: `DOCPIPE_YEAR`.
+- Keep `TWEET_LIKES_STATE` outside the repo (for example `/Users/<you>/.secrets/docflow/x_state.json`) to avoid losing session state during repo cleanup.
 - Keep `BASE_DIR` in `config.py` aligned with your local environment.

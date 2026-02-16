@@ -47,10 +47,12 @@ playwright install chromium
 export OPENAI_API_KEY=...
 export INSTAPAPER_USERNAME=...
 export INSTAPAPER_PASSWORD=...
-export TWEET_LIKES_STATE=/path/to/x_state.json
+export TWEET_LIKES_STATE=/Users/<you>/.secrets/docflow/x_state.json
 export TWEET_LIKES_URL=https://x.com/<user>/likes
 export TWEET_LIKES_MAX=50
 ```
+
+Keep `TWEET_LIKES_STATE` outside the repo so cleanup operations do not delete it.
 
 2. Run the processing pipeline:
 
@@ -125,7 +127,7 @@ python process_documents.py tweets
 - One-time browser state creation:
 
 ```bash
-python utils/create_x_state.py
+python utils/create_x_state.py --state-path /Users/<you>/.secrets/docflow/x_state.json
 ```
 
 - Daily consolidated tweets helper:

@@ -72,6 +72,15 @@ Optional override:
 
 - `INTRANET_BASE_DIR=/path/to/base`
 
+## X Likes session state
+
+- Store Playwright `storage_state` outside the repository.
+- Recommended path: `/Users/<you>/.secrets/docflow/x_state.json`
+- Set it in `~/.docflow_env`:
+  - `export TWEET_LIKES_STATE=/Users/<you>/.secrets/docflow/x_state.json`
+- Generate/refresh it with:
+  - `python utils/create_x_state.py --state-path /Users/<you>/.secrets/docflow/x_state.json`
+
 ## Tailscale exposure
 
 ```bash
