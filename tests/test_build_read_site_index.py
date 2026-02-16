@@ -84,8 +84,7 @@ def test_site_read_uses_bump_state_for_order_without_touching_mtime(tmp_path: Pa
 
     assert content.find("b.html") < content.find("a.html")
     assert abs(second.stat().st_mtime - mtime_b_before) < 0.001
-    assert build_read_index.fmt_date(mtime_b_before) in content
-    assert build_read_index.fmt_date(9_999_999_999.0) not in content
+    assert " — " not in content
 
 
 def test_build_read_index_cli_generates_site_index(tmp_path: Path):

@@ -6,7 +6,6 @@ import argparse
 import html
 import shutil
 import sys
-import time
 from pathlib import Path
 from typing import NamedTuple
 
@@ -20,7 +19,6 @@ from utils.highlight_store import has_highlights_for_path
 from utils.site_paths import raw_url_for_rel_path, resolve_base_dir, resolve_library_path, site_root
 from utils.site_state import list_published, load_bump_state
 
-MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
 READ_VIEWPORT = "width=device-width, initial-scale=1"
 READ_BASE_STYLE = (
     "body{margin:14px 18px;font:14px -apple-system,system-ui,Segoe UI,Roboto,Helvetica,Arial;color:#222;"
@@ -40,14 +38,6 @@ class SiteReadItem(NamedTuple):
     mtime: float
     sort_mtime: float
     highlighted: bool
-
-
-
-def fmt_date(ts: float) -> str:
-    t = time.localtime(ts)
-    return f"{t.tm_year}-{MONTHS[t.tm_mon-1]}-{t.tm_mday:02d} {t.tm_hour:02d}:{t.tm_min:02d}"
-
-
 
 def _icon_for(name: str) -> str:
     lower = name.lower()
@@ -111,26 +101,16 @@ def build_site_read_html(items: list[SiteReadItem]) -> str:
     if not items:
         list_html = "<ul></ul>"
     else:
-        lines: list[str] = []
-        current_year: int | None = None
+        lines: list[str] = ["<ul>"]
         for item in items:
-            year = time.localtime(item.mtime).tm_year
-            if year != current_year:
-                if current_year is not None:
-                    lines.append("</ul>")
-                lines.append(f"<h2>{year}</h2><ul>")
-                current_year = year
-
             href = raw_url_for_rel_path(item.rel_path)
             icon = _icon_for(item.name)
             hl_icon = '<span class="file-icon hl-icon" aria-hidden="true">🟡</span> ' if item.highlighted else ""
             esc_name = html.escape(item.name)
             lines.append(
-                f'<li>{icon}{hl_icon}<a href="{href}" title="{esc_name}">{esc_name}</a> — {fmt_date(item.mtime)}</li>'
+                f'<li>{icon}{hl_icon}<a href="{href}" title="{esc_name}">{esc_name}</a></li>'
             )
-
-        if current_year is not None:
-            lines.append("</ul>")
+        lines.append("</ul>")
         list_html = "\n".join(lines)
 
     return (

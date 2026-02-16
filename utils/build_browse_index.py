@@ -12,7 +12,7 @@ import os
 import re
 import shutil
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 import sys
 from urllib.parse import quote
@@ -34,8 +34,6 @@ from utils.site_paths import (
 from utils.highlight_store import has_highlights_for_path
 from utils.site_state import load_bump_state, list_published
 
-MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
-
 CATEGORY_KEYS = ("posts", "tweets", "pdfs", "images", "podcasts")
 CATEGORY_LABELS = {
     "posts": "Posts",
@@ -47,6 +45,8 @@ CATEGORY_LABELS = {
 
 SKIP_DIR_NAMES = {"highlights", "__pycache__"}
 YEAR_SUFFIX_RE = re.compile(r"(\d{4})$")
+YEAR_COUNT_CATEGORIES = {"posts", "tweets", "pdfs", "images"}
+YEAR_SORT_CATEGORIES = {"posts", "tweets", "pdfs", "images"}
 
 
 @dataclass(frozen=True)
@@ -72,11 +72,7 @@ class BrowseEntry:
     bumped: bool = False
     highlighted: bool = False
     sort_mtime: float | None = None
-
-
-def fmt_date(ts: float) -> str:
-    t = time.localtime(ts)
-    return f"{t.tm_year}-{MONTHS[t.tm_mon-1]}-{t.tm_mday:02d} {t.tm_hour:02d}:{t.tm_min:02d}"
+    item_count: int | None = None
 
 
 def _safe_quote_component(value: str) -> str:
@@ -145,10 +141,10 @@ def _actions_html(entry: BrowseEntry) -> str:
     )
 
 
-def _render_entry(entry: BrowseEntry, *, show_date: bool = True) -> str:
+def _render_entry(entry: BrowseEntry) -> str:
     display_name = entry.name + ("/" if entry.is_dir else "")
     esc_name = html.escape(display_name)
-    date_html = f"<span class='dg-date'> — {fmt_date(entry.mtime)}</span>" if show_date else ""
+    count_html = f" <span class='dg-count'>({entry.item_count})</span>" if entry.item_count is not None else ""
 
     prefix = (
         ("🔥 " if entry.bumped else "")
@@ -159,7 +155,7 @@ def _render_entry(entry: BrowseEntry, *, show_date: bool = True) -> str:
     cls_attr = _entry_classes(entry)
     actions = _actions_html(entry)
     return (
-        f"<li{cls_attr}><span>{prefix}<a href=\"{entry.href}\">{esc_name}</a>{date_html}</span>{actions}</li>"
+        f"<li{cls_attr}><span>{prefix}<a href=\"{entry.href}\">{esc_name}</a>{count_html}</span>{actions}</li>"
     )
 
 
@@ -186,7 +182,7 @@ def _base_head(title: str) -> str:
         ".dg-actions{display:inline-flex;gap:6px}"
         ".dg-actions button, .dg-actions a, .dg-rebuild{padding:2px 6px;border:1px solid #ccc;border-radius:6px;background:#f7f7f7;text-decoration:none;color:#333;font:12px -apple-system,system-ui,Segoe UI,Roboto,Helvetica,Arial;cursor:pointer}"
         ".dg-actions button[disabled], .dg-actions a[disabled], .dg-rebuild[disabled]{opacity:.6;pointer-events:none}"
-        ".dg-date{color:#666;margin-left:10px;white-space:nowrap}"
+        ".dg-count{color:#666;margin-left:8px;white-space:nowrap}"
         "</style>"
         "<script src='/assets/actions.js' defer></script>"
         "</head><body>"
@@ -199,7 +195,6 @@ def _render_directory_page(
     display_path: str,
     entries: list[BrowseEntry],
     parent_href: str | None,
-    show_dates: bool = True,
 ) -> str:
     rows: list[str] = [_base_head(title)]
     rows.append("<div class='dg-nav'><a href='/'>Home</a> · <a href='/browse/'>Browse</a> · <a href='/read/'>Read</a></div>")
@@ -210,7 +205,7 @@ def _render_directory_page(
         rows.append(f'<li><a href="{parent_href}">../</a></li>')
 
     for entry in entries:
-        rows.append(_render_entry(entry, show_date=show_dates))
+        rows.append(_render_entry(entry))
 
     rows.append("</ul><hr></body></html>")
     return "\n".join(rows)
@@ -248,6 +243,52 @@ def _dir_has_visible_entries(path: Path, cache: dict[str, bool]) -> bool:
 
     cache[key] = False
     return False
+
+
+def _count_visible_files(path: Path, cache: dict[str, int]) -> int:
+    key = str(path.resolve())
+    cached = cache.get(key)
+    if cached is not None:
+        return cached
+
+    total = 0
+    try:
+        with os.scandir(path) as it:
+            for entry in it:
+                name = entry.name
+                if _is_hidden_name(name):
+                    continue
+                try:
+                    if entry.is_dir(follow_symlinks=False):
+                        if _skip_directory(name):
+                            continue
+                        total += _count_visible_files(Path(entry.path), cache)
+                    else:
+                        if _is_visible_file_name(name):
+                            total += 1
+                except OSError:
+                    continue
+    except OSError:
+        total = 0
+
+    cache[key] = total
+    return total
+
+
+def _annotate_root_year_counts(*, category: str, rel_dir: Path, abs_dir: Path, entries: list[BrowseEntry]) -> list[BrowseEntry]:
+    if rel_dir != Path(".") or category not in YEAR_COUNT_CATEGORIES:
+        return entries
+
+    count_cache: dict[str, int] = {}
+    annotated: list[BrowseEntry] = []
+    for entry in entries:
+        if entry.is_dir and _extract_entry_year(entry) is not None:
+            child_abs = abs_dir / entry.name
+            item_count = _count_visible_files(child_abs, count_cache)
+            annotated.append(replace(entry, item_count=item_count))
+            continue
+        annotated.append(entry)
+    return annotated
 
 
 def _category_for_root_segment(segment: str) -> str | None:
@@ -400,9 +441,14 @@ def _write_category_directory_page(
         bump_items=bump_items,
         visibility_cache=visibility_cache,
     )
-    if category in {"pdfs", "tweets"} and rel_dir == Path("."):
+    if category in YEAR_SORT_CATEGORIES and rel_dir == Path("."):
         entries = _sort_root_year_entries(entries)
-
+    entries = _annotate_root_year_counts(
+        category=category,
+        rel_dir=rel_dir,
+        abs_dir=abs_dir,
+        entries=entries,
+    )
     display_path = _display_path_for_category_dir(category, rel_dir)
     html_doc = _render_directory_page(
         title=f"Index of {display_path}",
@@ -490,12 +536,13 @@ def _write_browse_home(base_dir: Path, category_roots: dict[str, Path], counts: 
 
         entries.append(
             BrowseEntry(
-                name=f"{label} ({count})",
+                name=label,
                 href=f"{category}/",
                 mtime=mtime,
                 sort_mtime=mtime,
                 is_dir=True,
                 icon="📁 ",
+                item_count=count,
             )
         )
 
@@ -504,7 +551,6 @@ def _write_browse_home(base_dir: Path, category_roots: dict[str, Path], counts: 
         display_path="/browse/",
         entries=entries,
         parent_href="/",
-        show_dates=False,
     )
     html_doc = html_doc.replace(
         "</ul><hr></body></html>",

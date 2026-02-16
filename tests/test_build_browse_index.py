@@ -20,6 +20,10 @@ def test_build_browse_site_generates_indexes_and_actions(tmp_path: Path):
     pdfs.mkdir(parents=True)
     pdf = pdfs / "paper.pdf"
     pdf.write_bytes(b"%PDF-1.4\n")
+    images = base / "Images" / "Images 2026"
+    images.mkdir(parents=True)
+    image_html = images / "photo.html"
+    image_html.write_text("<html><body>Image</body></html>", encoding="utf-8")
     podcasts = base / "Podcasts" / "Podcasts 2026"
     podcasts.mkdir(parents=True)
     podcast_html = podcasts / "episode.html"
@@ -41,6 +45,7 @@ def test_build_browse_site_generates_indexes_and_actions(tmp_path: Path):
 
     assert counts["posts"] == 1
     assert counts["pdfs"] == 1
+    assert counts["images"] == 1
     assert counts["podcasts"] == 1
     assert "incoming" not in counts
 
@@ -48,6 +53,7 @@ def test_build_browse_site_generates_indexes_and_actions(tmp_path: Path):
     posts_root_page = base / "_site" / "browse" / "posts" / "index.html"
     posts_year_page = base / "_site" / "browse" / "posts" / "Posts 2026" / "index.html"
     pdfs_year_page = base / "_site" / "browse" / "pdfs" / "Pdfs 2026" / "index.html"
+    images_root_page = base / "_site" / "browse" / "images" / "index.html"
     podcasts_year_page = base / "_site" / "browse" / "podcasts" / "Podcasts 2026" / "index.html"
     assets_js = base / "_site" / "assets" / "actions.js"
 
@@ -55,12 +61,18 @@ def test_build_browse_site_generates_indexes_and_actions(tmp_path: Path):
     assert posts_root_page.exists()
     assert posts_year_page.exists()
     assert pdfs_year_page.exists()
+    assert images_root_page.exists()
     assert podcasts_year_page.exists()
     assert assets_js.exists()
     assert not stale_incoming.exists()
 
     root_content = posts_root_page.read_text(encoding="utf-8")
-    assert "Posts 2026/" in root_content
+    assert "Posts 2026/</a> <span class='dg-count'>(1)</span>" in root_content
+    assert "Posts 2026/</a><span class='dg-date'>" not in root_content
+
+    images_root_content = images_root_page.read_text(encoding="utf-8")
+    assert "Images 2026/</a> <span class='dg-count'>(1)</span>" in images_root_content
+    assert "Images 2026/</a><span class='dg-date'>" not in images_root_content
 
     content = posts_year_page.read_text(encoding="utf-8")
     assert "Sample Title" not in content
@@ -78,11 +90,12 @@ def test_build_browse_site_generates_indexes_and_actions(tmp_path: Path):
 
     browse_home_content = browse_home.read_text(encoding="utf-8")
     assert "Incoming" not in browse_home_content
-    assert "Podcasts (1)" in browse_home_content
-    assert "Posts (1)</a><span class='dg-date'>" not in browse_home_content
-    assert "Tweets (0)</a><span class='dg-date'>" not in browse_home_content
-    assert browse_home_content.find("Posts (1)") < browse_home_content.find("Tweets (0)")
-    assert browse_home_content.find("Posts (1)") < browse_home_content.find("Pdfs (1)")
+    assert 'href="podcasts/">Podcasts/</a> <span class=\'dg-count\'>(1)</span>' in browse_home_content
+    assert 'href="posts/">Posts/</a> <span class=\'dg-count\'>(1)</span>' in browse_home_content
+    assert 'href="tweets/">Tweets/</a> <span class=\'dg-count\'>(0)</span>' in browse_home_content
+    assert 'href="posts/">Posts (1)/</a>' not in browse_home_content
+    assert browse_home_content.find('href="posts/">Posts/') < browse_home_content.find('href="tweets/">Tweets/')
+    assert browse_home_content.find('href="posts/">Posts/') < browse_home_content.find('href="pdfs/">Pdfs/')
 
 
 def test_collect_category_items_handles_missing_dirs(tmp_path: Path):
@@ -117,8 +130,7 @@ def test_browse_uses_bump_state_for_order_without_touching_mtime(tmp_path: Path)
 
     assert html.find("b.html") < html.find("a.html")
     assert abs(second.stat().st_mtime - mtime_b_before) < 0.001
-    assert build_browse_index.fmt_date(mtime_b_before) in html
-    assert build_browse_index.fmt_date(9_999_999_999.0) not in html
+    assert "<span class='dg-date'> — " not in html
 
 
 def test_tweets_listing_hides_secondary_title_text(tmp_path: Path):
@@ -152,6 +164,24 @@ def test_pdfs_root_is_sorted_by_year_desc(tmp_path: Path):
     root_page = base / "_site" / "browse" / "pdfs" / "index.html"
     content = root_page.read_text(encoding="utf-8")
     assert content.find("Pdfs 2026/") < content.find("Pdfs 2024/")
+    assert "Pdfs 2026/</a> <span class='dg-count'>(1)</span>" in content
+    assert "Pdfs 2026/</a><span class='dg-date'>" not in content
+
+
+def test_posts_root_is_sorted_by_year_desc(tmp_path: Path):
+    base = tmp_path / "base"
+    posts_1990 = base / "Posts" / "Posts 1990"
+    posts_2026 = base / "Posts" / "Posts 2026"
+    posts_1990.mkdir(parents=True)
+    posts_2026.mkdir(parents=True)
+    (posts_1990 / "old.html").write_text("<html><body>1990</body></html>", encoding="utf-8")
+    (posts_2026 / "new.html").write_text("<html><body>2026</body></html>", encoding="utf-8")
+
+    build_browse_index.build_browse_site(base)
+
+    root_page = base / "_site" / "browse" / "posts" / "index.html"
+    content = root_page.read_text(encoding="utf-8")
+    assert content.find("Posts 2026/") < content.find("Posts 1990/")
 
 
 def test_tweets_root_is_sorted_by_year_desc(tmp_path: Path):
@@ -168,6 +198,8 @@ def test_tweets_root_is_sorted_by_year_desc(tmp_path: Path):
     root_page = base / "_site" / "browse" / "tweets" / "index.html"
     content = root_page.read_text(encoding="utf-8")
     assert content.find("Tweets 2026/") < content.find("Tweets 2025/")
+    assert "Tweets 2026/</a> <span class='dg-count'>(1)</span>" in content
+    assert "Tweets 2026/</a><span class='dg-date'>" not in content
 
 
 def test_rebuild_browse_for_path_updates_only_target_branch(tmp_path: Path):
