@@ -92,3 +92,23 @@ python utils/docflow_server.py --base-dir "/Users/domingo/⭐️ Documentación"
 tailscale serve --bg 8088
 tailscale serve status
 ```
+
+## Auto-start on macOS
+
+Use a user `LaunchAgent` (`~/Library/LaunchAgents/com.domingo.docflow.intranet.plist`) so intranet starts at login and restarts if it exits.
+
+Load/update it:
+
+```bash
+launchctl bootout gui/$(id -u)/com.domingo.docflow.intranet 2>/dev/null || true
+launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.domingo.docflow.intranet.plist
+launchctl kickstart -k gui/$(id -u)/com.domingo.docflow.intranet
+```
+
+Check status and logs:
+
+```bash
+launchctl print gui/$(id -u)/com.domingo.docflow.intranet | head -n 40
+tail -f ~/Library/Logs/docflow/intranet.out.log
+tail -f ~/Library/Logs/docflow/intranet.err.log
+```

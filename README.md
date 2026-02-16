@@ -79,6 +79,39 @@ Optional full rebuild at startup:
 python utils/docflow_server.py --base-dir "/Users/domingo/⭐️ Documentación" --rebuild-on-start
 ```
 
+### Auto-start on macOS (launchd)
+
+To start intranet automatically at login and keep it alive, use a user `LaunchAgent`:
+
+```bash
+cat > ~/Library/LaunchAgents/com.domingo.docflow.intranet.plist <<'PLIST'
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key><string>com.domingo.docflow.intranet</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/opt/homebrew/bin/python3.11</string>
+    <string>/Users/domingo/Programacion/Python/docflow/utils/docflow_server.py</string>
+    <string>--base-dir</string><string>/Users/domingo/⭐️ Documentación</string>
+    <string>--host</string><string>127.0.0.1</string>
+    <string>--port</string><string>8088</string>
+    <string>--rebuild-on-start</string>
+  </array>
+  <key>WorkingDirectory</key><string>/Users/domingo/Programacion/Python/docflow</string>
+  <key>RunAtLoad</key><true/>
+  <key>KeepAlive</key><true/>
+  <key>StandardOutPath</key><string>/Users/domingo/Library/Logs/docflow/intranet.out.log</string>
+  <key>StandardErrorPath</key><string>/Users/domingo/Library/Logs/docflow/intranet.err.log</string>
+</dict>
+</plist>
+PLIST
+
+launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.domingo.docflow.intranet.plist
+launchctl kickstart -k gui/$(id -u)/com.domingo.docflow.intranet
+```
+
 ## Unified runner (`bin/docflow.sh`)
 
 Use this wrapper for cron/manual runs:
