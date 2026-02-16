@@ -41,7 +41,13 @@ def test_main_removes_source_tweet_files_after_consolidation(tmp_path: Path, mon
     md1, html1 = _write_tweet_pair(tweets_dir, "Tweet - user-1", day, hour=10)
     md2, html2 = _write_tweet_pair(tweets_dir, "Tweet - user-2", day, hour=11)
 
-    args = argparse.Namespace(day=day, year=2026, tweets_dir=tweets_dir, output_base=None)
+    args = argparse.Namespace(
+        day=day,
+        year=2026,
+        tweets_dir=tweets_dir,
+        output_base=None,
+        cleanup_if_consolidated=False,
+    )
     monkeypatch.setattr(mod, "parse_args", lambda: args)
 
     exit_code = mod.main()
@@ -66,7 +72,13 @@ def test_main_keeps_output_files_when_output_base_matches_input_stem(tmp_path: P
 
     _write_tweet_pair(tweets_dir, "daily", day, hour=10)
 
-    args = argparse.Namespace(day=day, year=2026, tweets_dir=tweets_dir, output_base="daily")
+    args = argparse.Namespace(
+        day=day,
+        year=2026,
+        tweets_dir=tweets_dir,
+        output_base="daily",
+        cleanup_if_consolidated=False,
+    )
     monkeypatch.setattr(mod, "parse_args", lambda: args)
 
     exit_code = mod.main()
@@ -77,3 +89,56 @@ def test_main_keeps_output_files_when_output_base_matches_input_stem(tmp_path: P
     assert md_path.is_file()
     assert html_path.is_file()
     assert "Consolidado diario de tweets (2026-02-13)" in md_path.read_text(encoding="utf-8")
+
+
+def test_cleanup_only_if_consolidated_removes_sources_without_rebuild(tmp_path: Path, monkeypatch) -> None:
+    day = "2026-02-13"
+    tweets_dir = tmp_path / "Tweets 2026"
+    tweets_dir.mkdir(parents=True)
+
+    src_md, src_html = _write_tweet_pair(tweets_dir, "Tweet - keep-cleaning", day, hour=10)
+    consolidated_md = tweets_dir / f"Tweets {day}.md"
+    consolidated_html = tweets_dir / f"Tweets {day}.html"
+    consolidated_md.write_text("already built", encoding="utf-8")
+    consolidated_html.write_text("<html><body>already built</body></html>", encoding="utf-8")
+    original_consolidated_md = consolidated_md.read_text(encoding="utf-8")
+
+    args = argparse.Namespace(
+        day=day,
+        year=2026,
+        tweets_dir=tweets_dir,
+        output_base=None,
+        cleanup_if_consolidated=True,
+    )
+    monkeypatch.setattr(mod, "parse_args", lambda: args)
+
+    exit_code = mod.main()
+    assert exit_code == 0
+
+    assert consolidated_md.read_text(encoding="utf-8") == original_consolidated_md
+    assert consolidated_html.is_file()
+    assert not src_md.exists()
+    assert not src_html.exists()
+
+
+def test_cleanup_only_if_consolidated_keeps_sources_when_no_consolidated(tmp_path: Path, monkeypatch) -> None:
+    day = "2026-02-13"
+    tweets_dir = tmp_path / "Tweets 2026"
+    tweets_dir.mkdir(parents=True)
+
+    src_md, src_html = _write_tweet_pair(tweets_dir, "Tweet - no-consolidated", day, hour=10)
+
+    args = argparse.Namespace(
+        day=day,
+        year=2026,
+        tweets_dir=tweets_dir,
+        output_base=None,
+        cleanup_if_consolidated=True,
+    )
+    monkeypatch.setattr(mod, "parse_args", lambda: args)
+
+    exit_code = mod.main()
+    assert exit_code == 0
+
+    assert src_md.is_file()
+    assert src_html.is_file()

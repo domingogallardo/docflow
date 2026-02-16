@@ -21,7 +21,7 @@ docflow works with two different sites:
 
 Tweet flow across both sites:
 - `bin/docflow.sh all` calls `bin/build_tweet_consolidated.sh --yesterday`.
-- `bin/build_tweet_consolidated.sh` calls `utils/build_daily_tweet_consolidated.py` to generate daily consolidated files in the `sitio biblioteca` and then removes source tweet files included in the consolidated day.
+- `bin/build_tweet_consolidated.sh` calls `utils/build_daily_tweet_consolidated.py` to generate daily consolidated files in the `sitio biblioteca` and removes source tweet files included in each newly built consolidated day.
 - `utils/sync_tweets_public.py` copies consolidated files from the library into the published site under `web/public/read/tweets/<YEAR>/`.
 - `utils/build_tweets_index.py` generates yearly static index pages in the `sitio publicado` (`web/public/read/tweets/<YEAR>.html`) that link to consolidated files for each year.
 - `web/deploy.sh` publishes what exists under `web/public/read/`.
@@ -190,6 +190,9 @@ State schema (versioned JSON, local-only):
   ```bash
   # Default mode: build yesterday only (skip if .md + .html already exist)
   bash bin/build_tweet_consolidated.sh
+
+  # One-shot cleanup for historical days already consolidated (no rebuild)
+  bash bin/build_tweet_consolidated.sh --all-days --cleanup-existing
 
   # Specific day
   bash bin/build_tweet_consolidated.sh --day 2026-02-13

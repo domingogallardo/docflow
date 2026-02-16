@@ -26,7 +26,7 @@ fi
 
 usage() {
   cat <<'EOF'
-Usage: bin/build_tweet_consolidated.sh [--yesterday|--day YYYY-MM-DD|--all-days] [--force]
+Usage: bin/build_tweet_consolidated.sh [--yesterday|--day YYYY-MM-DD|--all-days] [--force] [--cleanup-existing]
 
 Modes:
   --yesterday         Build consolidated file for yesterday (default).
@@ -34,12 +34,15 @@ Modes:
   --all-days          Scan all tweet folders and build one consolidated per day.
                       By default it skips days that already have both .md and .html.
   --force             Rebuild even if consolidated files already exist.
+  --cleanup-existing  Cleanup mode: remove source tweet files only when a consolidated
+                      pair already exists for the day. Does not rebuild.
 EOF
 }
 
 mode="yesterday"
 day=""
 force=0
+cleanup_existing=0
 
 while [ "$#" -gt 0 ]; do
   case "$1" in
@@ -65,6 +68,10 @@ while [ "$#" -gt 0 ]; do
       force=1
       shift
       ;;
+    --cleanup-existing)
+      cleanup_existing=1
+      shift
+      ;;
     -h|--help)
       usage
       exit 0
@@ -82,6 +89,13 @@ run_one_day() {
   local target_year="${target_day:0:4}"
   PYTHONPATH="${REPO_DIR}:${PYTHONPATH:-}" \
     "${PYTHON_BIN}" "${BUILDER}" --day "${target_day}" --year "${target_year}"
+}
+
+cleanup_one_day_if_consolidated() {
+  local target_day="$1"
+  local target_year="${target_day:0:4}"
+  PYTHONPATH="${REPO_DIR}:${PYTHONPATH:-}" \
+    "${PYTHON_BIN}" "${BUILDER}" --day "${target_day}" --year "${target_year}" --cleanup-if-consolidated
 }
 
 consolidated_exists() {
@@ -106,8 +120,16 @@ print((datetime.now() - timedelta(days=1)).strftime("%Y-%m-%d"))
 PY
 )"
   echo "🧾 Building consolidated tweets for yesterday: ${day}"
+  if [ "${cleanup_existing}" -eq 1 ]; then
+    if consolidated_exists "${day}"; then
+      cleanup_one_day_if_consolidated "${day}"
+    else
+      echo "⏭️  Cleanup skipped for ${day}: no consolidated files"
+    fi
+    exit 0
+  fi
   if [ "${force}" -eq 0 ] && consolidated_exists "${day}"; then
-    echo "⏭️  Skip ${day}: consolidated files already exist"
+    echo "⏭️  Skip build for ${day}: consolidated files already exist"
     exit 0
   fi
   run_one_day "${day}"
@@ -116,8 +138,16 @@ fi
 
 if [ "${mode}" = "day" ]; then
   echo "🧾 Building consolidated tweets for day: ${day}"
+  if [ "${cleanup_existing}" -eq 1 ]; then
+    if consolidated_exists "${day}"; then
+      cleanup_one_day_if_consolidated "${day}"
+    else
+      echo "⏭️  Cleanup skipped for ${day}: no consolidated files"
+    fi
+    exit 0
+  fi
   if [ "${force}" -eq 0 ] && consolidated_exists "${day}"; then
-    echo "⏭️  Skip ${day}: consolidated files already exist"
+    echo "⏭️  Skip build for ${day}: consolidated files already exist"
     exit 0
   fi
   run_one_day "${day}"
@@ -154,10 +184,28 @@ PY
 
 built=0
 skipped=0
+cleaned=0
 failed=0
 for row in "${rows[@]}"; do
-  IFS=$'\t' read -r _year day <<<"${row}"
+  IFS=$'\t' read -r year day <<<"${row}"
   if [ "${force}" -eq 0 ] && consolidated_exists "${day}"; then
+    if [ "${cleanup_existing}" -eq 1 ]; then
+      set +e
+      cleanup_one_day_if_consolidated "${day}"
+      rc=$?
+      set -e
+      if [ "${rc}" -eq 0 ]; then
+        cleaned=$((cleaned + 1))
+      else
+        failed=$((failed + 1))
+        echo "❌ Cleanup failed for ${day} (year=${year})"
+      fi
+    fi
+    skipped=$((skipped + 1))
+    continue
+  fi
+
+  if [ "${cleanup_existing}" -eq 1 ]; then
     skipped=$((skipped + 1))
     continue
   fi
@@ -176,5 +224,9 @@ for row in "${rows[@]}"; do
   fi
 done
 
-echo "✅ Consolidated build summary: built=${built} skipped=${skipped} failed=${failed}"
+if [ "${cleanup_existing}" -eq 1 ]; then
+  echo "✅ Consolidated cleanup summary: cleaned=${cleaned} skipped=${skipped} failed=${failed}"
+else
+  echo "✅ Consolidated build summary: built=${built} skipped=${skipped} cleaned=${cleaned} failed=${failed}"
+fi
 [ "${failed}" -eq 0 ]

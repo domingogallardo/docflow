@@ -400,7 +400,7 @@ def _write_category_directory_page(
         bump_items=bump_items,
         visibility_cache=visibility_cache,
     )
-    if category == "pdfs" and rel_dir == Path("."):
+    if category in {"pdfs", "tweets"} and rel_dir == Path("."):
         entries = _sort_root_year_entries(entries)
 
     display_path = _display_path_for_category_dir(category, rel_dir)

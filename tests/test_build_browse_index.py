@@ -154,6 +154,22 @@ def test_pdfs_root_is_sorted_by_year_desc(tmp_path: Path):
     assert content.find("Pdfs 2026/") < content.find("Pdfs 2024/")
 
 
+def test_tweets_root_is_sorted_by_year_desc(tmp_path: Path):
+    base = tmp_path / "base"
+    tweets_2025 = base / "Tweets" / "Tweets 2025"
+    tweets_2026 = base / "Tweets" / "Tweets 2026"
+    tweets_2025.mkdir(parents=True)
+    tweets_2026.mkdir(parents=True)
+    (tweets_2025 / "Tweets 2025-12-31.html").write_text("<html><body>2025</body></html>", encoding="utf-8")
+    (tweets_2026 / "Tweets 2026-01-01.html").write_text("<html><body>2026</body></html>", encoding="utf-8")
+
+    build_browse_index.build_browse_site(base)
+
+    root_page = base / "_site" / "browse" / "tweets" / "index.html"
+    content = root_page.read_text(encoding="utf-8")
+    assert content.find("Tweets 2026/") < content.find("Tweets 2025/")
+
+
 def test_rebuild_browse_for_path_updates_only_target_branch(tmp_path: Path):
     base = tmp_path / "base"
     posts_2025 = base / "Posts" / "Posts 2025"

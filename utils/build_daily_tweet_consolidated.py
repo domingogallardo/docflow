@@ -74,6 +74,11 @@ def parse_args() -> argparse.Namespace:
             "Default: 'Tweets <DAY>'"
         ),
     )
+    parser.add_argument(
+        "--cleanup-if-consolidated",
+        action="store_true",
+        help="Delete source tweet files for --day only when a consolidated file for that day already exists.",
+    )
     return parser.parse_args()
 
 
@@ -101,6 +106,30 @@ def _files_for_day(tweets_dir: Path, day: str) -> list[Path]:
         if local_day == day:
             selected.append(path)
     return selected
+
+
+def _consolidated_base_candidates(day: str, output_base: str | None) -> list[str]:
+    candidates: list[str] = []
+    if output_base:
+        candidates.append(output_base)
+    for base_name in (
+        f"Tweets {day}",
+        f"Consolidado Tweets {day}",
+        f"Consolidados Tweets {day}",
+    ):
+        if base_name not in candidates:
+            candidates.append(base_name)
+    return candidates
+
+
+def _existing_consolidated_pairs(tweets_dir: Path, day: str, output_base: str | None) -> list[tuple[Path, Path]]:
+    pairs: list[tuple[Path, Path]] = []
+    for base_name in _consolidated_base_candidates(day, output_base):
+        md_path = tweets_dir / f"{base_name}.md"
+        html_path = tweets_dir / f"{base_name}.html"
+        if md_path.is_file() and html_path.is_file():
+            pairs.append((md_path, html_path))
+    return pairs
 
 
 def _extract_first_x_url(text: str) -> str:
@@ -556,6 +585,20 @@ def main() -> int:
     tweets_dir = _tweets_dir(cfg.BASE_DIR, year, args.tweets_dir)
     if not tweets_dir.is_dir():
         raise SystemExit(f"❌ Tweets directory not found: {tweets_dir}")
+
+    if args.cleanup_if_consolidated:
+        pairs = _existing_consolidated_pairs(tweets_dir, args.day, args.output_base)
+        if not pairs:
+            print(f"🧾 No consolidated files found for {args.day}; cleanup skipped")
+            return 0
+        files = _files_for_day(tweets_dir, args.day)
+        keep_paths = [path for pair in pairs for path in pair]
+        deleted_md, deleted_html = _delete_consolidated_sources(files, keep_paths=keep_paths)
+        print(
+            f"🧹 Cleanup completed for {args.day}: "
+            f"removed {deleted_md} Markdown + {deleted_html} HTML"
+        )
+        return 0
 
     files = _files_for_day(tweets_dir, args.day)
     if not files:
