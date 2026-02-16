@@ -36,7 +36,7 @@ def test_empty_highlights_remove_canonical_file(tmp_path: Path):
     assert highlight_store.has_highlights_for_path(base, rel) is False
 
 
-def test_load_falls_back_to_legacy_posts_highlights(tmp_path: Path):
+def test_load_does_not_use_legacy_posts_highlights(tmp_path: Path):
     base = tmp_path / "base"
     year_dir = base / "Posts" / "Posts 2026"
     year_dir.mkdir(parents=True)
@@ -53,5 +53,5 @@ def test_load_falls_back_to_legacy_posts_highlights(tmp_path: Path):
 
     payload = highlight_store.load_highlights_for_path(base, rel)
     assert payload["path"] == rel
-    assert payload["highlights"][0]["text"] == "legacy"
-    assert highlight_store.has_highlights_for_path(base, rel) is True
+    assert payload["highlights"] == []
+    assert highlight_store.has_highlights_for_path(base, rel) is False

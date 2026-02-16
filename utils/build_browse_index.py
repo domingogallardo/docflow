@@ -1,7 +1,7 @@
 """Generate static browse pages under BASE_DIR/_site/browse.
 
-The generated browse UI intentionally mirrors the look of `utils/serve_docs.py`
-directory listings while keeping pages static.
+The generated browse UI mirrors the intranet local reading workflow while
+keeping pages static.
 """
 
 from __future__ import annotations

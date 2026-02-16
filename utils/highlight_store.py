@@ -2,10 +2,6 @@
 
 Canonical storage:
   BASE_DIR/state/highlights/<sha256-prefix>/<sha256>.json
-
-Compatibility:
-- If canonical data is missing, legacy highlight JSON under
-  Posts/Posts <YEAR>/highlights/<encoded-basename>.json is read as fallback.
 """
 
 from __future__ import annotations
@@ -17,7 +13,6 @@ import tempfile
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
-from urllib.parse import quote
 
 from utils.site_paths import normalize_rel_path, state_root
 
@@ -38,38 +33,6 @@ def highlight_state_path(base_dir: Path, rel_path: str) -> Path:
     normalized = normalize_rel_path(rel_path)
     digest = _highlight_hash(normalized)
     return highlights_state_root(base_dir) / digest[:2] / f"{digest}.json"
-
-
-def _legacy_highlight_path(base_dir: Path, rel_path: str) -> Path | None:
-    normalized = normalize_rel_path(rel_path)
-    parts = Path(normalized).parts
-    if len(parts) < 3:
-        return None
-    if parts[0] != "Posts":
-        return None
-
-    year_dir = parts[1]
-    if not year_dir.startswith("Posts "):
-        return None
-
-    highlights_dir = base_dir / "Posts" / year_dir / "highlights"
-    if not highlights_dir.is_dir():
-        return None
-
-    basename = parts[-1]
-    candidates = [
-        quote(basename),
-        quote(basename, safe="~!*()'"),
-    ]
-    seen: set[str] = set()
-    for encoded in candidates:
-        if encoded in seen:
-            continue
-        seen.add(encoded)
-        path = highlights_dir / f"{encoded}.json"
-        if path.is_file():
-            return path
-    return None
 
 
 def _coerce_payload(normalized_path: str, payload: dict[str, Any] | None) -> dict[str, Any]:
@@ -124,12 +87,6 @@ def load_highlights_for_path(base_dir: Path, rel_path: str) -> dict[str, Any]:
 
     if canonical_path.is_file():
         data = _read_json(canonical_path)
-        if data is not None:
-            return _coerce_payload(normalized, data)
-
-    legacy_path = _legacy_highlight_path(base_dir, normalized)
-    if legacy_path is not None:
-        data = _read_json(legacy_path)
         if data is not None:
             return _coerce_payload(normalized, data)
 

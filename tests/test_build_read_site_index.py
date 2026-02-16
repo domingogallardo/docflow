@@ -88,10 +88,14 @@ def test_site_read_uses_bump_state_for_order_without_touching_mtime(tmp_path: Pa
     assert build_read_index.fmt_date(9_999_999_999.0) not in content
 
 
-def test_build_read_index_legacy_mode_still_generates_read_html(tmp_path: Path):
-    (tmp_path / "a.html").write_text("<p>A</p>", encoding="utf-8")
+def test_build_read_index_cli_generates_site_index(tmp_path: Path):
+    base = tmp_path / "base"
+    posts = base / "Posts" / "Posts 2026"
+    posts.mkdir(parents=True)
+    (posts / "doc.html").write_text("<html><body>Doc</body></html>", encoding="utf-8")
+    site_state.publish_path(base, "Posts/Posts 2026/doc.html")
 
-    exit_code = build_read_index.main(["build_read_index.py", str(tmp_path)])
+    exit_code = build_read_index.main(["build_read_index.py", "--base-dir", str(base)])
 
     assert exit_code == 0
-    assert (tmp_path / "read.html").exists()
+    assert (base / "_site" / "read" / "index.html").exists()

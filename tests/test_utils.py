@@ -77,13 +77,23 @@ def test_clean_duplicate_markdown_links():
 
 
 def test_add_margins_wraps_images(tmp_path):
+    from bs4 import BeautifulSoup
+
     html = tmp_path / "sample.html"
     html.write_text("<html><head></head><body><p>hola</p><img src=\"https://img.test/x.jpg\"></body></html>", encoding="utf-8")
 
     utils.add_margins_to_html_files(tmp_path)
 
     out = html.read_text(encoding="utf-8")
-    assert '<a href="https://img.test/x.jpg" rel="noopener" target="_blank"><img src="https://img.test/x.jpg"/></a>' in out
+    soup = BeautifulSoup(out, "html.parser")
+    wrapped = soup.find("a", href="https://img.test/x.jpg")
+    assert wrapped is not None
+    assert wrapped.get("target") == "_blank"
+    rel = wrapped.get("rel") or []
+    assert "noopener" in rel
+    img = wrapped.find("img")
+    assert img is not None
+    assert img.get("src") == "https://img.test/x.jpg"
     assert "cursor: zoom-in" in out
 
 

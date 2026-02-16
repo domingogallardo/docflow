@@ -2,7 +2,7 @@
  * - Discreet overlay actions (copy quote + highlight)
  * - Console API: ArticleJS.active / ArticleJS.ping()
  * - Quote capture helpers with Text Fragments and Markdown
- * - Highlights persisted to local /api/highlights or legacy /data/highlights/
+ * - Highlights persisted to local /api/highlights
  */
 (function () {
   var version = '1.1.0';
@@ -314,15 +314,6 @@
     return document && document.body ? document.body : null;
   }
 
-  function getHighlightKey() {
-    var path = '';
-    try { path = String(location.pathname || ''); } catch (_) { path = ''; }
-    var name = path.split('/').pop() || 'read-index';
-    if (!name || name === 'read' || name === 'read.html') name = 'read-index';
-    try { name = decodeURIComponent(name); } catch (_) {}
-    return encodeURIComponent(name);
-  }
-
   function getLocalRawRelPath() {
     try {
       var taggedScript = document.querySelector('script[src$="/read/article.js"][data-docflow-path]');
@@ -364,12 +355,6 @@
     var relPath = getLocalRawRelPath();
     if (!relPath) return '';
     return '/api/highlights?path=' + encodeURIComponent(relPath);
-  }
-
-  function getHighlightStoreUrl() {
-    var key = getHighlightKey();
-    if (!key) return '';
-    return '/data/highlights/' + key + '.json';
   }
 
   function ensureHighlightStyles() {
@@ -599,23 +584,8 @@
     if (!window.fetch) return Promise.resolve(null);
 
     var localUrl = getLocalHighlightStoreUrl();
-    if (localUrl) {
-      return fetch(localUrl, { method: 'GET', cache: 'no-store' })
-        .then(function(res) {
-          if (res.status === 404) return null;
-          if (!res.ok) throw new Error('load failed');
-          return res.text();
-        })
-        .then(function(text) {
-          if (!text) return null;
-          try { return JSON.parse(text); } catch (_) { return null; }
-        })
-        .catch(function() { return null; });
-    }
-
-    var url = getHighlightStoreUrl();
-    if (!url) return Promise.resolve(null);
-    return fetch(url, { method: 'GET', cache: 'no-store', credentials: 'include' })
+    if (!localUrl) return Promise.resolve(null);
+    return fetch(localUrl, { method: 'GET', cache: 'no-store' })
       .then(function(res) {
         if (res.status === 404) return null;
         if (!res.ok) throw new Error('load failed');
@@ -639,24 +609,10 @@
     };
 
     var localUrl = getLocalHighlightStoreUrl();
-    if (localUrl) {
-      return fetch(localUrl, {
-        method: 'PUT',
-        cache: 'no-store',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
-      }).then(function(res) {
-        if (!res.ok) throw new Error('save failed');
-        return true;
-      });
-    }
-
-    var url = getHighlightStoreUrl();
-    if (!url) return Promise.resolve(false);
-    return fetch(url, {
+    if (!localUrl) return Promise.resolve(false);
+    return fetch(localUrl, {
       method: 'PUT',
       cache: 'no-store',
-      credentials: 'include',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload)
     }).then(function(res) {

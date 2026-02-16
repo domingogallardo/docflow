@@ -9,32 +9,32 @@ import shutil
 import sys
 from datetime import datetime
 from pathlib import Path
-from urllib.parse import quote
 
 ROOT_DIR = Path(__file__).resolve().parent.parent
 if str(ROOT_DIR) not in sys.path:
     sys.path.insert(0, str(ROOT_DIR))
 
 from config import BASE_DIR
+from utils.site_paths import raw_url_for_rel_path
 
 POSTS_ROOT = BASE_DIR / "Posts"
 PULSE_DIR = BASE_DIR / "Pulse"
 PULSE_INCOMING_DIR = PULSE_DIR / "Incoming"
 
-_SERVE_DOCS_BASE_URL = os.getenv("SERVE_DOCS_BASE_URL")
-_SERVE_DOCS_PORT = os.getenv("PORT", "8000")
-_FALLBACK_BASE = f"http://localhost:{_SERVE_DOCS_PORT}".rstrip("/")
+_DOCFLOW_SERVER_BASE_URL = os.getenv("DOCFLOW_SERVER_BASE_URL")
+_DOCFLOW_SERVER_PORT = os.getenv("DOCFLOW_PORT", "8088")
+_FALLBACK_BASE = f"http://localhost:{_DOCFLOW_SERVER_PORT}".rstrip("/")
 
 
-def _serve_docs_url(path: Path) -> str:
+def _docflow_server_url(path: Path) -> str:
     try:
         rel_path = path.relative_to(BASE_DIR).as_posix()
     except ValueError:
         return path.as_uri()
 
-    encoded_rel = quote(rel_path, safe="/")
-    base = (_SERVE_DOCS_BASE_URL or _FALLBACK_BASE).rstrip("/")
-    return f"{base}/{encoded_rel}"
+    route = raw_url_for_rel_path(rel_path)
+    base = (_DOCFLOW_SERVER_BASE_URL or _FALLBACK_BASE).rstrip("/")
+    return f"{base}{route}"
 
 
 def _sanitize_for_dir(name: str) -> str:
@@ -72,7 +72,7 @@ def _copy_selection(html_path: Path, md_path: Path) -> Path:
 
     url_stub = _unique_name(PULSE_INCOMING_DIR, safe_stem, ".url")
     url_stub.write_text(
-        f"{_serve_docs_url(html_path)}\n",
+        f"{_docflow_server_url(html_path)}\n",
         encoding="utf-8",
     )
 

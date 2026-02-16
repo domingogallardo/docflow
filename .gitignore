@@ -25,6 +25,7 @@ bin/docflow_cron.sh
 .env
 .env.*
 *.env
+.env.deploy
 *.key
 *.pem
 *.crt
@@ -35,21 +36,5 @@ bin/docflow_cron.sh
 *.jks
 .htpasswd
 
-# Web app: keep only configs, ignore public and data
-web/*
-!web/Dockerfile
-!web/docker-compose.yml
-!web/nginx.conf
-!web/deploy.sh
-!web/.dockerignore
-!web/README.md
-
-# Allow base article script under /web/public/read/
-!web/public/
-web/public/*
-!web/public/read/
-web/public/read/*
-!web/public/read/article.js
-
-# Artifacts created by deploy script
-web/*.tar.gz
+# Legacy web deploy workspace
+web/
