@@ -23,11 +23,11 @@ This repository automates collecting and organizing personal documents (Instapap
 ## Deploy & Verify (Web)
 - Remote deploy (production-safe): `env PERSONAL_WEB_DIR=/path/to/personal-web REMOTE_USER=root REMOTE_HOST=<SERVER_IP> bash web/deploy.sh`
 - Two-site model (must stay explicit):
-  - `sitio biblioteca` = local source under `BASE_DIR` (for example `⭐️ Documentación`), where pipelines write files (including `Tweets/Tweets <YEAR>/Consolidado Tweets YYYY-MM-DD.{md,html}`).
+  - `sitio biblioteca` = local source under `BASE_DIR` (for example `⭐️ Documentación`), where pipelines write files (including `Tweets/Tweets <YEAR>/Tweets YYYY-MM-DD.{md,html}`).
   - `sitio publicado` = static web artifacts under `web/public/read/`, which are the files deployed and served by Nginx at `/read/`.
 - What it does:
   - Generates a static `read.html` index for `/public/read` (HTML + PDF), ordered by mtime desc (bumps first), grouped by year, with entries like: `FileName — YYYY-Mon-DD HH:MM`.
-  - Syncs consolidated tweets from `BASE_DIR/Tweets/Tweets <YEAR>/Consolidado Tweets *.html` into `/public/read/tweets/<YEAR>/`.
+  - Syncs consolidated tweets from `BASE_DIR/Tweets/Tweets <YEAR>/Tweets *.html` into `/public/read/tweets/<YEAR>/` (legacy names are also supported).
   - Generates tweet index pages under `/public/read/tweets` (`read.html` + `<YEAR>.html`) linking to files under `/public/read/tweets/<YEAR>/`.
   - Optionally updates host BasicAuth when `HTPASSWD_USER` and `HTPASSWD_PSS` are set (bcrypt generated on host; no secrets in Git).
   - Bundles `web/Dockerfile`, `web/nginx.conf`, and `web/public/` and deploys to `/opt/web-domingo` on the remote host.

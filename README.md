@@ -11,7 +11,7 @@ docflow works with two different sites:
 - Current local intranet server: `python utils/docflow_server.py --base-dir "/path/to/BASE_DIR"` (serves `_site` + API).
 - Legacy local overlay (still available): `python utils/serve_docs.py`.
 - Tweet consolidated files are created here:
-  - `BASE_DIR/Tweets/Tweets <YEAR>/Consolidado Tweets YYYY-MM-DD.{md,html}`.
+  - `BASE_DIR/Tweets/Tweets <YEAR>/Tweets YYYY-MM-DD.{md,html}`.
 
 2. `sitio publicado` (web output)
 - What it is: static files inside this repo that are deployed to your web server.
@@ -110,7 +110,7 @@ State schema (versioned JSON, local-only):
 
 ## ✨ Highlights
 - Single pipeline for Instapaper, Snipd, PDFs, images, Markdown, and X likes (`Tweets/Tweets <YEAR>/`).
-- Daily tweet consolidated files (`Consolidado Tweets YYYY-MM-DD.{md,html}`) with full tweet/thread content, images, preserved links, and file `mtime` set to *(last tweet of the day + 60s)* so listings stay interleaved chronologically.
+- Daily tweet consolidated files (`Tweets YYYY-MM-DD.{md,html}`) with full tweet/thread content, images, preserved links, and file `mtime` set to *(last tweet of the day + 60s)* so listings stay interleaved chronologically.
 - Local overlay (`utils/serve_docs.py`) to bump/unbump, publish/unpublish (copies to `web/public/read/` + deploy), or delete.
 - Sync public highlights into `Posts/Posts <YEAR>/highlights/` and inject invisible markers into local `.md` (overlapping highlights are consolidated) after `bin/docflow.sh` (manual: `python utils/sync_public_highlights.py --base-url https://...`). When the pipeline and highlights sync succeed, it regenerates `web/public/read/read.html` and runs `web/deploy.sh` only if the index changed.
 - Deploy to your domain via `web/deploy.sh`: generates a static `/read/` index ordered by `mtime` and assembles the base site from a separate repo via `PERSONAL_WEB_DIR` (required for production deploys).
@@ -153,7 +153,7 @@ State schema (versioned JSON, local-only):
    # To unify cron and manual execution (loads ~/.docflow_env if it exists):
    bash bin/docflow.sh all
    # Also builds tweet consolidated files for yesterday if missing:
-   #   Consolidado Tweets YYYY-MM-DD.md / .html
+   #   Tweets YYYY-MM-DD.md / .html
    # Also syncs public highlights into Posts/Posts <YEAR>/highlights/.
    # If the pipeline + highlights sync succeed, it regenerates web/public/read/read.html.
    # It runs web/deploy.sh only if read.html changed (requires REMOTE_USER/REMOTE_HOST).

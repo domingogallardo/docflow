@@ -88,10 +88,15 @@ consolidated_exists() {
   local target_day="$1"
   local target_year="${target_day:0:4}"
   local tweets_dir="${BASE_DIR}/Tweets/Tweets ${target_year}"
-  local base_name="Consolidado Tweets ${target_day}"
-  local md_path="${tweets_dir}/${base_name}.md"
-  local html_path="${tweets_dir}/${base_name}.html"
-  [ -f "${md_path}" ] && [ -f "${html_path}" ]
+  local base_name=""
+  for base_name in "Tweets ${target_day}" "Consolidado Tweets ${target_day}" "Consolidados Tweets ${target_day}"; do
+    local md_path="${tweets_dir}/${base_name}.md"
+    local html_path="${tweets_dir}/${base_name}.html"
+    if [ -f "${md_path}" ] && [ -f "${html_path}" ]; then
+      return 0
+    fi
+  done
+  return 1
 }
 
 if [ "${mode}" = "yesterday" ]; then
@@ -137,7 +142,7 @@ for year_dir in sorted(base.glob("Tweets *")):
     for md in year_dir.glob("*.md"):
         if not md.is_file():
             continue
-        if md.name.startswith("Consolidado Tweets "):
+        if md.name.startswith(("Tweets ", "Consolidado Tweets ", "Consolidados Tweets ")):
             continue
         day = datetime.fromtimestamp(md.stat().st_mtime).strftime("%Y-%m-%d")
         seen.add((year, day))
@@ -151,14 +156,8 @@ built=0
 skipped=0
 failed=0
 for row in "${rows[@]}"; do
-  IFS=$'\t' read -r year day <<<"${row}"
-  tweets_dir="${BASE_DIR}/Tweets/Tweets ${year}"
-
-  base_name="Consolidado Tweets ${day}"
-  md_path="${tweets_dir}/${base_name}.md"
-  html_path="${tweets_dir}/${base_name}.html"
-
-  if [ "${force}" -eq 0 ] && [ -f "${md_path}" ] && [ -f "${html_path}" ]; then
+  IFS=$'\t' read -r _year day <<<"${row}"
+  if [ "${force}" -eq 0 ] && consolidated_exists "${day}"; then
     skipped=$((skipped + 1))
     continue
   fi

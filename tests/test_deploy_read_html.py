@@ -11,9 +11,9 @@ def test_gen_index_creates_read_html(tmp_path):
     tweets_2025 = tmp_path / "tweets" / "2025"
     tweets_2026.mkdir(parents=True)
     tweets_2025.mkdir(parents=True)
-    (tweets_2026 / "Consolidado Tweets 2026-01-02.html").write_text("x", encoding="utf-8")
-    (tweets_2026 / "Consolidado Tweets 2026-01-01.html").write_text("x", encoding="utf-8")
-    (tweets_2025 / "Consolidado Tweets 2025-12-31.html").write_text("x", encoding="utf-8")
+    (tweets_2026 / "Tweets 2026-01-02.html").write_text("x", encoding="utf-8")
+    (tweets_2026 / "Tweets 2026-01-01.html").write_text("x", encoding="utf-8")
+    (tweets_2025 / "Tweets 2025-12-31.html").write_text("x", encoding="utf-8")
 
     repo_root = Path(__file__).resolve().parents[1]
     builder = repo_root / "utils" / "build_read_index.py"

@@ -126,9 +126,9 @@ def test_tweets_listing_hides_secondary_title_text(tmp_path: Path):
     tweets = base / "Tweets" / "Tweets 2026"
     tweets.mkdir(parents=True)
 
-    tweet = tweets / "Consolidado Tweets 2026-01-02.html"
+    tweet = tweets / "Tweets 2026-01-02.html"
     tweet.write_text("<html><title>Tweet Title Extra</title><body>Tweets</body></html>", encoding="utf-8")
-    site_state.publish_path(base, "Tweets/Tweets 2026/Consolidado Tweets 2026-01-02.html")
+    site_state.publish_path(base, "Tweets/Tweets 2026/Tweets 2026-01-02.html")
 
     build_browse_index.build_browse_site(base)
     year_page = base / "_site" / "browse" / "tweets" / "Tweets 2026" / "index.html"

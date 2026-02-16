@@ -3,7 +3,8 @@
 Produces:
 - <YEAR>.html (consolidated entries for each year)
 
-Source files are discovered from BASE_DIR/Tweets/Tweets <YEAR>/Consolidado Tweets *.html
+Source files are discovered from BASE_DIR/Tweets/Tweets <YEAR>/Tweets *.html.
+Legacy names (Consolidado/Consolidados Tweets *.html) are also supported.
 """
 
 from __future__ import annotations
@@ -94,9 +95,14 @@ def _extract_tweet_count(path: Path) -> int:
     return len(_ENTRY_ARTICLE_RE.findall(text))
 
 
+def is_consolidated_tweet_name(name: str) -> bool:
+    return name.startswith(("Tweets ", "Consolidado Tweets ", "Consolidados Tweets "))
+
+
 def published_tweet_name(source_name: str) -> str:
-    if source_name.startswith("Consolidado "):
-        return source_name[len("Consolidado ") :]
+    for legacy_prefix in ("Consolidado ", "Consolidados "):
+        if source_name.startswith(legacy_prefix):
+            return source_name[len(legacy_prefix) :]
     return source_name
 
 
@@ -122,7 +128,7 @@ def discover_consolidated_by_year(base_dir: Path | None) -> dict[int, list[Tweet
             if not item.is_file():
                 continue
             low_name = item.name.lower()
-            if not item.name.startswith("Consolidado Tweets "):
+            if not is_consolidated_tweet_name(item.name):
                 continue
             if not low_name.endswith((".html", ".htm")):
                 continue

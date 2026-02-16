@@ -34,6 +34,7 @@ X_URL_RE = re.compile(r"https?://x\.com/[^\s)]+")
 VIEW_QUOTED_RE = re.compile(r"^\[view quoted tweet\]\(", re.IGNORECASE)
 METRIC_NUMBER_RE = re.compile(r"^\d[\d.,]*(?:\s?[kmbKMB])?$")
 METRIC_TIME_RE = re.compile(r"\b\d{1,2}:\d{2}\b")
+_CONSOLIDATED_PREFIXES = ("Tweets ", "Consolidado Tweets ", "Consolidados Tweets ")
 
 
 @dataclass(frozen=True)
@@ -70,7 +71,7 @@ def parse_args() -> argparse.Namespace:
         "--output-base",
         help=(
             "Output filename stem without extension. "
-            "Default: 'Consolidado Tweets <DAY>'"
+            "Default: 'Tweets <DAY>'"
         ),
     )
     return parser.parse_args()
@@ -94,7 +95,7 @@ def _files_for_day(tweets_dir: Path, day: str) -> list[Path]:
     for path in tweets_dir.glob("*.md"):
         if not path.is_file():
             continue
-        if path.name.startswith("Consolidado Tweets "):
+        if path.name.startswith(_CONSOLIDATED_PREFIXES):
             continue
         local_day = datetime.fromtimestamp(path.stat().st_mtime).strftime("%Y-%m-%d")
         if local_day == day:
@@ -534,7 +535,7 @@ def main() -> int:
     latest_tweet_mtime = max(entry.mtime for entry in entries)
     consolidated_mtime = latest_tweet_mtime + 60
 
-    output_base = args.output_base or f"Consolidado Tweets {args.day}"
+    output_base = args.output_base or f"Tweets {args.day}"
     md_path = tweets_dir / f"{output_base}.md"
     html_path = tweets_dir / f"{output_base}.html"
 

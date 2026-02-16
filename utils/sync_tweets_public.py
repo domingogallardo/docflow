@@ -1,7 +1,8 @@
 """Sync consolidated tweet HTML files from the library into the public read site.
 
 Copies files from:
-  BASE_DIR/Tweets/Tweets <YEAR>/Consolidado Tweets *.html
+  BASE_DIR/Tweets/Tweets <YEAR>/Tweets *.html
+  (legacy: Consolidado/Consolidados Tweets *.html)
 
 To:
   web/public/read/tweets/<YEAR>/Tweets *.html
@@ -38,7 +39,7 @@ class SyncStats:
 def _is_published_tweet_html(path: Path) -> bool:
     if not path.is_file():
         return False
-    if not (path.name.startswith("Consolidado Tweets ") or path.name.startswith("Tweets ")):
+    if not tweets_index.is_consolidated_tweet_name(path.name):
         return False
     return path.suffix.lower() in (".html", ".htm")
 

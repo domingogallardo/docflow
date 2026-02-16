@@ -16,9 +16,9 @@ def test_sync_consolidated_tweets_copies_by_year_and_cleans_stale(tmp_path: Path
     base_dir = tmp_path / "base"
     y2026 = base_dir / "Tweets" / "Tweets 2026"
     y2025 = base_dir / "Tweets" / "Tweets 2025"
-    _write_consolidated(y2026 / "Consolidado Tweets 2026-01-02.html", "2026-new", 2_000)
-    _write_consolidated(y2026 / "Consolidado Tweets 2026-01-01.html", "2026-old", 1_000)
-    _write_consolidated(y2025 / "Consolidado Tweets 2025-12-31.html", "2025", 500)
+    _write_consolidated(y2026 / "Tweets 2026-01-02.html", "2026-new", 2_000)
+    _write_consolidated(y2026 / "Tweets 2026-01-01.html", "2026-old", 1_000)
+    _write_consolidated(y2025 / "Tweets 2025-12-31.html", "2025", 500)
 
     output_dir = tmp_path / "public" / "read" / "tweets"
     output_dir.mkdir(parents=True)
@@ -48,7 +48,7 @@ def test_sync_consolidated_tweets_copies_by_year_and_cleans_stale(tmp_path: Path
 def test_sync_consolidated_tweets_removes_legacy_consolidado_names(tmp_path: Path) -> None:
     base_dir = tmp_path / "base"
     y2026 = base_dir / "Tweets" / "Tweets 2026"
-    _write_consolidated(y2026 / "Consolidado Tweets 2026-01-02.html", "2026-new", 2_000)
+    _write_consolidated(y2026 / "Tweets 2026-01-02.html", "2026-new", 2_000)
 
     output_dir = tmp_path / "public" / "read" / "tweets"
     legacy_name = output_dir / "2026" / "Consolidado Tweets 2026-01-02.html"
@@ -60,11 +60,22 @@ def test_sync_consolidated_tweets_removes_legacy_consolidado_names(tmp_path: Pat
     assert (output_dir / "2026" / "Tweets 2026-01-02.html").is_file()
 
 
-def test_sync_consolidated_tweets_is_idempotent(tmp_path: Path) -> None:
+def test_sync_consolidated_tweets_supports_legacy_source_names(tmp_path: Path) -> None:
     base_dir = tmp_path / "base"
     y2026 = base_dir / "Tweets" / "Tweets 2026"
     _write_consolidated(y2026 / "Consolidado Tweets 2026-01-02.html", "2026-new", 2_000)
-    _write_consolidated(y2026 / "Consolidado Tweets 2026-01-01.html", "2026-old", 1_000)
+
+    output_dir = tmp_path / "public" / "read" / "tweets"
+    mod.sync_consolidated_tweets(base_dir, output_dir)
+
+    assert (output_dir / "2026" / "Tweets 2026-01-02.html").is_file()
+
+
+def test_sync_consolidated_tweets_is_idempotent(tmp_path: Path) -> None:
+    base_dir = tmp_path / "base"
+    y2026 = base_dir / "Tweets" / "Tweets 2026"
+    _write_consolidated(y2026 / "Tweets 2026-01-02.html", "2026-new", 2_000)
+    _write_consolidated(y2026 / "Tweets 2026-01-01.html", "2026-old", 1_000)
 
     output_dir = tmp_path / "public" / "read" / "tweets"
     first = mod.sync_consolidated_tweets(base_dir, output_dir)
