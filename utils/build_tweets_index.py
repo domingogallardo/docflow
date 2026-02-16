@@ -21,6 +21,13 @@ from urllib.parse import quote
 
 MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
 BASE_DIR_ENV = "DOCFLOW_BASE_DIR"
+READ_VIEWPORT = "width=device-width, initial-scale=1"
+READ_BASE_STYLE = (
+    "body{margin:14px 18px;font:14px -apple-system,system-ui,Segoe UI,Roboto,Helvetica,Arial;color:#222;"
+    "-webkit-text-size-adjust:100%;text-size-adjust:100%}"
+    "h1{margin:6px 0 10px;font-weight:600}"
+    "ul{margin-top:0}"
+)
 
 
 @dataclass(frozen=True)
@@ -151,7 +158,8 @@ def render_year_html(year: int, files: list[TweetFile]) -> str:
 
     return (
         '<!DOCTYPE html><html><head><meta charset="utf-8">'
-        '<meta name="viewport" content="width=device-width">'
+        f'<meta name="viewport" content="{READ_VIEWPORT}">'
+        f"<style>{READ_BASE_STYLE}</style>"
         '<script src="/read/article.js" defer></script>'
         f'<title>Tweets {year}</title></head><body>'
         f'<h1>Tweets {year}</h1>'

@@ -36,6 +36,15 @@ BASE_DIR_ENV = "DOCFLOW_BASE_DIR"
 OWNER_URL_ENV = "DOCFLOW_OWNER_URL"
 DEFAULT_OWNER_URL = "https://domingogallardo.com/"
 DEFAULT_OWNER_NAME = "Domingo Gallardo"
+READ_VIEWPORT = "width=device-width, initial-scale=1"
+READ_BASE_STYLE = (
+    "body{margin:14px 18px;font:14px -apple-system,system-ui,Segoe UI,Roboto,Helvetica,Arial;color:#222;"
+    "-webkit-text-size-adjust:100%;text-size-adjust:100%}"
+    "h1{margin:6px 0 10px;font-weight:600}"
+    "h2{margin:16px 0 10px;font-weight:600}"
+    "ul{margin-top:0}"
+    ".file-icon{font-size:0.85em;vertical-align:baseline;display:inline-block;transform:translateY(-0.05em)}"
+)
 
 
 def fmt_date(ts: float) -> str:
@@ -241,12 +250,6 @@ def build_html(dir_path: str, entries: List[Tuple[float, str]], highlight_files:
     font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
     white-space: pre;
   }}
-  .file-icon {{
-    font-size: 0.85em;
-    vertical-align: baseline;
-    display: inline-block;
-    transform: translateY(-0.05em);
-  }}
 </style>
 <div class="ascii-head"><a href="https://github.com/domingogallardo/docflow" target="_blank" rel="noopener">Docflow</a></div>
 <p class="owner-copy">© <a href="{owner_url}" target="_blank" rel="noopener">{owner_name}</a></p>
@@ -269,7 +272,8 @@ def build_html(dir_path: str, entries: List[Tuple[float, str]], highlight_files:
 
     html_doc = (
         '<!DOCTYPE html><html><head><meta charset="utf-8">'
-        '<meta name="viewport" content="width=device-width">'
+        f'<meta name="viewport" content="{READ_VIEWPORT}">'
+        f"<style>{READ_BASE_STYLE}</style>"
         '<script src="/read/article.js" defer></script>'
         '<title>Read</title></head><body>'
         '<h1>Read</h1>'
@@ -371,7 +375,8 @@ def build_site_read_html(items: list[SiteReadItem]) -> str:
 
     return (
         '<!DOCTYPE html><html><head><meta charset="utf-8">'
-        '<meta name="viewport" content="width=device-width">'
+        f'<meta name="viewport" content="{READ_VIEWPORT}">'
+        f"<style>{READ_BASE_STYLE}</style>"
         '<script src="/read/article.js" defer></script>'
         '<title>Read</title></head><body>'
         '<h1>Read</h1>'
