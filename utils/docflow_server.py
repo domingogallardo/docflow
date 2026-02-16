@@ -4,7 +4,7 @@
 Features:
 - Serves generated site files from BASE_DIR/_site
 - Serves raw files from BASE_DIR via dedicated routes (/posts/raw/..., /pdfs/raw/...)
-- Exposes API actions under /api/* (publish, unpublish, bump, unbump, rebuild)
+- Exposes API actions under /api/* (publish, unpublish, bump, unbump, delete, rebuild)
 """
 
 from __future__ import annotations
@@ -21,7 +21,7 @@ from pathlib import Path
 import sys
 import threading
 import time
-from urllib.parse import parse_qs, urlparse, unquote
+from urllib.parse import parse_qs, quote, urlparse, unquote
 
 # Support direct execution: `python utils/docflow_server.py ...`
 if __package__ in (None, ""):
@@ -55,6 +55,55 @@ def _add_years(dt: datetime, years: int) -> datetime:
         return dt.replace(year=dt.year + years)
     except ValueError:
         return dt.replace(month=2, day=28, year=dt.year + years)
+
+
+def _browse_parent_url_for_rel_path(rel_path: str) -> str:
+    normalized = normalize_rel_path(rel_path)
+    parts = Path(normalized).parts
+    if len(parts) < 2:
+        return "/browse/"
+
+    category_map = {
+        "Posts": "posts",
+        "Tweets": "tweets",
+        "Pdfs": "pdfs",
+        "PDFs": "pdfs",
+        "Images": "images",
+        "Podcasts": "podcasts",
+    }
+    category = category_map.get(parts[0])
+    if category is None:
+        return "/browse/"
+
+    parent_parts = parts[1:-1]
+    if not parent_parts:
+        return f"/browse/{category}/"
+
+    encoded = "/".join(quote(part, safe="~!*()'") for part in parent_parts)
+    return f"/browse/{category}/{encoded}/"
+
+
+def _browse_url_from_raw_path(request_path: str) -> str:
+    prefixes = (
+        ("/posts/raw", "posts"),
+        ("/tweets/raw", "tweets"),
+        ("/pdfs/raw", "pdfs"),
+        ("/images/raw", "images"),
+        ("/podcasts/raw", "podcasts"),
+    )
+
+    for prefix, category in prefixes:
+        if request_path == prefix or request_path == f"{prefix}/":
+            return f"/browse/{category}/"
+        if request_path.startswith(prefix + "/"):
+            rel = request_path[len(prefix) + 1 :].strip("/")
+            if not rel:
+                return f"/browse/{category}/"
+            decoded = unquote(rel)
+            encoded = quote(decoded, safe="~!*()'/-")
+            return f"/browse/{category}/{encoded}/"
+
+    return "/browse/"
 
 
 class DocflowApp:
@@ -136,6 +185,46 @@ class DocflowApp:
         self.rebuild_for_path(normalized)
         return {"path": normalized, "restored_mtime": original_mtime}
 
+    def api_delete(self, rel_path: str) -> dict[str, object]:
+        normalized, abs_path = self._resolve_existing_file(rel_path)
+        sibling_md = abs_path.with_suffix(".md")
+        sibling_md_rel: str | None = None
+        if sibling_md != abs_path:
+            try:
+                sibling_md_rel = rel_path_from_abs(self.base_dir, sibling_md)
+            except Exception:
+                sibling_md_rel = None
+
+        try:
+            abs_path.unlink()
+        except FileNotFoundError as exc:
+            raise ApiError(404, f"File not found: {normalized}") from exc
+        except OSError as exc:
+            raise ApiError(500, f"Could not delete file: {exc}") from exc
+
+        deleted_md = False
+        if sibling_md != abs_path and sibling_md.is_file():
+            try:
+                sibling_md.unlink()
+                deleted_md = True
+            except OSError as exc:
+                raise ApiError(500, f"Could not delete associated Markdown: {exc}") from exc
+
+        unpublished = unpublish_path(self.base_dir, normalized)
+        pop_bumped_path(self.base_dir, normalized)
+
+        if sibling_md_rel:
+            unpublish_path(self.base_dir, sibling_md_rel)
+            pop_bumped_path(self.base_dir, sibling_md_rel)
+
+        self.rebuild_for_path(normalized)
+        return {
+            "path": normalized,
+            "deleted_md": deleted_md,
+            "unpublished": unpublished,
+            "redirect": _browse_parent_url_for_rel_path(normalized),
+        }
+
     def api_rebuild(self) -> dict[str, object]:
         self.rebuild()
         return {"rebuilt": True}
@@ -167,6 +256,8 @@ class DocflowApp:
             return self.api_bump(raw_path)
         if action == "unbump":
             return self.api_unbump(raw_path)
+        if action == "delete":
+            return self.api_delete(raw_path)
 
         raise ApiError(404, f"Unknown API action: {action}")
 
@@ -271,6 +362,12 @@ OVERLAY_JS = """
     button.textContent = label;
     button.addEventListener('click', async () => {
       if (busy) return;
+      if (action === 'delete') {
+        const name = relPath.split('/').pop() || relPath || 'this file';
+        if (!window.confirm(`Are you sure you want to delete "${name}"?`)) {
+          return;
+        }
+      }
       busy = true;
       render();
       try {
@@ -285,6 +382,16 @@ OVERLAY_JS = """
         if (action === 'unbump') bumped = false;
         if (action === 'publish') published = true;
         if (action === 'unpublish') published = false;
+        if (action === 'delete') {
+          let redirectTo = '/browse/';
+          try {
+            const payload = await res.json();
+            const maybe = payload && payload.data && payload.data.redirect;
+            if (typeof maybe === 'string' && maybe) redirectTo = maybe;
+          } catch (error) {}
+          window.location.assign(redirectTo);
+          return;
+        }
         window.location.reload();
       } catch (error) {
         alert(`Action error: ${action}`);
@@ -299,6 +406,7 @@ OVERLAY_JS = """
     bar.innerHTML = '';
     bar.appendChild(makeButton(bumped ? 'Unbump' : 'Bump', bumped ? 'unbump' : 'bump'));
     bar.appendChild(makeButton(published ? 'Unpublish' : 'Publish', published ? 'unpublish' : 'publish'));
+    bar.appendChild(makeButton('Delete', 'delete'));
     if (busy) {
       for (const btn of bar.querySelectorAll('button')) btn.setAttribute('disabled', '');
     }
@@ -434,6 +542,11 @@ def make_handler(app: DocflowApp):
                         _send_overlay_html(self, app, raw_target, rel_path)
                     else:
                         _send_file(self, raw_target)
+                    return
+                if raw_target.is_dir():
+                    self.send_response(302)
+                    self.send_header("Location", _browse_url_from_raw_path(path))
+                    self.end_headers()
                     return
                 _send_json(self, 404, {"ok": False, "error": "Raw file not found"})
                 return

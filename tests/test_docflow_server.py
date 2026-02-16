@@ -45,6 +45,18 @@ def _get(port: int, path: str) -> tuple[int, str]:
         conn.close()
 
 
+def _get_with_headers(port: int, path: str) -> tuple[int, str, dict[str, str]]:
+    conn = http.client.HTTPConnection("127.0.0.1", port, timeout=5)
+    try:
+        conn.request("GET", path)
+        res = conn.getresponse()
+        body = res.read().decode("utf-8", errors="ignore")
+        headers = {k.lower(): v for k, v in res.getheaders()}
+        return res.status, body, headers
+    finally:
+        conn.close()
+
+
 def _put_json(port: int, path: str, payload: dict[str, object]) -> tuple[int, dict]:
     conn = http.client.HTTPConnection("127.0.0.1", port, timeout=5)
     try:
@@ -107,6 +119,46 @@ def test_api_bump_unbump_roundtrip(tmp_path: Path):
         server.server_close()
 
 
+def test_api_delete_removes_local_markdown_and_read_entry(tmp_path: Path):
+    base = tmp_path / "base"
+    posts = base / "Posts" / "Posts 2026"
+    posts.mkdir(parents=True)
+    html = posts / "doc.html"
+    html.write_text("<html><body>Doc</body></html>", encoding="utf-8")
+    md = posts / "doc.md"
+    md.write_text("# Doc\n", encoding="utf-8")
+
+    rel_path = "Posts/Posts 2026/doc.html"
+
+    server, port = _start_server(base)
+    try:
+        status, payload = _post_json(port, "/api/publish", {"path": rel_path})
+        assert status == 200
+        assert payload["ok"] is True
+
+        status, payload = _post_json(port, "/api/bump", {"path": rel_path})
+        assert status == 200
+        assert payload["ok"] is True
+
+        status, payload = _post_json(port, "/api/delete", {"path": rel_path})
+        assert status == 200
+        assert payload["ok"] is True
+        assert payload["data"]["deleted_md"] is True
+        assert payload["data"]["redirect"] == "/browse/posts/Posts%202026/"
+
+        assert not html.exists()
+        assert not md.exists()
+        assert is_published(base, rel_path) is False
+        assert get_bumped_entry(base, rel_path) is None
+
+        read_status, read_html = _get(port, "/read/")
+        assert read_status == 200
+        assert "doc.html" not in read_html
+    finally:
+        server.shutdown()
+        server.server_close()
+
+
 def test_raw_route_serves_library_file(tmp_path: Path):
     base = tmp_path / "base"
     posts = base / "Posts" / "Posts 2026"
@@ -123,6 +175,7 @@ def test_raw_route_serves_library_file(tmp_path: Path):
         assert '/read/article.js' in body
         assert 'name="viewport"' in body
         assert "/api/publish" in body or "data-published" in body
+        assert "Delete" in body
     finally:
         server.shutdown()
         server.server_close()
@@ -180,6 +233,22 @@ def test_raw_pdf_route_has_no_overlay_injection(tmp_path: Path):
         status, body = _get(port, "/pdfs/raw/Pdfs%202026/doc.pdf")
         assert status == 200
         assert "dg-overlay" not in body
+    finally:
+        server.shutdown()
+        server.server_close()
+
+
+def test_raw_directory_route_redirects_to_browse(tmp_path: Path):
+    base = tmp_path / "base"
+    tweets = base / "Tweets" / "Tweets 2026"
+    tweets.mkdir(parents=True)
+    (tweets / "doc.html").write_text("<html><body>Tweet Doc</body></html>", encoding="utf-8")
+
+    server, port = _start_server(base)
+    try:
+        status, _body, headers = _get_with_headers(port, "/tweets/raw/Tweets%202026/")
+        assert status == 302
+        assert headers.get("location") == "/browse/tweets/Tweets%202026/"
     finally:
         server.shutdown()
         server.server_close()
