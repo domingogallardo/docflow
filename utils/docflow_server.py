@@ -83,7 +83,7 @@ def _browse_parent_url_for_rel_path(rel_path: str) -> str:
     return f"/browse/{category}/{encoded}/"
 
 
-def _browse_url_from_raw_path(request_path: str) -> str:
+def _browse_index_url_for_raw_library_path(request_path: str) -> str:
     prefixes = (
         ("/posts/raw", "posts"),
         ("/tweets/raw", "tweets"),
@@ -107,6 +107,15 @@ def _browse_url_from_raw_path(request_path: str) -> str:
 
 
 class DocflowApp:
+    _PATH_ACTION_METHODS = {
+        "publish": "api_publish",
+        "unpublish": "api_unpublish",
+        "bump": "api_bump",
+        "unbump": "api_unbump",
+        "delete": "api_delete",
+        "rebuild-file": "api_rebuild_file",
+    }
+
     def __init__(self, base_dir: Path, *, bump_years: int = 100):
         self.base_dir = base_dir
         self.bump_years = bump_years
@@ -132,22 +141,28 @@ class DocflowApp:
         base = _add_years(datetime.now().replace(microsecond=0), self.bump_years)
         return float(int(base.timestamp()) + counter)
 
-    def _resolve_existing_file(self, rel_path: str) -> tuple[str, Path]:
+    def _normalize_rel_path_or_400(self, rel_path: str) -> str:
         try:
-            normalized = normalize_rel_path(rel_path)
-            abs_path = resolve_library_path(self.base_dir, normalized)
+            return normalize_rel_path(rel_path)
+        except PathValidationError as exc:
+            raise ApiError(400, str(exc)) from exc
+
+    def _require_existing_library_file(self, normalized_rel_path: str) -> Path:
+        try:
+            abs_path = resolve_library_path(self.base_dir, normalized_rel_path)
         except PathValidationError as exc:
             raise ApiError(400, str(exc)) from exc
 
         if not abs_path.exists():
-            raise ApiError(404, f"File not found: {normalized}")
+            raise ApiError(404, f"File not found: {normalized_rel_path}")
         if not abs_path.is_file():
             raise ApiError(400, "Path must be a file")
 
-        return normalized, abs_path
+        return abs_path
 
     def api_publish(self, rel_path: str) -> dict[str, object]:
-        normalized, _ = self._resolve_existing_file(rel_path)
+        normalized = self._normalize_rel_path_or_400(rel_path)
+        self._require_existing_library_file(normalized)
         changed = publish_path(self.base_dir, normalized)
         self.rebuild_for_path(normalized)
         return {"changed": changed, "path": normalized}
@@ -159,7 +174,8 @@ class DocflowApp:
         return {"changed": changed, "path": normalized}
 
     def api_bump(self, rel_path: str) -> dict[str, object]:
-        normalized, abs_path = self._resolve_existing_file(rel_path)
+        normalized = self._normalize_rel_path_or_400(rel_path)
+        abs_path = self._require_existing_library_file(normalized)
         entry = get_bumped_entry(self.base_dir, normalized)
 
         st = abs_path.stat()
@@ -176,7 +192,8 @@ class DocflowApp:
         return {"path": normalized, "bumped_mtime": bumped_mtime}
 
     def api_unbump(self, rel_path: str) -> dict[str, object]:
-        normalized, _ = self._resolve_existing_file(rel_path)
+        normalized = self._normalize_rel_path_or_400(rel_path)
+        self._require_existing_library_file(normalized)
         entry = pop_bumped_path(self.base_dir, normalized)
         if entry is None:
             raise ApiError(409, f"Path is not bumped: {normalized}")
@@ -186,7 +203,8 @@ class DocflowApp:
         return {"path": normalized, "restored_mtime": original_mtime}
 
     def api_delete(self, rel_path: str) -> dict[str, object]:
-        normalized, abs_path = self._resolve_existing_file(rel_path)
+        normalized = self._normalize_rel_path_or_400(rel_path)
+        abs_path = self._require_existing_library_file(normalized)
         sibling_md = abs_path.with_suffix(".md")
         sibling_md_rel: str | None = None
         if sibling_md != abs_path:
@@ -225,8 +243,9 @@ class DocflowApp:
             "redirect": _browse_parent_url_for_rel_path(normalized),
         }
 
-    def _resolve_markdown_html_pair(self, rel_path: str) -> tuple[str, Path, str, Path]:
-        normalized, abs_path = self._resolve_existing_file(rel_path)
+    def _resolve_rebuild_targets(self, rel_path: str) -> tuple[str, Path, str, Path]:
+        normalized = self._normalize_rel_path_or_400(rel_path)
+        abs_path = self._require_existing_library_file(normalized)
         suffix = abs_path.suffix.lower()
 
         if suffix in {".html", ".htm"}:
@@ -248,7 +267,7 @@ class DocflowApp:
         return md_rel, md_abs, html_rel, html_abs
 
     def api_rebuild_file(self, rel_path: str) -> dict[str, object]:
-        md_rel, md_abs, html_rel, html_abs = self._resolve_markdown_html_pair(rel_path)
+        md_rel, md_abs, html_rel, html_abs = self._resolve_rebuild_targets(rel_path)
 
         try:
             md_text = md_abs.read_text(encoding="utf-8", errors="replace")
@@ -271,38 +290,31 @@ class DocflowApp:
         return {"rebuilt": True}
 
     def api_get_highlights(self, rel_path: str) -> dict[str, object]:
-        normalized, _ = self._resolve_existing_file(rel_path)
+        normalized = self._normalize_rel_path_or_400(rel_path)
+        self._require_existing_library_file(normalized)
         return load_highlights_for_path(self.base_dir, normalized)
 
     def api_put_highlights(self, rel_path: str, payload: dict[str, object]) -> dict[str, object]:
-        normalized, _ = self._resolve_existing_file(rel_path)
+        normalized = self._normalize_rel_path_or_400(rel_path)
+        self._require_existing_library_file(normalized)
         saved = save_highlights_for_path(self.base_dir, normalized, payload)
         self.rebuild_for_path(normalized)
         return saved
 
     def handle_api(self, action: str, payload: dict[str, object]) -> dict[str, object]:
-        action = action.strip("/")
-        if action == "rebuild":
+        action_name = action.strip("/")
+        if action_name == "rebuild":
             return self.api_rebuild()
 
         raw_path = payload.get("path")
         if not isinstance(raw_path, str) or not raw_path.strip():
             raise ApiError(400, "Field 'path' is required")
 
-        if action == "publish":
-            return self.api_publish(raw_path)
-        if action == "unpublish":
-            return self.api_unpublish(raw_path)
-        if action == "bump":
-            return self.api_bump(raw_path)
-        if action == "unbump":
-            return self.api_unbump(raw_path)
-        if action == "delete":
-            return self.api_delete(raw_path)
-        if action == "rebuild-file":
-            return self.api_rebuild_file(raw_path)
-
-        raise ApiError(404, f"Unknown API action: {action}")
+        method_name = self._PATH_ACTION_METHODS.get(action_name)
+        if method_name is None:
+            raise ApiError(404, f"Unknown API action: {action_name}")
+        method = getattr(self, method_name)
+        return method(raw_path)
 
     def resolve_site_file(self, request_path: str) -> Path | None:
         if request_path == "/":
@@ -589,7 +601,7 @@ def make_handler(app: DocflowApp):
                     return
                 if raw_target.is_dir():
                     self.send_response(302)
-                    self.send_header("Location", _browse_url_from_raw_path(path))
+                    self.send_header("Location", _browse_index_url_for_raw_library_path(path))
                     self.end_headers()
                     return
                 _send_json(self, 404, {"ok": False, "error": "Raw file not found"})
