@@ -2,6 +2,10 @@
 
 docflow automates your personal document pipeline (Instapaper posts, podcasts, Markdown notes, PDFs, images, and tweets) and serves everything locally from `BASE_DIR`.
 
+## Architecture overview
+
+![docflow architecture](docs/images/docflow-architecture.webp)
+
 ## What this repo does now
 
 - Single local source of truth: `BASE_DIR` (configured in `config.py`).
