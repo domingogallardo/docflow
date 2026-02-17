@@ -34,8 +34,8 @@ Modes:
   --all-days          Scan all tweet folders and build one consolidated per day.
                       By default it skips days that already have both .md and .html.
   --force             Rebuild even if consolidated files already exist.
-  --cleanup-existing  Cleanup mode: remove source tweet files only when a consolidated
-                      pair already exists for the day. Does not rebuild.
+  --cleanup-existing  Cleanup mode: remove source tweet HTML files only when a consolidated
+                      pair already exists for the day (source Markdown is kept). Does not rebuild.
 EOF
 }
 

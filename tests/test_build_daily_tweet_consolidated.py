@@ -33,7 +33,9 @@ def _write_tweet_pair(tweets_dir: Path, stem: str, day: str, *, hour: int) -> tu
     return md_path, html_path
 
 
-def test_main_removes_source_tweet_files_after_consolidation(tmp_path: Path, monkeypatch) -> None:
+def test_main_keeps_source_markdown_and_removes_source_html_after_consolidation(
+    tmp_path: Path, monkeypatch
+) -> None:
     day = "2026-02-13"
     tweets_dir = tmp_path / "Tweets 2026"
     tweets_dir.mkdir(parents=True)
@@ -59,8 +61,8 @@ def test_main_removes_source_tweet_files_after_consolidation(tmp_path: Path, mon
     assert consolidated_html.is_file()
     assert "Total de ficheros: **2**" in consolidated_md.read_text(encoding="utf-8")
 
-    assert not md1.exists()
-    assert not md2.exists()
+    assert md1.exists()
+    assert md2.exists()
     assert not html1.exists()
     assert not html2.exists()
 
@@ -91,7 +93,9 @@ def test_main_keeps_output_files_when_output_base_matches_input_stem(tmp_path: P
     assert "Consolidado diario de tweets (2026-02-13)" in md_path.read_text(encoding="utf-8")
 
 
-def test_cleanup_only_if_consolidated_removes_sources_without_rebuild(tmp_path: Path, monkeypatch) -> None:
+def test_cleanup_only_if_consolidated_keeps_md_and_removes_html_without_rebuild(
+    tmp_path: Path, monkeypatch
+) -> None:
     day = "2026-02-13"
     tweets_dir = tmp_path / "Tweets 2026"
     tweets_dir.mkdir(parents=True)
@@ -117,7 +121,7 @@ def test_cleanup_only_if_consolidated_removes_sources_without_rebuild(tmp_path: 
 
     assert consolidated_md.read_text(encoding="utf-8") == original_consolidated_md
     assert consolidated_html.is_file()
-    assert not src_md.exists()
+    assert src_md.is_file()
     assert not src_html.exists()
 
 

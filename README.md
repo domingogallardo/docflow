@@ -216,6 +216,8 @@ bash bin/build_tweet_consolidated.sh --all-days
 bash bin/build_tweet_consolidated.sh --all-days --cleanup-existing
 ```
 
+`--cleanup-existing` removes only source tweet `.html` files for consolidated days and keeps source `.md`.
+
 ## Tests
 
 Run all tests:

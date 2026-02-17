@@ -131,7 +131,10 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--cleanup-if-consolidated",
         action="store_true",
-        help="Delete source tweet files for --day only when a consolidated file for that day already exists.",
+        help=(
+            "Delete source tweet HTML files for --day only when a consolidated "
+            "file for that day already exists (source Markdown is kept)."
+        ),
     )
     return parser.parse_args()
 
@@ -569,6 +572,7 @@ def _delete_consolidated_sources(
     files: Iterable[Path],
     *,
     keep_paths: Iterable[Path] = (),
+    delete_markdown: bool = False,
 ) -> tuple[int, int]:
     keep = {_path_key(path) for path in keep_paths}
     deleted_md = 0
@@ -577,7 +581,7 @@ def _delete_consolidated_sources(
     for md_path in files:
         if _path_key(md_path) in keep:
             continue
-        if md_path.is_file():
+        if delete_markdown and md_path.is_file():
             md_path.unlink()
             deleted_md += 1
 
@@ -680,10 +684,10 @@ def main() -> int:
             return 0
         files = _files_for_day(tweets_dir, args.day)
         keep_paths = [path for pair in pairs for path in pair]
-        deleted_md, deleted_html = _delete_consolidated_sources(files, keep_paths=keep_paths)
+        _, deleted_html = _delete_consolidated_sources(files, keep_paths=keep_paths)
         print(
             f"🧹 Cleanup completed for {args.day}: "
-            f"removed {deleted_md} Markdown + {deleted_html} HTML"
+            f"removed {deleted_html} HTML (source Markdown kept)"
         )
         return 0
 
@@ -712,12 +716,12 @@ def main() -> int:
     _set_mtime(md_path, consolidated_mtime)
     _set_mtime(html_path, consolidated_mtime)
 
-    deleted_md, deleted_html = _delete_consolidated_sources(files, keep_paths=(md_path, html_path))
+    _, deleted_html = _delete_consolidated_sources(files, keep_paths=(md_path, html_path))
 
     print(f"✅ Consolidated Markdown generated: {md_path}")
     print(f"✅ Consolidated HTML generated: {html_path}")
     print(f"🧾 Entries included: {len(entries)}")
-    print(f"🧹 Source tweets removed: {deleted_md} Markdown + {deleted_html} HTML")
+    print(f"🧹 Source tweet cleanup: removed {deleted_html} HTML (source Markdown kept)")
     return 0
 
 
