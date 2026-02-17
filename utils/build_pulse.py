@@ -492,11 +492,11 @@ def _build_entry(md_path: Path) -> Iterable[str]:
         yield f"- {section}"
 
 
-def build_pulse_digest() -> Path | None:
+def build_pulse_digest() -> None:
     md_files = _list_markdown_files()
     if not md_files:
         print("⚠️ No Markdown files in Pulse/Incoming.")
-        return None
+        return
 
     PULSE_DIR.mkdir(parents=True, exist_ok=True)
     now = datetime.now()
@@ -523,9 +523,6 @@ def build_pulse_digest() -> Path | None:
         url_path = md_path.with_suffix(".url")
         if url_path.exists():
             url_path.unlink()
-
-    return output_path
-
 
 def main() -> None:
     build_pulse_digest()

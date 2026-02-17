@@ -135,7 +135,7 @@ class DocumentProcessor:
         if not cfg.TWEET_LIKES_STATE:
             raise RuntimeError("Configure TWEET_LIKES_STATE with the storage_state exported from X.")
         last_processed = self._last_processed_tweet_url()
-        items, stop_found, _ = fetch_like_items_with_state(
+        items, stop_found, total_articles = fetch_like_items_with_state(
             cfg.TWEET_LIKES_STATE,
             likes_url=cfg.TWEET_LIKES_URL,
             max_tweets=cfg.TWEET_LIKES_MAX,
@@ -143,7 +143,10 @@ class DocumentProcessor:
             headless=True,
         )
         if last_processed and not stop_found:
-            print("⚠️  Last processed URL not found in likes; check the TWEET_LIKES_MAX limit.")
+            print(
+                "⚠️  Last processed URL not found in likes; "
+                f"check the TWEET_LIKES_MAX limit (visible articles: {total_articles})."
+            )
         return items
 
     def _last_processed_tweet_url(self) -> Optional[str]:

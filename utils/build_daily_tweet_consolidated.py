@@ -572,18 +572,13 @@ def _delete_consolidated_sources(
     files: Iterable[Path],
     *,
     keep_paths: Iterable[Path] = (),
-    delete_markdown: bool = False,
-) -> tuple[int, int]:
+) -> int:
     keep = {_path_key(path) for path in keep_paths}
-    deleted_md = 0
     deleted_html = 0
 
     for md_path in files:
         if _path_key(md_path) in keep:
             continue
-        if delete_markdown and md_path.is_file():
-            md_path.unlink()
-            deleted_md += 1
 
         html_path = md_path.with_suffix(".html")
         if html_path == md_path:
@@ -594,7 +589,7 @@ def _delete_consolidated_sources(
             html_path.unlink()
             deleted_html += 1
 
-    return deleted_md, deleted_html
+    return deleted_html
 
 
 def _render_markdown(day: str, entries: Iterable[TweetEntry]) -> str:
@@ -684,7 +679,7 @@ def main() -> int:
             return 0
         files = _files_for_day(tweets_dir, args.day)
         keep_paths = [path for pair in pairs for path in pair]
-        _, deleted_html = _delete_consolidated_sources(files, keep_paths=keep_paths)
+        deleted_html = _delete_consolidated_sources(files, keep_paths=keep_paths)
         print(
             f"🧹 Cleanup completed for {args.day}: "
             f"removed {deleted_html} HTML (source Markdown kept)"
@@ -716,7 +711,7 @@ def main() -> int:
     _set_mtime(md_path, consolidated_mtime)
     _set_mtime(html_path, consolidated_mtime)
 
-    _, deleted_html = _delete_consolidated_sources(files, keep_paths=(md_path, html_path))
+    deleted_html = _delete_consolidated_sources(files, keep_paths=(md_path, html_path))
 
     print(f"✅ Consolidated Markdown generated: {md_path}")
     print(f"✅ Consolidated HTML generated: {html_path}")

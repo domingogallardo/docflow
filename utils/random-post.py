@@ -63,7 +63,7 @@ def _unique_name(base: Path, stem: str, suffix: str) -> Path:
     return candidate
 
 
-def _copy_selection(html_path: Path, md_path: Path) -> Path:
+def _copy_selection(html_path: Path, md_path: Path) -> None:
     PULSE_INCOMING_DIR.mkdir(parents=True, exist_ok=True)
     safe_stem = _sanitize_for_dir(md_path.stem[:80])
 
@@ -79,7 +79,6 @@ def _copy_selection(html_path: Path, md_path: Path) -> Path:
     print("📦 Copy created in Pulse:")
     print(f"  - {destination}")
     print(f"📝 Reference saved to: {url_stub}")
-    return destination.parent
 
 
 def main() -> None:

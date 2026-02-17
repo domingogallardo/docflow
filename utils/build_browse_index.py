@@ -559,7 +559,7 @@ def _write_browse_home(base_dir: Path, category_roots: dict[str, Path], counts: 
     (out_dir / "index.html").write_text(html_doc, encoding="utf-8")
 
 
-def write_site_home(base_dir: Path) -> Path:
+def write_site_home(base_dir: Path) -> None:
     out_dir = site_root(base_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
 
@@ -577,7 +577,6 @@ def write_site_home(base_dir: Path) -> Path:
 
     output = out_dir / "index.html"
     output.write_text(html_doc, encoding="utf-8")
-    return output
 
 
 def ensure_assets(base_dir: Path) -> None:
