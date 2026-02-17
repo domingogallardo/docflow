@@ -91,6 +91,32 @@ def test_site_read_uses_bump_state_for_order_without_touching_mtime(tmp_path: Pa
     assert 'class="dg-bump"' in content
 
 
+def test_site_read_orders_non_bumped_by_publish_time(tmp_path: Path, monkeypatch):
+    base = tmp_path / "base"
+    posts = base / "Posts" / "Posts 2026"
+    posts.mkdir(parents=True)
+
+    older_publish = posts / "older.html"
+    newer_publish = posts / "newer.html"
+    older_publish.write_text("<html><body>Older</body></html>", encoding="utf-8")
+    newer_publish.write_text("<html><body>Newer</body></html>", encoding="utf-8")
+
+    # Keep file mtime inverse to publish order to assert publish time wins.
+    os.utime(older_publish, (1_700_000_500, 1_700_000_500))
+    os.utime(newer_publish, (1_700_000_100, 1_700_000_100))
+
+    published_times = iter(["2026-02-01T10:00:00Z", "2026-02-01T10:00:05Z"])
+    monkeypatch.setattr(site_state, "_utc_now_iso", lambda: next(published_times))
+
+    site_state.publish_path(base, "Posts/Posts 2026/older.html")
+    site_state.publish_path(base, "Posts/Posts 2026/newer.html")
+
+    out = build_read_index.write_site_read_index(base)
+    content = out.read_text(encoding="utf-8")
+
+    assert content.find("newer.html") < content.find("older.html")
+
+
 def test_build_read_index_cli_generates_site_index(tmp_path: Path):
     base = tmp_path / "base"
     posts = base / "Posts" / "Posts 2026"

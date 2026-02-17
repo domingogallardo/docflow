@@ -6,6 +6,7 @@ import argparse
 import html
 import shutil
 import sys
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import NamedTuple
 
@@ -17,7 +18,7 @@ if __package__ in (None, ""):
 
 from utils.highlight_store import has_highlights_for_path
 from utils.site_paths import raw_url_for_rel_path, resolve_base_dir, resolve_library_path, site_root
-from utils.site_state import list_published, load_bump_state
+from utils.site_state import load_bump_state, load_published_state
 
 READ_VIEWPORT = "width=device-width, initial-scale=1"
 READ_BASE_STYLE = (
@@ -60,14 +61,37 @@ def _is_site_highlighted(base_dir: Path, rel_path: str) -> bool:
 
 
 
+def _published_at_to_epoch(value: object) -> float | None:
+    if not isinstance(value, str):
+        return None
+
+    iso_value = value.strip()
+    if not iso_value:
+        return None
+
+    if iso_value.endswith("Z"):
+        iso_value = iso_value[:-1] + "+00:00"
+
+    try:
+        parsed = datetime.fromisoformat(iso_value)
+    except ValueError:
+        return None
+
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=timezone.utc)
+    return parsed.timestamp()
+
+
 def collect_site_read_items(base_dir: Path) -> list[SiteReadItem]:
-    published = list_published(base_dir)
+    published_state = load_published_state(base_dir)
+    published_state_items = published_state.get("items", {})
+    published_items = published_state_items if isinstance(published_state_items, dict) else {}
     bump_state = load_bump_state(base_dir)
     items_state = bump_state.get("items", {})
     bump_items = items_state if isinstance(items_state, dict) else {}
 
     items: list[SiteReadItem] = []
-    for rel in sorted(published):
+    for rel in sorted(published_items):
         try:
             abs_path = resolve_library_path(base_dir, rel)
         except Exception:
@@ -76,6 +100,11 @@ def collect_site_read_items(base_dir: Path) -> list[SiteReadItem]:
             continue
 
         st = abs_path.stat()
+        published_entry = published_items.get(rel)
+        published_mtime: float | None = None
+        if isinstance(published_entry, dict):
+            published_mtime = _published_at_to_epoch(published_entry.get("published_at"))
+
         bump_entry = bump_items.get(rel)
         bumped_mtime: float | None = None
         if isinstance(bump_entry, dict):
@@ -85,7 +114,9 @@ def collect_site_read_items(base_dir: Path) -> list[SiteReadItem]:
                 bumped_mtime = None
 
         display_mtime = st.st_mtime
-        effective_mtime = bumped_mtime if bumped_mtime is not None else display_mtime
+        effective_mtime = bumped_mtime
+        if effective_mtime is None:
+            effective_mtime = published_mtime if published_mtime is not None else display_mtime
         items.append(
             SiteReadItem(
                 rel_path=rel,
