@@ -35,6 +35,60 @@ VIEW_QUOTED_RE = re.compile(r"^\[view quoted tweet\]\(", re.IGNORECASE)
 METRIC_NUMBER_RE = re.compile(r"^\d[\d.,]*(?:\s?[kmbKMB])?$")
 METRIC_TIME_RE = re.compile(r"\b\d{1,2}:\d{2}\b")
 _CONSOLIDATED_PREFIXES = ("Tweets ", "Consolidado Tweets ", "Consolidados Tweets ")
+METRIC_TOKEN_RE = re.compile(r"[0-9]+(?:[.,][0-9]+)?[kmb]?|[a-záéíóúñü]+", re.IGNORECASE)
+METRIC_NUMBER_TOKEN_RE = re.compile(r"^\d+(?:[.,]\d+)?[kmb]?$", re.IGNORECASE)
+METRIC_WORD_TOKENS = {
+    "am",
+    "pm",
+    "jan",
+    "feb",
+    "mar",
+    "apr",
+    "may",
+    "jun",
+    "jul",
+    "aug",
+    "sep",
+    "oct",
+    "nov",
+    "dec",
+    "ene",
+    "abr",
+    "ago",
+    "dic",
+    "retweet",
+    "retweets",
+    "retuit",
+    "retuits",
+    "repost",
+    "reposts",
+    "republicaciones",
+    "quote",
+    "quotes",
+    "citas",
+    "likes",
+    "me",
+    "gusta",
+    "favoritos",
+    "bookmarks",
+    "marcadores",
+    "views",
+    "view",
+    "visualizaciones",
+    "impresiones",
+    "replies",
+    "reply",
+    "respuestas",
+    "shares",
+    "compartidos",
+    "guardados",
+    "read",
+    "repl",
+    "leer",
+    "resp",
+    "relevant",
+    "relevante",
+}
 
 
 @dataclass(frozen=True)
@@ -249,10 +303,6 @@ def _is_metric_tail_line(line: str) -> bool:
         return True
     if METRIC_NUMBER_RE.match(stripped):
         return True
-    if "views" in lowered or "visualizaciones" in lowered:
-        return True
-    if "relevant" in lowered or "relevante" in lowered:
-        return True
 
     metric_keywords = (
         "retweets",
@@ -266,14 +316,45 @@ def _is_metric_tail_line(line: str) -> bool:
         "marcadores",
         "respuestas",
     )
-    if any(token in lowered for token in metric_keywords):
+    if _is_metric_only_line(stripped) and any(token in lowered for token in metric_keywords):
+        return True
+    if _is_metric_only_line(stripped) and ("views" in lowered or "visualizaciones" in lowered):
+        return True
+    if _is_metric_only_line(stripped) and ("relevant" in lowered or "relevante" in lowered):
         return True
 
     # Typical timestamp/date line shown before the metrics block.
-    if METRIC_TIME_RE.search(stripped) and ("am" in lowered or "pm" in lowered or "·" in stripped):
+    if (
+        _is_metric_only_line(stripped)
+        and METRIC_TIME_RE.search(stripped)
+        and ("am" in lowered or "pm" in lowered or "·" in stripped)
+    ):
         return True
 
     return False
+
+
+def _is_metric_only_line(line: str) -> bool:
+    stripped = line.strip()
+    if not stripped:
+        return False
+    lowered = stripped.lower()
+    if "http://" in lowered or "https://" in lowered:
+        return False
+    tokens = [token.lower() for token in METRIC_TOKEN_RE.findall(lowered)]
+    if not tokens:
+        return False
+
+    has_word = False
+    for token in tokens:
+        if METRIC_NUMBER_TOKEN_RE.match(token):
+            continue
+        if token in METRIC_WORD_TOKENS:
+            has_word = True
+            continue
+        return False
+
+    return has_word or all(METRIC_NUMBER_TOKEN_RE.match(token) for token in tokens)
 
 
 def _strip_tail_metrics(text: str) -> str:
@@ -300,6 +381,8 @@ def _contains_metric_summary(line: str) -> bool:
     lowered = line.strip().lower()
     if not lowered:
         return False
+    if not _is_metric_only_line(lowered):
+        return False
     return ("views" in lowered or "visualizaciones" in lowered) and (
         "relevant" in lowered
         or METRIC_NUMBER_RE.search(lowered) is not None
@@ -311,13 +394,17 @@ def _looks_like_metric_timestamp(line: str) -> bool:
     lowered = stripped.lower()
     if not stripped:
         return False
-    if METRIC_TIME_RE.search(stripped) and ("am" in lowered or "pm" in lowered or "·" in stripped):
+    if (
+        _is_metric_only_line(stripped)
+        and METRIC_TIME_RE.search(stripped)
+        and ("am" in lowered or "pm" in lowered or "·" in stripped)
+    ):
         return True
     months = ("jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec",
               "ene", "abr", "ago", "dic")
-    if METRIC_TIME_RE.search(stripped) and any(mon in lowered for mon in months):
+    if _is_metric_only_line(stripped) and METRIC_TIME_RE.search(stripped) and any(mon in lowered for mon in months):
         return True
-    if METRIC_TIME_RE.search(stripped) and re.search(r"\b20\d{2}\b", lowered):
+    if _is_metric_only_line(stripped) and METRIC_TIME_RE.search(stripped) and re.search(r"\b20\d{2}\b", lowered):
         return True
     return False
 
@@ -329,7 +416,7 @@ def _has_metrics_ahead(lines: list[str], start: int, lookahead: int = 8) -> bool
         if not candidate:
             continue
         low = candidate.lower()
-        if "views" in low or "visualizaciones" in low or "relevant" in low:
+        if _is_metric_only_line(low) and ("views" in low or "visualizaciones" in low or "relevant" in low):
             return True
     return False
 

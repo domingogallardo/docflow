@@ -142,3 +142,24 @@ def test_cleanup_only_if_consolidated_keeps_sources_when_no_consolidated(tmp_pat
 
     assert src_md.is_file()
     assert src_html.is_file()
+
+
+def test_clean_body_keeps_compact_line_with_real_content() -> None:
+    body = "\n".join(
+        [
+            "# Tweet by monos estocásticos (@monospodcast)",
+            "",
+            "[View on X](https://x.com/monospodcast/status/1)",
+            "",
+            "monos estocásticos@monospodcastOpenClaw se va a OpenAiQuote"
+            "Sam Altman@sama·Feb 15Peter Steinberger joins OpenAI"
+            "Show more11:04 PM · Feb 15, 2026·965 Views116",
+            "",
+            "[![image 1](https://pbs.twimg.com/media/example.jpg)](https://pbs.twimg.com/media/example.jpg)",
+        ]
+    )
+
+    cleaned = mod._clean_body(body)
+
+    assert "OpenClaw se va a OpenAi" in cleaned
+    assert "image 1" in cleaned

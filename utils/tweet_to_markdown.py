@@ -60,6 +60,8 @@ STAT_KEYWORDS = (
 )
 STAT_NUMBER_RE = re.compile(r"^\d[\d.,]*(?:\s?[kmbKMB])?$")
 TIME_RE = re.compile(r"\b\d{1,2}:\d{2}\b")
+METRIC_TOKEN_RE = re.compile(r"[0-9]+(?:[.,][0-9]+)?[kmb]?|[a-záéíóúñü]+", re.IGNORECASE)
+METRIC_NUMBER_TOKEN_RE = re.compile(r"^\d+(?:[.,]\d+)?[kmb]?$", re.IGNORECASE)
 QUOTE_MARKERS = {"quote"}
 QUOTE_MARKERS_JS = ", ".join(f'"{m}"' for m in sorted(QUOTE_MARKERS))
 SHOW_MORE_LABELS = (
@@ -71,6 +73,70 @@ SHOW_MORE_LABELS = (
     "Read more",
     "Leer más",
 )
+SHOW_MORE_LABELS_NORMALIZED = {
+    "show more",
+    "mostrar más",
+    "mostrar mas",
+    "mostrar mais",
+    "ver más",
+    "ver mas",
+    "ver mais",
+    "read more",
+    "leer más",
+    "leer mas",
+}
+METRIC_WORD_TOKENS = {
+    "am",
+    "pm",
+    "jan",
+    "feb",
+    "mar",
+    "apr",
+    "may",
+    "jun",
+    "jul",
+    "aug",
+    "sep",
+    "oct",
+    "nov",
+    "dec",
+    "ene",
+    "abr",
+    "ago",
+    "dic",
+    "retweet",
+    "retweets",
+    "retuit",
+    "retuits",
+    "repost",
+    "reposts",
+    "republicaciones",
+    "quote",
+    "quotes",
+    "citas",
+    "likes",
+    "me",
+    "gusta",
+    "favoritos",
+    "bookmarks",
+    "marcadores",
+    "views",
+    "view",
+    "visualizaciones",
+    "impresiones",
+    "replies",
+    "reply",
+    "respuestas",
+    "shares",
+    "compartidos",
+    "guardados",
+    "read",
+    "repl",
+    "leer",
+    "resp",
+    "relevant",
+    "relevante",
+}
 THREAD_MAX_MINUTES = 24 * 60
 THREAD_MARKER_RE = re.compile(r"\bthread\b|\bhilo\b", re.IGNORECASE)
 WAIT_MS = 1000
@@ -269,7 +335,6 @@ def _expand_show_more(article, page, *, wait_ms: int = SHOW_MORE_WAIT_MS) -> Non
     """Click inline "Show more" buttons to expand truncated tweet text."""
     if article is None or page is None:
         return
-    clicked = False
     for label in SHOW_MORE_LABELS:
         try:
             buttons = article.get_by_role("button", name=label, exact=True)
@@ -282,27 +347,6 @@ def _expand_show_more(article, page, *, wait_ms: int = SHOW_MORE_WAIT_MS) -> Non
         for idx in range(count):
             try:
                 buttons.nth(idx).click(timeout=2000)
-                clicked = True
-                if wait_ms > 0:
-                    page.wait_for_timeout(wait_ms)
-            except Exception:
-                continue
-
-    if clicked:
-        return
-
-    for label in SHOW_MORE_LABELS:
-        try:
-            nodes = article.locator(f'text="{label}"')
-        except Exception:
-            continue
-        try:
-            count = nodes.count()
-        except Exception:
-            continue
-        for idx in range(count):
-            try:
-                nodes.nth(idx).click(timeout=2000)
                 if wait_ms > 0:
                     page.wait_for_timeout(wait_ms)
             except Exception:
@@ -322,19 +366,26 @@ def _read_article_text(
     last_exc: PlaywrightTimeoutError | None = None
 
     for _ in range(3):
+        best_text: str | None = None
+        if page is not None and tweet_id:
+            evaluated = _evaluate_article_text(page, tweet_id)
+            best_text = _prefer_richer_text(best_text, evaluated)
         if anchor_handle is not None:
             try:
                 text = anchor_handle.evaluate(
                     "el => el.closest('article, div[data-testid=\"tweet\"]').innerText"
                 )
-                if text:
-                    return text
+                best_text = _prefer_richer_text(best_text, text)
             except Exception:
                 pass
-        if page is not None and tweet_id:
-            evaluated = _evaluate_article_text(page, tweet_id)
-            if evaluated:
-                return evaluated
+        if best_text and "\n" not in best_text:
+            try:
+                refined = current.evaluate("el => el.innerText")
+                best_text = _prefer_richer_text(best_text, refined)
+            except Exception:
+                pass
+        if best_text:
+            return best_text
         try:
             return current.inner_text(timeout=timeout_ms)
         except PlaywrightTimeoutError as exc:
@@ -532,11 +583,17 @@ def _select_thread_indices(
 
 def _is_timestamp_line(line: str) -> bool:
     lower = line.lower()
-    return bool(TIME_RE.search(line) and ("am" in lower or "pm" in lower))
+    if not TIME_RE.search(line):
+        return False
+    if not ("am" in lower or "pm" in lower or "·" in line or re.search(r"\b20\d{2}\b", lower)):
+        return False
+    return _is_metric_only_line(line)
 
 
 def _is_keyword_stat(line: str) -> bool:
     lower = line.lower()
+    if not _is_metric_only_line(line):
+        return False
     return any(keyword in lower for keyword in STAT_KEYWORDS)
 
 
@@ -548,6 +605,33 @@ def _is_numeric_stat(line: str) -> bool:
     if line.lower().startswith("read ") and "repl" in line.lower():
         return True
     return False
+
+
+def _is_show_more_line(line: str) -> bool:
+    return line.strip().lower() in SHOW_MORE_LABELS_NORMALIZED
+
+
+def _is_metric_only_line(line: str) -> bool:
+    stripped = line.strip()
+    if not stripped:
+        return False
+    lowered = stripped.lower()
+    if "http://" in lowered or "https://" in lowered:
+        return False
+    tokens = [token.lower() for token in METRIC_TOKEN_RE.findall(lowered)]
+    if not tokens:
+        return False
+
+    has_word = False
+    for token in tokens:
+        if METRIC_NUMBER_TOKEN_RE.match(token):
+            continue
+        if token in METRIC_WORD_TOKENS:
+            has_word = True
+            continue
+        return False
+
+    return has_word or all(METRIC_NUMBER_TOKEN_RE.match(token) for token in tokens)
 
 
 def _collapse_blank_lines(lines: List[str]) -> List[str]:
@@ -579,12 +663,27 @@ def strip_tweet_stats(text: str) -> str:
         _is_timestamp_line(lines[-1])
         or _is_keyword_stat(lines[-1])
         or _is_numeric_stat(lines[-1])
+        or _is_show_more_line(lines[-1])
     ):
         lines.pop()
         while lines and not lines[-1]:
             lines.pop()
 
     return "\n".join(lines).strip()
+
+
+def _text_quality(text: str) -> tuple[int, int]:
+    return (text.count("\n"), len(text))
+
+
+def _prefer_richer_text(current: str | None, candidate: str | None) -> str | None:
+    if not candidate:
+        return current
+    if not current:
+        return candidate
+    if _text_quality(candidate) > _text_quality(current):
+        return candidate
+    return current
 
 
 def _insert_quote_separator(text: str, quoted_url: str | None = None) -> str:

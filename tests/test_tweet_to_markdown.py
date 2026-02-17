@@ -116,6 +116,34 @@ def test_strip_tweet_stats_removes_timestamp_and_counts_block():
         assert snippet not in result
 
 
+def test_strip_tweet_stats_keeps_compact_line_with_real_content():
+    raw = (
+        "monos estocásticos@monospodcastOpenClaw se va a OpenAiQuote"
+        "Sam Altman@sama·Feb 15Peter Steinberger joins OpenAI"
+        "Show more11:04 PM · Feb 15, 2026·965 Views116"
+    )
+    result = strip_tweet_stats(raw)
+    assert "OpenClaw se va a OpenAi" in result
+    assert result.strip() != ""
+
+
+def test_strip_tweet_stats_removes_trailing_show_more_after_metrics():
+    raw = "\n".join(
+        [
+            "Contenido válido.",
+            "Show more",
+            "11:04 PM · Feb 15, 2026",
+            "·",
+            "965",
+            "Views",
+            "1",
+            "16",
+        ]
+    )
+    result = strip_tweet_stats(raw)
+    assert result == "Contenido válido."
+
+
 def test_insert_quote_separator_adds_hr_before_quote():
     raw = "\n".join(
         [
@@ -397,7 +425,7 @@ def test_expand_show_more_clicks_buttons_and_waits():
     assert waits == [123, 123]
 
 
-def test_expand_show_more_uses_text_fallback():
+def test_expand_show_more_ignores_non_button_text_nodes():
     clicked: list[int | None] = []
     waits: list[int] = []
 
@@ -433,8 +461,8 @@ def test_expand_show_more_uses_text_fallback():
             waits.append(wait_ms)
 
     _expand_show_more(FakeArticle(), FakePage(), wait_ms=50)
-    assert len(clicked) == 1
-    assert waits == [50]
+    assert len(clicked) == 0
+    assert waits == []
 
 
 def test_resolve_thread_context_prefers_like_metadata():
@@ -579,6 +607,36 @@ def test_read_article_text_uses_anchor_handle_first():
     )
     assert result == "from-handle"
 
+
+def test_read_article_text_prefers_richer_page_text_over_compact_anchor():
+    class FakeArticle:
+        def inner_text(self, timeout=None):
+            raise AssertionError("should not call inner_text when richer text is available")
+
+    class FakeHandle:
+        def evaluate(self, script):
+            return "compact-from-anchor"
+
+    class FakeLocator:
+        def __init__(self):
+            self.first = self
+
+        def evaluate(self, script):
+            return "line 1\nline 2 from page"
+
+    class FakePage:
+        def locator(self, selector):
+            assert selector == "a[href*='/status/1']"
+            return FakeLocator()
+
+    result = _read_article_text(
+        FakeArticle(),
+        "https://x.com/user/status/1",
+        page=FakePage(),
+        anchor_handle=FakeHandle(),
+        timeout_ms=10,
+    )
+    assert result == "line 1\nline 2 from page"
 
 
 def test_select_thread_indices_requires_context():
