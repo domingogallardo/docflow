@@ -152,7 +152,7 @@ def _tweets_dir(base_dir: Path, year: int, override: Path | None) -> Path:
     return base_dir / "Tweets" / f"Tweets {year}"
 
 
-def _files_for_day(tweets_dir: Path, day: str) -> list[Path]:
+def _collect_daily_source_markdown(tweets_dir: Path, day: str) -> list[Path]:
     selected: list[Path] = []
     for path in tweets_dir.glob("*.md"):
         if not path.is_file():
@@ -179,7 +179,11 @@ def _consolidated_base_candidates(day: str, output_base: str | None) -> list[str
     return candidates
 
 
-def _existing_consolidated_pairs(tweets_dir: Path, day: str, output_base: str | None) -> list[tuple[Path, Path]]:
+def _find_existing_daily_consolidated_outputs(
+    tweets_dir: Path,
+    day: str,
+    output_base: str | None,
+) -> list[tuple[Path, Path]]:
     pairs: list[tuple[Path, Path]] = []
     for base_name in _consolidated_base_candidates(day, output_base):
         md_path = tweets_dir / f"{base_name}.md"
@@ -568,15 +572,15 @@ def _path_key(path: Path) -> str:
     return str(path.resolve())
 
 
-def _delete_consolidated_sources(
-    files: Iterable[Path],
+def _delete_daily_source_html_only(
+    source_markdown: Iterable[Path],
     *,
     keep_paths: Iterable[Path] = (),
 ) -> int:
     keep = {_path_key(path) for path in keep_paths}
     deleted_html = 0
 
-    for md_path in files:
+    for md_path in source_markdown:
         if _path_key(md_path) in keep:
             continue
 
@@ -590,6 +594,14 @@ def _delete_consolidated_sources(
             deleted_html += 1
 
     return deleted_html
+
+
+def _cleanup_after_daily_consolidation(
+    source_markdown: Iterable[Path],
+    *,
+    keep_paths: Iterable[Path],
+) -> int:
+    return _delete_daily_source_html_only(source_markdown, keep_paths=keep_paths)
 
 
 def _render_markdown(day: str, entries: Iterable[TweetEntry]) -> str:
@@ -663,44 +675,46 @@ def _render_markdown(day: str, entries: Iterable[TweetEntry]) -> str:
     return "\n".join(lines).rstrip() + "\n"
 
 
-def main() -> int:
-    args = parse_args()
-    day_dt = _parse_day(args.day)
-    year = args.year or day_dt.year
-
-    tweets_dir = _tweets_dir(cfg.BASE_DIR, year, args.tweets_dir)
-    if not tweets_dir.is_dir():
-        raise SystemExit(f"❌ Tweets directory not found: {tweets_dir}")
-
-    if args.cleanup_if_consolidated:
-        pairs = _existing_consolidated_pairs(tweets_dir, args.day, args.output_base)
-        if not pairs:
-            print(f"🧾 No consolidated files found for {args.day}; cleanup skipped")
-            return 0
-        files = _files_for_day(tweets_dir, args.day)
-        keep_paths = [path for pair in pairs for path in pair]
-        deleted_html = _delete_consolidated_sources(files, keep_paths=keep_paths)
-        print(
-            f"🧹 Cleanup completed for {args.day}: "
-            f"removed {deleted_html} HTML (source Markdown kept)"
-        )
+def _run_cleanup_for_existing_daily_consolidated(
+    tweets_dir: Path,
+    day: str,
+    output_base: str | None,
+) -> int:
+    pairs = _find_existing_daily_consolidated_outputs(tweets_dir, day, output_base)
+    if not pairs:
+        print(f"🧾 No consolidated files found for {day}; cleanup skipped")
         return 0
 
-    files = _files_for_day(tweets_dir, args.day)
-    if not files:
-        print(f"🐦 No tweet Markdown files found for {args.day} in {tweets_dir}")
+    source_markdown = _collect_daily_source_markdown(tweets_dir, day)
+    keep_paths = [path for pair in pairs for path in pair]
+    deleted_html = _cleanup_after_daily_consolidation(source_markdown, keep_paths=keep_paths)
+    print(
+        f"🧹 Cleanup completed for {day}: "
+        f"removed {deleted_html} HTML (source Markdown kept)"
+    )
+    return 0
+
+
+def _build_daily_consolidated_from_markdown(
+    tweets_dir: Path,
+    day: str,
+    output_base: str | None,
+) -> int:
+    source_markdown = _collect_daily_source_markdown(tweets_dir, day)
+    if not source_markdown:
+        print(f"🐦 No tweet Markdown files found for {day} in {tweets_dir}")
         return 0
 
-    entries = [_build_entry(path) for path in files]
+    entries = [_build_entry(path) for path in source_markdown]
     entries.sort(key=lambda item: (item.mtime, item.title.lower()))
     latest_tweet_mtime = max(entry.mtime for entry in entries)
     consolidated_mtime = latest_tweet_mtime + 60
 
-    output_base = args.output_base or f"Tweets {args.day}"
-    md_path = tweets_dir / f"{output_base}.md"
-    html_path = tweets_dir / f"{output_base}.html"
+    output_name = output_base or f"Tweets {day}"
+    md_path = tweets_dir / f"{output_name}.md"
+    html_path = tweets_dir / f"{output_name}.html"
 
-    markdown_text = _render_markdown(args.day, entries)
+    markdown_text = _render_markdown(day, entries)
     md_path.write_text(markdown_text, encoding="utf-8")
 
     html_text = _render_full_html(markdown_text, md_path.stem)
@@ -711,13 +725,39 @@ def main() -> int:
     _set_mtime(md_path, consolidated_mtime)
     _set_mtime(html_path, consolidated_mtime)
 
-    deleted_html = _delete_consolidated_sources(files, keep_paths=(md_path, html_path))
+    deleted_html = _cleanup_after_daily_consolidation(
+        source_markdown,
+        keep_paths=(md_path, html_path),
+    )
 
     print(f"✅ Consolidated Markdown generated: {md_path}")
     print(f"✅ Consolidated HTML generated: {html_path}")
     print(f"🧾 Entries included: {len(entries)}")
     print(f"🧹 Source tweet cleanup: removed {deleted_html} HTML (source Markdown kept)")
     return 0
+
+
+def main() -> int:
+    args = parse_args()
+    day_dt = _parse_day(args.day)
+    year = args.year or day_dt.year
+
+    tweets_dir = _tweets_dir(cfg.BASE_DIR, year, args.tweets_dir)
+    if not tweets_dir.is_dir():
+        raise SystemExit(f"❌ Tweets directory not found: {tweets_dir}")
+
+    if args.cleanup_if_consolidated:
+        return _run_cleanup_for_existing_daily_consolidated(
+            tweets_dir,
+            args.day,
+            args.output_base,
+        )
+
+    return _build_daily_consolidated_from_markdown(
+        tweets_dir,
+        args.day,
+        args.output_base,
+    )
 
 
 if __name__ == "__main__":
