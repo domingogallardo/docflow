@@ -52,6 +52,7 @@ def test_done_items_order_by_done_time(tmp_path: Path, monkeypatch):
     out = build_done_index.write_site_done_index(base)
     content = out.read_text(encoding="utf-8")
 
+    assert '<h2 class="dg-year">2026</h2>' in content
     assert content.find("b.html") < content.find("a.html")
 
 
@@ -83,3 +84,26 @@ def test_done_index_shows_state_actions_for_pdfs(tmp_path: Path):
     assert 'data-api-action="reopen"' in content
     assert 'data-api-action="to-browse"' in content
     assert 'data-docflow-path="Pdfs/Pdfs 2026/paper.pdf"' in content
+
+
+def test_done_index_groups_items_by_year_headers(tmp_path: Path, monkeypatch):
+    base = tmp_path / "base"
+    posts_2025 = base / "Posts" / "Posts 2025"
+    posts_2026 = base / "Posts" / "Posts 2026"
+    posts_2025.mkdir(parents=True)
+    posts_2026.mkdir(parents=True)
+    (posts_2025 / "old.html").write_text("<html><body>Old</body></html>", encoding="utf-8")
+    (posts_2026 / "new.html").write_text("<html><body>New</body></html>", encoding="utf-8")
+
+    done_times = iter(["2026-01-01T10:00:00Z", "2026-01-02T10:00:00Z"])
+    monkeypatch.setattr(site_state, "_utc_now_iso", lambda: next(done_times))
+    site_state.set_done_path(base, "Posts/Posts 2025/old.html")
+    site_state.set_done_path(base, "Posts/Posts 2026/new.html")
+
+    out = build_done_index.write_site_done_index(base)
+    content = out.read_text(encoding="utf-8")
+
+    assert '<h2 class="dg-year">2026</h2>' in content
+    assert '<h2 class="dg-year">2025</h2>' in content
+    assert content.find('<h2 class="dg-year">2026</h2>') < content.find('<h2 class="dg-year">2025</h2>')
+    assert content.find("new.html") < content.find("old.html")

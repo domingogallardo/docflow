@@ -784,18 +784,21 @@ def ensure_assets(base_dir: Path) -> None:
 
   document.addEventListener('DOMContentLoaded', () => {
     const toggle = document.querySelector('[data-dg-sort-toggle]');
-    const list = document.querySelector('ul.dg-index, ul.dg-done-list');
-    if (!toggle || !list) return;
+    const lists = Array.from(document.querySelectorAll('ul.dg-index, ul.dg-done-list'));
+    if (!toggle || lists.length === 0) return;
 
-    const sortable = Array.from(list.querySelectorAll('li[data-dg-sortable=\"1\"]'));
-    const sortableFiles = sortable.filter((node) => {
-      const link = node.querySelector('a[href]');
-      if (!link) return false;
-      const href = (link.getAttribute('href') || '').trim();
-      return href !== '' && !href.endsWith('/');
-    });
+    const groups = lists.map((list) => {
+      const sortable = Array.from(list.querySelectorAll('li[data-dg-sortable=\"1\"]'));
+      const sortableFiles = sortable.filter((node) => {
+        const link = node.querySelector('a[href]');
+        if (!link) return false;
+        const href = (link.getAttribute('href') || '').trim();
+        return href !== '' && !href.endsWith('/');
+      });
+      return { list, sortableFiles };
+    }).filter((group) => group.sortableFiles.length > 0);
 
-    if (sortableFiles.length === 0) {
+    if (groups.length === 0) {
       toggle.setAttribute('disabled', '');
       return;
     }
@@ -803,9 +806,11 @@ def ensure_assets(base_dir: Path) -> None:
     let highlightsFirst = false;
 
     function renderOrder() {
-      const sorted = [...sortableFiles].sort((a, b) => compareEntries(a, b, highlightsFirst));
-      for (const node of sorted) {
-        list.appendChild(node);
+      for (const group of groups) {
+        const sorted = [...group.sortableFiles].sort((a, b) => compareEntries(a, b, highlightsFirst));
+        for (const node of sorted) {
+          group.list.appendChild(node);
+        }
       }
       toggle.textContent = highlightsFirst ? 'Highlight: on' : 'Highlight: off';
       toggle.classList.toggle('is-active', highlightsFirst);

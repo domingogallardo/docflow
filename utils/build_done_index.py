@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import html
+import re
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
@@ -29,6 +30,7 @@ DONE_BASE_STYLE = (
     ".dg-done-list{list-style:none;padding-left:0}"
     ".dg-done-list li{padding:2px 6px;border-radius:6px;margin:2px 0;display:flex;justify-content:space-between;gap:10px;align-items:center}"
     ".dg-done-list li.dg-hl{background:#fff9e8}"
+    ".dg-year{margin:14px 0 6px;font-size:1rem;font-weight:600;color:#555}"
     ".dg-nav{color:#666;font:13px -apple-system,system-ui,Segoe UI,Roboto,Helvetica,Arial;margin-bottom:8px}"
     ".dg-nav a{text-decoration:none;color:#0a7}"
     ".dg-legendbar{display:flex;align-items:center;justify-content:flex-start;gap:6px;flex-wrap:wrap;margin-bottom:8px}"
@@ -39,6 +41,8 @@ DONE_BASE_STYLE = (
     ".dg-actions button{padding:2px 6px;border:1px solid #ccc;border-radius:6px;background:#f7f7f7;color:#333;font:12px -apple-system,system-ui,Segoe UI,Roboto,Helvetica,Arial;cursor:pointer}"
     ".file-icon{font-size:0.85em;vertical-align:baseline;display:inline-block;transform:translateY(-0.05em)}"
 )
+
+YEAR_RE = re.compile(r"(?:19|20)\d{2}")
 
 
 class SiteDoneItem(NamedTuple):
@@ -97,6 +101,29 @@ def _done_at_to_epoch(value: object) -> float | None:
     return parsed.timestamp()
 
 
+def _year_for_item(rel_path: str) -> str:
+    for segment in Path(rel_path).parts[:-1]:
+        match = YEAR_RE.search(segment)
+        if match:
+            return match.group(0)
+    return "Unknown"
+
+
+def _group_items_by_year(items: list[SiteDoneItem]) -> list[tuple[str, list[SiteDoneItem]]]:
+    grouped: dict[str, list[SiteDoneItem]] = {}
+    for item in items:
+        year = _year_for_item(item.rel_path)
+        grouped.setdefault(year, []).append(item)
+
+    def _sort_key(year: str) -> tuple[int, int | str]:
+        if year.isdigit():
+            return (0, -int(year))
+        return (1, year.lower())
+
+    ordered_years = sorted(grouped.keys(), key=_sort_key)
+    return [(year, grouped[year]) for year in ordered_years]
+
+
 def collect_site_done_items(base_dir: Path) -> list[SiteDoneItem]:
     done_state = load_done_state(base_dir)
     state_items = done_state.get("items", {})
@@ -136,26 +163,29 @@ def build_site_done_html(items: list[SiteDoneItem]) -> str:
     if not items:
         list_html = '<ul class="dg-done-list"></ul>'
     else:
-        lines: list[str] = ['<ul class="dg-done-list">']
-        for item in items:
-            href = raw_url_for_rel_path(item.rel_path)
-            icon = _icon_for(item.name)
-            hl_icon = '<span class="file-icon hl-icon" aria-hidden="true">🟡</span> ' if item.highlighted else ""
-            esc_name = html.escape(item.name)
-            row_class = ' class="dg-hl"' if item.highlighted else ""
-            row_attrs = (
-                "data-dg-sortable='1' "
-                "data-dg-bumped='0' "
-                f"data-dg-highlighted='{'1' if item.highlighted else '0'}' "
-                f"data-dg-sort-mtime='{item.sort_mtime:.6f}' "
-                f"data-dg-name='{html.escape(item.name.lower(), quote=True)}'"
-            )
-            actions = _actions_html(item)
-            lines.append(
-                f'<li{row_class} {row_attrs}><span>{hl_icon}{icon}<a href="{href}" title="{esc_name}">{esc_name}</a></span>{actions}</li>'
-            )
-        lines.append("</ul>")
-        list_html = "\n".join(lines)
+        sections: list[str] = []
+        for year, year_items in _group_items_by_year(items):
+            lines: list[str] = [f'<h2 class="dg-year">{html.escape(year)}</h2>', '<ul class="dg-done-list">']
+            for item in year_items:
+                href = raw_url_for_rel_path(item.rel_path)
+                icon = _icon_for(item.name)
+                hl_icon = '<span class="file-icon hl-icon" aria-hidden="true">🟡</span> ' if item.highlighted else ""
+                esc_name = html.escape(item.name)
+                row_class = ' class="dg-hl"' if item.highlighted else ""
+                row_attrs = (
+                    "data-dg-sortable='1' "
+                    "data-dg-bumped='0' "
+                    f"data-dg-highlighted='{'1' if item.highlighted else '0'}' "
+                    f"data-dg-sort-mtime='{item.sort_mtime:.6f}' "
+                    f"data-dg-name='{html.escape(item.name.lower(), quote=True)}'"
+                )
+                actions = _actions_html(item)
+                lines.append(
+                    f'<li{row_class} {row_attrs}><span>{hl_icon}{icon}<a href="{href}" title="{esc_name}">{esc_name}</a></span>{actions}</li>'
+                )
+            lines.append("</ul>")
+            sections.append("\n".join(lines))
+        list_html = "\n".join(sections)
 
     return (
         '<!DOCTYPE html><html><head><meta charset="utf-8">'
