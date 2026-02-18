@@ -35,7 +35,7 @@ from utils.site_paths import (
 from utils.highlight_store import has_highlights_for_path
 from utils.site_state import load_bump_state, load_published_state, load_working_state
 
-CATEGORY_KEYS = ("posts", "tweets", "pdfs", "images", "podcasts")
+CATEGORY_KEYS = ("posts", "tweets", "podcasts", "pdfs", "images")
 CATEGORY_LABELS = {
     "posts": "Posts",
     "tweets": "Tweets",

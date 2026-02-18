@@ -101,9 +101,13 @@ def test_build_browse_site_generates_indexes_and_actions(tmp_path: Path):
     assert 'href="podcasts/">Podcasts/</a> <span class=\'dg-count\'>(1)</span>' in browse_home_content
     assert 'href="posts/">Posts/</a> <span class=\'dg-count\'>(1)</span>' in browse_home_content
     assert 'href="tweets/">Tweets/</a> <span class=\'dg-count\'>(0)</span>' in browse_home_content
+    assert 'href="pdfs/">Pdfs/</a> <span class=\'dg-count\'>(1)</span>' in browse_home_content
+    assert 'href="images/">Images/</a> <span class=\'dg-count\'>(1)</span>' in browse_home_content
     assert 'href="posts/">Posts (1)/</a>' not in browse_home_content
     assert browse_home_content.find('href="posts/">Posts/') < browse_home_content.find('href="tweets/">Tweets/')
-    assert browse_home_content.find('href="posts/">Posts/') < browse_home_content.find('href="pdfs/">Pdfs/')
+    assert browse_home_content.find('href="tweets/">Tweets/') < browse_home_content.find('href="podcasts/">Podcasts/')
+    assert browse_home_content.find('href="podcasts/">Podcasts/') < browse_home_content.find('href="pdfs/">Pdfs/')
+    assert browse_home_content.find('href="pdfs/">Pdfs/') < browse_home_content.find('href="images/">Images/')
 
 
 def test_collect_category_items_handles_missing_dirs(tmp_path: Path):
