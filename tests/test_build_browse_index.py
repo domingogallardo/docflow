@@ -86,13 +86,14 @@ def test_build_browse_site_generates_indexes_and_actions(tmp_path: Path):
     assert "Highlights first: off" in content
     assert "data-dg-sortable='1'" in content
     assert "data-dg-highlighted='1'" in content
+    assert "data-dg-done='1'" in content
     assert "<script src='/assets/browse-sort.js' defer></script>" in content
     assert 'data-api-action="unpublish"' not in content
     assert 'data-api-action="unbump"' not in content
     assert '/posts/raw/Posts%202026/doc.html' in content
 
     pdf_content = pdfs_year_page.read_text(encoding="utf-8")
-    assert 'data-api-action="publish"' in pdf_content or 'data-api-action="unpublish"' in pdf_content
+    assert 'data-api-action="to-working"' in pdf_content
     assert 'data-api-action="bump"' in pdf_content or 'data-api-action="unbump"' in pdf_content
 
     browse_home_content = browse_home.read_text(encoding="utf-8")
@@ -125,9 +126,6 @@ def test_browse_uses_bump_state_for_order_without_touching_mtime(tmp_path: Path)
     os.utime(first, (1_700_000_100, 1_700_000_100))
     os.utime(second, (1_700_000_000, 1_700_000_000))
 
-    site_state.publish_path(base, "Posts/Posts 2026/a.html")
-    site_state.publish_path(base, "Posts/Posts 2026/b.html")
-
     mtime_b_before = second.stat().st_mtime
     site_state.set_bumped_path(base, "Posts/Posts 2026/b.html", original_mtime=mtime_b_before, bumped_mtime=9_999_999_999.0)
 
@@ -138,6 +136,35 @@ def test_browse_uses_bump_state_for_order_without_touching_mtime(tmp_path: Path)
     assert html.find("b.html") < html.find("a.html")
     assert abs(second.stat().st_mtime - mtime_b_before) < 0.001
     assert "<span class='dg-date'> — " not in html
+
+
+def test_browse_orders_working_before_done_and_rest(tmp_path: Path, monkeypatch):
+    base = tmp_path / "base"
+    posts = base / "Posts" / "Posts 2026"
+    posts.mkdir(parents=True)
+
+    working_doc = posts / "working.html"
+    done_doc = posts / "done.html"
+    rest_doc = posts / "rest.html"
+    working_doc.write_text("<html><body>Working</body></html>", encoding="utf-8")
+    done_doc.write_text("<html><body>Done</body></html>", encoding="utf-8")
+    rest_doc.write_text("<html><body>Rest</body></html>", encoding="utf-8")
+
+    os.utime(working_doc, (1_700_000_000, 1_700_000_000))
+    os.utime(done_doc, (1_700_000_100, 1_700_000_100))
+    os.utime(rest_doc, (1_700_000_200, 1_700_000_200))
+
+    times = iter(["2026-02-01T10:00:00Z", "2026-02-01T10:00:05Z"])
+    monkeypatch.setattr(site_state, "_utc_now_iso", lambda: next(times))
+    site_state.set_working_path(base, "Posts/Posts 2026/working.html")
+    site_state.publish_path(base, "Posts/Posts 2026/done.html")
+
+    build_browse_index.build_browse_site(base)
+    year_page = base / "_site" / "browse" / "posts" / "Posts 2026" / "index.html"
+    html = year_page.read_text(encoding="utf-8")
+
+    assert html.find("working.html") < html.find("done.html")
+    assert html.find("done.html") < html.find("rest.html")
 
 
 def test_browse_orders_bumped_then_published_then_rest(tmp_path: Path, monkeypatch):

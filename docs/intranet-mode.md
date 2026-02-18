@@ -15,22 +15,26 @@ Static output under `BASE_DIR/_site`:
 - `index.html`
 - `browse/...`
 - `working/...`
+- `done/...`
 - `assets/...`
 
 Local state under `BASE_DIR/state`:
 
+- `working.json`
 - `published.json`
 - `bump.json`
 - `highlights/...`
 
-## Browse and Working behavior
+## Browse, Working, and Done behavior
 
 - `browse`: full library navigation by category (`posts`, `tweets`, `pdfs`, `images`, `podcasts`).
 - `incoming` is intentionally excluded from browse navigation.
-- `browse` default ordering: bumped first, then published, then the rest.
+- `browse` default ordering: bumped first, then working, then done, then the rest.
 - `browse` includes a top toggle button (`Highlights first`) to prioritize highlighted items dynamically.
-- `working`: curated list from `state/published.json`.
-- `working` ordering: bumped entries first (via `state/bump.json`), then non-bumped entries by `published_at` (newest first).
+- `working`: curated list from `state/working.json`.
+- `working` ordering: by `working_at` (newest first).
+- `done`: curated list from `state/published.json`.
+- `done` ordering: by `published_at` (newest first).
 - Highlight marks (🟡) come from canonical local highlight state only.
 
 ## Bump semantics
@@ -46,6 +50,10 @@ Local state under `BASE_DIR/state`:
 - Static files from `_site`
 - Raw files from `BASE_DIR` via `/posts/raw/...`, `/pdfs/raw/...`, etc.
 - API endpoints:
+  - `POST /api/to-working`
+  - `POST /api/to-done`
+  - `POST /api/to-browse`
+  - `POST /api/reopen`
   - `POST /api/publish`
   - `POST /api/unpublish`
   - `POST /api/bump`
@@ -62,8 +70,9 @@ Local state under `BASE_DIR/state`:
 - Per-file API actions trigger:
   - partial browse rebuild for the affected branch
   - full working rebuild
-- `POST /api/rebuild-file` rebuilds one HTML file from its sibling Markdown (`.md`) and then refreshes browse/working.
-- `POST /api/rebuild` triggers full browse + working rebuild.
+  - full done rebuild
+- `POST /api/rebuild-file` rebuilds one HTML file from its sibling Markdown (`.md`) and then refreshes browse/working/done.
+- `POST /api/rebuild` triggers full browse + working + done rebuild.
 
 ## `bin/docflow.sh all`
 
@@ -71,7 +80,7 @@ Local state under `BASE_DIR/state`:
 
 - executes `process_documents.py`
 - optionally runs tweet daily consolidation (`--yesterday` when target is `all`)
-- rebuilds intranet browse and working
+- rebuilds intranet browse, working, and done
 
 Optional override:
 

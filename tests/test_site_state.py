@@ -35,3 +35,20 @@ def test_bump_state_keeps_original_mtime(tmp_path: Path):
     removed = site_state.pop_bumped_path(base, rel)
     assert removed is not None
     assert site_state.get_bumped_entry(base, rel) is None
+
+
+def test_working_roundtrip(tmp_path: Path):
+    base = tmp_path / "base"
+    base.mkdir()
+    rel = "Posts/Posts 2026/doc.html"
+
+    changed = site_state.set_working_path(base, rel)
+    assert changed is True
+    assert site_state.is_working(base, rel) is True
+
+    changed_again = site_state.set_working_path(base, rel)
+    assert changed_again is False
+
+    removed = site_state.pop_working_path(base, rel)
+    assert removed is not None
+    assert site_state.is_working(base, rel) is False

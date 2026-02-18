@@ -4,7 +4,7 @@
 Features:
 - Serves generated site files from BASE_DIR/_site
 - Serves raw files from BASE_DIR via dedicated routes (/posts/raw/..., /pdfs/raw/...)
-- Exposes API actions under /api/* (publish, unpublish, bump, unbump, delete, rebuild, rebuild-file)
+- Exposes API actions under /api/* (to-working, to-done, to-browse, reopen, bump, unbump, delete, rebuild, rebuild-file)
 """
 
 from __future__ import annotations
@@ -29,7 +29,7 @@ if __package__ in (None, ""):
     if str(_REPO_ROOT) not in sys.path:
         sys.path.insert(0, str(_REPO_ROOT))
 
-from utils import add_margins_to_html_files, build_browse_index, build_working_index, markdown_to_html
+from utils import add_margins_to_html_files, build_browse_index, build_done_index, build_working_index, markdown_to_html
 from utils.site_paths import (
     PathValidationError,
     normalize_rel_path,
@@ -39,7 +39,17 @@ from utils.site_paths import (
     resolve_raw_path,
     site_root,
 )
-from utils.site_state import get_bumped_entry, is_published, pop_bumped_path, publish_path, set_bumped_path, unpublish_path
+from utils.site_state import (
+    get_bumped_entry,
+    is_published,
+    is_working,
+    pop_bumped_path,
+    pop_working_path,
+    publish_path,
+    set_bumped_path,
+    set_working_path,
+    unpublish_path,
+)
 from utils.highlight_store import load_highlights_for_path, save_highlights_for_path
 
 
@@ -108,6 +118,10 @@ def _browse_index_url_for_raw_library_path(request_path: str) -> str:
 
 class DocflowApp:
     _PATH_ACTION_METHODS = {
+        "to-working": "api_to_working",
+        "to-done": "api_to_done",
+        "to-browse": "api_to_browse",
+        "reopen": "api_reopen",
         "publish": "api_publish",
         "unpublish": "api_unpublish",
         "bump": "api_bump",
@@ -129,10 +143,12 @@ class DocflowApp:
     def rebuild(self) -> None:
         build_browse_index.build_browse_site(self.base_dir)
         build_working_index.write_site_working_index(self.base_dir)
+        build_done_index.write_site_done_index(self.base_dir)
 
     def rebuild_for_path(self, rel_path: str) -> None:
         build_browse_index.rebuild_browse_for_path(self.base_dir, rel_path)
         build_working_index.write_site_working_index(self.base_dir)
+        build_done_index.write_site_done_index(self.base_dir)
 
     def _next_bump_mtime(self) -> float:
         with self._bump_lock:
@@ -160,22 +176,59 @@ class DocflowApp:
 
         return abs_path
 
-    def api_publish(self, rel_path: str) -> dict[str, object]:
+    def path_stage(self, rel_path: str) -> str:
+        normalized = normalize_rel_path(rel_path)
+        if is_published(self.base_dir, normalized):
+            return "done"
+        if is_working(self.base_dir, normalized):
+            return "working"
+        return "browse"
+
+    def api_to_working(self, rel_path: str) -> dict[str, object]:
+        normalized = self._normalize_rel_path_or_400(rel_path)
+        self._require_existing_library_file(normalized)
+        changed = set_working_path(self.base_dir, normalized)
+        changed = unpublish_path(self.base_dir, normalized) or changed
+        changed = (pop_bumped_path(self.base_dir, normalized) is not None) or changed
+        self.rebuild_for_path(normalized)
+        return {"changed": changed, "path": normalized, "stage": "working"}
+
+    def api_to_done(self, rel_path: str) -> dict[str, object]:
         normalized = self._normalize_rel_path_or_400(rel_path)
         self._require_existing_library_file(normalized)
         changed = publish_path(self.base_dir, normalized)
+        changed = (pop_working_path(self.base_dir, normalized) is not None) or changed
+        changed = (pop_bumped_path(self.base_dir, normalized) is not None) or changed
         self.rebuild_for_path(normalized)
-        return {"changed": changed, "path": normalized}
+        return {"changed": changed, "path": normalized, "stage": "done"}
+
+    def api_to_browse(self, rel_path: str) -> dict[str, object]:
+        normalized = self._normalize_rel_path_or_400(rel_path)
+        self._require_existing_library_file(normalized)
+        changed = (pop_working_path(self.base_dir, normalized) is not None)
+        changed = unpublish_path(self.base_dir, normalized) or changed
+        changed = (pop_bumped_path(self.base_dir, normalized) is not None) or changed
+        self.rebuild_for_path(normalized)
+        return {"changed": changed, "path": normalized, "stage": "browse"}
+
+    def api_reopen(self, rel_path: str) -> dict[str, object]:
+        result = self.api_to_working(rel_path)
+        result["transition"] = "reopen"
+        return result
+
+    def api_publish(self, rel_path: str) -> dict[str, object]:
+        # Backward-compatible alias.
+        return self.api_to_done(rel_path)
 
     def api_unpublish(self, rel_path: str) -> dict[str, object]:
-        normalized = normalize_rel_path(rel_path)
-        changed = unpublish_path(self.base_dir, normalized)
-        self.rebuild_for_path(normalized)
-        return {"changed": changed, "path": normalized}
+        # Backward-compatible alias.
+        return self.api_to_browse(rel_path)
 
     def api_bump(self, rel_path: str) -> dict[str, object]:
         normalized = self._normalize_rel_path_or_400(rel_path)
         abs_path = self._require_existing_library_file(normalized)
+        if self.path_stage(normalized) != "browse":
+            raise ApiError(409, f"Bump is only allowed in browse stage: {normalized}")
         entry = get_bumped_entry(self.base_dir, normalized)
 
         st = abs_path.stat()
@@ -229,10 +282,12 @@ class DocflowApp:
                 raise ApiError(500, f"Could not delete associated Markdown: {exc}") from exc
 
         unpublished = unpublish_path(self.base_dir, normalized)
+        removed_working = pop_working_path(self.base_dir, normalized) is not None
         pop_bumped_path(self.base_dir, normalized)
 
         if sibling_md_rel:
             unpublish_path(self.base_dir, sibling_md_rel)
+            pop_working_path(self.base_dir, sibling_md_rel)
             pop_bumped_path(self.base_dir, sibling_md_rel)
 
         self.rebuild_for_path(normalized)
@@ -240,6 +295,7 @@ class DocflowApp:
             "path": normalized,
             "deleted_md": deleted_md,
             "unpublished": unpublished,
+            "removed_working": removed_working,
             "redirect": _browse_parent_url_for_rel_path(normalized),
         }
 
@@ -399,8 +455,7 @@ OVERLAY_JS = """
   const relPath = script.getAttribute('data-path') || '';
   if (!relPath) return;
 
-  let bumped = script.getAttribute('data-bumped') === '1';
-  let published = script.getAttribute('data-published') === '1';
+  let stage = script.getAttribute('data-stage') || 'browse';
   let busy = false;
 
   function callApi(action, path) {
@@ -433,10 +488,9 @@ OVERLAY_JS = """
           render();
           return;
         }
-        if (action === 'bump') bumped = true;
-        if (action === 'unbump') bumped = false;
-        if (action === 'publish') published = true;
-        if (action === 'unpublish') published = false;
+        if (action === 'to-working' || action === 'reopen') stage = 'working';
+        if (action === 'to-done') stage = 'done';
+        if (action === 'to-browse') stage = 'browse';
         if (action === 'delete') {
           let redirectTo = '/browse/';
           try {
@@ -457,10 +511,27 @@ OVERLAY_JS = """
     return button;
   }
 
+  function stageActions() {
+    if (stage === 'working') {
+      return [
+        ['Move to Done', 'to-done'],
+        ['Move to Browse', 'to-browse']
+      ];
+    }
+    if (stage === 'done') {
+      return [
+        ['Reopen to Working', 'reopen'],
+        ['Move to Browse', 'to-browse']
+      ];
+    }
+    return [['Move to Working', 'to-working']];
+  }
+
   function render() {
     bar.innerHTML = '';
-    bar.appendChild(makeButton(bumped ? 'Unbump' : 'Bump', bumped ? 'unbump' : 'bump'));
-    bar.appendChild(makeButton(published ? 'Unpublish' : 'Publish', published ? 'unpublish' : 'publish'));
+    for (const [label, action] of stageActions()) {
+      bar.appendChild(makeButton(label, action));
+    }
     bar.appendChild(makeButton('Rebuild', 'rebuild-file'));
     bar.appendChild(makeButton('Delete', 'delete'));
     if (busy) {
@@ -503,7 +574,7 @@ def _ensure_viewport_meta(html_text: str) -> str:
     return f"<head>{viewport}</head>{html_text}"
 
 
-def _inject_html_overlay(*, html_text: str, rel_path: str, published: bool, bumped: bool) -> bytes:
+def _inject_html_overlay(*, html_text: str, rel_path: str, stage: str) -> bytes:
     html_text = _ensure_viewport_meta(html_text)
     path_attr = html.escape(rel_path, quote=True)
     article_js = ""
@@ -512,8 +583,7 @@ def _inject_html_overlay(*, html_text: str, rel_path: str, published: bool, bump
     tags = (
         article_js
         + f"<style>{OVERLAY_CSS}</style>"
-        + f"<script defer data-path=\"{path_attr}\" data-published=\"{'1' if published else '0'}\" "
-        + f"data-bumped=\"{'1' if bumped else '0'}\">{OVERLAY_JS}</script>"
+        + f"<script defer data-path=\"{path_attr}\" data-stage=\"{html.escape(stage, quote=True)}\">{OVERLAY_JS}</script>"
     )
     lower = html_text.lower()
     idx = lower.rfind("</body>")
@@ -528,9 +598,8 @@ def _send_overlay_html(handler: BaseHTTPRequestHandler, app: DocflowApp, abs_pat
         _send_file(handler, abs_path)
         return
 
-    published = is_published(app.base_dir, rel_path)
-    bumped = get_bumped_entry(app.base_dir, rel_path) is not None
-    payload = _inject_html_overlay(html_text=text, rel_path=rel_path, published=published, bumped=bumped)
+    stage = app.path_stage(rel_path)
+    payload = _inject_html_overlay(html_text=text, rel_path=rel_path, stage=stage)
 
     handler.send_response(HTTPStatus.OK)
     handler.send_header("Content-Type", "text/html; charset=utf-8")
@@ -607,7 +676,7 @@ def make_handler(app: DocflowApp):
                 _send_json(self, 404, {"ok": False, "error": "Raw file not found"})
                 return
 
-            if path in ("/browse", "/working"):
+            if path in ("/browse", "/working", "/done"):
                 self.send_response(302)
                 self.send_header("Location", path + "/")
                 self.end_headers()
@@ -676,7 +745,7 @@ def parse_args() -> argparse.Namespace:
         "--rebuild-on-start",
         dest="rebuild_on_start",
         action="store_true",
-        help="Rebuild browse/working static pages before serving.",
+        help="Rebuild browse/working/done static pages before serving.",
     )
     # Backward compatibility: previously this was the explicit opt-out flag.
     parser.add_argument("--no-rebuild-on-start", dest="rebuild_on_start", action="store_false", help=argparse.SUPPRESS)

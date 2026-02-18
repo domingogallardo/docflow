@@ -5,7 +5,7 @@ set -euo pipefail
 # - Loads ~/.docflow_env if it exists
 # - Runs process_documents.py
 # - Optionally builds daily tweet consolidated files
-# - Rebuilds local intranet browse/working outputs
+# - Rebuilds local intranet browse/working/done outputs
 
 ENV_FILE="${HOME}/.docflow_env"
 if [ -f "${ENV_FILE}" ]; then
@@ -88,6 +88,7 @@ fi
 
 intranet_browse_status=0
 intranet_working_status=0
+intranet_done_status=0
 intranet_status=0
 if [ "${status}" -eq 0 ]; then
   if [ -n "${INTRANET_BASE_DIR}" ] && [ -d "${INTRANET_BASE_DIR}" ]; then
@@ -103,7 +104,13 @@ if [ "${status}" -eq 0 ]; then
     set -e
     echo "[$(date -Iseconds)] Docflow: intranet working build exit=${intranet_working_status}"
 
-    if [ "${intranet_browse_status}" -ne 0 ] || [ "${intranet_working_status}" -ne 0 ]; then
+    set +e
+    "${PYTHON_BIN}" utils/build_done_index.py --base-dir "${INTRANET_BASE_DIR}"
+    intranet_done_status=$?
+    set -e
+    echo "[$(date -Iseconds)] Docflow: intranet done build exit=${intranet_done_status}"
+
+    if [ "${intranet_browse_status}" -ne 0 ] || [ "${intranet_working_status}" -ne 0 ] || [ "${intranet_done_status}" -ne 0 ]; then
       intranet_status=1
     fi
   else

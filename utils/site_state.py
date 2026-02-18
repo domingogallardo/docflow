@@ -9,7 +9,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from utils.site_paths import bump_state_path, normalize_rel_path, published_state_path
+from utils.site_paths import bump_state_path, normalize_rel_path, published_state_path, working_state_path
 
 STATE_VERSION = 1
 
@@ -72,8 +72,21 @@ def save_published_state(base_dir: Path, state: dict[str, Any]) -> None:
     _write_state(published_state_path(base_dir), state)
 
 
+def load_working_state(base_dir: Path) -> dict[str, Any]:
+    return _read_state(working_state_path(base_dir))
+
+
+def save_working_state(base_dir: Path, state: dict[str, Any]) -> None:
+    _write_state(working_state_path(base_dir), state)
+
+
 def list_published(base_dir: Path) -> set[str]:
     state = load_published_state(base_dir)
+    return set(state.get("items", {}).keys())
+
+
+def list_working(base_dir: Path) -> set[str]:
+    state = load_working_state(base_dir)
     return set(state.get("items", {}).keys())
 
 
@@ -102,6 +115,36 @@ def unpublish_path(base_dir: Path, rel_path: str) -> bool:
 def is_published(base_dir: Path, rel_path: str) -> bool:
     key = normalize_rel_path(rel_path)
     return key in list_published(base_dir)
+
+
+def set_working_path(base_dir: Path, rel_path: str) -> bool:
+    key = normalize_rel_path(rel_path)
+    state = load_working_state(base_dir)
+    items: dict[str, dict[str, Any]] = state["items"]
+    already = key in items
+    if not already:
+        items[key] = {"working_at": _utc_now_iso()}
+        save_working_state(base_dir, state)
+    return not already
+
+
+def pop_working_path(base_dir: Path, rel_path: str) -> dict[str, Any] | None:
+    key = normalize_rel_path(rel_path)
+    state = load_working_state(base_dir)
+    items: dict[str, dict[str, Any]] = state["items"]
+    value = items.pop(key, None)
+    if value is not None:
+        save_working_state(base_dir, state)
+    return value
+
+
+def clear_working_path(base_dir: Path, rel_path: str) -> bool:
+    return pop_working_path(base_dir, rel_path) is not None
+
+
+def is_working(base_dir: Path, rel_path: str) -> bool:
+    key = normalize_rel_path(rel_path)
+    return key in list_working(base_dir)
 
 
 def load_bump_state(base_dir: Path) -> dict[str, Any]:

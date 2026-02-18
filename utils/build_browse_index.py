@@ -33,7 +33,7 @@ from utils.site_paths import (
     site_root,
 )
 from utils.highlight_store import has_highlights_for_path
-from utils.site_state import load_bump_state, load_published_state
+from utils.site_state import load_bump_state, load_published_state, load_working_state
 
 CATEGORY_KEYS = ("posts", "tweets", "pdfs", "images", "podcasts")
 CATEGORY_LABELS = {
@@ -55,6 +55,7 @@ class BrowseItem:
     rel_path: str
     name: str
     mtime: float
+    working: bool
     published: bool
     bumped: bool
     highlighted: bool
@@ -69,6 +70,7 @@ class BrowseEntry:
     is_dir: bool
     icon: str
     rel_path: str | None = None
+    working: bool = False
     published: bool = False
     bumped: bool = False
     highlighted: bool = False
@@ -115,6 +117,8 @@ def _entry_classes(entry: BrowseEntry) -> str:
     classes: list[str] = []
     if entry.bumped:
         classes.append("dg-bump")
+    if entry.working:
+        classes.append("dg-work")
     if entry.published:
         classes.append("dg-pub")
     if entry.highlighted:
@@ -128,17 +132,26 @@ def _actions_html(entry: BrowseEntry) -> str:
     if not entry.name.lower().endswith(".pdf"):
         return ""
 
-    pub_action = "unpublish" if entry.published else "publish"
-    pub_label = "Unpublish" if entry.published else "Publish"
-    bump_action = "unbump" if entry.bumped else "bump"
-    bump_label = "Unbump" if entry.bumped else "Bump"
+    if entry.published:
+        stage_buttons = [("reopen", "Reopen"), ("to-browse", "Move to Browse")]
+    elif entry.working:
+        stage_buttons = [("to-done", "Move to Done"), ("to-browse", "Move to Browse")]
+    else:
+        stage_buttons = [("to-working", "Move to Working")]
 
     path_attr = html.escape(entry.rel_path, quote=True)
+    button_html = "".join(
+        f"<button class='dg-act' data-api-action=\"{action}\" data-docflow-path=\"{path_attr}\">{label}</button>"
+        for action, label in stage_buttons
+    )
+    if not entry.published and not entry.working:
+        bump_action = "unbump" if entry.bumped else "bump"
+        bump_label = "Unbump" if entry.bumped else "Bump"
+        button_html += f"<button class='dg-act' data-api-action=\"{bump_action}\" data-docflow-path=\"{path_attr}\">{bump_label}</button>"
     return (
         "<span class='dg-actions'>"
-        f"<button class='dg-act' data-api-action=\"{pub_action}\" data-docflow-path=\"{path_attr}\">{pub_label}</button>"
-        f"<button class='dg-act' data-api-action=\"{bump_action}\" data-docflow-path=\"{path_attr}\">{bump_label}</button>"
-        "</span>"
+        + button_html
+        + "</span>"
     )
 
 
@@ -149,6 +162,7 @@ def _render_entry(entry: BrowseEntry) -> str:
 
     prefix = (
         ("🔥 " if entry.bumped else "")
+        + ("🔵 " if entry.working else "")
         + ("🟢 " if entry.published else "")
         + ("🟡 " if entry.highlighted else "")
         + entry.icon
@@ -157,7 +171,8 @@ def _render_entry(entry: BrowseEntry) -> str:
     attr_bits = [
         "data-dg-sortable='1'",
         f"data-dg-bumped='{'1' if entry.bumped else '0'}'",
-        f"data-dg-published='{'1' if entry.published else '0'}'",
+        f"data-dg-working='{'1' if entry.working else '0'}'",
+        f"data-dg-done='{'1' if entry.published else '0'}'",
         f"data-dg-highlighted='{'1' if entry.highlighted else '0'}'",
         f"data-dg-sort-mtime='{_sort_mtime(entry):.6f}'",
         f"data-dg-name='{html.escape(entry.name.lower(), quote=True)}'",
@@ -199,9 +214,11 @@ def _published_at_to_epoch(value: object) -> float | None:
 def _natural_priority(entry: BrowseEntry) -> int:
     if entry.bumped:
         return 0
-    if entry.published:
+    if entry.working:
         return 1
-    return 2
+    if entry.published:
+        return 2
+    return 3
 
 
 def _entry_sort_key(entry: BrowseEntry) -> tuple[int, float, str]:
@@ -218,6 +235,7 @@ def _base_head(title: str) -> str:
         "ul.dg-index{list-style:none;padding-left:0}"
         ".dg-index li{padding:2px 6px;border-radius:6px;margin:2px 0;display:flex;justify-content:space-between;align-items:center;gap:10px}"
         ".dg-bump{background:#fff6e5}"
+        ".dg-work{background:#eaf3ff}"
         ".dg-pub a{color:#0a7;font-weight:600}"
         ".dg-legend{color:#666;font:13px -apple-system,system-ui,Segoe UI,Roboto,Helvetica,Arial;margin-bottom:6px}"
         ".dg-nav{color:#666;font:13px -apple-system,system-ui,Segoe UI,Roboto,Helvetica,Arial;margin-bottom:8px}"
@@ -244,13 +262,13 @@ def _render_directory_page(
     parent_href: str | None,
 ) -> str:
     rows: list[str] = [_base_head(title)]
-    rows.append("<div class='dg-nav'><a href='/'>Home</a> · <a href='/browse/'>Browse</a> · <a href='/working/'>Working</a></div>")
+    rows.append("<div class='dg-nav'><a href='/'>Home</a> · <a href='/browse/'>Browse</a> · <a href='/working/'>Working</a> · <a href='/done/'>Done</a></div>")
     rows.append(f"<h2>Index of {html.escape(display_path)}</h2>")
     rows.append(
         "<div class='dg-sortbar'><button type='button' class='dg-sort-toggle' data-dg-sort-toggle "
         "aria-pressed='false'>Highlights first: off</button></div>"
     )
-    rows.append("<div class='dg-legend'>🔥 bumped · 🟢 published · 🟡 highlight</div><hr><ul class='dg-index'>")
+    rows.append("<div class='dg-legend'>🔥 bumped · 🔵 working · 🟢 done · 🟡 highlight</div><hr><ul class='dg-index'>")
 
     if parent_href:
         rows.append(f'<li data-dg-parent="1"><a href="{parent_href}">../</a></li>')
@@ -387,6 +405,7 @@ def _scan_directory(
     *,
     base_dir: Path,
     abs_dir: Path,
+    working_items: dict[str, dict],
     published_items: dict[str, dict],
     bump_items: dict[str, dict],
     visibility_cache: dict[str, bool],
@@ -436,11 +455,14 @@ def _scan_directory(
                 file_count += 1
                 abs_path = Path(fs_entry.path)
                 rel = rel_path_from_abs(base_dir, abs_path)
+                is_working = rel in working_items
                 published_entry = published_items.get(rel)
                 published_at_mtime = None
                 if isinstance(published_entry, dict):
                     published_at_mtime = _published_at_to_epoch(published_entry.get("published_at"))
                 is_published = rel in published_items
+                if is_published:
+                    is_working = False
 
                 bump_entry = bump_items.get(rel)
                 bumped_mtime = None
@@ -452,11 +474,16 @@ def _scan_directory(
                 display_mtime = st.st_mtime
                 effective_mtime = bumped_mtime
                 if effective_mtime is None:
-                    if is_published and published_at_mtime is not None:
+                    if is_working and isinstance(working_items.get(rel), dict):
+                        working_at_mtime = _published_at_to_epoch(working_items.get(rel, {}).get("working_at"))
+                        effective_mtime = working_at_mtime if working_at_mtime is not None else display_mtime
+                    elif is_published and published_at_mtime is not None:
                         effective_mtime = published_at_mtime
                     else:
                         effective_mtime = display_mtime
                 bumped = bumped_mtime is not None
+                if is_working or is_published:
+                    bumped = False
                 entries.append(
                     BrowseEntry(
                         name=name,
@@ -466,6 +493,7 @@ def _scan_directory(
                         is_dir=False,
                         icon=_icon_for_filename(name),
                         rel_path=rel,
+                        working=is_working,
                         published=is_published,
                         bumped=bumped,
                         highlighted=_is_highlighted(base_dir, rel),
@@ -485,6 +513,7 @@ def _write_category_directory_page(
     category: str,
     category_root: Path,
     rel_dir: Path,
+    working_items: dict[str, dict],
     published_items: dict[str, dict],
     bump_items: dict[str, dict],
     visibility_cache: dict[str, bool],
@@ -499,6 +528,7 @@ def _write_category_directory_page(
     entries, child_dirs, direct_files = _scan_directory(
         base_dir=base_dir,
         abs_dir=abs_dir,
+        working_items=working_items,
         published_items=published_items,
         bump_items=bump_items,
         visibility_cache=visibility_cache,
@@ -554,6 +584,7 @@ def _write_category_tree(
     base_dir: Path,
     category: str,
     category_root: Path,
+    working_items: dict[str, dict],
     published_items: dict[str, dict],
     bump_items: dict[str, dict],
 ) -> int:
@@ -565,6 +596,7 @@ def _write_category_tree(
             category=category,
             category_root=category_root,
             rel_dir=rel_dir,
+            working_items=working_items,
             published_items=published_items,
             bump_items=bump_items,
             visibility_cache=visibility_cache,
@@ -616,7 +648,7 @@ def _write_browse_home(base_dir: Path, category_roots: dict[str, Path], counts: 
     )
     html_doc = html_doc.replace(
         "</ul><hr></body></html>",
-        "</ul><p><button class='dg-rebuild' data-api-action='rebuild'>Rebuild browse + working</button></p><hr></body></html>",
+        "</ul><p><button class='dg-rebuild' data-api-action='rebuild'>Rebuild browse + working + done</button></p><hr></body></html>",
     )
     (out_dir / "index.html").write_text(html_doc, encoding="utf-8")
 
@@ -632,8 +664,8 @@ def write_site_home(base_dir: Path) -> None:
         ".dg-actions button{padding:2px 6px;border:1px solid #ccc;border-radius:6px;background:#f7f7f7;color:#333;font:12px -apple-system,system-ui,Segoe UI,Roboto,Helvetica,Arial;cursor:pointer}"
         "</style><script src='/assets/actions.js' defer></script></head><body>"
         "<h1>Docflow Intranet</h1>"
-        "<p><a href='/browse/'>Browse</a> · <a href='/working/'>Working</a></p>"
-        "<p><button data-api-action='rebuild'>Rebuild browse + working</button></p>"
+        "<p><a href='/browse/'>Browse</a> · <a href='/working/'>Working</a> · <a href='/done/'>Done</a></p>"
+        "<p><button data-api-action='rebuild'>Rebuild browse + working + done</button></p>"
         "</body></html>"
     )
 
@@ -691,8 +723,9 @@ def ensure_assets(base_dir: Path) -> None:
 
   function naturalRank(node) {
     if (node.dataset.dgBumped === '1') return 0;
-    if (node.dataset.dgPublished === '1') return 1;
-    return 2;
+    if (node.dataset.dgWorking === '1') return 1;
+    if (node.dataset.dgDone === '1') return 2;
+    return 3;
   }
 
   function compareEntries(a, b, highlightsFirst) {
@@ -777,6 +810,9 @@ def collect_category_items(base_dir: Path, category: str) -> list[BrowseItem]:
     published_state = load_published_state(base_dir)
     published_state_items = published_state.get("items", {})
     published_items = published_state_items if isinstance(published_state_items, dict) else {}
+    working_state = load_working_state(base_dir)
+    working_state_items = working_state.get("items", {})
+    working_items = working_state_items if isinstance(working_state_items, dict) else {}
     bump_state = load_bump_state(base_dir)
     bump_items = bump_state.get("items", {}) if isinstance(bump_state.get("items", {}), dict) else {}
 
@@ -791,12 +827,15 @@ def collect_category_items(base_dir: Path, category: str) -> list[BrowseItem]:
             continue
 
         rel = rel_path_from_abs(base_dir, path)
+        is_working = rel in working_items
         st = path.stat()
         published_entry = published_items.get(rel)
         published_at_mtime = None
         if isinstance(published_entry, dict):
             published_at_mtime = _published_at_to_epoch(published_entry.get("published_at"))
         is_published = rel in published_items
+        if is_published:
+            is_working = False
 
         bump_entry = bump_items.get(rel)
         bumped_mtime = None
@@ -808,25 +847,30 @@ def collect_category_items(base_dir: Path, category: str) -> list[BrowseItem]:
         display_mtime = st.st_mtime
         effective_mtime = bumped_mtime
         if effective_mtime is None:
-            if is_published and published_at_mtime is not None:
+            if is_working and isinstance(working_items.get(rel), dict):
+                working_at_mtime = _published_at_to_epoch(working_items.get(rel, {}).get("working_at"))
+                effective_mtime = working_at_mtime if working_at_mtime is not None else display_mtime
+            elif is_published and published_at_mtime is not None:
                 effective_mtime = published_at_mtime
             else:
                 effective_mtime = display_mtime
+        is_bumped = bumped_mtime is not None and not is_working and not is_published
         items.append(
             BrowseItem(
                 rel_path=rel,
                 name=path.name,
                 mtime=display_mtime,
                 sort_mtime=effective_mtime,
+                working=is_working,
                 published=is_published,
-                bumped=bumped_mtime is not None,
+                bumped=is_bumped,
                 highlighted=_is_highlighted(base_dir, rel),
             )
         )
 
     items.sort(
         key=lambda item: (
-            0 if item.bumped else 1 if item.published else 2,
+            0 if item.bumped else 1 if item.working else 2 if item.published else 3,
             -(item.sort_mtime if item.sort_mtime is not None else item.mtime),
             item.name.lower(),
         )
@@ -865,6 +909,9 @@ def rebuild_browse_for_path(base_dir: Path, rel_path: str) -> dict[str, object]:
         counts = build_browse_site(base_dir)
         return {"mode": "full", "reason": "unsupported_root", "counts": counts}
 
+    working_state = load_working_state(base_dir)
+    working_state_items = working_state.get("items", {})
+    working_items = working_state_items if isinstance(working_state_items, dict) else {}
     published_state = load_published_state(base_dir)
     published_state_items = published_state.get("items", {})
     published_items = published_state_items if isinstance(published_state_items, dict) else {}
@@ -889,6 +936,7 @@ def rebuild_browse_for_path(base_dir: Path, rel_path: str) -> dict[str, object]:
             category=category,
             category_root=category_root,
             rel_dir=target_rel_dir,
+            working_items=working_items,
             published_items=published_items,
             bump_items=bump_items,
             visibility_cache=visibility_cache,
@@ -906,6 +954,9 @@ def build_browse_site(base_dir: Path) -> dict[str, int]:
     ensure_assets(base_dir)
     _cleanup_obsolete_incoming_dir(base_dir)
 
+    working_state = load_working_state(base_dir)
+    working_state_items = working_state.get("items", {})
+    working_items = working_state_items if isinstance(working_state_items, dict) else {}
     published_state = load_published_state(base_dir)
     published_state_items = published_state.get("items", {})
     published_items = published_state_items if isinstance(published_state_items, dict) else {}
@@ -919,6 +970,7 @@ def build_browse_site(base_dir: Path) -> dict[str, int]:
             base_dir=base_dir,
             category=category,
             category_root=roots[category],
+            working_items=working_items,
             published_items=published_items,
             bump_items=bump_items,
         )

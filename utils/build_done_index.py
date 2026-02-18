@@ -1,16 +1,15 @@
-"""Build intranet Working index pages under BASE_DIR/_site/working."""
+"""Build intranet Done index pages under BASE_DIR/_site/done."""
 
 from __future__ import annotations
 
 import argparse
 import html
-import shutil
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import NamedTuple
 
-# Support direct execution: `python utils/build_working_index.py ...`
+# Support direct execution: `python utils/build_done_index.py ...`
 if __package__ in (None, ""):
     _REPO_ROOT = Path(__file__).resolve().parents[1]
     if str(_REPO_ROOT) not in sys.path:
@@ -18,29 +17,29 @@ if __package__ in (None, ""):
 
 from utils.highlight_store import has_highlights_for_path
 from utils.site_paths import raw_url_for_rel_path, resolve_base_dir, resolve_library_path, site_root
-from utils.site_state import load_working_state
+from utils.site_state import load_published_state
 
-WORKING_VIEWPORT = "width=device-width, initial-scale=1"
-WORKING_BASE_STYLE = (
+DONE_VIEWPORT = "width=device-width, initial-scale=1"
+DONE_BASE_STYLE = (
     "body{margin:14px 18px;font:14px -apple-system,system-ui,Segoe UI,Roboto,Helvetica,Arial;color:#222;"
     "-webkit-text-size-adjust:100%;text-size-adjust:100%}"
     "h1{margin:6px 0 10px;font-weight:600}"
-    "h2{margin:16px 0 10px;font-weight:600}"
     "ul{margin-top:0}"
-    ".dg-working-list{list-style:none;padding-left:0}"
-    ".dg-working-list li{padding:2px 6px;border-radius:6px;margin:2px 0}"
+    ".dg-done-list{list-style:none;padding-left:0}"
+    ".dg-done-list li{padding:2px 6px;border-radius:6px;margin:2px 0}"
     ".dg-nav{color:#666;font:13px -apple-system,system-ui,Segoe UI,Roboto,Helvetica,Arial;margin-bottom:8px}"
     ".dg-nav a{text-decoration:none;color:#0a7}"
     ".file-icon{font-size:0.85em;vertical-align:baseline;display:inline-block;transform:translateY(-0.05em)}"
 )
 
 
-class SiteWorkingItem(NamedTuple):
+class SiteDoneItem(NamedTuple):
     rel_path: str
     name: str
     mtime: float
     sort_mtime: float
     highlighted: bool
+
 
 def _icon_for(name: str) -> str:
     lower = name.lower()
@@ -51,15 +50,13 @@ def _icon_for(name: str) -> str:
     return ""
 
 
-
 def _is_site_highlighted(base_dir: Path, rel_path: str) -> bool:
     if not Path(rel_path).name.lower().endswith((".html", ".htm")):
         return False
     return has_highlights_for_path(base_dir, rel_path)
 
 
-
-def _iso_to_epoch(value: object) -> float | None:
+def _published_at_to_epoch(value: object) -> float | None:
     if not isinstance(value, str):
         return None
 
@@ -80,13 +77,13 @@ def _iso_to_epoch(value: object) -> float | None:
     return parsed.timestamp()
 
 
-def collect_site_working_items(base_dir: Path) -> list[SiteWorkingItem]:
-    working_state = load_working_state(base_dir)
-    state_items = working_state.get("items", {})
-    working_items = state_items if isinstance(state_items, dict) else {}
+def collect_site_done_items(base_dir: Path) -> list[SiteDoneItem]:
+    published_state = load_published_state(base_dir)
+    state_items = published_state.get("items", {})
+    published_items = state_items if isinstance(state_items, dict) else {}
 
-    items: list[SiteWorkingItem] = []
-    for rel in sorted(working_items):
+    items: list[SiteDoneItem] = []
+    for rel in sorted(published_items):
         try:
             abs_path = resolve_library_path(base_dir, rel)
         except Exception:
@@ -95,14 +92,14 @@ def collect_site_working_items(base_dir: Path) -> list[SiteWorkingItem]:
             continue
 
         st = abs_path.stat()
-        working_entry = working_items.get(rel)
-        working_mtime: float | None = None
-        if isinstance(working_entry, dict):
-            working_mtime = _iso_to_epoch(working_entry.get("working_at"))
+        published_entry = published_items.get(rel)
+        published_mtime: float | None = None
+        if isinstance(published_entry, dict):
+            published_mtime = _published_at_to_epoch(published_entry.get("published_at"))
         display_mtime = st.st_mtime
-        effective_mtime = working_mtime if working_mtime is not None else display_mtime
+        effective_mtime = published_mtime if published_mtime is not None else display_mtime
         items.append(
-            SiteWorkingItem(
+            SiteDoneItem(
                 rel_path=rel,
                 name=abs_path.name,
                 mtime=display_mtime,
@@ -115,12 +112,11 @@ def collect_site_working_items(base_dir: Path) -> list[SiteWorkingItem]:
     return items
 
 
-
-def build_site_working_html(items: list[SiteWorkingItem]) -> str:
+def build_site_done_html(items: list[SiteDoneItem]) -> str:
     if not items:
-        list_html = '<ul class="dg-working-list"></ul>'
+        list_html = '<ul class="dg-done-list"></ul>'
     else:
-        lines: list[str] = ['<ul class="dg-working-list">']
+        lines: list[str] = ['<ul class="dg-done-list">']
         for item in items:
             href = raw_url_for_rel_path(item.rel_path)
             icon = _icon_for(item.name)
@@ -134,65 +130,39 @@ def build_site_working_html(items: list[SiteWorkingItem]) -> str:
 
     return (
         '<!DOCTYPE html><html><head><meta charset="utf-8">'
-        f'<meta name="viewport" content="{WORKING_VIEWPORT}">'
-        f"<style>{WORKING_BASE_STYLE}</style>"
-        '<script src="/working/article.js" defer></script>'
-        '<title>Working</title></head><body>'
+        f'<meta name="viewport" content="{DONE_VIEWPORT}">'
+        f"<style>{DONE_BASE_STYLE}</style>"
+        "<title>Done</title></head><body>"
         '<div class="dg-nav"><a href="/">Home</a> · <a href="/browse/">Browse</a> · <a href="/working/">Working</a> · <a href="/done/">Done</a></div>'
-        '<h1>Working</h1>'
+        '<h1>Done</h1>'
         + list_html
         + "</body></html>"
     )
 
 
-
-def _copy_site_working_assets(out_dir: Path) -> None:
-    source = Path(__file__).resolve().parent / "static" / "article.js"
-    if not source.is_file():
-        raise FileNotFoundError(f"Missing working asset: {source}")
-
-    target = out_dir / "article.js"
-    target.write_text(source.read_text(encoding="utf-8"), encoding="utf-8")
-
-
-
-def write_site_working_index(base_dir: Path, output_dir: Path | None = None) -> Path:
-    out_dir = output_dir or (site_root(base_dir) / "working")
+def write_site_done_index(base_dir: Path, output_dir: Path | None = None) -> Path:
+    out_dir = output_dir or (site_root(base_dir) / "done")
     out_dir.mkdir(parents=True, exist_ok=True)
 
-    # Cleanup obsolete tweet pages from older working index layouts.
-    tweets_pages_dir = out_dir / "tweets"
-    if tweets_pages_dir.exists():
-        shutil.rmtree(tweets_pages_dir)
-
-    # Cleanup obsolete legacy read pages.
-    if output_dir is None:
-        legacy_read_dir = site_root(base_dir) / "read"
-        if legacy_read_dir.exists():
-            shutil.rmtree(legacy_read_dir)
-
-    items = collect_site_working_items(base_dir)
-    html_doc = build_site_working_html(items)
+    items = collect_site_done_items(base_dir)
+    html_doc = build_site_done_html(items)
     out_path = out_dir / "index.html"
     out_path.write_text(html_doc, encoding="utf-8")
-    _copy_site_working_assets(out_dir)
     return out_path
 
 
-
 def parse_args(argv: list[str]) -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Build intranet Working index pages.")
+    parser = argparse.ArgumentParser(description="Build intranet Done index pages.")
     parser.add_argument("--base-dir", help="BASE_DIR with Incoming/Posts/Tweets/... and _site/")
-    parser.add_argument("--output-dir", help="Output dir (default BASE_DIR/_site/working)")
+    parser.add_argument("--output-dir", help="Output dir (default BASE_DIR/_site/done)")
     return parser.parse_args(argv)
-
 
 
 def main(argv: list[str]) -> int:
     args = parse_args(argv[1:])
     base_dir = resolve_base_dir(args.base_dir)
     out_dir = Path(args.output_dir).expanduser() if args.output_dir else None
-    out_path = write_site_working_index(base_dir, out_dir)
+    out_path = write_site_done_index(base_dir, out_dir)
     print(f"✓ Generated {out_path}")
     return 0
 
