@@ -182,6 +182,8 @@ INTRANET_BASE_DIR="/path/to/base" bash bin/docflow.sh all
 
 - Static files from `BASE_DIR/_site`
 - Raw files from `BASE_DIR` routes (`/posts/raw/...`, `/tweets/raw/...`, etc.)
+- `browse` list default ordering: bumped entries first, then published entries, then the rest
+- `browse` pages include a top `Highlights first` toggle to prioritize highlighted items
 - `read` list ordering: bumped entries first, then non-bumped entries by publish time (newest first)
 - JSON API actions:
   - `POST /api/publish`

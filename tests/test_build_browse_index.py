@@ -56,6 +56,7 @@ def test_build_browse_site_generates_indexes_and_actions(tmp_path: Path):
     images_root_page = base / "_site" / "browse" / "images" / "index.html"
     podcasts_year_page = base / "_site" / "browse" / "podcasts" / "Podcasts 2026" / "index.html"
     assets_js = base / "_site" / "assets" / "actions.js"
+    browse_sort_js = base / "_site" / "assets" / "browse-sort.js"
 
     assert browse_home.exists()
     assert posts_root_page.exists()
@@ -64,6 +65,7 @@ def test_build_browse_site_generates_indexes_and_actions(tmp_path: Path):
     assert images_root_page.exists()
     assert podcasts_year_page.exists()
     assert assets_js.exists()
+    assert browse_sort_js.exists()
     assert not stale_incoming.exists()
 
     root_content = posts_root_page.read_text(encoding="utf-8")
@@ -80,6 +82,11 @@ def test_build_browse_site_generates_indexes_and_actions(tmp_path: Path):
     assert "🟢" in content
     assert "🟡" in content
     assert "doc.md" not in content
+    assert "data-dg-sort-toggle" in content
+    assert "Highlights first: off" in content
+    assert "data-dg-sortable='1'" in content
+    assert "data-dg-highlighted='1'" in content
+    assert "<script src='/assets/browse-sort.js' defer></script>" in content
     assert 'data-api-action="unpublish"' not in content
     assert 'data-api-action="unbump"' not in content
     assert '/posts/raw/Posts%202026/doc.html' in content
@@ -131,6 +138,42 @@ def test_browse_uses_bump_state_for_order_without_touching_mtime(tmp_path: Path)
     assert html.find("b.html") < html.find("a.html")
     assert abs(second.stat().st_mtime - mtime_b_before) < 0.001
     assert "<span class='dg-date'> — " not in html
+
+
+def test_browse_orders_bumped_then_published_then_rest(tmp_path: Path, monkeypatch):
+    base = tmp_path / "base"
+    posts = base / "Posts" / "Posts 2026"
+    posts.mkdir(parents=True)
+
+    bumped = posts / "bumped.html"
+    published_old = posts / "published-old.html"
+    published_new = posts / "published-new.html"
+    other = posts / "other.html"
+    bumped.write_text("<html><body>Bumped</body></html>", encoding="utf-8")
+    published_old.write_text("<html><body>Published old</body></html>", encoding="utf-8")
+    published_new.write_text("<html><body>Published new</body></html>", encoding="utf-8")
+    other.write_text("<html><body>Other</body></html>", encoding="utf-8")
+
+    # Make file mtime conflict with desired order so state-driven priority is tested.
+    os.utime(bumped, (1_700_000_000, 1_700_000_000))
+    os.utime(published_old, (1_700_000_400, 1_700_000_400))
+    os.utime(published_new, (1_700_000_100, 1_700_000_100))
+    os.utime(other, (1_700_000_900, 1_700_000_900))
+
+    published_times = iter(["2026-02-01T10:00:00Z", "2026-02-01T10:00:05Z", "2026-02-01T10:00:10Z"])
+    monkeypatch.setattr(site_state, "_utc_now_iso", lambda: next(published_times))
+
+    site_state.publish_path(base, "Posts/Posts 2026/published-old.html")
+    site_state.publish_path(base, "Posts/Posts 2026/published-new.html")
+    site_state.set_bumped_path(base, "Posts/Posts 2026/bumped.html", original_mtime=1_700_000_000.0, bumped_mtime=9_999_999_999.0)
+
+    build_browse_index.build_browse_site(base)
+    year_page = base / "_site" / "browse" / "posts" / "Posts 2026" / "index.html"
+    html = year_page.read_text(encoding="utf-8")
+
+    assert html.find("bumped.html") < html.find("published-new.html")
+    assert html.find("published-new.html") < html.find("published-old.html")
+    assert html.find("published-old.html") < html.find("other.html")
 
 
 def test_tweets_listing_hides_secondary_title_text(tmp_path: Path):

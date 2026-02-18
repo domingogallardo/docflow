@@ -12,6 +12,7 @@ import os
 import re
 import shutil
 import time
+from datetime import datetime, timezone
 from dataclasses import dataclass, replace
 from pathlib import Path
 import sys
@@ -32,7 +33,7 @@ from utils.site_paths import (
     site_root,
 )
 from utils.highlight_store import has_highlights_for_path
-from utils.site_state import load_bump_state, list_published
+from utils.site_state import load_bump_state, load_published_state
 
 CATEGORY_KEYS = ("posts", "tweets", "pdfs", "images", "podcasts")
 CATEGORY_LABELS = {
@@ -153,9 +154,18 @@ def _render_entry(entry: BrowseEntry) -> str:
         + entry.icon
     )
     cls_attr = _entry_classes(entry)
+    attr_bits = [
+        "data-dg-sortable='1'",
+        f"data-dg-bumped='{'1' if entry.bumped else '0'}'",
+        f"data-dg-published='{'1' if entry.published else '0'}'",
+        f"data-dg-highlighted='{'1' if entry.highlighted else '0'}'",
+        f"data-dg-sort-mtime='{_sort_mtime(entry):.6f}'",
+        f"data-dg-name='{html.escape(entry.name.lower(), quote=True)}'",
+    ]
+    attrs = f"{cls_attr} " + " ".join(attr_bits) if cls_attr else " " + " ".join(attr_bits)
     actions = _actions_html(entry)
     return (
-        f"<li{cls_attr}><span>{prefix}<a href=\"{entry.href}\">{esc_name}</a>{count_html}</span>{actions}</li>"
+        f"<li{attrs}><span>{prefix}<a href=\"{entry.href}\">{esc_name}</a>{count_html}</span>{actions}</li>"
     )
 
 
@@ -163,6 +173,39 @@ def _sort_mtime(entry: BrowseEntry) -> float:
     if entry.sort_mtime is not None:
         return entry.sort_mtime
     return entry.mtime
+
+
+def _published_at_to_epoch(value: object) -> float | None:
+    if not isinstance(value, str):
+        return None
+
+    iso_value = value.strip()
+    if not iso_value:
+        return None
+
+    if iso_value.endswith("Z"):
+        iso_value = iso_value[:-1] + "+00:00"
+
+    try:
+        parsed = datetime.fromisoformat(iso_value)
+    except ValueError:
+        return None
+
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=timezone.utc)
+    return parsed.timestamp()
+
+
+def _natural_priority(entry: BrowseEntry) -> int:
+    if entry.bumped:
+        return 0
+    if entry.published:
+        return 1
+    return 2
+
+
+def _entry_sort_key(entry: BrowseEntry) -> tuple[int, float, str]:
+    return (_natural_priority(entry), -_sort_mtime(entry), entry.name.lower())
 
 
 def _base_head(title: str) -> str:
@@ -183,8 +226,12 @@ def _base_head(title: str) -> str:
         ".dg-actions button, .dg-actions a, .dg-rebuild{padding:2px 6px;border:1px solid #ccc;border-radius:6px;background:#f7f7f7;text-decoration:none;color:#333;font:12px -apple-system,system-ui,Segoe UI,Roboto,Helvetica,Arial;cursor:pointer}"
         ".dg-actions button[disabled], .dg-actions a[disabled], .dg-rebuild[disabled]{opacity:.6;pointer-events:none}"
         ".dg-count{color:#666;margin-left:8px;white-space:nowrap}"
+        ".dg-sortbar{margin:6px 0 8px}"
+        ".dg-sort-toggle{padding:2px 8px;border:1px solid #ccc;border-radius:6px;background:#f7f7f7;color:#333;font:12px -apple-system,system-ui,Segoe UI,Roboto,Helvetica,Arial;cursor:pointer}"
+        ".dg-sort-toggle.is-active{border-color:#c8a400;background:#fff6e5}"
         "</style>"
         "<script src='/assets/actions.js' defer></script>"
+        "<script src='/assets/browse-sort.js' defer></script>"
         "</head><body>"
     )
 
@@ -199,10 +246,14 @@ def _render_directory_page(
     rows: list[str] = [_base_head(title)]
     rows.append("<div class='dg-nav'><a href='/'>Home</a> · <a href='/browse/'>Browse</a> · <a href='/read/'>Read</a></div>")
     rows.append(f"<h2>Index of {html.escape(display_path)}</h2>")
+    rows.append(
+        "<div class='dg-sortbar'><button type='button' class='dg-sort-toggle' data-dg-sort-toggle "
+        "aria-pressed='false'>Highlights first: off</button></div>"
+    )
     rows.append("<div class='dg-legend'>🔥 bumped · 🟢 published · 🟡 highlight</div><hr><ul class='dg-index'>")
 
     if parent_href:
-        rows.append(f'<li><a href="{parent_href}">../</a></li>')
+        rows.append(f'<li data-dg-parent="1"><a href="{parent_href}">../</a></li>')
 
     for entry in entries:
         rows.append(_render_entry(entry))
@@ -336,7 +387,7 @@ def _scan_directory(
     *,
     base_dir: Path,
     abs_dir: Path,
-    published_set: set[str],
+    published_items: dict[str, dict],
     bump_items: dict[str, dict],
     visibility_cache: dict[str, bool],
 ) -> tuple[list[BrowseEntry], list[str], int]:
@@ -385,6 +436,12 @@ def _scan_directory(
                 file_count += 1
                 abs_path = Path(fs_entry.path)
                 rel = rel_path_from_abs(base_dir, abs_path)
+                published_entry = published_items.get(rel)
+                published_at_mtime = None
+                if isinstance(published_entry, dict):
+                    published_at_mtime = _published_at_to_epoch(published_entry.get("published_at"))
+                is_published = rel in published_items
+
                 bump_entry = bump_items.get(rel)
                 bumped_mtime = None
                 if isinstance(bump_entry, dict):
@@ -393,7 +450,12 @@ def _scan_directory(
                     except Exception:
                         bumped_mtime = None
                 display_mtime = st.st_mtime
-                effective_mtime = bumped_mtime if bumped_mtime is not None else display_mtime
+                effective_mtime = bumped_mtime
+                if effective_mtime is None:
+                    if is_published and published_at_mtime is not None:
+                        effective_mtime = published_at_mtime
+                    else:
+                        effective_mtime = display_mtime
                 bumped = bumped_mtime is not None
                 entries.append(
                     BrowseEntry(
@@ -404,7 +466,7 @@ def _scan_directory(
                         is_dir=False,
                         icon=_icon_for_filename(name),
                         rel_path=rel,
-                        published=rel in published_set,
+                        published=is_published,
                         bumped=bumped,
                         highlighted=_is_highlighted(base_dir, rel),
                     )
@@ -412,7 +474,7 @@ def _scan_directory(
     except OSError:
         return [], [], 0
 
-    entries.sort(key=_sort_mtime, reverse=True)
+    entries.sort(key=_entry_sort_key)
     child_dirs.sort()
     return entries, child_dirs, file_count
 
@@ -423,7 +485,7 @@ def _write_category_directory_page(
     category: str,
     category_root: Path,
     rel_dir: Path,
-    published_set: set[str],
+    published_items: dict[str, dict],
     bump_items: dict[str, dict],
     visibility_cache: dict[str, bool],
 ) -> tuple[list[str], int]:
@@ -437,7 +499,7 @@ def _write_category_directory_page(
     entries, child_dirs, direct_files = _scan_directory(
         base_dir=base_dir,
         abs_dir=abs_dir,
-        published_set=published_set,
+        published_items=published_items,
         bump_items=bump_items,
         visibility_cache=visibility_cache,
     )
@@ -483,7 +545,7 @@ def _sort_root_year_entries(entries: list[BrowseEntry]) -> list[BrowseEntry]:
             year_dirs.append((year, entry))
 
     year_dirs.sort(key=lambda item: item[0], reverse=True)
-    others.sort(key=_sort_mtime, reverse=True)
+    others.sort(key=_entry_sort_key)
     return [entry for _, entry in year_dirs] + others
 
 
@@ -492,7 +554,7 @@ def _write_category_tree(
     base_dir: Path,
     category: str,
     category_root: Path,
-    published_set: set[str],
+    published_items: dict[str, dict],
     bump_items: dict[str, dict],
 ) -> int:
     visibility_cache: dict[str, bool] = {}
@@ -503,7 +565,7 @@ def _write_category_tree(
             category=category,
             category_root=category_root,
             rel_dir=rel_dir,
-            published_set=published_set,
+            published_items=published_items,
             bump_items=bump_items,
             visibility_cache=visibility_cache,
         )
@@ -620,6 +682,72 @@ def ensure_assets(base_dir: Path) -> None:
 })();
 """.strip()
 
+    browse_sort_js = """
+(function() {
+  function asNumber(value) {
+    const num = Number(value);
+    return Number.isFinite(num) ? num : 0;
+  }
+
+  function naturalRank(node) {
+    if (node.dataset.dgBumped === '1') return 0;
+    if (node.dataset.dgPublished === '1') return 1;
+    return 2;
+  }
+
+  function compareEntries(a, b, highlightsFirst) {
+    if (highlightsFirst) {
+      const aHl = a.dataset.dgHighlighted === '1' ? 0 : 1;
+      const bHl = b.dataset.dgHighlighted === '1' ? 0 : 1;
+      if (aHl !== bHl) return aHl - bHl;
+    }
+
+    const aNatural = naturalRank(a);
+    const bNatural = naturalRank(b);
+    if (aNatural !== bNatural) return aNatural - bNatural;
+
+    const aSort = asNumber(a.dataset.dgSortMtime);
+    const bSort = asNumber(b.dataset.dgSortMtime);
+    if (aSort !== bSort) return bSort - aSort;
+
+    const aName = a.dataset.dgName || '';
+    const bName = b.dataset.dgName || '';
+    return aName.localeCompare(bName);
+  }
+
+  document.addEventListener('DOMContentLoaded', () => {
+    const toggle = document.querySelector('[data-dg-sort-toggle]');
+    const list = document.querySelector('ul.dg-index');
+    if (!toggle || !list) return;
+
+    const sortable = Array.from(list.querySelectorAll('li[data-dg-sortable=\"1\"]'));
+    if (sortable.length === 0) {
+      toggle.setAttribute('disabled', '');
+      return;
+    }
+
+    let highlightsFirst = false;
+
+    function renderOrder() {
+      const sorted = [...sortable].sort((a, b) => compareEntries(a, b, highlightsFirst));
+      for (const node of sorted) {
+        list.appendChild(node);
+      }
+      toggle.textContent = highlightsFirst ? 'Highlights first: on' : 'Highlights first: off';
+      toggle.classList.toggle('is-active', highlightsFirst);
+      toggle.setAttribute('aria-pressed', highlightsFirst ? 'true' : 'false');
+    }
+
+    toggle.addEventListener('click', () => {
+      highlightsFirst = !highlightsFirst;
+      renderOrder();
+    });
+
+    renderOrder();
+  });
+})();
+""".strip()
+
     css = """
 /* Base styles for read pages and shared elements */
 body { margin:14px 18px; font:14px -apple-system,system-ui,Segoe UI,Roboto,Helvetica,Arial; color:#222; }
@@ -635,6 +763,7 @@ main { max-width: 1100px; }
 """.strip()
 
     (assets_dir / "actions.js").write_text(js + "\n", encoding="utf-8")
+    (assets_dir / "browse-sort.js").write_text(browse_sort_js + "\n", encoding="utf-8")
     (assets_dir / "site.css").write_text(css + "\n", encoding="utf-8")
 
 
@@ -645,7 +774,9 @@ def collect_category_items(base_dir: Path, category: str) -> list[BrowseItem]:
     if not root.is_dir():
         return []
 
-    published_set = list_published(base_dir)
+    published_state = load_published_state(base_dir)
+    published_state_items = published_state.get("items", {})
+    published_items = published_state_items if isinstance(published_state_items, dict) else {}
     bump_state = load_bump_state(base_dir)
     bump_items = bump_state.get("items", {}) if isinstance(bump_state.get("items", {}), dict) else {}
 
@@ -661,6 +792,12 @@ def collect_category_items(base_dir: Path, category: str) -> list[BrowseItem]:
 
         rel = rel_path_from_abs(base_dir, path)
         st = path.stat()
+        published_entry = published_items.get(rel)
+        published_at_mtime = None
+        if isinstance(published_entry, dict):
+            published_at_mtime = _published_at_to_epoch(published_entry.get("published_at"))
+        is_published = rel in published_items
+
         bump_entry = bump_items.get(rel)
         bumped_mtime = None
         if isinstance(bump_entry, dict):
@@ -669,20 +806,31 @@ def collect_category_items(base_dir: Path, category: str) -> list[BrowseItem]:
             except Exception:
                 bumped_mtime = None
         display_mtime = st.st_mtime
-        effective_mtime = bumped_mtime if bumped_mtime is not None else display_mtime
+        effective_mtime = bumped_mtime
+        if effective_mtime is None:
+            if is_published and published_at_mtime is not None:
+                effective_mtime = published_at_mtime
+            else:
+                effective_mtime = display_mtime
         items.append(
             BrowseItem(
                 rel_path=rel,
                 name=path.name,
                 mtime=display_mtime,
                 sort_mtime=effective_mtime,
-                published=rel in published_set,
+                published=is_published,
                 bumped=bumped_mtime is not None,
                 highlighted=_is_highlighted(base_dir, rel),
             )
         )
 
-    items.sort(key=lambda item: (item.sort_mtime if item.sort_mtime is not None else item.mtime), reverse=True)
+    items.sort(
+        key=lambda item: (
+            0 if item.bumped else 1 if item.published else 2,
+            -(item.sort_mtime if item.sort_mtime is not None else item.mtime),
+            item.name.lower(),
+        )
+    )
     return items
 
 
@@ -717,7 +865,9 @@ def rebuild_browse_for_path(base_dir: Path, rel_path: str) -> dict[str, object]:
         counts = build_browse_site(base_dir)
         return {"mode": "full", "reason": "unsupported_root", "counts": counts}
 
-    published_set = list_published(base_dir)
+    published_state = load_published_state(base_dir)
+    published_state_items = published_state.get("items", {})
+    published_items = published_state_items if isinstance(published_state_items, dict) else {}
     bump_state = load_bump_state(base_dir)
     bump_items = bump_state.get("items", {}) if isinstance(bump_state.get("items", {}), dict) else {}
     roots = _category_roots(base_dir)
@@ -739,7 +889,7 @@ def rebuild_browse_for_path(base_dir: Path, rel_path: str) -> dict[str, object]:
             category=category,
             category_root=category_root,
             rel_dir=target_rel_dir,
-            published_set=published_set,
+            published_items=published_items,
             bump_items=bump_items,
             visibility_cache=visibility_cache,
         )
@@ -756,7 +906,9 @@ def build_browse_site(base_dir: Path) -> dict[str, int]:
     ensure_assets(base_dir)
     _cleanup_obsolete_incoming_dir(base_dir)
 
-    published_set = list_published(base_dir)
+    published_state = load_published_state(base_dir)
+    published_state_items = published_state.get("items", {})
+    published_items = published_state_items if isinstance(published_state_items, dict) else {}
     bump_state = load_bump_state(base_dir)
     bump_items = bump_state.get("items", {}) if isinstance(bump_state.get("items", {}), dict) else {}
     roots = _category_roots(base_dir)
@@ -767,7 +919,7 @@ def build_browse_site(base_dir: Path) -> dict[str, int]:
             base_dir=base_dir,
             category=category,
             category_root=roots[category],
-            published_set=published_set,
+            published_items=published_items,
             bump_items=bump_items,
         )
 

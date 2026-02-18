@@ -27,6 +27,8 @@ Local state under `BASE_DIR/state`:
 
 - `browse`: full library navigation by category (`posts`, `tweets`, `pdfs`, `images`, `podcasts`).
 - `incoming` is intentionally excluded from browse navigation.
+- `browse` default ordering: bumped first, then published, then the rest.
+- `browse` includes a top toggle button (`Highlights first`) to prioritize highlighted items dynamically.
 - `read`: curated list from `state/published.json`.
 - `read` ordering: bumped entries first (via `state/bump.json`), then non-bumped entries by `published_at` (newest first).
 - Highlight marks (🟡) come from canonical local highlight state only.
