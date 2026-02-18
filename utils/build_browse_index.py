@@ -235,14 +235,14 @@ def _base_head(title: str) -> str:
         ".dg-bump{background:#fff6e5}"
         ".dg-work{background:#eaf3ff}"
         ".dg-pub a{color:#0a7;font-weight:600}"
-        ".dg-legend{color:#666;font:13px -apple-system,system-ui,Segoe UI,Roboto,Helvetica,Arial;margin-bottom:6px}"
+        ".dg-legendbar{display:flex;align-items:center;justify-content:flex-start;gap:6px;flex-wrap:wrap;margin-bottom:6px}"
+        ".dg-legend{color:#666;font:13px -apple-system,system-ui,Segoe UI,Roboto,Helvetica,Arial}"
         ".dg-nav{color:#666;font:13px -apple-system,system-ui,Segoe UI,Roboto,Helvetica,Arial;margin-bottom:8px}"
         ".dg-nav a{text-decoration:none;color:#0a7}"
         ".dg-actions{display:inline-flex;gap:6px}"
         ".dg-actions button, .dg-actions a, .dg-rebuild{padding:2px 6px;border:1px solid #ccc;border-radius:6px;background:#f7f7f7;text-decoration:none;color:#333;font:12px -apple-system,system-ui,Segoe UI,Roboto,Helvetica,Arial;cursor:pointer}"
         ".dg-actions button[disabled], .dg-actions a[disabled], .dg-rebuild[disabled]{opacity:.6;pointer-events:none}"
         ".dg-count{color:#666;margin-left:8px;white-space:nowrap}"
-        ".dg-sortbar{margin:6px 0 8px}"
         ".dg-sort-toggle{padding:2px 8px;border:1px solid #ccc;border-radius:6px;background:#f7f7f7;color:#333;font:12px -apple-system,system-ui,Segoe UI,Roboto,Helvetica,Arial;cursor:pointer}"
         ".dg-sort-toggle.is-active{border-color:#c8a400;background:#fff6e5}"
         "</style>"
@@ -263,10 +263,11 @@ def _render_directory_page(
     rows.append("<div class='dg-nav'><a href='/'>Home</a> · <a href='/browse/'>Browse</a> · <a href='/working/'>Working</a> · <a href='/done/'>Done</a></div>")
     rows.append(f"<h2>Index of {html.escape(display_path)}</h2>")
     rows.append(
-        "<div class='dg-sortbar'><button type='button' class='dg-sort-toggle' data-dg-sort-toggle "
-        "aria-pressed='false'>Highlights first: off</button></div>"
+        "<div class='dg-legendbar'>"
+        "<div class='dg-legend'>🔥 bumped · 🟡 highlight</div>"
+        "<button type='button' class='dg-sort-toggle' data-dg-sort-toggle aria-pressed='false'>Highlight: off</button>"
+        "</div><hr><ul class='dg-index'>"
     )
-    rows.append("<div class='dg-legend'>🔥 bumped · 🔵 working · 🟢 done · 🟡 highlight</div><hr><ul class='dg-index'>")
 
     if parent_href:
         rows.append(f'<li data-dg-parent="1"><a href="{parent_href}">../</a></li>')
@@ -278,7 +279,14 @@ def _render_directory_page(
     return "\n".join(rows)
 
 
-def _dir_has_visible_entries(path: Path, cache: dict[str, bool]) -> bool:
+def _dir_has_visible_entries(
+    path: Path,
+    cache: dict[str, bool],
+    *,
+    base_dir: Path,
+    working_items: dict[str, dict],
+    published_items: dict[str, dict],
+) -> bool:
     key = str(path.resolve())
     cached = cache.get(key)
     if cached is not None:
@@ -295,11 +303,23 @@ def _dir_has_visible_entries(path: Path, cache: dict[str, bool]) -> bool:
 
                 try:
                     if entry.is_dir(follow_symlinks=False):
-                        if _dir_has_visible_entries(Path(entry.path), cache):
+                        if _dir_has_visible_entries(
+                            Path(entry.path),
+                            cache,
+                            base_dir=base_dir,
+                            working_items=working_items,
+                            published_items=published_items,
+                        ):
                             cache[key] = True
                             return True
                     else:
                         if _is_visible_file_name(name):
+                            try:
+                                rel = rel_path_from_abs(base_dir, Path(entry.path))
+                            except Exception:
+                                continue
+                            if rel in working_items or rel in published_items:
+                                continue
                             cache[key] = True
                             return True
                 except OSError:
@@ -312,7 +332,14 @@ def _dir_has_visible_entries(path: Path, cache: dict[str, bool]) -> bool:
     return False
 
 
-def _count_visible_files(path: Path, cache: dict[str, int]) -> int:
+def _count_visible_files(
+    path: Path,
+    cache: dict[str, int],
+    *,
+    base_dir: Path,
+    working_items: dict[str, dict],
+    published_items: dict[str, dict],
+) -> int:
     key = str(path.resolve())
     cached = cache.get(key)
     if cached is not None:
@@ -329,9 +356,21 @@ def _count_visible_files(path: Path, cache: dict[str, int]) -> int:
                     if entry.is_dir(follow_symlinks=False):
                         if _skip_directory(name):
                             continue
-                        total += _count_visible_files(Path(entry.path), cache)
+                        total += _count_visible_files(
+                            Path(entry.path),
+                            cache,
+                            base_dir=base_dir,
+                            working_items=working_items,
+                            published_items=published_items,
+                        )
                     else:
                         if _is_visible_file_name(name):
+                            try:
+                                rel = rel_path_from_abs(base_dir, Path(entry.path))
+                            except Exception:
+                                continue
+                            if rel in working_items or rel in published_items:
+                                continue
                             total += 1
                 except OSError:
                     continue
@@ -342,7 +381,16 @@ def _count_visible_files(path: Path, cache: dict[str, int]) -> int:
     return total
 
 
-def _annotate_root_year_counts(*, category: str, rel_dir: Path, abs_dir: Path, entries: list[BrowseEntry]) -> list[BrowseEntry]:
+def _annotate_root_year_counts(
+    *,
+    category: str,
+    rel_dir: Path,
+    abs_dir: Path,
+    entries: list[BrowseEntry],
+    base_dir: Path,
+    working_items: dict[str, dict],
+    published_items: dict[str, dict],
+) -> list[BrowseEntry]:
     if rel_dir != Path(".") or category not in YEAR_COUNT_CATEGORIES:
         return entries
 
@@ -351,7 +399,13 @@ def _annotate_root_year_counts(*, category: str, rel_dir: Path, abs_dir: Path, e
     for entry in entries:
         if entry.is_dir and _extract_entry_year(entry) is not None:
             child_abs = abs_dir / entry.name
-            item_count = _count_visible_files(child_abs, count_cache)
+            item_count = _count_visible_files(
+                child_abs,
+                count_cache,
+                base_dir=base_dir,
+                working_items=working_items,
+                published_items=published_items,
+            )
             annotated.append(replace(entry, item_count=item_count))
             continue
         annotated.append(entry)
@@ -429,7 +483,13 @@ def _scan_directory(
                         if _skip_directory(name):
                             continue
                         child_abs = Path(fs_entry.path)
-                        if not _dir_has_visible_entries(child_abs, visibility_cache):
+                        if not _dir_has_visible_entries(
+                            child_abs,
+                            visibility_cache,
+                            base_dir=base_dir,
+                            working_items=working_items,
+                            published_items=published_items,
+                        ):
                             continue
 
                         child_dirs.append(name)
@@ -450,7 +510,6 @@ def _scan_directory(
                 if not _is_visible_file_name(name):
                     continue
 
-                file_count += 1
                 abs_path = Path(fs_entry.path)
                 rel = rel_path_from_abs(base_dir, abs_path)
                 is_working = rel in working_items
@@ -461,6 +520,10 @@ def _scan_directory(
                 is_published = rel in published_items
                 if is_published:
                     is_working = False
+                if is_working or is_published:
+                    continue
+
+                file_count += 1
 
                 bump_entry = bump_items.get(rel)
                 bumped_mtime = None
@@ -480,8 +543,6 @@ def _scan_directory(
                     else:
                         effective_mtime = display_mtime
                 bumped = bumped_mtime is not None
-                if is_working or is_published:
-                    bumped = False
                 entries.append(
                     BrowseEntry(
                         name=name,
@@ -491,8 +552,8 @@ def _scan_directory(
                         is_dir=False,
                         icon=_icon_for_filename(name),
                         rel_path=rel,
-                        working=is_working,
-                        published=is_published,
+                        working=False,
+                        published=False,
                         bumped=bumped,
                         highlighted=_is_highlighted(base_dir, rel),
                     )
@@ -538,6 +599,9 @@ def _write_category_directory_page(
         rel_dir=rel_dir,
         abs_dir=abs_dir,
         entries=entries,
+        base_dir=base_dir,
+        working_items=working_items,
+        published_items=published_items,
     )
     display_path = _display_path_for_category_dir(category, rel_dir)
     html_doc = _render_directory_page(
@@ -747,11 +811,18 @@ def ensure_assets(base_dir: Path) -> None:
 
   document.addEventListener('DOMContentLoaded', () => {
     const toggle = document.querySelector('[data-dg-sort-toggle]');
-    const list = document.querySelector('ul.dg-index');
+    const list = document.querySelector('ul.dg-index, ul.dg-done-list');
     if (!toggle || !list) return;
 
     const sortable = Array.from(list.querySelectorAll('li[data-dg-sortable=\"1\"]'));
-    if (sortable.length === 0) {
+    const sortableFiles = sortable.filter((node) => {
+      const link = node.querySelector('a[href]');
+      if (!link) return false;
+      const href = (link.getAttribute('href') || '').trim();
+      return href !== '' && !href.endsWith('/');
+    });
+
+    if (sortableFiles.length === 0) {
       toggle.setAttribute('disabled', '');
       return;
     }
@@ -759,11 +830,11 @@ def ensure_assets(base_dir: Path) -> None:
     let highlightsFirst = false;
 
     function renderOrder() {
-      const sorted = [...sortable].sort((a, b) => compareEntries(a, b, highlightsFirst));
+      const sorted = [...sortableFiles].sort((a, b) => compareEntries(a, b, highlightsFirst));
       for (const node of sorted) {
         list.appendChild(node);
       }
-      toggle.textContent = highlightsFirst ? 'Highlights first: on' : 'Highlights first: off';
+      toggle.textContent = highlightsFirst ? 'Highlight: on' : 'Highlight: off';
       toggle.classList.toggle('is-active', highlightsFirst);
       toggle.setAttribute('aria-pressed', highlightsFirst ? 'true' : 'false');
     }

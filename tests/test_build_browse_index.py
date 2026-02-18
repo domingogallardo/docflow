@@ -33,7 +33,6 @@ def test_build_browse_site_generates_indexes_and_actions(tmp_path: Path):
     stale_incoming.mkdir(parents=True)
     (stale_incoming / "index.html").write_text("<p>stale incoming</p>", encoding="utf-8")
 
-    site_state.publish_path(base, "Posts/Posts 2026/doc.html")
     site_state.set_bumped_path(base, "Posts/Posts 2026/doc.html", original_mtime=10.0, bumped_mtime=20.0)
     highlight_store.save_highlights_for_path(
         base,
@@ -68,6 +67,11 @@ def test_build_browse_site_generates_indexes_and_actions(tmp_path: Path):
     assert browse_sort_js.exists()
     assert not stale_incoming.exists()
 
+    browse_sort_content = browse_sort_js.read_text(encoding="utf-8")
+    assert "const sortableFiles = sortable.filter" in browse_sort_content
+    assert "!href.endsWith('/')" in browse_sort_content
+    assert "ul.dg-index, ul.dg-done-list" in browse_sort_content
+
     root_content = posts_root_page.read_text(encoding="utf-8")
     assert "Posts 2026/</a> <span class='dg-count'>(1)</span>" in root_content
     assert "Posts 2026/</a><span class='dg-date'>" not in root_content
@@ -79,14 +83,14 @@ def test_build_browse_site_generates_indexes_and_actions(tmp_path: Path):
     content = posts_year_page.read_text(encoding="utf-8")
     assert "Sample Title" not in content
     assert " · Sample Title" not in content
-    assert "🟢" in content
+    assert "🔥" in content
     assert "🟡" in content
     assert "doc.md" not in content
     assert "data-dg-sort-toggle" in content
-    assert "Highlights first: off" in content
+    assert "Highlight: off" in content
     assert "data-dg-sortable='1'" in content
     assert "data-dg-highlighted='1'" in content
-    assert "data-dg-done='1'" in content
+    assert "data-dg-done='1'" not in content
     assert "<script src='/assets/browse-sort.js' defer></script>" in content
     assert 'data-api-action="unpublish"' not in content
     assert 'data-api-action="unbump"' not in content
@@ -98,6 +102,9 @@ def test_build_browse_site_generates_indexes_and_actions(tmp_path: Path):
 
     browse_home_content = browse_home.read_text(encoding="utf-8")
     assert "Incoming" not in browse_home_content
+    assert "🔥 bumped · 🟡 highlight" in browse_home_content
+    assert "🔵 working" not in browse_home_content
+    assert "🟢 done" not in browse_home_content
     assert 'href="podcasts/">Podcasts/</a> <span class=\'dg-count\'>(1)</span>' in browse_home_content
     assert 'href="posts/">Posts/</a> <span class=\'dg-count\'>(1)</span>' in browse_home_content
     assert 'href="tweets/">Tweets/</a> <span class=\'dg-count\'>(0)</span>' in browse_home_content
@@ -142,7 +149,7 @@ def test_browse_uses_bump_state_for_order_without_touching_mtime(tmp_path: Path)
     assert "<span class='dg-date'> — " not in html
 
 
-def test_browse_orders_working_before_done_without_done_priority(tmp_path: Path, monkeypatch):
+def test_browse_hides_working_and_done_items(tmp_path: Path, monkeypatch):
     base = tmp_path / "base"
     posts = base / "Posts" / "Posts 2026"
     posts.mkdir(parents=True)
@@ -168,12 +175,12 @@ def test_browse_orders_working_before_done_without_done_priority(tmp_path: Path,
     year_page = base / "_site" / "browse" / "posts" / "Posts 2026" / "index.html"
     html = year_page.read_text(encoding="utf-8")
 
-    assert html.find("working.html") < html.find("done.html")
-    assert html.find("working.html") < html.find("rest.html")
-    assert html.find("rest.html") < html.find("done.html")
+    assert "working.html" not in html
+    assert "done.html" not in html
+    assert "rest.html" in html
 
 
-def test_browse_orders_bumped_then_published_then_rest(tmp_path: Path, monkeypatch):
+def test_browse_keeps_bumped_and_hides_published(tmp_path: Path, monkeypatch):
     base = tmp_path / "base"
     posts = base / "Posts" / "Posts 2026"
     posts.mkdir(parents=True)
@@ -204,9 +211,9 @@ def test_browse_orders_bumped_then_published_then_rest(tmp_path: Path, monkeypat
     year_page = base / "_site" / "browse" / "posts" / "Posts 2026" / "index.html"
     html = year_page.read_text(encoding="utf-8")
 
-    assert html.find("bumped.html") < html.find("published-new.html")
-    assert html.find("published-new.html") < html.find("published-old.html")
-    assert html.find("published-old.html") < html.find("other.html")
+    assert html.find("bumped.html") < html.find("other.html")
+    assert "published-new.html" not in html
+    assert "published-old.html" not in html
 
 
 def test_tweets_listing_hides_secondary_title_text(tmp_path: Path):
@@ -216,7 +223,6 @@ def test_tweets_listing_hides_secondary_title_text(tmp_path: Path):
 
     tweet = tweets / "Tweets 2026-01-02.html"
     tweet.write_text("<html><title>Tweet Title Extra</title><body>Tweets</body></html>", encoding="utf-8")
-    site_state.publish_path(base, "Tweets/Tweets 2026/Tweets 2026-01-02.html")
 
     build_browse_index.build_browse_site(base)
     year_page = base / "_site" / "browse" / "tweets" / "Tweets 2026" / "index.html"
@@ -302,5 +308,7 @@ def test_rebuild_browse_for_path_updates_only_target_branch(tmp_path: Path):
     assert result["mode"] == "partial"
     assert result["category"] == "posts"
     assert "/browse/posts/Posts 2026/" in result["updated"]
-    assert "🟢" in target_page.read_text(encoding="utf-8")
+    target_content = target_page.read_text(encoding="utf-8")
+    assert "new.html" not in target_content
+    assert "🟢" not in target_content
     assert abs(untouched_page.stat().st_mtime - untouched_mtime_before) < 0.001

@@ -31,6 +31,7 @@ WORKING_BASE_STYLE = (
     ".dg-working-list li{padding:2px 6px;border-radius:6px;margin:2px 0}"
     ".dg-nav{color:#666;font:13px -apple-system,system-ui,Segoe UI,Roboto,Helvetica,Arial;margin-bottom:8px}"
     ".dg-nav a{text-decoration:none;color:#0a7}"
+    ".dg-legend{color:#666;font:13px -apple-system,system-ui,Segoe UI,Roboto,Helvetica,Arial;margin-bottom:8px}"
     ".file-icon{font-size:0.85em;vertical-align:baseline;display:inline-block;transform:translateY(-0.05em)}"
 )
 
@@ -140,6 +141,7 @@ def build_site_working_html(items: list[SiteWorkingItem]) -> str:
         '<title>Working</title></head><body>'
         '<div class="dg-nav"><a href="/">Home</a> · <a href="/browse/">Browse</a> · <a href="/working/">Working</a> · <a href="/done/">Done</a></div>'
         '<h1>Working</h1>'
+        '<div class="dg-legend">🟡 highlight</div>'
         + list_html
         + "</body></html>"
     )

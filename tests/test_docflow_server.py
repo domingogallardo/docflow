@@ -266,9 +266,35 @@ def test_raw_route_serves_library_file(tmp_path: Path):
         assert '/working/article.js' in body
         assert 'name="viewport"' in body
         assert "data-stage" in body
+        assert 'data-bumped="0"' in body
         assert "to-working" in body
         assert "Rebuild" in body
         assert "Delete" in body
+    finally:
+        server.shutdown()
+        server.server_close()
+
+
+def test_raw_route_overlay_marks_bumped_state(tmp_path: Path):
+    base = tmp_path / "base"
+    posts = base / "Posts" / "Posts 2026"
+    posts.mkdir(parents=True)
+    rel = "Posts/Posts 2026/doc.html"
+    (posts / "doc.html").write_text("<html><body>Raw Doc</body></html>", encoding="utf-8")
+
+    server, port = _start_server(base)
+    try:
+        status, payload = _post_json(port, "/api/to-browse", {"path": rel})
+        assert status == 200
+        assert payload["ok"] is True
+
+        status, payload = _post_json(port, "/api/bump", {"path": rel})
+        assert status == 200
+        assert payload["ok"] is True
+
+        status, body = _get(port, "/posts/raw/Posts%202026/doc.html")
+        assert status == 200
+        assert 'data-bumped="1"' in body
     finally:
         server.shutdown()
         server.server_close()
@@ -433,7 +459,8 @@ def test_publish_does_not_rewrite_unrelated_browse_branch(tmp_path: Path):
         assert abs(untouched_page.stat().st_mtime - untouched_mtime_before) < 0.001
         status, html = _get(port, "/browse/posts/Posts%202026/")
         assert status == 200
-        assert "🟢" in html
+        assert "new.html" not in html
+        assert "🟢" not in html
     finally:
         server.shutdown()
         server.server_close()

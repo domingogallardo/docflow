@@ -27,8 +27,13 @@ DONE_BASE_STYLE = (
     "ul{margin-top:0}"
     ".dg-done-list{list-style:none;padding-left:0}"
     ".dg-done-list li{padding:2px 6px;border-radius:6px;margin:2px 0}"
+    ".dg-done-list li.dg-hl{background:#fff9e8}"
     ".dg-nav{color:#666;font:13px -apple-system,system-ui,Segoe UI,Roboto,Helvetica,Arial;margin-bottom:8px}"
     ".dg-nav a{text-decoration:none;color:#0a7}"
+    ".dg-legendbar{display:flex;align-items:center;justify-content:flex-start;gap:6px;flex-wrap:wrap;margin-bottom:8px}"
+    ".dg-legend{color:#666;font:13px -apple-system,system-ui,Segoe UI,Roboto,Helvetica,Arial}"
+    ".dg-sort-toggle{padding:2px 8px;border:1px solid #ccc;border-radius:6px;background:#f7f7f7;color:#333;font:12px -apple-system,system-ui,Segoe UI,Roboto,Helvetica,Arial;cursor:pointer}"
+    ".dg-sort-toggle.is-active{border-color:#c8a400;background:#fff6e5}"
     ".file-icon{font-size:0.85em;vertical-align:baseline;display:inline-block;transform:translateY(-0.05em)}"
 )
 
@@ -122,8 +127,18 @@ def build_site_done_html(items: list[SiteDoneItem]) -> str:
             icon = _icon_for(item.name)
             hl_icon = '<span class="file-icon hl-icon" aria-hidden="true">🟡</span> ' if item.highlighted else ""
             esc_name = html.escape(item.name)
+            row_class = ' class="dg-hl"' if item.highlighted else ""
+            row_attrs = (
+                "data-dg-sortable='1' "
+                "data-dg-bumped='0' "
+                "data-dg-working='0' "
+                "data-dg-done='1' "
+                f"data-dg-highlighted='{'1' if item.highlighted else '0'}' "
+                f"data-dg-sort-mtime='{item.sort_mtime:.6f}' "
+                f"data-dg-name='{html.escape(item.name.lower(), quote=True)}'"
+            )
             lines.append(
-                f'<li>{hl_icon}{icon}<a href="{href}" title="{esc_name}">{esc_name}</a></li>'
+                f'<li{row_class} {row_attrs}>{hl_icon}{icon}<a href="{href}" title="{esc_name}">{esc_name}</a></li>'
             )
         lines.append("</ul>")
         list_html = "\n".join(lines)
@@ -132,9 +147,11 @@ def build_site_done_html(items: list[SiteDoneItem]) -> str:
         '<!DOCTYPE html><html><head><meta charset="utf-8">'
         f'<meta name="viewport" content="{DONE_VIEWPORT}">'
         f"<style>{DONE_BASE_STYLE}</style>"
+        '<script src="/assets/browse-sort.js" defer></script>'
         "<title>Done</title></head><body>"
         '<div class="dg-nav"><a href="/">Home</a> · <a href="/browse/">Browse</a> · <a href="/working/">Working</a> · <a href="/done/">Done</a></div>'
         '<h1>Done</h1>'
+        '<div class="dg-legendbar"><div class="dg-legend">🟡 highlight</div><button type="button" class="dg-sort-toggle" data-dg-sort-toggle aria-pressed="false">Highlight: off</button></div>'
         + list_html
         + "</body></html>"
     )

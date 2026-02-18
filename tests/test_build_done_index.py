@@ -27,6 +27,11 @@ def test_write_site_done_index_uses_published_state(tmp_path: Path):
     assert "/posts/raw/Posts%202026/doc.html" in content
     assert '<a href="/working/">Working</a>' in content
     assert "<h1>Done</h1>" in content
+    assert "🟡 highlight" in content
+    assert "data-dg-sort-toggle" in content
+    assert "Highlight: off" in content
+    assert "data-dg-highlighted='1'" in content
+    assert "data-dg-sort-mtime=" in content
     assert "🟡" in content
 
 

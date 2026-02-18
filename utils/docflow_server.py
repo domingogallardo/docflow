@@ -456,6 +456,7 @@ OVERLAY_JS = """
   if (!relPath) return;
 
   let stage = script.getAttribute('data-stage') || 'browse';
+  let bumped = script.getAttribute('data-bumped') === '1';
   let busy = false;
 
   function callApi(action, path) {
@@ -490,7 +491,15 @@ OVERLAY_JS = """
         }
         if (action === 'to-working' || action === 'reopen') stage = 'working';
         if (action === 'to-done') stage = 'done';
-        if (action === 'to-browse') stage = 'browse';
+        if (action === 'to-browse') {
+          stage = 'browse';
+          bumped = false;
+        }
+        if (action === 'to-working' || action === 'to-done' || action === 'reopen') {
+          bumped = false;
+        }
+        if (action === 'bump') bumped = true;
+        if (action === 'unbump') bumped = false;
         if (action === 'delete') {
           let redirectTo = '/browse/';
           try {
@@ -514,17 +523,19 @@ OVERLAY_JS = """
   function stageActions() {
     if (stage === 'working') {
       return [
-        ['Move to Done', 'to-done'],
-        ['Move to Browse', 'to-browse']
+        ['Move to Browse', 'to-browse'],
+        ['Move to Done', 'to-done']
       ];
     }
     if (stage === 'done') {
       return [
-        ['Reopen to Working', 'reopen'],
-        ['Move to Browse', 'to-browse']
+        ['Reopen to Working', 'reopen']
       ];
     }
-    return [['Move to Working', 'to-working']];
+    return [
+      ['Move to Working', 'to-working'],
+      [bumped ? 'Unbump' : 'Bump', bumped ? 'unbump' : 'bump']
+    ];
   }
 
   function render() {
@@ -532,8 +543,10 @@ OVERLAY_JS = """
     for (const [label, action] of stageActions()) {
       bar.appendChild(makeButton(label, action));
     }
-    bar.appendChild(makeButton('Rebuild', 'rebuild-file'));
-    bar.appendChild(makeButton('Delete', 'delete'));
+    if (stage === 'browse') {
+      bar.appendChild(makeButton('Rebuild', 'rebuild-file'));
+      bar.appendChild(makeButton('Delete', 'delete'));
+    }
     if (busy) {
       for (const btn of bar.querySelectorAll('button')) btn.setAttribute('disabled', '');
     }
@@ -574,7 +587,7 @@ def _ensure_viewport_meta(html_text: str) -> str:
     return f"<head>{viewport}</head>{html_text}"
 
 
-def _inject_html_overlay(*, html_text: str, rel_path: str, stage: str) -> bytes:
+def _inject_html_overlay(*, html_text: str, rel_path: str, stage: str, bumped: bool) -> bytes:
     html_text = _ensure_viewport_meta(html_text)
     path_attr = html.escape(rel_path, quote=True)
     article_js = ""
@@ -583,7 +596,8 @@ def _inject_html_overlay(*, html_text: str, rel_path: str, stage: str) -> bytes:
     tags = (
         article_js
         + f"<style>{OVERLAY_CSS}</style>"
-        + f"<script defer data-path=\"{path_attr}\" data-stage=\"{html.escape(stage, quote=True)}\">{OVERLAY_JS}</script>"
+        + f"<script defer data-path=\"{path_attr}\" data-stage=\"{html.escape(stage, quote=True)}\" "
+        + f"data-bumped=\"{'1' if bumped else '0'}\">{OVERLAY_JS}</script>"
     )
     lower = html_text.lower()
     idx = lower.rfind("</body>")
@@ -599,7 +613,8 @@ def _send_overlay_html(handler: BaseHTTPRequestHandler, app: DocflowApp, abs_pat
         return
 
     stage = app.path_stage(rel_path)
-    payload = _inject_html_overlay(html_text=text, rel_path=rel_path, stage=stage)
+    bumped = get_bumped_entry(app.base_dir, rel_path) is not None
+    payload = _inject_html_overlay(html_text=text, rel_path=rel_path, stage=stage, bumped=bumped)
 
     handler.send_response(HTTPStatus.OK)
     handler.send_header("Content-Type", "text/html; charset=utf-8")
