@@ -268,6 +268,8 @@ def test_raw_route_serves_library_file(tmp_path: Path):
         assert "data-stage" in body
         assert 'data-bumped="0"' in body
         assert 'data-browse-url="/browse/posts/Posts%202026/"' in body
+        assert "window.addEventListener('pageshow'" in body
+        assert "back_forward" in body
         assert "Index: Browse" in body
         assert "to-working" in body
         assert "Rebuild" in body

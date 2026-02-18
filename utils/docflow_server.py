@@ -498,6 +498,17 @@ OVERLAY_JS = """
   const relPath = script.getAttribute('data-path') || '';
   if (!relPath) return;
 
+  window.addEventListener('pageshow', (event) => {
+    let navType = '';
+    try {
+      const entries = performance.getEntriesByType('navigation');
+      if (entries && entries.length > 0) navType = entries[0].type || '';
+    } catch (error) {}
+    if (event.persisted || navType === 'back_forward') {
+      window.location.reload();
+    }
+  });
+
   let stage = script.getAttribute('data-stage') || 'browse';
   let bumped = script.getAttribute('data-bumped') === '1';
   const browseIndexUrl = script.getAttribute('data-browse-url') || '/browse/';

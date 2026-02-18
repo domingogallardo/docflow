@@ -801,6 +801,17 @@ def ensure_assets(base_dir: Path) -> None:
 
     js = """
 (function() {
+  window.addEventListener('pageshow', (event) => {
+    let navType = '';
+    try {
+      const entries = performance.getEntriesByType('navigation');
+      if (entries && entries.length > 0) navType = entries[0].type || '';
+    } catch (error) {}
+    if (event.persisted || navType === 'back_forward') {
+      window.location.reload();
+    }
+  });
+
   async function callApi(action, path) {
     const body = path ? { path } : {};
     const response = await fetch(`/api/${action}`, {

@@ -67,6 +67,10 @@ def test_build_browse_site_generates_indexes_and_actions(tmp_path: Path):
     assert browse_sort_js.exists()
     assert not stale_incoming.exists()
 
+    assets_content = assets_js.read_text(encoding="utf-8")
+    assert "window.addEventListener('pageshow'" in assets_content
+    assert "back_forward" in assets_content
+
     browse_sort_content = browse_sort_js.read_text(encoding="utf-8")
     assert "window.addEventListener('pageshow'" in browse_sort_content
     assert "back_forward" in browse_sort_content
