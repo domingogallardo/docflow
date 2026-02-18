@@ -162,8 +162,6 @@ def _render_entry(entry: BrowseEntry) -> str:
 
     prefix = (
         ("🔥 " if entry.bumped else "")
-        + ("🔵 " if entry.working else "")
-        + ("🟢 " if entry.published else "")
         + ("🟡 " if entry.highlighted else "")
         + entry.icon
     )
@@ -233,8 +231,6 @@ def _base_head(title: str) -> str:
         "ul.dg-index{list-style:none;padding-left:0}"
         ".dg-index li{padding:2px 6px;border-radius:6px;margin:2px 0;display:flex;justify-content:space-between;align-items:center;gap:10px}"
         ".dg-bump{background:#fff6e5}"
-        ".dg-work{background:#eaf3ff}"
-        ".dg-pub a{color:#0a7;font-weight:600}"
         ".dg-legendbar{display:flex;align-items:center;justify-content:flex-start;gap:6px;flex-wrap:wrap;margin-bottom:6px}"
         ".dg-legend{color:#666;font:13px -apple-system,system-ui,Segoe UI,Roboto,Helvetica,Arial}"
         ".dg-nav{color:#666;font:13px -apple-system,system-ui,Segoe UI,Roboto,Helvetica,Arial;margin-bottom:8px}"
