@@ -103,3 +103,20 @@ def test_build_working_index_cli_generates_site_index(tmp_path: Path):
 
     assert exit_code == 0
     assert (base / "_site" / "working" / "index.html").exists()
+
+
+def test_working_index_shows_state_actions_for_pdfs(tmp_path: Path):
+    base = tmp_path / "base"
+    pdfs = base / "Pdfs" / "Pdfs 2026"
+    pdfs.mkdir(parents=True)
+    pdf = pdfs / "paper.pdf"
+    pdf.write_bytes(b"%PDF-1.4\n")
+    site_state.set_working_path(base, "Pdfs/Pdfs 2026/paper.pdf")
+
+    out = build_working_index.write_site_working_index(base)
+    content = out.read_text(encoding="utf-8")
+
+    assert "/pdfs/raw/Pdfs%202026/paper.pdf" in content
+    assert 'data-api-action="to-done"' in content
+    assert 'data-api-action="to-browse"' in content
+    assert 'data-docflow-path="Pdfs/Pdfs 2026/paper.pdf"' in content

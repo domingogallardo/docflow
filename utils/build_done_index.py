@@ -27,7 +27,7 @@ DONE_BASE_STYLE = (
     "hr{border:0;border-top:1px solid #e6e6e6;margin:8px 0}"
     "ul{margin-top:0}"
     ".dg-done-list{list-style:none;padding-left:0}"
-    ".dg-done-list li{padding:2px 6px;border-radius:6px;margin:2px 0}"
+    ".dg-done-list li{padding:2px 6px;border-radius:6px;margin:2px 0;display:flex;justify-content:space-between;gap:10px;align-items:center}"
     ".dg-done-list li.dg-hl{background:#fff9e8}"
     ".dg-nav{color:#666;font:13px -apple-system,system-ui,Segoe UI,Roboto,Helvetica,Arial;margin-bottom:8px}"
     ".dg-nav a{text-decoration:none;color:#0a7}"
@@ -35,6 +35,8 @@ DONE_BASE_STYLE = (
     ".dg-legend{color:#666;font:13px -apple-system,system-ui,Segoe UI,Roboto,Helvetica,Arial}"
     ".dg-sort-toggle{padding:2px 8px;border:1px solid #ccc;border-radius:6px;background:#f7f7f7;color:#333;font:12px -apple-system,system-ui,Segoe UI,Roboto,Helvetica,Arial;cursor:pointer}"
     ".dg-sort-toggle.is-active{border-color:#c8a400;background:#fff6e5}"
+    ".dg-actions{display:inline-flex;gap:6px}"
+    ".dg-actions button{padding:2px 6px;border:1px solid #ccc;border-radius:6px;background:#f7f7f7;color:#333;font:12px -apple-system,system-ui,Segoe UI,Roboto,Helvetica,Arial;cursor:pointer}"
     ".file-icon{font-size:0.85em;vertical-align:baseline;display:inline-block;transform:translateY(-0.05em)}"
 )
 
@@ -60,6 +62,18 @@ def _is_site_highlighted(base_dir: Path, rel_path: str) -> bool:
     if not Path(rel_path).name.lower().endswith((".html", ".htm")):
         return False
     return has_highlights_for_path(base_dir, rel_path)
+
+
+def _actions_html(item: SiteDoneItem) -> str:
+    if not item.name.lower().endswith(".pdf"):
+        return ""
+    path_attr = html.escape(item.rel_path, quote=True)
+    return (
+        "<span class='dg-actions'>"
+        f"<button data-api-action=\"reopen\" data-docflow-path=\"{path_attr}\">Reopen to Working</button>"
+        f"<button data-api-action=\"to-browse\" data-docflow-path=\"{path_attr}\">Back to Browse</button>"
+        "</span>"
+    )
 
 
 def _done_at_to_epoch(value: object) -> float | None:
@@ -136,8 +150,9 @@ def build_site_done_html(items: list[SiteDoneItem]) -> str:
                 f"data-dg-sort-mtime='{item.sort_mtime:.6f}' "
                 f"data-dg-name='{html.escape(item.name.lower(), quote=True)}'"
             )
+            actions = _actions_html(item)
             lines.append(
-                f'<li{row_class} {row_attrs}>{hl_icon}{icon}<a href="{href}" title="{esc_name}">{esc_name}</a></li>'
+                f'<li{row_class} {row_attrs}><span>{hl_icon}{icon}<a href="{href}" title="{esc_name}">{esc_name}</a></span>{actions}</li>'
             )
         lines.append("</ul>")
         list_html = "\n".join(lines)
@@ -146,6 +161,7 @@ def build_site_done_html(items: list[SiteDoneItem]) -> str:
         '<!DOCTYPE html><html><head><meta charset="utf-8">'
         f'<meta name="viewport" content="{DONE_VIEWPORT}">'
         f"<style>{DONE_BASE_STYLE}</style>"
+        '<script src="/assets/actions.js" defer></script>'
         '<script src="/assets/browse-sort.js" defer></script>'
         "<title>Done</title></head><body>"
         '<div class="dg-nav"><a href="/">Home</a> · <a href="/browse/">Browse</a> · <a href="/working/">Working</a> · <a href="/done/">Done</a></div>'
