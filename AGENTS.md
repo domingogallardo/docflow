@@ -6,7 +6,7 @@ This repository automates collecting and organizing personal documents (Instapap
 
 - Source: top-level Python modules (for example `process_documents.py`, `pipeline_manager.py`, `utils.py`, `*_processor.py`).
 - Tests: `tests/` with `pytest` suites and fixtures in `tests/fixtures/`.
-- Utilities: `utils/` for helper scripts (for example `docflow_server.py`, `build_browse_index.py`, `build_read_index.py`).
+- Utilities: `utils/` for helper scripts (for example `docflow_server.py`, `build_browse_index.py`, `build_working_index.py`).
 - Configuration: `config.py` (paths and env vars).
 
 ## Build, Test, and Dev Commands
@@ -18,7 +18,7 @@ This repository automates collecting and organizing personal documents (Instapap
 - Tweet queue: `python process_documents.py tweets`
 - Create/refresh X likes state: `python utils/create_x_state.py --state-path /Users/<you>/.secrets/docflow/x_state.json`
 - Build intranet browse index: `python utils/build_browse_index.py --base-dir "/path/to/BASE_DIR"`
-- Build intranet read index: `python utils/build_read_index.py --base-dir "/path/to/BASE_DIR"`
+- Build intranet working index: `python utils/build_working_index.py --base-dir "/path/to/BASE_DIR"`
 - Run intranet server: `python utils/docflow_server.py --base-dir "/path/to/BASE_DIR" --port 8088`
 - Unified wrapper (cron/manual): `bash bin/docflow.sh all`
 - Tests (verbose): `pytest -v`

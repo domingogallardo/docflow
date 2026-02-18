@@ -168,7 +168,7 @@ def get_base_css() -> str:
 
 
 def get_article_js_script_tag() -> str:
-    """Deprecated: JS injection happens when publishing to /read/."""
+    """Deprecated: JS injection happens when publishing to /working/."""
     return ""
 
 

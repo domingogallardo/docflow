@@ -1,12 +1,12 @@
-def test_build_read_index_includes_article_js():
+def test_build_working_index_includes_article_js():
     import importlib.util, pathlib
-    path = pathlib.Path('utils/build_read_index.py')
-    spec = importlib.util.spec_from_file_location('build_read_index', path)
+    path = pathlib.Path('utils/build_working_index.py')
+    spec = importlib.util.spec_from_file_location('build_working_index', path)
     mod = importlib.util.module_from_spec(spec)
     assert spec and spec.loader
     spec.loader.exec_module(mod)  # type: ignore
-    html = mod.build_site_read_html([])
-    assert '<script src="/read/article.js" defer></script>' in html
+    html = mod.build_site_working_html([])
+    assert '<script src="/working/article.js" defer></script>' in html
 
 
 def test_article_js_includes_highlights():

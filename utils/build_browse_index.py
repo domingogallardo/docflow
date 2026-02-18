@@ -244,7 +244,7 @@ def _render_directory_page(
     parent_href: str | None,
 ) -> str:
     rows: list[str] = [_base_head(title)]
-    rows.append("<div class='dg-nav'><a href='/'>Home</a> · <a href='/browse/'>Browse</a> · <a href='/read/'>Read</a></div>")
+    rows.append("<div class='dg-nav'><a href='/'>Home</a> · <a href='/browse/'>Browse</a> · <a href='/working/'>Working</a></div>")
     rows.append(f"<h2>Index of {html.escape(display_path)}</h2>")
     rows.append(
         "<div class='dg-sortbar'><button type='button' class='dg-sort-toggle' data-dg-sort-toggle "
@@ -616,7 +616,7 @@ def _write_browse_home(base_dir: Path, category_roots: dict[str, Path], counts: 
     )
     html_doc = html_doc.replace(
         "</ul><hr></body></html>",
-        "</ul><p><button class='dg-rebuild' data-api-action='rebuild'>Rebuild browse + read</button></p><hr></body></html>",
+        "</ul><p><button class='dg-rebuild' data-api-action='rebuild'>Rebuild browse + working</button></p><hr></body></html>",
     )
     (out_dir / "index.html").write_text(html_doc, encoding="utf-8")
 
@@ -632,8 +632,8 @@ def write_site_home(base_dir: Path) -> None:
         ".dg-actions button{padding:2px 6px;border:1px solid #ccc;border-radius:6px;background:#f7f7f7;color:#333;font:12px -apple-system,system-ui,Segoe UI,Roboto,Helvetica,Arial;cursor:pointer}"
         "</style><script src='/assets/actions.js' defer></script></head><body>"
         "<h1>Docflow Intranet</h1>"
-        "<p><a href='/browse/'>Browse</a> · <a href='/read/'>Read</a></p>"
-        "<p><button data-api-action='rebuild'>Rebuild browse + read</button></p>"
+        "<p><a href='/browse/'>Browse</a> · <a href='/working/'>Working</a></p>"
+        "<p><button data-api-action='rebuild'>Rebuild browse + working</button></p>"
         "</body></html>"
     )
 
@@ -749,7 +749,7 @@ def ensure_assets(base_dir: Path) -> None:
 """.strip()
 
     css = """
-/* Base styles for read pages and shared elements */
+/* Base styles for working pages and shared elements */
 body { margin:14px 18px; font:14px -apple-system,system-ui,Segoe UI,Roboto,Helvetica,Arial; color:#222; }
 header h1 { margin:6px 0 10px; font-weight:600; }
 header nav a { color:#0a7; text-decoration:none; }

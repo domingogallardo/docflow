@@ -14,7 +14,7 @@ Static output under `BASE_DIR/_site`:
 
 - `index.html`
 - `browse/...`
-- `read/...`
+- `working/...`
 - `assets/...`
 
 Local state under `BASE_DIR/state`:
@@ -23,14 +23,14 @@ Local state under `BASE_DIR/state`:
 - `bump.json`
 - `highlights/...`
 
-## Browse and Read behavior
+## Browse and Working behavior
 
 - `browse`: full library navigation by category (`posts`, `tweets`, `pdfs`, `images`, `podcasts`).
 - `incoming` is intentionally excluded from browse navigation.
 - `browse` default ordering: bumped first, then published, then the rest.
 - `browse` includes a top toggle button (`Highlights first`) to prioritize highlighted items dynamically.
-- `read`: curated list from `state/published.json`.
-- `read` ordering: bumped entries first (via `state/bump.json`), then non-bumped entries by `published_at` (newest first).
+- `working`: curated list from `state/published.json`.
+- `working` ordering: bumped entries first (via `state/bump.json`), then non-bumped entries by `published_at` (newest first).
 - Highlight marks (🟡) come from canonical local highlight state only.
 
 ## Bump semantics
@@ -61,9 +61,9 @@ Local state under `BASE_DIR/state`:
 - Startup rebuild is optional (`--rebuild-on-start`).
 - Per-file API actions trigger:
   - partial browse rebuild for the affected branch
-  - full read rebuild
-- `POST /api/rebuild-file` rebuilds one HTML file from its sibling Markdown (`.md`) and then refreshes browse/read.
-- `POST /api/rebuild` triggers full browse + read rebuild.
+  - full working rebuild
+- `POST /api/rebuild-file` rebuilds one HTML file from its sibling Markdown (`.md`) and then refreshes browse/working.
+- `POST /api/rebuild` triggers full browse + working rebuild.
 
 ## `bin/docflow.sh all`
 
@@ -71,7 +71,7 @@ Local state under `BASE_DIR/state`:
 
 - executes `process_documents.py`
 - optionally runs tweet daily consolidation (`--yesterday` when target is `all`)
-- rebuilds intranet browse and read
+- rebuilds intranet browse and working
 
 Optional override:
 

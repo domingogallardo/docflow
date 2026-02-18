@@ -29,7 +29,7 @@ if __package__ in (None, ""):
     if str(_REPO_ROOT) not in sys.path:
         sys.path.insert(0, str(_REPO_ROOT))
 
-from utils import add_margins_to_html_files, build_browse_index, build_read_index, markdown_to_html
+from utils import add_margins_to_html_files, build_browse_index, build_working_index, markdown_to_html
 from utils.site_paths import (
     PathValidationError,
     normalize_rel_path,
@@ -128,11 +128,11 @@ class DocflowApp:
 
     def rebuild(self) -> None:
         build_browse_index.build_browse_site(self.base_dir)
-        build_read_index.write_site_read_index(self.base_dir)
+        build_working_index.write_site_working_index(self.base_dir)
 
     def rebuild_for_path(self, rel_path: str) -> None:
         build_browse_index.rebuild_browse_for_path(self.base_dir, rel_path)
-        build_read_index.write_site_read_index(self.base_dir)
+        build_working_index.write_site_working_index(self.base_dir)
 
     def _next_bump_mtime(self) -> float:
         with self._bump_lock:
@@ -507,8 +507,8 @@ def _inject_html_overlay(*, html_text: str, rel_path: str, published: bool, bump
     html_text = _ensure_viewport_meta(html_text)
     path_attr = html.escape(rel_path, quote=True)
     article_js = ""
-    if "/read/article.js" not in html_text:
-        article_js = f"<script defer src=\"/read/article.js\" data-docflow-path=\"{path_attr}\"></script>"
+    if "/working/article.js" not in html_text:
+        article_js = f"<script defer src=\"/working/article.js\" data-docflow-path=\"{path_attr}\"></script>"
     tags = (
         article_js
         + f"<style>{OVERLAY_CSS}</style>"
@@ -607,10 +607,14 @@ def make_handler(app: DocflowApp):
                 _send_json(self, 404, {"ok": False, "error": "Raw file not found"})
                 return
 
-            if path in ("/browse", "/read"):
+            if path in ("/browse", "/working"):
                 self.send_response(302)
                 self.send_header("Location", path + "/")
                 self.end_headers()
+                return
+
+            if path == "/read" or path.startswith("/read/"):
+                _send_json(self, 404, {"ok": False, "error": "Not found"})
                 return
 
             site_file = app.resolve_site_file(path)
@@ -672,7 +676,7 @@ def parse_args() -> argparse.Namespace:
         "--rebuild-on-start",
         dest="rebuild_on_start",
         action="store_true",
-        help="Rebuild browse/read static pages before serving.",
+        help="Rebuild browse/working static pages before serving.",
     )
     # Backward compatibility: previously this was the explicit opt-out flag.
     parser.add_argument("--no-rebuild-on-start", dest="rebuild_on_start", action="store_false", help=argparse.SUPPRESS)

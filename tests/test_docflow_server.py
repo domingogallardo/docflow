@@ -69,7 +69,7 @@ def _put_json(port: int, path: str, payload: dict[str, object]) -> tuple[int, di
         conn.close()
 
 
-def test_api_publish_and_read_listing(tmp_path: Path):
+def test_api_publish_and_working_listing(tmp_path: Path):
     base = tmp_path / "base"
     posts = base / "Posts" / "Posts 2026"
     posts.mkdir(parents=True)
@@ -83,9 +83,9 @@ def test_api_publish_and_read_listing(tmp_path: Path):
         assert payload["ok"] is True
         assert is_published(base, "Posts/Posts 2026/doc.html") is True
 
-        read_status, read_html = _get(port, "/read/")
-        assert read_status == 200
-        assert "doc.html" in read_html
+        working_status, working_html = _get(port, "/working/")
+        assert working_status == 200
+        assert "doc.html" in working_html
     finally:
         server.shutdown()
         server.server_close()
@@ -119,7 +119,7 @@ def test_api_bump_unbump_roundtrip(tmp_path: Path):
         server.server_close()
 
 
-def test_api_delete_removes_local_markdown_and_read_entry(tmp_path: Path):
+def test_api_delete_removes_local_markdown_and_working_entry(tmp_path: Path):
     base = tmp_path / "base"
     posts = base / "Posts" / "Posts 2026"
     posts.mkdir(parents=True)
@@ -151,9 +151,9 @@ def test_api_delete_removes_local_markdown_and_read_entry(tmp_path: Path):
         assert is_published(base, rel_path) is False
         assert get_bumped_entry(base, rel_path) is None
 
-        read_status, read_html = _get(port, "/read/")
-        assert read_status == 200
-        assert "doc.html" not in read_html
+        working_status, working_html = _get(port, "/working/")
+        assert working_status == 200
+        assert "doc.html" not in working_html
     finally:
         server.shutdown()
         server.server_close()
@@ -172,11 +172,26 @@ def test_raw_route_serves_library_file(tmp_path: Path):
         assert status == 200
         assert "Raw Doc" in body
         assert "dg-overlay" in body
-        assert '/read/article.js' in body
+        assert '/working/article.js' in body
         assert 'name="viewport"' in body
         assert "/api/publish" in body or "data-published" in body
         assert "Rebuild" in body
         assert "Delete" in body
+    finally:
+        server.shutdown()
+        server.server_close()
+
+
+def test_read_route_is_removed(tmp_path: Path):
+    base = tmp_path / "base"
+    (base / "Posts" / "Posts 2026").mkdir(parents=True)
+
+    server, port = _start_server(base)
+    try:
+        status, _ = _get(port, "/read/")
+        assert status == 404
+        status, _ = _get(port, "/read")
+        assert status == 404
     finally:
         server.shutdown()
         server.server_close()

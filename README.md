@@ -68,7 +68,7 @@ python process_documents.py all --year 2026
 
 ```bash
 python utils/build_browse_index.py --base-dir "/Users/domingo/⭐️ Documentación"
-python utils/build_read_index.py --base-dir "/Users/domingo/⭐️ Documentación"
+python utils/build_working_index.py --base-dir "/Users/domingo/⭐️ Documentación"
 ```
 
 4. Run local server:
@@ -168,7 +168,7 @@ Behavior:
 - Loads `~/.docflow_env` if present.
 - Runs `process_documents.py` with your arguments.
 - If target is `all`, runs `bin/build_tweet_consolidated.sh --yesterday`.
-- Rebuilds intranet browse/read pages (`utils/build_browse_index.py` and `utils/build_read_index.py`) when processing succeeds.
+- Rebuilds intranet browse/working pages (`utils/build_browse_index.py` and `utils/build_working_index.py`) when processing succeeds.
 
 Optional override:
 
@@ -184,7 +184,7 @@ INTRANET_BASE_DIR="/path/to/base" bash bin/docflow.sh all
 - Raw files from `BASE_DIR` routes (`/posts/raw/...`, `/tweets/raw/...`, etc.)
 - `browse` list default ordering: bumped entries first, then published entries, then the rest
 - `browse` pages include a top `Highlights first` toggle to prioritize highlighted items
-- `read` list ordering: bumped entries first, then non-bumped entries by publish time (newest first)
+- `working` list ordering: bumped entries first, then non-bumped entries by publish time (newest first)
 - JSON API actions:
   - `POST /api/publish`
   - `POST /api/unpublish`
