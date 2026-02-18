@@ -1,4 +1,5 @@
 from pathlib import Path
+import json
 
 from utils import site_state
 
@@ -52,3 +53,23 @@ def test_working_roundtrip(tmp_path: Path):
     removed = site_state.pop_working_path(base, rel)
     assert removed is not None
     assert site_state.is_working(base, rel) is False
+
+
+def test_load_done_state_migrates_legacy_published_json(tmp_path: Path):
+    base = tmp_path / "base"
+    state_dir = base / "state"
+    state_dir.mkdir(parents=True)
+    legacy = state_dir / "published.json"
+    payload = {
+        "version": 1,
+        "items": {
+            "Posts/Posts 2026/doc.html": {"done_at": "2026-02-18T10:00:00Z"},
+        },
+    }
+    legacy.write_text(json.dumps(payload), encoding="utf-8")
+
+    loaded = site_state.load_done_state(base)
+
+    assert "Posts/Posts 2026/doc.html" in loaded["items"]
+    assert (state_dir / "done.json").exists()
+    assert not legacy.exists()

@@ -4,12 +4,19 @@ from __future__ import annotations
 
 import json
 import os
+import shutil
 import tempfile
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from utils.site_paths import bump_state_path, done_state_path, normalize_rel_path, working_state_path
+from utils.site_paths import (
+    bump_state_path,
+    done_state_path,
+    normalize_rel_path,
+    state_root,
+    working_state_path,
+)
 
 STATE_VERSION = 1
 
@@ -64,12 +71,58 @@ def _write_state(path: Path, state: dict[str, Any]) -> None:
             os.remove(tmp_name)
 
 
+def _legacy_done_state_path(base_dir: Path) -> Path:
+    return state_root(base_dir) / "published.json"
+
+
+def _migrate_legacy_done_state(base_dir: Path) -> None:
+    legacy_path = _legacy_done_state_path(base_dir)
+    canonical_path = done_state_path(base_dir)
+    if not legacy_path.exists():
+        return
+
+    if canonical_path.exists():
+        try:
+            legacy_path.unlink()
+        except OSError:
+            pass
+        return
+
+    canonical_path.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        os.replace(legacy_path, canonical_path)
+        return
+    except OSError:
+        pass
+
+    try:
+        shutil.copy2(legacy_path, canonical_path)
+        legacy_path.unlink()
+    except OSError:
+        # Best effort migration; keep legacy file if it cannot be moved.
+        pass
+
+
 def load_done_state(base_dir: Path) -> dict[str, Any]:
-    return _read_state(done_state_path(base_dir))
+    _migrate_legacy_done_state(base_dir)
+    path = done_state_path(base_dir)
+    if path.exists():
+        return _read_state(path)
+    legacy_path = _legacy_done_state_path(base_dir)
+    if legacy_path.exists():
+        return _read_state(legacy_path)
+    return _read_state(path)
 
 
 def save_done_state(base_dir: Path, state: dict[str, Any]) -> None:
+    _migrate_legacy_done_state(base_dir)
     _write_state(done_state_path(base_dir), state)
+    legacy_path = _legacy_done_state_path(base_dir)
+    if legacy_path.exists():
+        try:
+            legacy_path.unlink()
+        except OSError:
+            pass
 
 
 def load_working_state(base_dir: Path) -> dict[str, Any]:
