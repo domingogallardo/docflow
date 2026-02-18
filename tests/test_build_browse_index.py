@@ -301,7 +301,9 @@ def test_rebuild_browse_for_path_updates_only_target_branch(tmp_path: Path):
     build_browse_index.build_browse_site(base)
     untouched_page = base / "_site" / "browse" / "posts" / "Posts 2025" / "index.html"
     target_page = base / "_site" / "browse" / "posts" / "Posts 2026" / "index.html"
+    category_root_page = base / "_site" / "browse" / "posts" / "index.html"
     untouched_mtime_before = untouched_page.stat().st_mtime
+    category_root_mtime_before = category_root_page.stat().st_mtime
 
     site_state.publish_path(base, "Posts/Posts 2026/new.html")
     time.sleep(1.1)
@@ -314,3 +316,4 @@ def test_rebuild_browse_for_path_updates_only_target_branch(tmp_path: Path):
     assert "new.html" not in target_content
     assert "🟢" not in target_content
     assert abs(untouched_page.stat().st_mtime - untouched_mtime_before) < 0.001
+    assert abs(category_root_page.stat().st_mtime - category_root_mtime_before) < 0.001

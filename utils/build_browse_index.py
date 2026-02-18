@@ -1001,12 +1001,15 @@ def rebuild_browse_for_path(base_dir: Path, rel_path: str) -> dict[str, object]:
     visibility_cache: dict[str, bool] = {}
 
     dirs_to_update: list[Path] = []
-    cursor = rel_dir
-    while True:
-        dirs_to_update.append(cursor)
-        if cursor == Path("."):
-            break
-        cursor = cursor.parent
+    if rel_dir == Path("."):
+        dirs_to_update.append(Path("."))
+    else:
+        cursor = rel_dir
+        while True:
+            dirs_to_update.append(cursor)
+            if cursor.parent == Path("."):
+                break
+            cursor = cursor.parent
 
     updated_paths: list[str] = []
     for target_rel_dir in dirs_to_update:
