@@ -216,9 +216,7 @@ def _natural_priority(entry: BrowseEntry) -> int:
         return 0
     if entry.working:
         return 1
-    if entry.published:
-        return 2
-    return 3
+    return 2
 
 
 def _entry_sort_key(entry: BrowseEntry) -> tuple[int, float, str]:
@@ -724,8 +722,7 @@ def ensure_assets(base_dir: Path) -> None:
   function naturalRank(node) {
     if (node.dataset.dgBumped === '1') return 0;
     if (node.dataset.dgWorking === '1') return 1;
-    if (node.dataset.dgDone === '1') return 2;
-    return 3;
+    return 2;
   }
 
   function compareEntries(a, b, highlightsFirst) {
@@ -870,7 +867,7 @@ def collect_category_items(base_dir: Path, category: str) -> list[BrowseItem]:
 
     items.sort(
         key=lambda item: (
-            0 if item.bumped else 1 if item.working else 2 if item.published else 3,
+            0 if item.bumped else 1 if item.working else 2,
             -(item.sort_mtime if item.sort_mtime is not None else item.mtime),
             item.name.lower(),
         )

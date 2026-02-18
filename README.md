@@ -185,7 +185,7 @@ INTRANET_BASE_DIR="/path/to/base" bash bin/docflow.sh all
 
 - Static files from `BASE_DIR/_site`
 - Raw files from `BASE_DIR` routes (`/posts/raw/...`, `/tweets/raw/...`, etc.)
-- `browse` list default ordering: bumped entries first, then working entries, then done entries, then the rest
+- `browse` list default ordering: bumped entries first, then working entries, then the rest (done has no extra stage priority)
 - `browse` pages include a top `Highlights first` toggle to prioritize highlighted items
 - `working` list ordering: by `working_at` (newest first)
 - `done` list ordering: by `published_at` (newest first)

@@ -142,7 +142,7 @@ def test_browse_uses_bump_state_for_order_without_touching_mtime(tmp_path: Path)
     assert "<span class='dg-date'> — " not in html
 
 
-def test_browse_orders_working_before_done_and_rest(tmp_path: Path, monkeypatch):
+def test_browse_orders_working_before_done_without_done_priority(tmp_path: Path, monkeypatch):
     base = tmp_path / "base"
     posts = base / "Posts" / "Posts 2026"
     posts.mkdir(parents=True)
@@ -156,7 +156,8 @@ def test_browse_orders_working_before_done_and_rest(tmp_path: Path, monkeypatch)
 
     os.utime(working_doc, (1_700_000_000, 1_700_000_000))
     os.utime(done_doc, (1_700_000_100, 1_700_000_100))
-    os.utime(rest_doc, (1_700_000_200, 1_700_000_200))
+    # Keep a very recent mtime so rest beats done once done has no stage priority.
+    os.utime(rest_doc, (1_900_000_200, 1_900_000_200))
 
     times = iter(["2026-02-01T10:00:00Z", "2026-02-01T10:00:05Z"])
     monkeypatch.setattr(site_state, "_utc_now_iso", lambda: next(times))
@@ -168,7 +169,8 @@ def test_browse_orders_working_before_done_and_rest(tmp_path: Path, monkeypatch)
     html = year_page.read_text(encoding="utf-8")
 
     assert html.find("working.html") < html.find("done.html")
-    assert html.find("done.html") < html.find("rest.html")
+    assert html.find("working.html") < html.find("rest.html")
+    assert html.find("rest.html") < html.find("done.html")
 
 
 def test_browse_orders_bumped_then_published_then_rest(tmp_path: Path, monkeypatch):

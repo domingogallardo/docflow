@@ -29,7 +29,7 @@ Local state under `BASE_DIR/state`:
 
 - `browse`: full library navigation by category (`posts`, `tweets`, `pdfs`, `images`, `podcasts`).
 - `incoming` is intentionally excluded from browse navigation.
-- `browse` default ordering: bumped first, then working, then done, then the rest.
+- `browse` default ordering: bumped first, then working, then the rest (done has no extra stage priority).
 - `browse` includes a top toggle button (`Highlights first`) to prioritize highlighted items dynamically.
 - `working`: curated list from `state/working.json`.
 - `working` ordering: by `working_at` (newest first).
