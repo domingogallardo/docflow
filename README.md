@@ -2,6 +2,8 @@
 
 docflow automates your personal document pipeline (Instapaper posts, podcasts, Markdown notes, PDFs, images, and tweets) and serves everything locally from `BASE_DIR`.
 
+Podcast snippets are typically captured in [Snipd](https://www.snipd.com) and then exported into this pipeline.
+
 ## Architecture overview
 
 ![docflow architecture](docs/images/docflow-architecture.webp)
