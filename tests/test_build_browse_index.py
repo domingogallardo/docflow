@@ -73,6 +73,7 @@ def test_build_browse_site_generates_indexes_and_actions(tmp_path: Path):
     assert "const sortableFiles = sortable.filter" in browse_sort_content
     assert "!href.endsWith('/')" in browse_sort_content
     assert "ul.dg-index, ul.dg-done-list" in browse_sort_content
+    assert "dgWorking" not in browse_sort_content
 
     root_content = posts_root_page.read_text(encoding="utf-8")
     assert "Posts 2026/</a> <span class='dg-count'>(1)</span>" in root_content
@@ -91,8 +92,9 @@ def test_build_browse_site_generates_indexes_and_actions(tmp_path: Path):
     assert "data-dg-sort-toggle" in content
     assert "Highlight: off" in content
     assert "data-dg-sortable='1'" in content
+    assert "data-dg-working" not in content
+    assert "data-dg-done" not in content
     assert "data-dg-highlighted='1'" in content
-    assert "data-dg-done='1'" not in content
     assert "<script src='/assets/browse-sort.js' defer></script>" in content
     assert 'data-api-action="unbump"' not in content
     assert '/posts/raw/Posts%202026/doc.html' in content

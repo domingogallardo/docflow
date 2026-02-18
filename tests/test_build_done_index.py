@@ -32,6 +32,8 @@ def test_write_site_done_index_uses_done_state(tmp_path: Path):
     assert "Highlight: off" in content
     assert "data-dg-highlighted='1'" in content
     assert "data-dg-sort-mtime=" in content
+    assert "data-dg-working" not in content
+    assert "data-dg-done" not in content
     assert "🟡" in content
 
 

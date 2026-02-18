@@ -132,8 +132,6 @@ def build_site_done_html(items: list[SiteDoneItem]) -> str:
             row_attrs = (
                 "data-dg-sortable='1' "
                 "data-dg-bumped='0' "
-                "data-dg-working='0' "
-                "data-dg-done='1' "
                 f"data-dg-highlighted='{'1' if item.highlighted else '0'}' "
                 f"data-dg-sort-mtime='{item.sort_mtime:.6f}' "
                 f"data-dg-name='{html.escape(item.name.lower(), quote=True)}'"

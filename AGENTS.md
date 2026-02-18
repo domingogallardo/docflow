@@ -52,6 +52,7 @@ Useful setup (new environment):
 - Keep all script messages in English.
 - Preserve file `mtime` whenever editing existing content files (`.md`, `.html`) unless the task explicitly requires changing ordering semantics.
 - Use intranet routes and local state as canonical behavior (`docflow_server.py`, `_site`, `state`).
+- API backward compatibility is not required in this repo: there is a single user/consumer. Prefer removing obsolete API terms and endpoints instead of keeping legacy aliases.
 
 ### Fast path for article location (avoid full-disk search)
 

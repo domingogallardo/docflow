@@ -70,8 +70,6 @@ class BrowseEntry:
     is_dir: bool
     icon: str
     rel_path: str | None = None
-    working: bool = False
-    done: bool = False
     bumped: bool = False
     highlighted: bool = False
     sort_mtime: float | None = None
@@ -117,10 +115,6 @@ def _entry_classes(entry: BrowseEntry) -> str:
     classes: list[str] = []
     if entry.bumped:
         classes.append("dg-bump")
-    if entry.working:
-        classes.append("dg-work")
-    if entry.done:
-        classes.append("dg-done")
     if entry.highlighted:
         classes.append("dg-hl")
     return f' class="{" ".join(classes)}"' if classes else ""
@@ -132,22 +126,16 @@ def _actions_html(entry: BrowseEntry) -> str:
     if not entry.name.lower().endswith(".pdf"):
         return ""
 
-    if entry.done:
-        stage_buttons = [("reopen", "Reopen"), ("to-browse", "Back to Browse")]
-    elif entry.working:
-        stage_buttons = [("to-done", "Move to Done"), ("to-browse", "Back to Browse")]
-    else:
-        stage_buttons = [("to-working", "Move to Working")]
+    stage_buttons = [("to-working", "Move to Working")]
 
     path_attr = html.escape(entry.rel_path, quote=True)
     button_html = "".join(
         f"<button class='dg-act' data-api-action=\"{action}\" data-docflow-path=\"{path_attr}\">{label}</button>"
         for action, label in stage_buttons
     )
-    if not entry.done and not entry.working:
-        bump_action = "unbump" if entry.bumped else "bump"
-        bump_label = "Unbump" if entry.bumped else "Bump"
-        button_html += f"<button class='dg-act' data-api-action=\"{bump_action}\" data-docflow-path=\"{path_attr}\">{bump_label}</button>"
+    bump_action = "unbump" if entry.bumped else "bump"
+    bump_label = "Unbump" if entry.bumped else "Bump"
+    button_html += f"<button class='dg-act' data-api-action=\"{bump_action}\" data-docflow-path=\"{path_attr}\">{bump_label}</button>"
     return (
         "<span class='dg-actions'>"
         + button_html
@@ -169,8 +157,6 @@ def _render_entry(entry: BrowseEntry) -> str:
     attr_bits = [
         "data-dg-sortable='1'",
         f"data-dg-bumped='{'1' if entry.bumped else '0'}'",
-        f"data-dg-working='{'1' if entry.working else '0'}'",
-        f"data-dg-done='{'1' if entry.done else '0'}'",
         f"data-dg-highlighted='{'1' if entry.highlighted else '0'}'",
         f"data-dg-sort-mtime='{_sort_mtime(entry):.6f}'",
         f"data-dg-name='{html.escape(entry.name.lower(), quote=True)}'",
@@ -212,9 +198,7 @@ def _iso_to_epoch(value: object) -> float | None:
 def _natural_priority(entry: BrowseEntry) -> int:
     if entry.bumped:
         return 0
-    if entry.working:
-        return 1
-    return 2
+    return 1
 
 
 def _entry_sort_key(entry: BrowseEntry) -> tuple[int, float, str]:
@@ -508,15 +492,7 @@ def _scan_directory(
 
                 abs_path = Path(fs_entry.path)
                 rel = rel_path_from_abs(base_dir, abs_path)
-                is_working = rel in working_items
-                done_entry = done_items.get(rel)
-                done_at_mtime = None
-                if isinstance(done_entry, dict):
-                    done_at_mtime = _iso_to_epoch(done_entry.get("done_at"))
-                is_done = rel in done_items
-                if is_done:
-                    is_working = False
-                if is_working or is_done:
+                if rel in working_items or rel in done_items:
                     continue
 
                 file_count += 1
@@ -531,13 +507,7 @@ def _scan_directory(
                 display_mtime = st.st_mtime
                 effective_mtime = bumped_mtime
                 if effective_mtime is None:
-                    if is_working and isinstance(working_items.get(rel), dict):
-                        working_at_mtime = _iso_to_epoch(working_items.get(rel, {}).get("working_at"))
-                        effective_mtime = working_at_mtime if working_at_mtime is not None else display_mtime
-                    elif is_done and done_at_mtime is not None:
-                        effective_mtime = done_at_mtime
-                    else:
-                        effective_mtime = display_mtime
+                    effective_mtime = display_mtime
                 bumped = bumped_mtime is not None
                 entries.append(
                     BrowseEntry(
@@ -548,8 +518,6 @@ def _scan_directory(
                         is_dir=False,
                         icon=_icon_for_filename(name),
                         rel_path=rel,
-                        working=False,
-                        done=False,
                         bumped=bumped,
                         highlighted=_is_highlighted(base_dir, rel),
                     )
@@ -792,8 +760,7 @@ def ensure_assets(base_dir: Path) -> None:
 
   function naturalRank(node) {
     if (node.dataset.dgBumped === '1') return 0;
-    if (node.dataset.dgWorking === '1') return 1;
-    return 2;
+    return 1;
   }
 
   function compareEntries(a, b, highlightsFirst) {
