@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import argparse
 import html
+import json
 import os
 import re
 import shutil
@@ -222,6 +223,11 @@ def _base_head(title: str) -> str:
         ".dg-actions button, .dg-actions a, .dg-rebuild{padding:2px 6px;border:1px solid #ccc;border-radius:6px;background:#f7f7f7;text-decoration:none;color:#333;font:12px -apple-system,system-ui,Segoe UI,Roboto,Helvetica,Arial;cursor:pointer}"
         ".dg-actions button[disabled], .dg-actions a[disabled], .dg-rebuild[disabled]{opacity:.6;pointer-events:none}"
         ".dg-count{color:#666;margin-left:8px;white-space:nowrap}"
+        ".dg-search{display:inline-flex;align-items:center;gap:6px}"
+        ".dg-search input{padding:3px 8px;border:1px solid #ccc;border-radius:6px;min-width:420px;max-width:100%;font:13px -apple-system,system-ui,Segoe UI,Roboto,Helvetica,Arial}"
+        ".dg-search button{padding:2px 8px;border:1px solid #ccc;border-radius:6px;background:#f7f7f7;color:#333;font:12px -apple-system,system-ui,Segoe UI,Roboto,Helvetica,Arial;cursor:pointer}"
+        ".dg-search-hit{margin:6px 0 2px;font:13px -apple-system,system-ui,Segoe UI,Roboto,Helvetica,Arial;color:#444}"
+        ".dg-search-hit a{color:#0a7;text-decoration:none}"
         ".dg-sort-toggle{padding:2px 8px;border:1px solid #ccc;border-radius:6px;background:#f7f7f7;color:#333;font:12px -apple-system,system-ui,Segoe UI,Roboto,Helvetica,Arial;cursor:pointer}"
         ".dg-sort-toggle.is-active{border-color:#c8a400;background:#fff6e5}"
         "</style>"
@@ -237,16 +243,27 @@ def _render_directory_page(
     display_path: str,
     entries: list[BrowseEntry],
     parent_href: str | None,
+    controls_html: str | None = None,
+    pre_list_html: str = "",
 ) -> str:
     rows: list[str] = [_base_head(title)]
     rows.append("<div class='dg-nav'><a href='/'>Home</a> · <a href='/browse/'>Browse</a> · <a href='/working/'>Working</a> · <a href='/done/'>Done</a></div>")
     rows.append(f"<h2>Index of {html.escape(display_path)}</h2>")
+    if controls_html is None:
+        controls_html = (
+            "<button type='button' class='dg-sort-toggle' data-dg-sort-toggle aria-pressed='false'>"
+            "Highlight: off"
+            "</button>"
+        )
     rows.append(
         "<div class='dg-legendbar'>"
         "<div class='dg-legend'>🔥 bumped · 🟡 highlight</div>"
-        "<button type='button' class='dg-sort-toggle' data-dg-sort-toggle aria-pressed='false'>Highlight: off</button>"
-        "</div><hr><ul class='dg-index'>"
+        f"{controls_html}"
+        "</div>"
     )
+    if pre_list_html:
+        rows.append(pre_list_html)
+    rows.append("<hr><ul class='dg-index'>")
 
     if parent_href:
         rows.append(f'<li data-dg-parent="1"><a href="{parent_href}">../</a></li>')
@@ -256,6 +273,40 @@ def _render_directory_page(
 
     rows.append("</ul><hr></body></html>")
     return "\n".join(rows)
+
+
+def _collect_browse_search_entries(base_dir: Path, category_roots: dict[str, Path]) -> list[dict[str, str]]:
+    scanned: list[tuple[float, dict[str, str]]] = []
+    for category in CATEGORY_KEYS:
+        root = category_roots[category]
+        if not root.is_dir():
+            continue
+        for path in root.rglob("*"):
+            if not path.is_file():
+                continue
+            rel_to_root = path.relative_to(root)
+            if any(_skip_directory(part) for part in rel_to_root.parts[:-1]):
+                continue
+            if not _is_visible_file_name(path.name):
+                continue
+            try:
+                rel = rel_path_from_abs(base_dir, path)
+                href = raw_url_for_rel_path(rel)
+                mtime = path.stat().st_mtime
+            except Exception:
+                continue
+            scanned.append(
+                (
+                    mtime,
+                    {
+                        "stem": path.stem,
+                        "name": path.name,
+                        "href": href,
+                    },
+                )
+            )
+    scanned.sort(key=lambda item: item[0], reverse=True)
+    return [entry for _, entry in scanned]
 
 
 def _dir_has_visible_entries(
@@ -665,16 +716,62 @@ def _write_browse_home(base_dir: Path, category_roots: dict[str, Path], counts: 
             )
         )
 
+    search_entries = _collect_browse_search_entries(base_dir, category_roots)
+    search_controls = (
+        "<form class='dg-search' data-dg-search-form autocomplete='off'>"
+        "<input type='text' data-dg-search-input "
+        "placeholder='Search exact filename (without extension)' "
+        "aria-label='Search exact filename'>"
+        "<button type='submit' data-dg-search-button aria-label='Search'>🔍</button>"
+        "</form>"
+    )
+    search_result = "<div class='dg-search-hit' data-dg-search-hit></div>"
+
     html_doc = _render_directory_page(
         title="Index of /browse/",
         display_path="/browse/",
         entries=entries,
         parent_href="/",
+        controls_html=search_controls,
+        pre_list_html=search_result,
+    )
+    search_payload = json.dumps(search_entries, ensure_ascii=False).replace("</", "<\\/")
+    search_js = (
+        "<script id='dg-browse-search-data' type='application/json'>"
+        + search_payload
+        + "</script>"
+        + "<script>"
+        + "(function(){"
+        + "function norm(v){return String(v||'').trim().replace(/\\.(html?|pdf)$/i,'');}"
+        + "const form=document.querySelector('[data-dg-search-form]');"
+        + "const input=document.querySelector('[data-dg-search-input]');"
+        + "const hit=document.querySelector('[data-dg-search-hit]');"
+        + "const dataEl=document.getElementById('dg-browse-search-data');"
+        + "if(!form||!input||!hit||!dataEl)return;"
+        + "let entries=[];"
+        + "try{entries=JSON.parse(dataEl.textContent||'[]');}catch(_){entries=[];}"
+        + "function render(msg,href){"
+        + "if(!msg){hit.textContent='';return;}"
+        + "if(href){hit.innerHTML='Found: <a href=\"'+href+'\">'+msg+'</a>';return;}"
+        + "hit.textContent=msg;"
+        + "}"
+        + "function run(){"
+        + "const q=norm(input.value);"
+        + "if(!q){render('', '');return;}"
+        + "let match=entries.find(e=>e&&e.stem===q);"
+        + "if(!match){const ql=q.toLowerCase();match=entries.find(e=>e&&String(e.stem||'').toLowerCase()===ql);}"
+        + "if(match){render(match.name, match.href);return;}"
+        + "render('No exact match found.','');"
+        + "}"
+        + "form.addEventListener('submit',function(ev){ev.preventDefault();run();});"
+        + "})();"
+        + "</script>"
     )
     html_doc = html_doc.replace(
         "</ul><hr></body></html>",
         "</ul><p><button class='dg-rebuild' data-api-action='rebuild'>Rebuild browse + working + done</button></p><hr></body></html>",
     )
+    html_doc = html_doc.replace("</body></html>", f"{search_js}</body></html>")
     (out_dir / "index.html").write_text(html_doc, encoding="utf-8")
 
 

@@ -106,6 +106,11 @@ def test_build_browse_site_generates_indexes_and_actions(tmp_path: Path):
     browse_home_content = browse_home.read_text(encoding="utf-8")
     assert "Incoming" not in browse_home_content
     assert "🔥 bumped · 🟡 highlight" in browse_home_content
+    assert "data-dg-sort-toggle" not in browse_home_content
+    assert "data-dg-search-input" in browse_home_content
+    assert "data-dg-search-button" in browse_home_content
+    assert "dg-browse-search-data" in browse_home_content
+    assert '"stem": "doc"' in browse_home_content
     assert "🔵 working" not in browse_home_content
     assert "🟢 done" not in browse_home_content
     assert 'href="podcasts/">Podcasts/</a> <span class=\'dg-count\'>(1)</span>' in browse_home_content
