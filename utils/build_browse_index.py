@@ -133,9 +133,9 @@ def _actions_html(entry: BrowseEntry) -> str:
         return ""
 
     if entry.published:
-        stage_buttons = [("reopen", "Reopen"), ("to-browse", "Move to Browse")]
+        stage_buttons = [("reopen", "Reopen"), ("to-browse", "Back to Browse")]
     elif entry.working:
-        stage_buttons = [("to-done", "Move to Done"), ("to-browse", "Move to Browse")]
+        stage_buttons = [("to-done", "Move to Done"), ("to-browse", "Back to Browse")]
     else:
         stage_buttons = [("to-working", "Move to Working")]
 
@@ -778,6 +778,17 @@ def ensure_assets(base_dir: Path) -> None:
 
     browse_sort_js = """
 (function() {
+  window.addEventListener('pageshow', (event) => {
+    let navType = '';
+    try {
+      const entries = performance.getEntriesByType('navigation');
+      if (entries && entries.length > 0) navType = entries[0].type || '';
+    } catch (error) {}
+    if (event.persisted || navType === 'back_forward') {
+      window.location.reload();
+    }
+  });
+
   function asNumber(value) {
     const num = Number(value);
     return Number.isFinite(num) ? num : 0;

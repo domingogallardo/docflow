@@ -24,6 +24,7 @@ DONE_BASE_STYLE = (
     "body{margin:14px 18px;font:14px -apple-system,system-ui,Segoe UI,Roboto,Helvetica,Arial;color:#222;"
     "-webkit-text-size-adjust:100%;text-size-adjust:100%}"
     "h1{margin:6px 0 10px;font-weight:600}"
+    "hr{border:0;border-top:1px solid #e6e6e6;margin:8px 0}"
     "ul{margin-top:0}"
     ".dg-done-list{list-style:none;padding-left:0}"
     ".dg-done-list li{padding:2px 6px;border-radius:6px;margin:2px 0}"
@@ -151,7 +152,7 @@ def build_site_done_html(items: list[SiteDoneItem]) -> str:
         "<title>Done</title></head><body>"
         '<div class="dg-nav"><a href="/">Home</a> · <a href="/browse/">Browse</a> · <a href="/working/">Working</a> · <a href="/done/">Done</a></div>'
         '<h1>Done</h1>'
-        '<div class="dg-legendbar"><div class="dg-legend">🟡 highlight</div><button type="button" class="dg-sort-toggle" data-dg-sort-toggle aria-pressed="false">Highlight: off</button></div>'
+        '<div class="dg-legendbar"><div class="dg-legend">🟡 highlight</div><button type="button" class="dg-sort-toggle" data-dg-sort-toggle aria-pressed="false">Highlight: off</button></div><hr>'
         + list_html
         + "</body></html>"
     )

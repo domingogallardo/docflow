@@ -267,6 +267,8 @@ def test_raw_route_serves_library_file(tmp_path: Path):
         assert 'name="viewport"' in body
         assert "data-stage" in body
         assert 'data-bumped="0"' in body
+        assert 'data-browse-url="/browse/posts/Posts%202026/"' in body
+        assert "Index: Browse" in body
         assert "to-working" in body
         assert "Rebuild" in body
         assert "Delete" in body
@@ -464,3 +466,68 @@ def test_publish_does_not_rewrite_unrelated_browse_branch(tmp_path: Path):
     finally:
         server.shutdown()
         server.server_close()
+
+
+def test_api_to_working_rebuilds_only_browse_and_working(tmp_path: Path, monkeypatch):
+    base = tmp_path / "base"
+    posts = base / "Posts" / "Posts 2026"
+    posts.mkdir(parents=True)
+    rel = "Posts/Posts 2026/doc.html"
+    (posts / "doc.html").write_text("<html><body>Doc</body></html>", encoding="utf-8")
+
+    app = docflow_server.DocflowApp(base)
+    calls: list[str] = []
+
+    def _browse(*_args, **_kwargs):
+        calls.append("browse")
+        return {"mode": "partial"}
+
+    def _working(*_args, **_kwargs):
+        calls.append("working")
+        return None
+
+    def _done(*_args, **_kwargs):
+        calls.append("done")
+        return None
+
+    monkeypatch.setattr(docflow_server.build_browse_index, "rebuild_browse_for_path", _browse)
+    monkeypatch.setattr(docflow_server.build_working_index, "write_site_working_index", _working)
+    monkeypatch.setattr(docflow_server.build_done_index, "write_site_done_index", _done)
+
+    result = app.api_to_working(rel)
+    assert result["stage"] == "working"
+    assert result["changed"] is True
+    assert calls == ["browse", "working"]
+
+
+def test_api_to_done_from_working_rebuilds_only_working_and_done(tmp_path: Path, monkeypatch):
+    base = tmp_path / "base"
+    posts = base / "Posts" / "Posts 2026"
+    posts.mkdir(parents=True)
+    rel = "Posts/Posts 2026/doc.html"
+    (posts / "doc.html").write_text("<html><body>Doc</body></html>", encoding="utf-8")
+    docflow_server.set_working_path(base, rel)
+
+    app = docflow_server.DocflowApp(base)
+    calls: list[str] = []
+
+    def _browse(*_args, **_kwargs):
+        calls.append("browse")
+        return {"mode": "partial"}
+
+    def _working(*_args, **_kwargs):
+        calls.append("working")
+        return None
+
+    def _done(*_args, **_kwargs):
+        calls.append("done")
+        return None
+
+    monkeypatch.setattr(docflow_server.build_browse_index, "rebuild_browse_for_path", _browse)
+    monkeypatch.setattr(docflow_server.build_working_index, "write_site_working_index", _working)
+    monkeypatch.setattr(docflow_server.build_done_index, "write_site_done_index", _done)
+
+    result = app.api_to_done(rel)
+    assert result["stage"] == "done"
+    assert result["changed"] is True
+    assert calls == ["working", "done"]

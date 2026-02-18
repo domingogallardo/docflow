@@ -26,6 +26,7 @@ WORKING_BASE_STYLE = (
     "-webkit-text-size-adjust:100%;text-size-adjust:100%}"
     "h1{margin:6px 0 10px;font-weight:600}"
     "h2{margin:16px 0 10px;font-weight:600}"
+    "hr{border:0;border-top:1px solid #e6e6e6;margin:8px 0}"
     "ul{margin-top:0}"
     ".dg-working-list{list-style:none;padding-left:0}"
     ".dg-working-list li{padding:2px 6px;border-radius:6px;margin:2px 0}"
@@ -141,7 +142,7 @@ def build_site_working_html(items: list[SiteWorkingItem]) -> str:
         '<title>Working</title></head><body>'
         '<div class="dg-nav"><a href="/">Home</a> · <a href="/browse/">Browse</a> · <a href="/working/">Working</a> · <a href="/done/">Done</a></div>'
         '<h1>Working</h1>'
-        '<div class="dg-legend">🟡 highlight</div>'
+        '<div class="dg-legend">🟡 highlight</div><hr>'
         + list_html
         + "</body></html>"
     )

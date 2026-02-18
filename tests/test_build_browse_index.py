@@ -68,6 +68,8 @@ def test_build_browse_site_generates_indexes_and_actions(tmp_path: Path):
     assert not stale_incoming.exists()
 
     browse_sort_content = browse_sort_js.read_text(encoding="utf-8")
+    assert "window.addEventListener('pageshow'" in browse_sort_content
+    assert "back_forward" in browse_sort_content
     assert "const sortableFiles = sortable.filter" in browse_sort_content
     assert "!href.endsWith('/')" in browse_sort_content
     assert "ul.dg-index, ul.dg-done-list" in browse_sort_content
