@@ -81,6 +81,14 @@ def _write_json_atomic(path: Path, payload: dict[str, Any]) -> None:
             os.remove(tmp_name)
 
 
+def _remove_dir_if_empty(path: Path) -> None:
+    try:
+        path.rmdir()
+    except OSError:
+        # Directory is missing or not empty; no cleanup needed.
+        return
+
+
 def load_highlights_for_path(base_dir: Path, rel_path: str) -> dict[str, Any]:
     normalized = normalize_rel_path(rel_path)
     canonical_path = highlight_state_path(base_dir, normalized)
@@ -101,6 +109,7 @@ def save_highlights_for_path(base_dir: Path, rel_path: str, payload: dict[str, A
     if not normalized_payload["highlights"]:
         if canonical_path.exists():
             canonical_path.unlink()
+            _remove_dir_if_empty(canonical_path.parent)
         return normalized_payload
 
     _write_json_atomic(canonical_path, normalized_payload)

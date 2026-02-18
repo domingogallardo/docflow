@@ -33,7 +33,25 @@ def test_empty_highlights_remove_canonical_file(tmp_path: Path):
 
     highlight_store.save_highlights_for_path(base, rel, {"highlights": []})
     assert not path.exists()
+    assert not path.parent.exists()
     assert highlight_store.has_highlights_for_path(base, rel) is False
+
+
+def test_empty_highlights_keep_hash_dir_when_not_empty(tmp_path: Path):
+    base = tmp_path / "base"
+    base.mkdir()
+    rel = "Posts/Posts 2026/doc.html"
+
+    highlight_store.save_highlights_for_path(base, rel, {"highlights": [{"text": "x"}]})
+    path = highlight_store.highlight_state_path(base, rel)
+    assert path.exists()
+    marker = path.parent / "keep.txt"
+    marker.write_text("keep", encoding="utf-8")
+
+    highlight_store.save_highlights_for_path(base, rel, {"highlights": []})
+    assert not path.exists()
+    assert path.parent.exists()
+    assert marker.exists()
 
 
 def test_load_does_not_use_old_posts_highlights(tmp_path: Path):
