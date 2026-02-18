@@ -484,11 +484,9 @@ def test_api_to_working_rebuilds_only_browse_and_working(tmp_path: Path, monkeyp
 
     def _working(*_args, **_kwargs):
         calls.append("working")
-        return None
 
     def _done(*_args, **_kwargs):
         calls.append("done")
-        return None
 
     monkeypatch.setattr(docflow_server.build_browse_index, "rebuild_browse_for_path", _browse)
     monkeypatch.setattr(docflow_server.build_working_index, "write_site_working_index", _working)
@@ -517,11 +515,9 @@ def test_api_to_done_from_working_rebuilds_only_working_and_done(tmp_path: Path,
 
     def _working(*_args, **_kwargs):
         calls.append("working")
-        return None
 
     def _done(*_args, **_kwargs):
         calls.append("done")
-        return None
 
     monkeypatch.setattr(docflow_server.build_browse_index, "rebuild_browse_for_path", _browse)
     monkeypatch.setattr(docflow_server.build_working_index, "write_site_working_index", _working)

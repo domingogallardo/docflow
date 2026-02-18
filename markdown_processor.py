@@ -37,23 +37,6 @@ class MarkdownProcessor:
             context="📝 Processing Markdown files...",
         )
 
-    def process_markdown_subset(self, markdown_files: Iterable[Path]) -> List[Path]:
-        """Process a specific Markdown subset (for example, newly downloaded tweets)."""
-        selected: List[Path] = []
-        for raw_path in markdown_files:
-            path = Path(raw_path)
-            if self._is_generic_markdown(path):
-                selected.append(path)
-
-        if not selected:
-            print("📝 No valid Markdown files to process")
-            return []
-
-        return self._process_markdown_batch(
-            selected,
-            context=f"📝 Processing {len(selected)} selected Markdown file(s)...",
-        )
-
     def process_tweet_markdown_subset(self, markdown_files: Iterable[Path]) -> List[Path]:
         """Process a specific tweet Markdown subset (for example, newly downloaded tweets)."""
         selected: List[Path] = []

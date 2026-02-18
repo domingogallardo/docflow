@@ -144,9 +144,8 @@ class InstapaperProcessor:
                 moved_posts = self._move_files_to_destination(posts)
                 print(f"📄 {len(moved_posts)} post(s) moved to {self.destination_dir}")
                 return moved_posts
-            else:
-                print("📄 No processed posts found to move")
-                return []
+            print("📄 No processed posts found to move")
+            return []
                 
         except Exception as e:
             print(f"❌ Error processing Instapaper: {e}")
@@ -405,8 +404,7 @@ class InstapaperProcessor:
         if head_tag:
             insert_pos = head_tag.end()
             return content[:insert_pos] + "\n" + meta_tag + content[insert_pos:]
-        else:
-            return meta_tag + content
+        return meta_tag + content
 
     def _reduce_images_width(self):
         """Reduce image widths in HTML files without remote measurement.

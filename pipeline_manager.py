@@ -85,7 +85,7 @@ class DocumentProcessor:
 
         fresh_likes = [like for like in likes if like.url not in processed_set]
         fresh_url_set = {like.url for like in fresh_likes}
-        retry_urls = [url for url in pending_failed.keys() if url not in fresh_url_set]
+        retry_urls = [url for url in pending_failed if url not in fresh_url_set]
 
         if not fresh_likes and not retry_urls:
             self._write_failed_urls(list(pending_failed.keys()))

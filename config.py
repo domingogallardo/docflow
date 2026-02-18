@@ -23,13 +23,8 @@ def get_default_year() -> int:
     return _system_year()
 
 
-YEAR = get_default_year()
-
 BASE_DIR = Path("/Users/domingo/⭐️ Documentación")
 INCOMING = BASE_DIR / "Incoming"
-POSTS_DEST = BASE_DIR / "Posts" / f"Posts {YEAR}"
-PDFS_DEST = BASE_DIR / "Pdfs" / f"Pdfs {YEAR}"
-PODCASTS_DEST = BASE_DIR / "Podcasts" / f"Podcasts {YEAR}"
 PROCESSED_HISTORY = INCOMING / "processed_history.txt"
 
 OPENAI_KEY = os.getenv("OPENAI_API_KEY")

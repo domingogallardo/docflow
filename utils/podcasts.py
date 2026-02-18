@@ -10,7 +10,7 @@ from utils.markdown_utils import split_front_matter
 def is_podcast_file(file_path: Path) -> bool:
     """Detect whether an MD file is a Snipd-exported podcast."""
     try:
-        if not file_path.suffix.lower() == '.md':
+        if file_path.suffix.lower() != '.md':
             return False
         content = file_path.read_text(encoding="utf-8", errors="ignore")
         meta, _ = split_front_matter(content)

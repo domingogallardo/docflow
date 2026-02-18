@@ -57,16 +57,6 @@ def front_matter_meta_tags(meta: dict[str, str]) -> str:
     return "\n".join(tags) + ("\n" if tags else "")
 
 
-def _extract_front_matter(md_text: str) -> tuple[dict[str, str], str]:
-    """Backward-compatible wrapper for split_front_matter."""
-    return split_front_matter(md_text)
-
-
-def _front_matter_meta_tags(meta: dict[str, str]) -> str:
-    """Backward-compatible wrapper for front_matter_meta_tags."""
-    return front_matter_meta_tags(meta)
-
-
 def clean_duplicate_markdown_links(text: str) -> str:
     """Clean Markdown links where the text and URL are identical."""
     duplicate_link_pattern = r'\[(https?://[^\]]+)\]\(\1\)'
@@ -140,9 +130,7 @@ def convert_newlines_to_br(html_text: str) -> str:
 
     html_text = re.sub(r'(<p[^>]*>)(.*?)(</p>)', replace_in_content, html_text, flags=re.DOTALL)
     html_text = re.sub(r'(<li[^>]*>)(.*?)(</li>)', replace_in_content, html_text, flags=re.DOTALL)
-    html_text = re.sub(r'(<div[^>]*>)(.*?)(</div>)', replace_in_content, html_text, flags=re.DOTALL)
-
-    return html_text
+    return re.sub(r'(<div[^>]*>)(.*?)(</div>)', replace_in_content, html_text, flags=re.DOTALL)
 
 
 def markdown_to_html(md_text: str, title: str = None) -> str:
@@ -174,7 +162,7 @@ def markdown_to_html(md_text: str, title: str = None) -> str:
 
     title_tag = f"<title>{title}</title>\n" if title else ""
     meta_tags = front_matter_meta_tags(front_matter)
-    full_html = (
+    return (
         "<!DOCTYPE html>\n"
         "<html>\n<head>\n<meta charset=\"UTF-8\">\n"
         f"{meta_tags}"
@@ -183,8 +171,6 @@ def markdown_to_html(md_text: str, title: str = None) -> str:
         f"{html_body}\n"
         "</body>\n</html>\n"
     )
-
-    return full_html
 
 
 def extract_html_body(html: str) -> str:

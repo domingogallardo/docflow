@@ -326,8 +326,7 @@ def test_podcast_processor_splits_multi_episode_file(tmp_path):
     # Check expected names (sanitized as in utils.extract_episode_title).
     def sanitize(filename: str) -> str:
         s = re.sub(r'[<>:\"/\\|?*#]', '', filename)
-        s = re.sub(r"\s+", " ", s).strip()
-        return s
+        return re.sub(r"\s+", " ", s).strip()
 
     expected1 = sanitize("Upgrade - 579: The 2025 September Event Draft")
     expected2 = sanitize("The Last Theory - Black holes in the hypergraph with Stephen Wolfram")

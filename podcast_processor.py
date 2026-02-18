@@ -3,6 +3,7 @@
 PodcastProcessor - unified module for full processing of Snipd podcasts.
 """
 from __future__ import annotations
+from contextlib import suppress
 import re
 import unicodedata
 from pathlib import Path
@@ -106,10 +107,8 @@ class PodcastProcessor:
                     new_files.append(out_path)
 
                 # Delete the original file after creating all new ones.
-                try:
+                with suppress(Exception):
                     md_file.unlink()
-                except Exception:
-                    pass  # do not block if delete fails
 
                 print(f"✂️  Split: {md_file.name} → {len(new_files)} files")
 

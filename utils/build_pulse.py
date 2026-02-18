@@ -57,8 +57,7 @@ def _read_url(md_path: Path) -> str:
         return ""
     try:
         with candidate.open("r", encoding="utf-8") as fh:
-            first = fh.readline().strip()
-            return first
+            return fh.readline().strip()
     except UnicodeDecodeError:
         return ""
 
@@ -270,16 +269,14 @@ def _parse_summary_sections(text: str) -> tuple[List[str], List[str]]:
         trimmed = re.sub(r"^(?:H|h)[1-6]\s*[.:)\-–—]*\s*", "", trimmed)
         trimmed = re.sub(r"^(?:Level\s*\d+)\s*[:)\-–—]*\s*", "", trimmed)
         trimmed = trimmed.strip("• ").strip()
-        trimmed = trimmed.rstrip("|").rstrip().rstrip(".").strip()
-        return trimmed
+        return trimmed.rstrip("|").rstrip().rstrip(".").strip()
 
     for raw_line in cleaned.split("\n"):
         line = raw_line.strip()
         if not line:
-            if not in_sections:
-                # Keep paragraph separation.
-                if summary_lines and summary_lines[-1] != "":
-                    summary_lines.append("")
+            # Keep paragraph separation.
+            if not in_sections and summary_lines and summary_lines[-1] != "":
+                summary_lines.append("")
             continue
 
         lowered = line.lower()

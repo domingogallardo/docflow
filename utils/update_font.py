@@ -55,10 +55,7 @@ def update_font_in_html(html_file: Path) -> bool:
                             if re.search(body_pattern, css_content):
                                 def add_font_to_body(match):
                                     body_rule = match.group(1)
-                                    if body_rule.endswith('{'):
-                                        return f"{body_rule} font-family: {SYSTEM_FONT};"
-                                    else:
-                                        return f"{body_rule} font-family: {SYSTEM_FONT};"
+                                    return f"{body_rule} font-family: {SYSTEM_FONT};"
                                 
                                 new_css = re.sub(body_pattern, add_font_to_body, css_content)
                                 style_tag.string = new_css

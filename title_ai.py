@@ -59,8 +59,7 @@ class TitleAIUpdater:
                 lang = self._detect_language(lang_probe)
                 new_title = self._generate_title(snippet, lang, old_title)
                 print(f"📄 {old_title} → {new_title} [{lang}]")
-
-                md_final = rename_pair(md_file, new_title)
+                rename_pair(md_file, new_title)
                 time.sleep(self.delay_seconds)
 
             except Exception as exc:  # pragma: no cover - logs for manual tracking
@@ -376,5 +375,4 @@ def rename_markdown_pair(md_path: Path, new_title: str) -> Path:
 def _safe_filename(name: str) -> str:
     cleaned = re.sub(r'[<>:"/\\|?*#]', '', name).strip()
     cleaned = re.sub(r"\s+", " ", cleaned)
-    cleaned = cleaned[:240] or "markdown"
-    return cleaned
+    return cleaned[:240] or "markdown"

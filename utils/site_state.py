@@ -138,10 +138,6 @@ def pop_working_path(base_dir: Path, rel_path: str) -> dict[str, Any] | None:
     return value
 
 
-def clear_working_path(base_dir: Path, rel_path: str) -> bool:
-    return pop_working_path(base_dir, rel_path) is not None
-
-
 def is_working(base_dir: Path, rel_path: str) -> bool:
     key = normalize_rel_path(rel_path)
     return key in list_working(base_dir)
@@ -190,8 +186,3 @@ def get_bumped_entry(base_dir: Path, rel_path: str) -> dict[str, Any] | None:
     items: dict[str, dict[str, Any]] = state["items"]
     value = items.get(key)
     return value if isinstance(value, dict) else None
-
-
-def list_bumped(base_dir: Path) -> set[str]:
-    state = load_bump_state(base_dir)
-    return set(state.get("items", {}).keys())

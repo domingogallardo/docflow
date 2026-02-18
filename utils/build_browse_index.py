@@ -56,7 +56,6 @@ class BrowseItem:
     name: str
     mtime: float
     working: bool
-    done: bool
     bumped: bool
     highlighted: bool
     sort_mtime: float | None = None
@@ -904,7 +903,6 @@ def collect_category_items(base_dir: Path, category: str) -> list[BrowseItem]:
                 mtime=display_mtime,
                 sort_mtime=effective_mtime,
                 working=is_working,
-                done=is_done,
                 bumped=is_bumped,
                 highlighted=_is_highlighted(base_dir, rel),
             )

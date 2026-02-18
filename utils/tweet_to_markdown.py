@@ -542,10 +542,7 @@ def _has_thread_marker(article) -> bool:
         link_texts = article.locator("a").all_text_contents()
     except Exception:
         return False
-    for text in link_texts:
-        if THREAD_MARKER_RE.search(text or ""):
-            return True
-    return False
+    return any(THREAD_MARKER_RE.search(text or "") for text in link_texts)
 
 
 def _select_thread_indices(
@@ -602,9 +599,8 @@ def _is_numeric_stat(line: str) -> bool:
         return True
     if STAT_NUMBER_RE.match(line):
         return True
-    if line.lower().startswith("read ") and "repl" in line.lower():
-        return True
-    return False
+    lower = line.lower()
+    return lower.startswith("read ") and "repl" in lower
 
 
 def _is_show_more_line(line: str) -> bool:
@@ -1200,51 +1196,6 @@ def _build_single_tweet_markdown(parts: TweetParts, tweet_url: str) -> str:
     return "\n".join(md_lines).strip() + "\n"
 
 
-def fetch_tweet_markdown(
-    url: str,
-    *,
-    headless: bool = True,
-    storage_state: Path | None = None,
-) -> tuple[str, str]:
-    """Return (markdown, filename) for the given tweet."""
-    if sync_playwright is None:
-        raise RuntimeError(
-            "playwright is not installed. Run 'pip install playwright' and "
-            "'playwright install chromium' to use this tool."
-        )
-    with sync_playwright() as playwright:
-        browser = playwright.chromium.launch(headless=headless)
-        state_path = _resolve_storage_state(storage_state)
-        context_kwargs = {"user_agent": USER_AGENT}
-        if state_path:
-            # Use an authenticated session to avoid X's login wall.
-            context_kwargs["storage_state"] = str(state_path)
-        context = browser.new_context(**context_kwargs)
-        if state_path:
-            # Reinforce the context against X's login wall.
-            context.add_init_script(STEALTH_SNIPPET)
-        page = context.new_page()
-        quoted_status = _attach_quoted_status_listener(page)
-        page.goto(url, wait_until="domcontentloaded", timeout=60000)
-        _wait_with_log(page, WAIT_MS, "load the tweet")
-        _raise_if_access_issue(page)
-
-        article = _locate_tweet_article(page, url)
-        if article is None:
-            _raise_if_access_issue(page)
-            raise RuntimeError(
-                "Could not find the post <article>. "
-                "It may require login or be unavailable."
-            )
-
-        parts = _extract_tweet_parts(article, url, page=page, quoted_status_id=quoted_status["id"])
-        filename = _build_filename(url, parts.author_handle)
-        markdown = _build_single_tweet_markdown(parts, url)
-
-        browser.close()
-        return markdown, filename
-
-
 def fetch_tweet_thread_markdown(
     url: str,
     *,
@@ -1354,9 +1305,8 @@ def fetch_tweet_thread_markdown(
             anchor_time_datetime=effective_time_datetime,
         )
 
-        if thread_ids and target_id:
-            if target_id in thread_ids:
-                target_idx = thread_ids.index(target_id)
+        if thread_ids and target_id and target_id in thread_ids:
+            target_idx = thread_ids.index(target_id)
         if thread_ids and len(thread_ids) > len(selected_indices):
             primary_handle = effective_author_handle
             handle_slug = (primary_handle or "").lstrip("@")

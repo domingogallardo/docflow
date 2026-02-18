@@ -306,6 +306,7 @@ def _is_metric_tail_line(line: str) -> bool:
         return False
 
     lowered = stripped.lower()
+    metric_only = _is_metric_only_line(stripped)
     if stripped == "·":
         return True
     if METRIC_NUMBER_RE.match(stripped):
@@ -323,22 +324,19 @@ def _is_metric_tail_line(line: str) -> bool:
         "marcadores",
         "respuestas",
     )
-    if _is_metric_only_line(stripped) and any(token in lowered for token in metric_keywords):
+    if metric_only and any(token in lowered for token in metric_keywords):
         return True
-    if _is_metric_only_line(stripped) and ("views" in lowered or "visualizaciones" in lowered):
+    if metric_only and ("views" in lowered or "visualizaciones" in lowered):
         return True
-    if _is_metric_only_line(stripped) and ("relevant" in lowered or "relevante" in lowered):
+    if metric_only and ("relevant" in lowered or "relevante" in lowered):
         return True
 
     # Typical timestamp/date line shown before the metrics block.
-    if (
-        _is_metric_only_line(stripped)
+    return bool(
+        metric_only
         and METRIC_TIME_RE.search(stripped)
         and ("am" in lowered or "pm" in lowered or "·" in stripped)
-    ):
-        return True
-
-    return False
+    )
 
 
 def _is_metric_only_line(line: str) -> bool:
@@ -401,19 +399,16 @@ def _looks_like_metric_timestamp(line: str) -> bool:
     lowered = stripped.lower()
     if not stripped:
         return False
-    if (
-        _is_metric_only_line(stripped)
-        and METRIC_TIME_RE.search(stripped)
-        and ("am" in lowered or "pm" in lowered or "·" in stripped)
-    ):
+    metric_time = _is_metric_only_line(stripped) and METRIC_TIME_RE.search(stripped)
+    if not metric_time:
+        return False
+    if "am" in lowered or "pm" in lowered or "·" in stripped:
         return True
     months = ("jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec",
               "ene", "abr", "ago", "dic")
-    if _is_metric_only_line(stripped) and METRIC_TIME_RE.search(stripped) and any(mon in lowered for mon in months):
+    if any(mon in lowered for mon in months):
         return True
-    if _is_metric_only_line(stripped) and METRIC_TIME_RE.search(stripped) and re.search(r"\b20\d{2}\b", lowered):
-        return True
-    return False
+    return re.search(r"\b20\d{2}\b", lowered) is not None
 
 
 def _has_metrics_ahead(lines: list[str], start: int, lookahead: int = 8) -> bool:

@@ -338,7 +338,7 @@ def test_wait_for_tweet_detail_returns_payload():
         def __enter__(self):
             return self
 
-        def __exit__(self, exc_type, exc, tb):
+        def __exit__(self, _exc_type, _exc, _tb):
             return False
 
     class FakePage:
@@ -373,7 +373,7 @@ def test_wait_for_tweet_detail_returns_none_on_bad_json():
         def __enter__(self):
             return self
 
-        def __exit__(self, exc_type, exc, tb):
+        def __exit__(self, _exc_type, _exc, _tb):
             return False
 
     class FakePage:
