@@ -1,4 +1,4 @@
-"""Persistent local state for published and bumped entries."""
+"""Persistent local state for done, working, and bumped entries."""
 
 from __future__ import annotations
 
@@ -9,7 +9,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from utils.site_paths import bump_state_path, normalize_rel_path, published_state_path, working_state_path
+from utils.site_paths import bump_state_path, done_state_path, normalize_rel_path, working_state_path
 
 STATE_VERSION = 1
 
@@ -64,12 +64,12 @@ def _write_state(path: Path, state: dict[str, Any]) -> None:
             os.remove(tmp_name)
 
 
-def load_published_state(base_dir: Path) -> dict[str, Any]:
-    return _read_state(published_state_path(base_dir))
+def load_done_state(base_dir: Path) -> dict[str, Any]:
+    return _read_state(done_state_path(base_dir))
 
 
-def save_published_state(base_dir: Path, state: dict[str, Any]) -> None:
-    _write_state(published_state_path(base_dir), state)
+def save_done_state(base_dir: Path, state: dict[str, Any]) -> None:
+    _write_state(done_state_path(base_dir), state)
 
 
 def load_working_state(base_dir: Path) -> dict[str, Any]:
@@ -80,8 +80,8 @@ def save_working_state(base_dir: Path, state: dict[str, Any]) -> None:
     _write_state(working_state_path(base_dir), state)
 
 
-def list_published(base_dir: Path) -> set[str]:
-    state = load_published_state(base_dir)
+def list_done(base_dir: Path) -> set[str]:
+    state = load_done_state(base_dir)
     return set(state.get("items", {}).keys())
 
 
@@ -90,31 +90,31 @@ def list_working(base_dir: Path) -> set[str]:
     return set(state.get("items", {}).keys())
 
 
-def publish_path(base_dir: Path, rel_path: str) -> bool:
+def set_done_path(base_dir: Path, rel_path: str) -> bool:
     key = normalize_rel_path(rel_path)
-    state = load_published_state(base_dir)
+    state = load_done_state(base_dir)
     items: dict[str, dict[str, Any]] = state["items"]
     already = key in items
     if not already:
-        items[key] = {"published_at": _utc_now_iso()}
-        save_published_state(base_dir, state)
+        items[key] = {"done_at": _utc_now_iso()}
+        save_done_state(base_dir, state)
     return not already
 
 
-def unpublish_path(base_dir: Path, rel_path: str) -> bool:
+def clear_done_path(base_dir: Path, rel_path: str) -> bool:
     key = normalize_rel_path(rel_path)
-    state = load_published_state(base_dir)
+    state = load_done_state(base_dir)
     items: dict[str, dict[str, Any]] = state["items"]
     if key not in items:
         return False
     items.pop(key, None)
-    save_published_state(base_dir, state)
+    save_done_state(base_dir, state)
     return True
 
 
-def is_published(base_dir: Path, rel_path: str) -> bool:
+def is_done(base_dir: Path, rel_path: str) -> bool:
     key = normalize_rel_path(rel_path)
-    return key in list_published(base_dir)
+    return key in list_done(base_dir)
 
 
 def set_working_path(base_dir: Path, rel_path: str) -> bool:

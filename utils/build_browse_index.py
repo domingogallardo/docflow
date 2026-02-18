@@ -33,7 +33,7 @@ from utils.site_paths import (
     site_root,
 )
 from utils.highlight_store import has_highlights_for_path
-from utils.site_state import load_bump_state, load_published_state, load_working_state
+from utils.site_state import load_bump_state, load_done_state, load_working_state
 
 CATEGORY_KEYS = ("posts", "tweets", "podcasts", "pdfs", "images")
 CATEGORY_LABELS = {
@@ -56,7 +56,7 @@ class BrowseItem:
     name: str
     mtime: float
     working: bool
-    published: bool
+    done: bool
     bumped: bool
     highlighted: bool
     sort_mtime: float | None = None
@@ -71,7 +71,7 @@ class BrowseEntry:
     icon: str
     rel_path: str | None = None
     working: bool = False
-    published: bool = False
+    done: bool = False
     bumped: bool = False
     highlighted: bool = False
     sort_mtime: float | None = None
@@ -119,8 +119,8 @@ def _entry_classes(entry: BrowseEntry) -> str:
         classes.append("dg-bump")
     if entry.working:
         classes.append("dg-work")
-    if entry.published:
-        classes.append("dg-pub")
+    if entry.done:
+        classes.append("dg-done")
     if entry.highlighted:
         classes.append("dg-hl")
     return f' class="{" ".join(classes)}"' if classes else ""
@@ -132,7 +132,7 @@ def _actions_html(entry: BrowseEntry) -> str:
     if not entry.name.lower().endswith(".pdf"):
         return ""
 
-    if entry.published:
+    if entry.done:
         stage_buttons = [("reopen", "Reopen"), ("to-browse", "Back to Browse")]
     elif entry.working:
         stage_buttons = [("to-done", "Move to Done"), ("to-browse", "Back to Browse")]
@@ -144,7 +144,7 @@ def _actions_html(entry: BrowseEntry) -> str:
         f"<button class='dg-act' data-api-action=\"{action}\" data-docflow-path=\"{path_attr}\">{label}</button>"
         for action, label in stage_buttons
     )
-    if not entry.published and not entry.working:
+    if not entry.done and not entry.working:
         bump_action = "unbump" if entry.bumped else "bump"
         bump_label = "Unbump" if entry.bumped else "Bump"
         button_html += f"<button class='dg-act' data-api-action=\"{bump_action}\" data-docflow-path=\"{path_attr}\">{bump_label}</button>"
@@ -170,7 +170,7 @@ def _render_entry(entry: BrowseEntry) -> str:
         "data-dg-sortable='1'",
         f"data-dg-bumped='{'1' if entry.bumped else '0'}'",
         f"data-dg-working='{'1' if entry.working else '0'}'",
-        f"data-dg-done='{'1' if entry.published else '0'}'",
+        f"data-dg-done='{'1' if entry.done else '0'}'",
         f"data-dg-highlighted='{'1' if entry.highlighted else '0'}'",
         f"data-dg-sort-mtime='{_sort_mtime(entry):.6f}'",
         f"data-dg-name='{html.escape(entry.name.lower(), quote=True)}'",
@@ -188,7 +188,7 @@ def _sort_mtime(entry: BrowseEntry) -> float:
     return entry.mtime
 
 
-def _published_at_to_epoch(value: object) -> float | None:
+def _iso_to_epoch(value: object) -> float | None:
     if not isinstance(value, str):
         return None
 
@@ -281,7 +281,7 @@ def _dir_has_visible_entries(
     *,
     base_dir: Path,
     working_items: dict[str, dict],
-    published_items: dict[str, dict],
+    done_items: dict[str, dict],
 ) -> bool:
     key = str(path.resolve())
     cached = cache.get(key)
@@ -304,7 +304,7 @@ def _dir_has_visible_entries(
                             cache,
                             base_dir=base_dir,
                             working_items=working_items,
-                            published_items=published_items,
+                            done_items=done_items,
                         ):
                             cache[key] = True
                             return True
@@ -314,7 +314,7 @@ def _dir_has_visible_entries(
                                 rel = rel_path_from_abs(base_dir, Path(entry.path))
                             except Exception:
                                 continue
-                            if rel in working_items or rel in published_items:
+                            if rel in working_items or rel in done_items:
                                 continue
                             cache[key] = True
                             return True
@@ -334,7 +334,7 @@ def _count_visible_files(
     *,
     base_dir: Path,
     working_items: dict[str, dict],
-    published_items: dict[str, dict],
+    done_items: dict[str, dict],
 ) -> int:
     key = str(path.resolve())
     cached = cache.get(key)
@@ -357,7 +357,7 @@ def _count_visible_files(
                             cache,
                             base_dir=base_dir,
                             working_items=working_items,
-                            published_items=published_items,
+                            done_items=done_items,
                         )
                     else:
                         if _is_visible_file_name(name):
@@ -365,7 +365,7 @@ def _count_visible_files(
                                 rel = rel_path_from_abs(base_dir, Path(entry.path))
                             except Exception:
                                 continue
-                            if rel in working_items or rel in published_items:
+                            if rel in working_items or rel in done_items:
                                 continue
                             total += 1
                 except OSError:
@@ -385,7 +385,7 @@ def _annotate_root_year_counts(
     entries: list[BrowseEntry],
     base_dir: Path,
     working_items: dict[str, dict],
-    published_items: dict[str, dict],
+    done_items: dict[str, dict],
 ) -> list[BrowseEntry]:
     if rel_dir != Path(".") or category not in YEAR_COUNT_CATEGORIES:
         return entries
@@ -400,7 +400,7 @@ def _annotate_root_year_counts(
                 count_cache,
                 base_dir=base_dir,
                 working_items=working_items,
-                published_items=published_items,
+                done_items=done_items,
             )
             annotated.append(replace(entry, item_count=item_count))
             continue
@@ -454,7 +454,7 @@ def _scan_directory(
     base_dir: Path,
     abs_dir: Path,
     working_items: dict[str, dict],
-    published_items: dict[str, dict],
+    done_items: dict[str, dict],
     bump_items: dict[str, dict],
     visibility_cache: dict[str, bool],
 ) -> tuple[list[BrowseEntry], list[str], int]:
@@ -484,7 +484,7 @@ def _scan_directory(
                             visibility_cache,
                             base_dir=base_dir,
                             working_items=working_items,
-                            published_items=published_items,
+                            done_items=done_items,
                         ):
                             continue
 
@@ -509,14 +509,14 @@ def _scan_directory(
                 abs_path = Path(fs_entry.path)
                 rel = rel_path_from_abs(base_dir, abs_path)
                 is_working = rel in working_items
-                published_entry = published_items.get(rel)
-                published_at_mtime = None
-                if isinstance(published_entry, dict):
-                    published_at_mtime = _published_at_to_epoch(published_entry.get("published_at"))
-                is_published = rel in published_items
-                if is_published:
+                done_entry = done_items.get(rel)
+                done_at_mtime = None
+                if isinstance(done_entry, dict):
+                    done_at_mtime = _iso_to_epoch(done_entry.get("done_at"))
+                is_done = rel in done_items
+                if is_done:
                     is_working = False
-                if is_working or is_published:
+                if is_working or is_done:
                     continue
 
                 file_count += 1
@@ -532,10 +532,10 @@ def _scan_directory(
                 effective_mtime = bumped_mtime
                 if effective_mtime is None:
                     if is_working and isinstance(working_items.get(rel), dict):
-                        working_at_mtime = _published_at_to_epoch(working_items.get(rel, {}).get("working_at"))
+                        working_at_mtime = _iso_to_epoch(working_items.get(rel, {}).get("working_at"))
                         effective_mtime = working_at_mtime if working_at_mtime is not None else display_mtime
-                    elif is_published and published_at_mtime is not None:
-                        effective_mtime = published_at_mtime
+                    elif is_done and done_at_mtime is not None:
+                        effective_mtime = done_at_mtime
                     else:
                         effective_mtime = display_mtime
                 bumped = bumped_mtime is not None
@@ -549,7 +549,7 @@ def _scan_directory(
                         icon=_icon_for_filename(name),
                         rel_path=rel,
                         working=False,
-                        published=False,
+                        done=False,
                         bumped=bumped,
                         highlighted=_is_highlighted(base_dir, rel),
                     )
@@ -569,7 +569,7 @@ def _write_category_directory_page(
     category_root: Path,
     rel_dir: Path,
     working_items: dict[str, dict],
-    published_items: dict[str, dict],
+    done_items: dict[str, dict],
     bump_items: dict[str, dict],
     visibility_cache: dict[str, bool],
 ) -> tuple[list[str], int]:
@@ -584,7 +584,7 @@ def _write_category_directory_page(
         base_dir=base_dir,
         abs_dir=abs_dir,
         working_items=working_items,
-        published_items=published_items,
+        done_items=done_items,
         bump_items=bump_items,
         visibility_cache=visibility_cache,
     )
@@ -597,7 +597,7 @@ def _write_category_directory_page(
         entries=entries,
         base_dir=base_dir,
         working_items=working_items,
-        published_items=published_items,
+        done_items=done_items,
     )
     display_path = _display_path_for_category_dir(category, rel_dir)
     html_doc = _render_directory_page(
@@ -643,7 +643,7 @@ def _write_category_tree(
     category: str,
     category_root: Path,
     working_items: dict[str, dict],
-    published_items: dict[str, dict],
+    done_items: dict[str, dict],
     bump_items: dict[str, dict],
 ) -> int:
     visibility_cache: dict[str, bool] = {}
@@ -655,7 +655,7 @@ def _write_category_tree(
             category_root=category_root,
             rel_dir=rel_dir,
             working_items=working_items,
-            published_items=published_items,
+            done_items=done_items,
             bump_items=bump_items,
             visibility_cache=visibility_cache,
         )
@@ -882,9 +882,9 @@ def collect_category_items(base_dir: Path, category: str) -> list[BrowseItem]:
     if not root.is_dir():
         return []
 
-    published_state = load_published_state(base_dir)
-    published_state_items = published_state.get("items", {})
-    published_items = published_state_items if isinstance(published_state_items, dict) else {}
+    done_state = load_done_state(base_dir)
+    done_state_items = done_state.get("items", {})
+    done_items = done_state_items if isinstance(done_state_items, dict) else {}
     working_state = load_working_state(base_dir)
     working_state_items = working_state.get("items", {})
     working_items = working_state_items if isinstance(working_state_items, dict) else {}
@@ -904,12 +904,12 @@ def collect_category_items(base_dir: Path, category: str) -> list[BrowseItem]:
         rel = rel_path_from_abs(base_dir, path)
         is_working = rel in working_items
         st = path.stat()
-        published_entry = published_items.get(rel)
-        published_at_mtime = None
-        if isinstance(published_entry, dict):
-            published_at_mtime = _published_at_to_epoch(published_entry.get("published_at"))
-        is_published = rel in published_items
-        if is_published:
+        done_entry = done_items.get(rel)
+        done_at_mtime = None
+        if isinstance(done_entry, dict):
+            done_at_mtime = _iso_to_epoch(done_entry.get("done_at"))
+        is_done = rel in done_items
+        if is_done:
             is_working = False
 
         bump_entry = bump_items.get(rel)
@@ -923,13 +923,13 @@ def collect_category_items(base_dir: Path, category: str) -> list[BrowseItem]:
         effective_mtime = bumped_mtime
         if effective_mtime is None:
             if is_working and isinstance(working_items.get(rel), dict):
-                working_at_mtime = _published_at_to_epoch(working_items.get(rel, {}).get("working_at"))
+                working_at_mtime = _iso_to_epoch(working_items.get(rel, {}).get("working_at"))
                 effective_mtime = working_at_mtime if working_at_mtime is not None else display_mtime
-            elif is_published and published_at_mtime is not None:
-                effective_mtime = published_at_mtime
+            elif is_done and done_at_mtime is not None:
+                effective_mtime = done_at_mtime
             else:
                 effective_mtime = display_mtime
-        is_bumped = bumped_mtime is not None and not is_working and not is_published
+        is_bumped = bumped_mtime is not None and not is_working and not is_done
         items.append(
             BrowseItem(
                 rel_path=rel,
@@ -937,7 +937,7 @@ def collect_category_items(base_dir: Path, category: str) -> list[BrowseItem]:
                 mtime=display_mtime,
                 sort_mtime=effective_mtime,
                 working=is_working,
-                published=is_published,
+                done=is_done,
                 bumped=is_bumped,
                 highlighted=_is_highlighted(base_dir, rel),
             )
@@ -987,9 +987,9 @@ def rebuild_browse_for_path(base_dir: Path, rel_path: str) -> dict[str, object]:
     working_state = load_working_state(base_dir)
     working_state_items = working_state.get("items", {})
     working_items = working_state_items if isinstance(working_state_items, dict) else {}
-    published_state = load_published_state(base_dir)
-    published_state_items = published_state.get("items", {})
-    published_items = published_state_items if isinstance(published_state_items, dict) else {}
+    done_state = load_done_state(base_dir)
+    done_state_items = done_state.get("items", {})
+    done_items = done_state_items if isinstance(done_state_items, dict) else {}
     bump_state = load_bump_state(base_dir)
     bump_items = bump_state.get("items", {}) if isinstance(bump_state.get("items", {}), dict) else {}
     roots = _category_roots(base_dir)
@@ -1015,7 +1015,7 @@ def rebuild_browse_for_path(base_dir: Path, rel_path: str) -> dict[str, object]:
             category_root=category_root,
             rel_dir=target_rel_dir,
             working_items=working_items,
-            published_items=published_items,
+            done_items=done_items,
             bump_items=bump_items,
             visibility_cache=visibility_cache,
         )
@@ -1035,9 +1035,9 @@ def build_browse_site(base_dir: Path) -> dict[str, int]:
     working_state = load_working_state(base_dir)
     working_state_items = working_state.get("items", {})
     working_items = working_state_items if isinstance(working_state_items, dict) else {}
-    published_state = load_published_state(base_dir)
-    published_state_items = published_state.get("items", {})
-    published_items = published_state_items if isinstance(published_state_items, dict) else {}
+    done_state = load_done_state(base_dir)
+    done_state_items = done_state.get("items", {})
+    done_items = done_state_items if isinstance(done_state_items, dict) else {}
     bump_state = load_bump_state(base_dir)
     bump_items = bump_state.get("items", {}) if isinstance(bump_state.get("items", {}), dict) else {}
     roots = _category_roots(base_dir)
@@ -1049,7 +1049,7 @@ def build_browse_site(base_dir: Path) -> dict[str, int]:
             category=category,
             category_root=roots[category],
             working_items=working_items,
-            published_items=published_items,
+            done_items=done_items,
             bump_items=bump_items,
         )
 

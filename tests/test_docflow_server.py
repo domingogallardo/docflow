@@ -9,7 +9,7 @@ from pathlib import Path
 from urllib.parse import quote
 
 from utils import docflow_server
-from utils.site_state import get_bumped_entry, is_published, is_working
+from utils.site_state import get_bumped_entry, is_done, is_working
 
 
 def _start_server(base_dir: Path) -> tuple[ThreadingHTTPServer, int]:
@@ -69,7 +69,7 @@ def _put_json(port: int, path: str, payload: dict[str, object]) -> tuple[int, di
         conn.close()
 
 
-def test_api_publish_alias_moves_to_done_listing(tmp_path: Path):
+def test_api_to_done_moves_to_done_listing(tmp_path: Path):
     base = tmp_path / "base"
     posts = base / "Posts" / "Posts 2026"
     posts.mkdir(parents=True)
@@ -78,10 +78,10 @@ def test_api_publish_alias_moves_to_done_listing(tmp_path: Path):
 
     server, port = _start_server(base)
     try:
-        status, payload = _post_json(port, "/api/publish", {"path": "Posts/Posts 2026/doc.html"})
+        status, payload = _post_json(port, "/api/to-done", {"path": "Posts/Posts 2026/doc.html"})
         assert status == 200
         assert payload["ok"] is True
-        assert is_published(base, "Posts/Posts 2026/doc.html") is True
+        assert is_done(base, "Posts/Posts 2026/doc.html") is True
         assert is_working(base, "Posts/Posts 2026/doc.html") is False
 
         working_status, working_html = _get(port, "/working/")
@@ -110,14 +110,14 @@ def test_api_stage_transitions_roundtrip(tmp_path: Path):
         assert payload["ok"] is True
         assert payload["data"]["stage"] == "working"
         assert is_working(base, rel) is True
-        assert is_published(base, rel) is False
+        assert is_done(base, rel) is False
 
         status, payload = _post_json(port, "/api/to-done", {"path": rel})
         assert status == 200
         assert payload["ok"] is True
         assert payload["data"]["stage"] == "done"
         assert is_working(base, rel) is False
-        assert is_published(base, rel) is True
+        assert is_done(base, rel) is True
 
         status, payload = _post_json(port, "/api/reopen", {"path": rel})
         assert status == 200
@@ -125,14 +125,14 @@ def test_api_stage_transitions_roundtrip(tmp_path: Path):
         assert payload["data"]["stage"] == "working"
         assert payload["data"]["transition"] == "reopen"
         assert is_working(base, rel) is True
-        assert is_published(base, rel) is False
+        assert is_done(base, rel) is False
 
         status, payload = _post_json(port, "/api/to-browse", {"path": rel})
         assert status == 200
         assert payload["ok"] is True
         assert payload["data"]["stage"] == "browse"
         assert is_working(base, rel) is False
-        assert is_published(base, rel) is False
+        assert is_done(base, rel) is False
     finally:
         server.shutdown()
         server.server_close()
@@ -234,7 +234,7 @@ def test_api_delete_removes_local_markdown_and_state_entries(tmp_path: Path):
 
         assert not html.exists()
         assert not md.exists()
-        assert is_published(base, rel_path) is False
+        assert is_done(base, rel_path) is False
         assert is_working(base, rel_path) is False
         assert get_bumped_entry(base, rel_path) is None
 
@@ -438,7 +438,7 @@ def test_raw_directory_route_redirects_to_browse(tmp_path: Path):
         server.server_close()
 
 
-def test_publish_does_not_rewrite_unrelated_browse_branch(tmp_path: Path):
+def test_to_done_does_not_rewrite_unrelated_browse_branch(tmp_path: Path):
     base = tmp_path / "base"
     posts_2025 = base / "Posts" / "Posts 2025"
     posts_2026 = base / "Posts" / "Posts 2026"
@@ -454,7 +454,7 @@ def test_publish_does_not_rewrite_unrelated_browse_branch(tmp_path: Path):
         untouched_mtime_before = untouched_page.stat().st_mtime
 
         time.sleep(1.1)
-        status, payload = _post_json(port, "/api/publish", {"path": "Posts/Posts 2026/new.html"})
+        status, payload = _post_json(port, "/api/to-done", {"path": "Posts/Posts 2026/new.html"})
         assert status == 200
         assert payload["ok"] is True
 

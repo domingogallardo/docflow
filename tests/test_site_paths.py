@@ -45,6 +45,6 @@ def test_resolve_base_dir_prefers_env(monkeypatch, tmp_path: Path):
 
 
 def test_state_paths_include_working_file(tmp_path: Path):
-    assert site_paths.published_state_path(tmp_path).name == "published.json"
+    assert site_paths.done_state_path(tmp_path).name == "done.json"
     assert site_paths.working_state_path(tmp_path).name == "working.json"
     assert site_paths.bump_state_path(tmp_path).name == "bump.json"

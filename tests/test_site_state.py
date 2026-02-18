@@ -3,20 +3,20 @@ from pathlib import Path
 from utils import site_state
 
 
-def test_publish_unpublish_roundtrip(tmp_path: Path):
+def test_done_roundtrip(tmp_path: Path):
     base = tmp_path / "base"
     base.mkdir()
 
-    changed = site_state.publish_path(base, "Posts/Posts 2026/doc.html")
+    changed = site_state.set_done_path(base, "Posts/Posts 2026/doc.html")
     assert changed is True
-    assert site_state.is_published(base, "Posts/Posts 2026/doc.html") is True
+    assert site_state.is_done(base, "Posts/Posts 2026/doc.html") is True
 
-    changed_again = site_state.publish_path(base, "Posts/Posts 2026/doc.html")
+    changed_again = site_state.set_done_path(base, "Posts/Posts 2026/doc.html")
     assert changed_again is False
 
-    removed = site_state.unpublish_path(base, "Posts/Posts 2026/doc.html")
+    removed = site_state.clear_done_path(base, "Posts/Posts 2026/doc.html")
     assert removed is True
-    assert site_state.is_published(base, "Posts/Posts 2026/doc.html") is False
+    assert site_state.is_done(base, "Posts/Posts 2026/doc.html") is False
 
 
 def test_bump_state_keeps_original_mtime(tmp_path: Path):

@@ -21,7 +21,7 @@ Static output under `BASE_DIR/_site`:
 Local state under `BASE_DIR/state`:
 
 - `working.json`
-- `published.json`
+- `done.json`
 - `bump.json`
 - `highlights/...`
 
@@ -33,8 +33,8 @@ Local state under `BASE_DIR/state`:
 - `browse` includes a top toggle button (`Highlights first`) to prioritize highlighted items dynamically.
 - `working`: curated list from `state/working.json`.
 - `working` ordering: by `working_at` (newest first).
-- `done`: curated list from `state/published.json`.
-- `done` ordering: by `published_at` (newest first).
+- `done`: curated list from `state/done.json`.
+- `done` ordering: by `done_at` (newest first).
 - Highlight marks (🟡) come from canonical local highlight state only.
 
 ## Bump semantics
@@ -54,8 +54,6 @@ Local state under `BASE_DIR/state`:
   - `POST /api/to-done`
   - `POST /api/to-browse`
   - `POST /api/reopen`
-  - `POST /api/publish`
-  - `POST /api/unpublish`
   - `POST /api/bump`
   - `POST /api/unbump`
   - `POST /api/delete`

@@ -41,14 +41,14 @@ from utils.site_paths import (
 )
 from utils.site_state import (
     get_bumped_entry,
-    is_published,
+    is_done,
     is_working,
     pop_bumped_path,
     pop_working_path,
-    publish_path,
+    set_done_path,
     set_bumped_path,
     set_working_path,
-    unpublish_path,
+    clear_done_path,
 )
 from utils.highlight_store import load_highlights_for_path, save_highlights_for_path
 
@@ -122,8 +122,6 @@ class DocflowApp:
         "to-done": "api_to_done",
         "to-browse": "api_to_browse",
         "reopen": "api_reopen",
-        "publish": "api_publish",
-        "unpublish": "api_unpublish",
         "bump": "api_bump",
         "unbump": "api_unbump",
         "delete": "api_delete",
@@ -197,7 +195,7 @@ class DocflowApp:
 
     def path_stage(self, rel_path: str) -> str:
         normalized = normalize_rel_path(rel_path)
-        if is_published(self.base_dir, normalized):
+        if is_done(self.base_dir, normalized):
             return "done"
         if is_working(self.base_dir, normalized):
             return "working"
@@ -208,7 +206,7 @@ class DocflowApp:
         self._require_existing_library_file(normalized)
         before_stage = self.path_stage(normalized)
         changed = set_working_path(self.base_dir, normalized)
-        changed = unpublish_path(self.base_dir, normalized) or changed
+        changed = clear_done_path(self.base_dir, normalized) or changed
         changed = (pop_bumped_path(self.base_dir, normalized) is not None) or changed
         if changed:
             self.rebuild_for_stage_transition(normalized, before_stage, "working")
@@ -218,7 +216,7 @@ class DocflowApp:
         normalized = self._normalize_rel_path_or_400(rel_path)
         self._require_existing_library_file(normalized)
         before_stage = self.path_stage(normalized)
-        changed = publish_path(self.base_dir, normalized)
+        changed = set_done_path(self.base_dir, normalized)
         changed = (pop_working_path(self.base_dir, normalized) is not None) or changed
         changed = (pop_bumped_path(self.base_dir, normalized) is not None) or changed
         if changed:
@@ -230,7 +228,7 @@ class DocflowApp:
         self._require_existing_library_file(normalized)
         before_stage = self.path_stage(normalized)
         changed = (pop_working_path(self.base_dir, normalized) is not None)
-        changed = unpublish_path(self.base_dir, normalized) or changed
+        changed = clear_done_path(self.base_dir, normalized) or changed
         changed = (pop_bumped_path(self.base_dir, normalized) is not None) or changed
         if changed:
             self.rebuild_for_stage_transition(normalized, before_stage, "browse")
@@ -240,14 +238,6 @@ class DocflowApp:
         result = self.api_to_working(rel_path)
         result["transition"] = "reopen"
         return result
-
-    def api_publish(self, rel_path: str) -> dict[str, object]:
-        # Backward-compatible alias.
-        return self.api_to_done(rel_path)
-
-    def api_unpublish(self, rel_path: str) -> dict[str, object]:
-        # Backward-compatible alias.
-        return self.api_to_browse(rel_path)
 
     def api_bump(self, rel_path: str) -> dict[str, object]:
         normalized = self._normalize_rel_path_or_400(rel_path)
@@ -307,12 +297,12 @@ class DocflowApp:
             except OSError as exc:
                 raise ApiError(500, f"Could not delete associated Markdown: {exc}") from exc
 
-        unpublished = unpublish_path(self.base_dir, normalized)
+        removed_done = clear_done_path(self.base_dir, normalized)
         removed_working = pop_working_path(self.base_dir, normalized) is not None
         pop_bumped_path(self.base_dir, normalized)
 
         if sibling_md_rel:
-            unpublish_path(self.base_dir, sibling_md_rel)
+            clear_done_path(self.base_dir, sibling_md_rel)
             pop_working_path(self.base_dir, sibling_md_rel)
             pop_bumped_path(self.base_dir, sibling_md_rel)
 
@@ -320,12 +310,12 @@ class DocflowApp:
             normalized,
             rebuild_browse=True,
             rebuild_working=(before_stage == "working") or removed_working,
-            rebuild_done=(before_stage == "done") or unpublished,
+            rebuild_done=(before_stage == "done") or removed_done,
         )
         return {
             "path": normalized,
             "deleted_md": deleted_md,
-            "unpublished": unpublished,
+            "removed_done": removed_done,
             "removed_working": removed_working,
             "redirect": _browse_parent_url_for_rel_path(normalized),
         }
@@ -639,10 +629,17 @@ OVERLAY_JS = """
 
   const bar = document.createElement('div');
   bar.id = 'dg-overlay';
-  document.addEventListener('DOMContentLoaded', () => {
-    document.body.appendChild(bar);
+  function mount() {
+    if (!document.body) return;
+    if (!bar.isConnected) document.body.appendChild(bar);
     render();
-  });
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', mount, { once: true });
+  } else {
+    mount();
+  }
 })();
 """.strip()
 

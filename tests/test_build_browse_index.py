@@ -94,7 +94,6 @@ def test_build_browse_site_generates_indexes_and_actions(tmp_path: Path):
     assert "data-dg-highlighted='1'" in content
     assert "data-dg-done='1'" not in content
     assert "<script src='/assets/browse-sort.js' defer></script>" in content
-    assert 'data-api-action="unpublish"' not in content
     assert 'data-api-action="unbump"' not in content
     assert '/posts/raw/Posts%202026/doc.html' in content
 
@@ -171,7 +170,7 @@ def test_browse_hides_working_and_done_items(tmp_path: Path, monkeypatch):
     times = iter(["2026-02-01T10:00:00Z", "2026-02-01T10:00:05Z"])
     monkeypatch.setattr(site_state, "_utc_now_iso", lambda: next(times))
     site_state.set_working_path(base, "Posts/Posts 2026/working.html")
-    site_state.publish_path(base, "Posts/Posts 2026/done.html")
+    site_state.set_done_path(base, "Posts/Posts 2026/done.html")
 
     build_browse_index.build_browse_site(base)
     year_page = base / "_site" / "browse" / "posts" / "Posts 2026" / "index.html"
@@ -182,31 +181,31 @@ def test_browse_hides_working_and_done_items(tmp_path: Path, monkeypatch):
     assert "rest.html" in html
 
 
-def test_browse_keeps_bumped_and_hides_published(tmp_path: Path, monkeypatch):
+def test_browse_keeps_bumped_and_hides_done(tmp_path: Path, monkeypatch):
     base = tmp_path / "base"
     posts = base / "Posts" / "Posts 2026"
     posts.mkdir(parents=True)
 
     bumped = posts / "bumped.html"
-    published_old = posts / "published-old.html"
-    published_new = posts / "published-new.html"
+    done_old = posts / "done-old.html"
+    done_new = posts / "done-new.html"
     other = posts / "other.html"
     bumped.write_text("<html><body>Bumped</body></html>", encoding="utf-8")
-    published_old.write_text("<html><body>Published old</body></html>", encoding="utf-8")
-    published_new.write_text("<html><body>Published new</body></html>", encoding="utf-8")
+    done_old.write_text("<html><body>Done old</body></html>", encoding="utf-8")
+    done_new.write_text("<html><body>Done new</body></html>", encoding="utf-8")
     other.write_text("<html><body>Other</body></html>", encoding="utf-8")
 
     # Make file mtime conflict with desired order so state-driven priority is tested.
     os.utime(bumped, (1_700_000_000, 1_700_000_000))
-    os.utime(published_old, (1_700_000_400, 1_700_000_400))
-    os.utime(published_new, (1_700_000_100, 1_700_000_100))
+    os.utime(done_old, (1_700_000_400, 1_700_000_400))
+    os.utime(done_new, (1_700_000_100, 1_700_000_100))
     os.utime(other, (1_700_000_900, 1_700_000_900))
 
-    published_times = iter(["2026-02-01T10:00:00Z", "2026-02-01T10:00:05Z", "2026-02-01T10:00:10Z"])
-    monkeypatch.setattr(site_state, "_utc_now_iso", lambda: next(published_times))
+    done_times = iter(["2026-02-01T10:00:00Z", "2026-02-01T10:00:05Z", "2026-02-01T10:00:10Z"])
+    monkeypatch.setattr(site_state, "_utc_now_iso", lambda: next(done_times))
 
-    site_state.publish_path(base, "Posts/Posts 2026/published-old.html")
-    site_state.publish_path(base, "Posts/Posts 2026/published-new.html")
+    site_state.set_done_path(base, "Posts/Posts 2026/done-old.html")
+    site_state.set_done_path(base, "Posts/Posts 2026/done-new.html")
     site_state.set_bumped_path(base, "Posts/Posts 2026/bumped.html", original_mtime=1_700_000_000.0, bumped_mtime=9_999_999_999.0)
 
     build_browse_index.build_browse_site(base)
@@ -214,8 +213,8 @@ def test_browse_keeps_bumped_and_hides_published(tmp_path: Path, monkeypatch):
     html = year_page.read_text(encoding="utf-8")
 
     assert html.find("bumped.html") < html.find("other.html")
-    assert "published-new.html" not in html
-    assert "published-old.html" not in html
+    assert "done-new.html" not in html
+    assert "done-old.html" not in html
 
 
 def test_tweets_listing_hides_secondary_title_text(tmp_path: Path):
@@ -305,7 +304,7 @@ def test_rebuild_browse_for_path_updates_only_target_branch(tmp_path: Path):
     untouched_mtime_before = untouched_page.stat().st_mtime
     category_root_mtime_before = category_root_page.stat().st_mtime
 
-    site_state.publish_path(base, "Posts/Posts 2026/new.html")
+    site_state.set_done_path(base, "Posts/Posts 2026/new.html")
     time.sleep(1.1)
     result = build_browse_index.rebuild_browse_for_path(base, "Posts/Posts 2026/new.html")
 

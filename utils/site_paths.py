@@ -62,8 +62,8 @@ def state_root(base_dir: Path) -> Path:
     return base_dir / "state"
 
 
-def published_state_path(base_dir: Path) -> Path:
-    return state_root(base_dir) / "published.json"
+def done_state_path(base_dir: Path) -> Path:
+    return state_root(base_dir) / "done.json"
 
 
 def working_state_path(base_dir: Path) -> Path:

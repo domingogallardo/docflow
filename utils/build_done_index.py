@@ -17,7 +17,7 @@ if __package__ in (None, ""):
 
 from utils.highlight_store import has_highlights_for_path
 from utils.site_paths import raw_url_for_rel_path, resolve_base_dir, resolve_library_path, site_root
-from utils.site_state import load_published_state
+from utils.site_state import load_done_state
 
 DONE_VIEWPORT = "width=device-width, initial-scale=1"
 DONE_BASE_STYLE = (
@@ -62,7 +62,7 @@ def _is_site_highlighted(base_dir: Path, rel_path: str) -> bool:
     return has_highlights_for_path(base_dir, rel_path)
 
 
-def _published_at_to_epoch(value: object) -> float | None:
+def _done_at_to_epoch(value: object) -> float | None:
     if not isinstance(value, str):
         return None
 
@@ -84,12 +84,12 @@ def _published_at_to_epoch(value: object) -> float | None:
 
 
 def collect_site_done_items(base_dir: Path) -> list[SiteDoneItem]:
-    published_state = load_published_state(base_dir)
-    state_items = published_state.get("items", {})
-    published_items = state_items if isinstance(state_items, dict) else {}
+    done_state = load_done_state(base_dir)
+    state_items = done_state.get("items", {})
+    done_items = state_items if isinstance(state_items, dict) else {}
 
     items: list[SiteDoneItem] = []
-    for rel in sorted(published_items):
+    for rel in sorted(done_items):
         try:
             abs_path = resolve_library_path(base_dir, rel)
         except Exception:
@@ -98,12 +98,12 @@ def collect_site_done_items(base_dir: Path) -> list[SiteDoneItem]:
             continue
 
         st = abs_path.stat()
-        published_entry = published_items.get(rel)
-        published_mtime: float | None = None
-        if isinstance(published_entry, dict):
-            published_mtime = _published_at_to_epoch(published_entry.get("published_at"))
+        done_entry = done_items.get(rel)
+        done_mtime: float | None = None
+        if isinstance(done_entry, dict):
+            done_mtime = _done_at_to_epoch(done_entry.get("done_at"))
         display_mtime = st.st_mtime
-        effective_mtime = published_mtime if published_mtime is not None else display_mtime
+        effective_mtime = done_mtime if done_mtime is not None else display_mtime
         items.append(
             SiteDoneItem(
                 rel_path=rel,
