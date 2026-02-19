@@ -474,8 +474,8 @@ OVERLAY_CSS = """
   flex-wrap: wrap;
   align-items: center;
 }
-#dg-overlay .dg-row-nav {
-  justify-content: flex-end;
+#dg-overlay .dg-row-secondary {
+  justify-content: flex-start;
 }
 #dg-overlay button {
   padding: 4px 8px;
@@ -499,6 +499,12 @@ OVERLAY_CSS = """
   color: #333;
   text-decoration: none;
 }
+#dg-overlay .dg-row-secondary .dg-link,
+#dg-overlay .dg-row-secondary button {
+  border: 0;
+  background: #f3f3f3;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.12);
+}
 #dg-overlay .dg-hl-nav {
   display: none;
   align-items: center;
@@ -506,6 +512,10 @@ OVERLAY_CSS = """
 }
 #dg-overlay .dg-hl-nav.is-visible {
   display: inline-flex;
+}
+#dg-overlay .dg-hl-label {
+  color: #333;
+  white-space: nowrap;
 }
 #dg-overlay .dg-hl-count {
   display: inline-flex;
@@ -519,10 +529,13 @@ OVERLAY_CSS = """
   font-variant-numeric: tabular-nums;
 }
 #dg-overlay .dg-hl-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   width: 30px;
   min-width: 30px;
   padding: 4px 0;
-  font-size: 15px;
+  font-size: 16px;
   line-height: 1;
 }
 """.strip()
@@ -710,6 +723,11 @@ OVERLAY_JS = """
     nav.className = `dg-hl-nav${visible ? ' is-visible' : ''}`;
     nav.setAttribute('aria-hidden', visible ? 'false' : 'true');
 
+    const label = document.createElement('span');
+    label.className = 'dg-hl-label';
+    label.textContent = 'Jump to highlight';
+    nav.appendChild(label);
+
     const count = document.createElement('span');
     count.className = 'dg-hl-count';
     count.textContent = highlightProgress.label;
@@ -718,7 +736,7 @@ OVERLAY_JS = """
     const prevBtn = document.createElement('button');
     prevBtn.type = 'button';
     prevBtn.className = 'dg-hl-btn';
-    prevBtn.textContent = '^';
+    prevBtn.textContent = '⌃';
     prevBtn.setAttribute('aria-label', 'Previous highlight');
     prevBtn.title = 'Previous highlight';
     prevBtn.addEventListener('click', () => { moveHighlight(-1); });
@@ -727,7 +745,7 @@ OVERLAY_JS = """
     const nextBtn = document.createElement('button');
     nextBtn.type = 'button';
     nextBtn.className = 'dg-hl-btn';
-    nextBtn.textContent = '˅';
+    nextBtn.textContent = '⌄';
     nextBtn.setAttribute('aria-label', 'Next highlight');
     nextBtn.title = 'Next highlight';
     nextBtn.addEventListener('click', () => { moveHighlight(1); });
@@ -763,7 +781,6 @@ OVERLAY_JS = """
     bar.innerHTML = '';
     const actionsRow = document.createElement('div');
     actionsRow.className = 'dg-row dg-row-actions';
-    actionsRow.appendChild(makeIndexLink());
     for (const [label, action] of stageActions()) {
       actionsRow.appendChild(makeButton(label, action));
     }
@@ -773,13 +790,14 @@ OVERLAY_JS = """
     }
     bar.appendChild(actionsRow);
 
+    const secondaryRow = document.createElement('div');
+    secondaryRow.className = 'dg-row dg-row-secondary';
+    secondaryRow.appendChild(makeIndexLink());
     const navControl = makeHighlightNav();
     if (navControl.visible) {
-      const navRow = document.createElement('div');
-      navRow.className = 'dg-row dg-row-nav';
-      navRow.appendChild(navControl.node);
-      bar.appendChild(navRow);
+      secondaryRow.appendChild(navControl.node);
     }
+    bar.appendChild(secondaryRow);
 
     if (busy) {
       for (const btn of bar.querySelectorAll('button')) btn.setAttribute('disabled', '');
