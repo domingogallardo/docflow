@@ -114,4 +114,35 @@ URL aislada: https://x.com/SchmidhuberAI/status/1950194864940835159"""
     assert "[https://x.com/SchmidhuberAI/status/1950194864940835159](https://x.com/SchmidhuberAI/status/1950194864940835159)" in result 
 
 
+def test_convert_newlines_to_br_does_not_inject_breaks_in_list_items():
+    from utils import convert_newlines_to_br
+
+    html = "<ul><li>\n<p>Item A</p>\n</li><li>Item B</li></ul>"
+    converted = convert_newlines_to_br(html)
+
+    assert "<li><br>" not in converted
+    assert "<br></li>" not in converted
+    assert "<p>Item A</p>" in converted
+
+
+def test_markdown_to_html_avoids_list_item_br_artifacts():
+    from bs4 import BeautifulSoup
+    from utils import markdown_to_html
+
+    md = """# Demo
+
+- Parent item
+
+  - Child item
+- Sibling item
+"""
+    html = markdown_to_html(md, title="Demo")
+
+    assert "<li><br>" not in html
+    assert "<br></li>" not in html
+
+    soup = BeautifulSoup(html, "html.parser")
+    assert len(soup.find_all("li")) == 3
+
+
 # (tests for Instapaper-starred utils were removed)
