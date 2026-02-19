@@ -270,12 +270,14 @@ def test_raw_route_serves_library_file(tmp_path: Path):
         assert 'data-browse-url="/browse/posts/Posts%202026/"' in body
         assert "window.addEventListener('pageshow'" in body
         assert "back_forward" in body
-        assert "Index: Browse" in body
+        assert "Inside Browse" in body
         assert "to-working" in body
         assert "Rebuild" in body
         assert "Delete" in body
         assert "dg-hl-nav" in body
-        assert "dg-row-secondary" in body
+        assert "dg-row-status" in body
+        assert "dg-row-actions" in body
+        assert "dg-row-highlights" in body
         assert "Jump to highlight:" in body
         assert "articlejs:highlight-progress" in body
         assert "Previous highlight" in body

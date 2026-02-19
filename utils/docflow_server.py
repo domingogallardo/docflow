@@ -474,7 +474,10 @@ OVERLAY_CSS = """
   flex-wrap: wrap;
   align-items: center;
 }
-#dg-overlay .dg-row-secondary {
+#dg-overlay .dg-row-status {
+  justify-content: flex-start;
+}
+#dg-overlay .dg-row-highlights {
   justify-content: flex-start;
 }
 #dg-overlay button {
@@ -499,8 +502,8 @@ OVERLAY_CSS = """
   color: #333;
   text-decoration: none;
 }
-#dg-overlay .dg-row-secondary .dg-link,
-#dg-overlay .dg-row-secondary button {
+#dg-overlay .dg-row-status .dg-link,
+#dg-overlay .dg-row-highlights button {
   border: 0;
   background: #f3f3f3;
   box-shadow: 0 1px 4px rgba(0,0,0,0.12);
@@ -643,10 +646,10 @@ OVERLAY_JS = """
     return browseIndexUrl;
   }
 
-  function currentIndexLabel() {
-    if (stage === 'working') return 'Index: Working';
-    if (stage === 'done') return 'Index: Done';
-    return 'Index: Browse';
+  function currentInsideLabel() {
+    if (stage === 'working') return 'Inside Working';
+    if (stage === 'done') return 'Inside Done';
+    return 'Inside Browse';
   }
 
   function withRefreshParam(url) {
@@ -659,10 +662,10 @@ OVERLAY_JS = """
     }
   }
 
-  function makeIndexLink() {
+  function makeInsideLink() {
     const link = document.createElement('a');
     link.className = 'dg-link';
-    link.textContent = currentIndexLabel();
+    link.textContent = currentInsideLabel();
     link.href = withRefreshParam(currentIndexUrl());
     return link;
   }
@@ -801,6 +804,11 @@ OVERLAY_JS = """
 
   function render() {
     bar.innerHTML = '';
+    const statusRow = document.createElement('div');
+    statusRow.className = 'dg-row dg-row-status';
+    statusRow.appendChild(makeInsideLink());
+    bar.appendChild(statusRow);
+
     const actionsRow = document.createElement('div');
     actionsRow.className = 'dg-row dg-row-actions';
     for (const [label, action] of stageActions()) {
@@ -812,14 +820,13 @@ OVERLAY_JS = """
     }
     bar.appendChild(actionsRow);
 
-    const secondaryRow = document.createElement('div');
-    secondaryRow.className = 'dg-row dg-row-secondary';
-    secondaryRow.appendChild(makeIndexLink());
     const navControl = makeHighlightNav();
+    const highlightsRow = document.createElement('div');
+    highlightsRow.className = 'dg-row dg-row-highlights';
     if (navControl.visible) {
-      secondaryRow.appendChild(navControl.node);
+      highlightsRow.appendChild(navControl.node);
+      bar.appendChild(highlightsRow);
     }
-    bar.appendChild(secondaryRow);
 
     if (busy) {
       for (const btn of bar.querySelectorAll('button')) btn.setAttribute('disabled', '');
