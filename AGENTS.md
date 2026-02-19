@@ -50,7 +50,8 @@ Useful setup (new environment):
 ## Notes for Agents
 
 - Keep all script messages in English.
-- Preserve file `mtime` whenever editing existing content files (`.md`, `.html`) unless the task explicitly requires changing ordering semantics.
+- Preserve file `mtime` only for existing content files inside `BASE_DIR` (for example articles/pages under `Posts`, `Tweets`, etc.) unless the task explicitly requires changing ordering semantics.
+- Do not preserve `mtime` for repository code/docs files outside `BASE_DIR` (for example `docs/*.md`, `utils/*.py`, tests).
 - Use intranet routes and local state as canonical behavior (`docflow_server.py`, `_site`, `state`).
 - API backward compatibility is not required in this repo: there is a single user/consumer. Prefer removing obsolete API terms and endpoints instead of keeping legacy aliases.
 - Long-term operational notes live in `docs/memory.md`.
