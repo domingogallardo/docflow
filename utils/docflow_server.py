@@ -458,14 +458,24 @@ OVERLAY_CSS = """
   top: 12px;
   z-index: 2147483000;
   display: flex;
+  flex-direction: column;
+  align-items: stretch;
   gap: 8px;
-  flex-wrap: wrap;
   padding: 8px;
   border: 1px solid #cfcfcf;
   border-radius: 10px;
   background: #ffffff;
   box-shadow: 0 4px 16px rgba(0,0,0,0.15);
   font: 12px -apple-system,system-ui,Segoe UI,Roboto,Helvetica,Arial;
+}
+#dg-overlay .dg-row {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+#dg-overlay .dg-row-nav {
+  justify-content: flex-end;
 }
 #dg-overlay button {
   padding: 4px 8px;
@@ -488,6 +498,32 @@ OVERLAY_CSS = """
   background: #fafafa;
   color: #333;
   text-decoration: none;
+}
+#dg-overlay .dg-hl-nav {
+  display: none;
+  align-items: center;
+  gap: 6px;
+}
+#dg-overlay .dg-hl-nav.is-visible {
+  display: inline-flex;
+}
+#dg-overlay .dg-hl-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 56px;
+  padding: 4px 8px;
+  border-radius: 6px;
+  background: #f0f0f0;
+  color: #444;
+  font-variant-numeric: tabular-nums;
+}
+#dg-overlay .dg-hl-btn {
+  width: 30px;
+  min-width: 30px;
+  padding: 4px 0;
+  font-size: 15px;
+  line-height: 1;
 }
 """.strip()
 
@@ -513,6 +549,9 @@ OVERLAY_JS = """
   let bumped = script.getAttribute('data-bumped') === '1';
   const browseIndexUrl = script.getAttribute('data-browse-url') || '/browse/';
   let busy = false;
+  let highlightBusy = false;
+  let highlightProgress = { current: 0, total: 0, label: '0 / 0' };
+  let highlightProgressListenerAttached = false;
 
   function callApi(action, path) {
     const body = path ? { path } : {};
@@ -605,6 +644,103 @@ OVERLAY_JS = """
     return link;
   }
 
+  function hasHighlightApi() {
+    const api = window.ArticleJS;
+    return !!(
+      api
+      && typeof api.getHighlightProgress === 'function'
+      && typeof api.nextHighlight === 'function'
+      && typeof api.previousHighlight === 'function'
+    );
+  }
+
+  function normalizeHighlightProgress(progress) {
+    let total = Number(progress && progress.total);
+    let current = Number(progress && progress.current);
+    if (!Number.isFinite(total) || total < 0) total = 0;
+    if (!Number.isFinite(current) || current < 0) current = 0;
+    if (total === 0) current = 0;
+    if (current > total) current = total;
+    return {
+      current,
+      total,
+      label: `${current} / ${total}`
+    };
+  }
+
+  async function refreshHighlightProgress() {
+    if (!hasHighlightApi()) {
+      highlightProgress = normalizeHighlightProgress(null);
+      render();
+      return;
+    }
+    try {
+      highlightProgress = normalizeHighlightProgress(await window.ArticleJS.getHighlightProgress());
+    } catch (error) {
+      highlightProgress = normalizeHighlightProgress(null);
+    }
+    render();
+  }
+
+  async function moveHighlight(direction) {
+    if (busy || highlightBusy || !hasHighlightApi()) return;
+    highlightBusy = true;
+    render();
+    try {
+      const api = window.ArticleJS;
+      let result;
+      if (direction < 0) {
+        result = await api.previousHighlight();
+      } else {
+        result = await api.nextHighlight();
+      }
+      if (result && result.progress) {
+        highlightProgress = normalizeHighlightProgress(result.progress);
+      } else {
+        highlightProgress = normalizeHighlightProgress(await api.getHighlightProgress());
+      }
+    } catch (error) {}
+    highlightBusy = false;
+    render();
+  }
+
+  function makeHighlightNav() {
+    const nav = document.createElement('div');
+    const visible = highlightProgress.total > 0;
+    nav.className = `dg-hl-nav${visible ? ' is-visible' : ''}`;
+    nav.setAttribute('aria-hidden', visible ? 'false' : 'true');
+
+    const count = document.createElement('span');
+    count.className = 'dg-hl-count';
+    count.textContent = highlightProgress.label;
+    nav.appendChild(count);
+
+    const prevBtn = document.createElement('button');
+    prevBtn.type = 'button';
+    prevBtn.className = 'dg-hl-btn';
+    prevBtn.textContent = '^';
+    prevBtn.setAttribute('aria-label', 'Previous highlight');
+    prevBtn.title = 'Previous highlight';
+    prevBtn.addEventListener('click', () => { moveHighlight(-1); });
+    nav.appendChild(prevBtn);
+
+    const nextBtn = document.createElement('button');
+    nextBtn.type = 'button';
+    nextBtn.className = 'dg-hl-btn';
+    nextBtn.textContent = '˅';
+    nextBtn.setAttribute('aria-label', 'Next highlight');
+    nextBtn.title = 'Next highlight';
+    nextBtn.addEventListener('click', () => { moveHighlight(1); });
+    nav.appendChild(nextBtn);
+
+    if (!visible || busy || highlightBusy || !hasHighlightApi()) {
+      prevBtn.setAttribute('disabled', '');
+      nextBtn.setAttribute('disabled', '');
+    }
+
+    return { node: nav, visible };
+  }
+
   function stageActions() {
     if (stage === 'working') {
       return [
@@ -625,14 +761,26 @@ OVERLAY_JS = """
 
   function render() {
     bar.innerHTML = '';
-    bar.appendChild(makeIndexLink());
+    const actionsRow = document.createElement('div');
+    actionsRow.className = 'dg-row dg-row-actions';
+    actionsRow.appendChild(makeIndexLink());
     for (const [label, action] of stageActions()) {
-      bar.appendChild(makeButton(label, action));
+      actionsRow.appendChild(makeButton(label, action));
     }
     if (stage === 'browse') {
-      bar.appendChild(makeButton('Rebuild', 'rebuild-file'));
-      bar.appendChild(makeButton('Delete', 'delete'));
+      actionsRow.appendChild(makeButton('Rebuild', 'rebuild-file'));
+      actionsRow.appendChild(makeButton('Delete', 'delete'));
     }
+    bar.appendChild(actionsRow);
+
+    const navControl = makeHighlightNav();
+    if (navControl.visible) {
+      const navRow = document.createElement('div');
+      navRow.className = 'dg-row dg-row-nav';
+      navRow.appendChild(navControl.node);
+      bar.appendChild(navRow);
+    }
+
     if (busy) {
       for (const btn of bar.querySelectorAll('button')) btn.setAttribute('disabled', '');
     }
@@ -640,10 +788,21 @@ OVERLAY_JS = """
 
   const bar = document.createElement('div');
   bar.id = 'dg-overlay';
+
+  function onHighlightProgress(event) {
+    highlightProgress = normalizeHighlightProgress(event && event.detail ? event.detail : null);
+    render();
+  }
+
   function mount() {
     if (!document.body) return;
     if (!bar.isConnected) document.body.appendChild(bar);
+    if (!highlightProgressListenerAttached) {
+      document.addEventListener('articlejs:highlight-progress', onHighlightProgress);
+      highlightProgressListenerAttached = true;
+    }
     render();
+    refreshHighlightProgress();
   }
 
   if (document.readyState === 'loading') {

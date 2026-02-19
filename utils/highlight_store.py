@@ -29,6 +29,23 @@ def _highlight_hash(rel_path: str) -> str:
     return hashlib.sha256(rel_path.encode("utf-8")).hexdigest()
 
 
+def _coerce_highlight_id(item: dict[str, Any], index: int) -> str:
+    raw_id = str(item.get("id") or "").strip()
+    if raw_id:
+        return raw_id
+
+    seed = "|".join(
+        [
+            str(item.get("text") or ""),
+            str(item.get("prefix") or ""),
+            str(item.get("suffix") or ""),
+            str(index),
+        ]
+    )
+    digest = hashlib.sha1(seed.encode("utf-8")).hexdigest()[:16]
+    return f"h_{digest}"
+
+
 def highlight_state_path(base_dir: Path, rel_path: str) -> Path:
     normalized = normalize_rel_path(rel_path)
     digest = _highlight_hash(normalized)
@@ -40,7 +57,7 @@ def _coerce_payload(normalized_path: str, payload: dict[str, Any] | None) -> dic
     highlights_raw = payload.get("highlights")
     highlights: list[dict[str, Any]] = []
     if isinstance(highlights_raw, list):
-        for item in highlights_raw:
+        for index, item in enumerate(highlights_raw):
             if not isinstance(item, dict):
                 continue
             text = str(item.get("text") or "").strip()
@@ -48,6 +65,7 @@ def _coerce_payload(normalized_path: str, payload: dict[str, Any] | None) -> dic
                 continue
             copied = dict(item)
             copied["text"] = text
+            copied["id"] = _coerce_highlight_id(copied, index)
             highlights.append(copied)
 
     return {

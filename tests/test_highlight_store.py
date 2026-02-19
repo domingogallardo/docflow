@@ -73,3 +73,27 @@ def test_load_does_not_use_old_posts_highlights(tmp_path: Path):
     assert payload["path"] == rel
     assert payload["highlights"] == []
     assert highlight_store.has_highlights_for_path(base, rel) is False
+
+
+def test_missing_ids_are_generated_and_stable(tmp_path: Path):
+    base = tmp_path / "base"
+    base.mkdir()
+    rel = "Posts/Posts 2026/doc.html"
+
+    payload = {
+        "highlights": [
+            {"text": "hello", "prefix": "a", "suffix": "b"},
+            {"text": "hello", "prefix": "a", "suffix": "b"},
+        ]
+    }
+
+    saved = highlight_store.save_highlights_for_path(base, rel, payload)
+    ids = [item["id"] for item in saved["highlights"]]
+    assert len(ids) == 2
+    assert ids[0].startswith("h_")
+    assert ids[1].startswith("h_")
+    assert ids[0] != ids[1]
+
+    loaded = highlight_store.load_highlights_for_path(base, rel)
+    loaded_ids = [item["id"] for item in loaded["highlights"]]
+    assert loaded_ids == ids

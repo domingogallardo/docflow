@@ -274,6 +274,12 @@ def test_raw_route_serves_library_file(tmp_path: Path):
         assert "to-working" in body
         assert "Rebuild" in body
         assert "Delete" in body
+        assert "dg-hl-nav" in body
+        assert "articlejs:highlight-progress" in body
+        assert "Previous highlight" in body
+        assert "Next highlight" in body
+        assert "textContent = '^'" in body
+        assert "textContent = '˅'" in body
     finally:
         server.shutdown()
         server.server_close()

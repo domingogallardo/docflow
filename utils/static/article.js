@@ -3,9 +3,10 @@
  * - Console API: ArticleJS.active / ArticleJS.ping()
  * - Quote capture helpers with Text Fragments and Markdown
  * - Highlights persisted to local /api/highlights
+ * - Highlight navigation helpers (next/previous + progress)
  */
 (function () {
-  var version = '1.1.0';
+  var version = '1.2.0';
 
   // -- Minimal helpers: longer head/tail slices to scope text fragments better --
   function baseUrlWithoutHash() {
@@ -370,6 +371,10 @@
       '  -webkit-box-decoration-break: clone;',
       '  padding: 0 2px;',
       '  border-radius: 2px;',
+      '}',
+      '.articlejs-highlight.articlejs-highlight-active {',
+      '  background-image: linear-gradient(transparent 45%, rgba(255, 196, 64, 0.95) 45%);',
+      '  box-shadow: 0 0 0 2px rgba(190, 126, 0, 0.35);',
       '}'
     ].join('\n');
     var head = document.head || document.documentElement;
@@ -579,6 +584,204 @@
   }
 
   var highlightState = { loaded: false, highlights: [] };
+  var highlightsInitPromise = null;
+  var highlightNavState = { blocks: [], currentIndex: -1 };
+
+  function getHighlightById(id) {
+    if (!id) return null;
+    for (var i = 0; i < highlightState.highlights.length; i++) {
+      var item = highlightState.highlights[i];
+      if (item && item.id === id) return item;
+    }
+    return null;
+  }
+
+  function collectHighlightBlocks() {
+    if (!document || !document.querySelectorAll) return [];
+    var marks = document.querySelectorAll('span.articlejs-highlight[data-highlight-id]');
+    var blocks = [];
+    var byId = {};
+    for (var i = 0; i < marks.length; i++) {
+      var mark = marks[i];
+      var id = mark.getAttribute('data-highlight-id') || '';
+      if (!id) continue;
+      var block = byId[id];
+      if (!block) {
+        var highlight = getHighlightById(id);
+        block = {
+          id: id,
+          text: highlight && highlight.text ? String(highlight.text) : '',
+          nodes: []
+        };
+        byId[id] = block;
+        blocks.push(block);
+      }
+      block.nodes.push(mark);
+    }
+    return blocks;
+  }
+
+  function highlightProgressSnapshot() {
+    var total = highlightNavState.blocks.length;
+    var currentIndex = highlightNavState.currentIndex;
+    if (currentIndex < 0 || currentIndex >= total) currentIndex = -1;
+    var current = currentIndex >= 0 ? (currentIndex + 1) : 0;
+    var currentId = null;
+    if (currentIndex >= 0 && currentIndex < total) {
+      currentId = highlightNavState.blocks[currentIndex].id || null;
+    }
+    return {
+      current: current,
+      total: total,
+      currentIndex: currentIndex,
+      currentId: currentId,
+      label: String(current) + '/' + String(total)
+    };
+  }
+
+  function emitHighlightProgress(reason) {
+    if (!document || !document.dispatchEvent) return;
+    var detail = highlightProgressSnapshot();
+    detail.reason = reason || '';
+    try {
+      if (typeof CustomEvent === 'function') {
+        document.dispatchEvent(new CustomEvent('articlejs:highlight-progress', { detail: detail }));
+        return;
+      }
+    } catch (_) {}
+    if (document.createEvent) {
+      try {
+        var evt = document.createEvent('CustomEvent');
+        evt.initCustomEvent('articlejs:highlight-progress', false, false, detail);
+        document.dispatchEvent(evt);
+      } catch (_) {}
+    }
+  }
+
+  function applyActiveHighlightClass() {
+    if (!document || !document.querySelectorAll) return;
+    var activeId = '';
+    if (highlightNavState.currentIndex >= 0 && highlightNavState.currentIndex < highlightNavState.blocks.length) {
+      activeId = highlightNavState.blocks[highlightNavState.currentIndex].id || '';
+    }
+
+    var nodes = document.querySelectorAll('span.articlejs-highlight[data-highlight-id]');
+    for (var i = 0; i < nodes.length; i++) {
+      var node = nodes[i];
+      var nodeId = node.getAttribute('data-highlight-id') || '';
+      var active = !!activeId && nodeId === activeId;
+      if (node.classList && node.classList.toggle) {
+        node.classList.toggle('articlejs-highlight-active', active);
+      } else {
+        var className = String(node.className || '');
+        var hasActive = /\barticlejs-highlight-active\b/.test(className);
+        if (active && !hasActive) {
+          node.className = (className ? className + ' ' : '') + 'articlejs-highlight-active';
+        } else if (!active && hasActive) {
+          node.className = className
+            .replace(/\barticlejs-highlight-active\b/g, '')
+            .replace(/\s+/g, ' ')
+            .replace(/^\s+|\s+$/g, '');
+        }
+      }
+    }
+  }
+
+  function refreshHighlightNavigation(options) {
+    options = options || {};
+    var preferredId = '';
+    if (typeof options.currentId === 'string' && options.currentId) {
+      preferredId = options.currentId;
+    } else if (highlightNavState.currentIndex >= 0 && highlightNavState.currentIndex < highlightNavState.blocks.length) {
+      preferredId = highlightNavState.blocks[highlightNavState.currentIndex].id || '';
+    }
+
+    var preferredIndex = -1;
+    if (typeof options.currentIndex === 'number' && isFinite(options.currentIndex)) {
+      preferredIndex = Math.floor(options.currentIndex);
+    } else if (highlightNavState.currentIndex >= 0) {
+      preferredIndex = highlightNavState.currentIndex;
+    }
+
+    highlightNavState.blocks = collectHighlightBlocks();
+    var nextIndex = -1;
+    if (preferredId) {
+      for (var i = 0; i < highlightNavState.blocks.length; i++) {
+        if (highlightNavState.blocks[i].id === preferredId) {
+          nextIndex = i;
+          break;
+        }
+      }
+    }
+    if (nextIndex < 0 && preferredIndex >= 0 && preferredIndex < highlightNavState.blocks.length) {
+      nextIndex = preferredIndex;
+    }
+    if (nextIndex < 0 && options.selectFirst && highlightNavState.blocks.length) {
+      nextIndex = 0;
+    }
+
+    highlightNavState.currentIndex = nextIndex;
+    applyActiveHighlightClass();
+    return highlightProgressSnapshot();
+  }
+
+  function scrollToHighlightBlock(block, options) {
+    if (!block || !block.nodes || !block.nodes.length) return;
+    var node = block.nodes[0];
+    if (!node || !node.scrollIntoView) return;
+    var behavior = (options && options.behavior === 'auto') ? 'auto' : 'smooth';
+    var blockMode = (options && typeof options.block === 'string') ? options.block : 'center';
+    try {
+      node.scrollIntoView({ behavior: behavior, block: blockMode, inline: 'nearest' });
+    } catch (_) {
+      try { node.scrollIntoView(); } catch (_) {}
+    }
+  }
+
+  function focusHighlightAt(index, options) {
+    options = options || {};
+    var progressBefore = refreshHighlightNavigation({ currentIndex: highlightNavState.currentIndex });
+    if (!progressBefore.total) {
+      emitHighlightProgress('empty');
+      return { ok: false, reason: 'empty', progress: progressBefore };
+    }
+    if (typeof index !== 'number' || !isFinite(index)) {
+      return { ok: false, reason: 'index', progress: progressBefore };
+    }
+
+    var total = highlightNavState.blocks.length;
+    var targetIndex = Math.floor(index);
+    if (options.wrap !== false) {
+      targetIndex = ((targetIndex % total) + total) % total;
+    } else if (targetIndex < 0 || targetIndex >= total) {
+      return { ok: false, reason: 'range', progress: progressBefore };
+    }
+
+    highlightNavState.currentIndex = targetIndex;
+    applyActiveHighlightClass();
+    if (options.scroll !== false) {
+      scrollToHighlightBlock(highlightNavState.blocks[targetIndex], options);
+    }
+    var progress = highlightProgressSnapshot();
+    emitHighlightProgress('focus');
+    return { ok: true, progress: progress };
+  }
+
+  function stepHighlight(delta, options) {
+    return initHighlights().then(function() {
+      refreshHighlightNavigation({ currentIndex: highlightNavState.currentIndex });
+      if (!highlightNavState.blocks.length) {
+        var emptyProgress = highlightProgressSnapshot();
+        emitHighlightProgress('empty');
+        return { ok: false, reason: 'empty', progress: emptyProgress };
+      }
+      var baseIndex = highlightNavState.currentIndex;
+      if (baseIndex < 0) {
+        baseIndex = delta >= 0 ? -1 : 0;
+      }
+      return focusHighlightAt(baseIndex + delta, options);
+    });
+  }
 
   function readHighlights() {
     if (!window.fetch) return Promise.resolve(null);
@@ -643,15 +846,41 @@
   }
 
   function initHighlights() {
+    if (highlightsInitPromise) return highlightsInitPromise;
     var root = getRootElement();
-    if (!root) return;
+    if (!root) return Promise.resolve([]);
     ensureHighlightStyles();
-    ensureHighlightState().then(function() {
-      if (!highlightState.highlights.length) return;
-      var indexData = buildTextIndex(root);
-      for (var i = 0; i < highlightState.highlights.length; i++) {
-        applyHighlightFromData(highlightState.highlights[i], indexData);
-      }
+    highlightsInitPromise = ensureHighlightState()
+      .then(function() {
+        if (!highlightState.highlights.length) return highlightState.highlights;
+        var indexData = buildTextIndex(root);
+        for (var i = 0; i < highlightState.highlights.length; i++) {
+          applyHighlightFromData(highlightState.highlights[i], indexData);
+        }
+        return highlightState.highlights;
+      })
+      .catch(function() {
+        return highlightState.highlights;
+      })
+      .then(function(result) {
+        refreshHighlightNavigation({ selectFirst: false });
+        emitHighlightProgress('ready');
+        return result;
+      });
+    return highlightsInitPromise;
+  }
+
+  function nextHighlight(options) {
+    return stepHighlight(1, options);
+  }
+
+  function previousHighlight(options) {
+    return stepHighlight(-1, options);
+  }
+
+  function getHighlightProgress() {
+    return initHighlights().then(function() {
+      return refreshHighlightNavigation({ currentIndex: highlightNavState.currentIndex });
     });
   }
 
@@ -671,7 +900,7 @@
     var root = getRootElement();
     var highlight = buildHighlightFromRange(range, root);
     if (!highlight) return Promise.resolve({ ok: false, reason: 'empty' });
-    return ensureHighlightState().then(function() {
+    return initHighlights().then(function() {
       if (isDuplicateHighlight(highlight, highlightState.highlights)) {
         return { ok: false, reason: 'duplicate' };
       }
@@ -681,12 +910,18 @@
       }
       highlightState.highlights.push(highlight);
       return writeHighlights(highlightState.highlights)
-        .then(function() { return { ok: true }; })
+        .then(function() {
+          var progress = refreshHighlightNavigation({ currentId: highlight.id, selectFirst: true });
+          emitHighlightProgress('add');
+          return { ok: true, progress: progress };
+        })
         .catch(function() {
           unwrapHighlight(highlight.id);
           highlightState.highlights = highlightState.highlights.filter(function(item) {
             return item && item.id !== highlight.id;
           });
+          refreshHighlightNavigation({ currentIndex: highlightNavState.currentIndex, selectFirst: false });
+          emitHighlightProgress('save-failed');
           return { ok: false, reason: 'save' };
         });
     });
@@ -694,7 +929,12 @@
 
   function removeHighlightById(id) {
     if (!id) return Promise.resolve({ ok: false, reason: 'missing' });
-    return ensureHighlightState().then(function() {
+    return initHighlights().then(function() {
+      var currentIdBefore = null;
+      if (highlightNavState.currentIndex >= 0 && highlightNavState.currentIndex < highlightNavState.blocks.length) {
+        currentIdBefore = highlightNavState.blocks[highlightNavState.currentIndex].id || null;
+      }
+      var currentIndexBefore = highlightNavState.currentIndex;
       var idx = -1;
       for (var i = 0; i < highlightState.highlights.length; i++) {
         if (highlightState.highlights[i] && highlightState.highlights[i].id === id) {
@@ -708,7 +948,16 @@
         highlightState.highlights.splice(idx, 1);
       }
       return writeHighlights(highlightState.highlights)
-        .then(function() { return { ok: true }; })
+        .then(function() {
+          var preferredId = currentIdBefore && currentIdBefore !== id ? currentIdBefore : '';
+          var progress = refreshHighlightNavigation({
+            currentId: preferredId,
+            currentIndex: currentIndexBefore,
+            selectFirst: false
+          });
+          emitHighlightProgress('remove');
+          return { ok: true, progress: progress };
+        })
         .catch(function() {
           if (existing) {
             highlightState.highlights.splice(idx, 0, existing);
@@ -718,6 +967,12 @@
               applyHighlightFromData(existing, indexData);
             }
           }
+          refreshHighlightNavigation({
+            currentId: currentIdBefore || '',
+            currentIndex: currentIndexBefore,
+            selectFirst: false
+          });
+          emitHighlightProgress('save-failed');
           return { ok: false, reason: 'save' };
         });
     });
@@ -732,7 +987,10 @@
     version: version,
     copyQuote: copyQuote,
     highlightSelection: highlightSelection,
-    removeHighlight: removeHighlightById
+    removeHighlight: removeHighlightById,
+    nextHighlight: nextHighlight,
+    previousHighlight: previousHighlight,
+    getHighlightProgress: getHighlightProgress
   };
 
   // ---- Discreet overlay button to copy current selection as Markdown ----
