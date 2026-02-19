@@ -276,12 +276,13 @@ def test_raw_route_serves_library_file(tmp_path: Path):
         assert "Delete" in body
         assert "dg-hl-nav" in body
         assert "dg-row-secondary" in body
-        assert "Jump to highlight" in body
+        assert "Jump to highlight:" in body
         assert "articlejs:highlight-progress" in body
         assert "Previous highlight" in body
         assert "Next highlight" in body
-        assert "textContent = '⌃'" in body
-        assert "textContent = '⌄'" in body
+        assert "makeChevronIcon('up')" in body
+        assert "makeChevronIcon('down')" in body
+        assert "http://www.w3.org/2000/svg" in body
     finally:
         server.shutdown()
         server.server_close()

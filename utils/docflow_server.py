@@ -535,8 +535,18 @@ OVERLAY_CSS = """
   width: 30px;
   min-width: 30px;
   padding: 4px 0;
-  font-size: 16px;
   line-height: 1;
+}
+#dg-overlay .dg-hl-icon {
+  width: 14px;
+  height: 14px;
+  display: block;
+  stroke: #333;
+  fill: none;
+  stroke-width: 2.1;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  pointer-events: none;
 }
 """.strip()
 
@@ -657,6 +667,18 @@ OVERLAY_JS = """
     return link;
   }
 
+  function makeChevronIcon(direction) {
+    const ns = 'http://www.w3.org/2000/svg';
+    const svg = document.createElementNS(ns, 'svg');
+    svg.setAttribute('viewBox', '0 0 16 16');
+    svg.setAttribute('aria-hidden', 'true');
+    svg.classList.add('dg-hl-icon');
+    const path = document.createElementNS(ns, 'path');
+    path.setAttribute('d', direction === 'up' ? 'M3.5 10.5L8 6l4.5 4.5' : 'M3.5 5.5L8 10l4.5-4.5');
+    svg.appendChild(path);
+    return svg;
+  }
+
   function hasHighlightApi() {
     const api = window.ArticleJS;
     return !!(
@@ -725,7 +747,7 @@ OVERLAY_JS = """
 
     const label = document.createElement('span');
     label.className = 'dg-hl-label';
-    label.textContent = 'Jump to highlight';
+    label.textContent = 'Jump to highlight:';
     nav.appendChild(label);
 
     const count = document.createElement('span');
@@ -736,7 +758,7 @@ OVERLAY_JS = """
     const prevBtn = document.createElement('button');
     prevBtn.type = 'button';
     prevBtn.className = 'dg-hl-btn';
-    prevBtn.textContent = '⌃';
+    prevBtn.appendChild(makeChevronIcon('up'));
     prevBtn.setAttribute('aria-label', 'Previous highlight');
     prevBtn.title = 'Previous highlight';
     prevBtn.addEventListener('click', () => { moveHighlight(-1); });
@@ -745,7 +767,7 @@ OVERLAY_JS = """
     const nextBtn = document.createElement('button');
     nextBtn.type = 'button';
     nextBtn.className = 'dg-hl-btn';
-    nextBtn.textContent = '⌄';
+    nextBtn.appendChild(makeChevronIcon('down'));
     nextBtn.setAttribute('aria-label', 'Next highlight');
     nextBtn.title = 'Next highlight';
     nextBtn.addEventListener('click', () => { moveHighlight(1); });
