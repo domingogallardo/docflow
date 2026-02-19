@@ -369,12 +369,8 @@
       '  background-image: linear-gradient(transparent 60%, rgba(255, 229, 122, 0.85) 60%);',
       '  box-decoration-break: clone;',
       '  -webkit-box-decoration-break: clone;',
-      '  padding: 0 2px;',
+      '  padding: 0;',
       '  border-radius: 2px;',
-      '}',
-      '.articlejs-highlight.articlejs-highlight-active {',
-      '  background-image: linear-gradient(transparent 45%, rgba(255, 196, 64, 0.95) 45%);',
-      '  box-shadow: 0 0 0 2px rgba(190, 126, 0, 0.35);',
       '}'
     ].join('\n');
     var head = document.head || document.documentElement;
@@ -471,6 +467,10 @@
     if (startOffset < 0) startOffset = 0;
     if (endOffset > length) endOffset = length;
     if (startOffset >= endOffset) return;
+    var selectedText = (node.nodeValue || '').slice(startOffset, endOffset);
+    // Never wrap pure whitespace segments; they can add visible vertical gaps
+    // when highlights cross line or paragraph boundaries.
+    if (!selectedText || !/\S/.test(selectedText)) return;
     var selected = node;
     if (startOffset > 0) {
       selected = node.splitText(startOffset);
@@ -567,10 +567,58 @@
     }
   }
 
+  function _trimTextEdges(value) {
+    return String(value || '').replace(/^\s+|\s+$/g, '');
+  }
+
+  function _whitespaceEdgeLengths(text) {
+    var leading = 0;
+    var trailing = 0;
+    var leadMatch = String(text || '').match(/^\s+/);
+    if (leadMatch && leadMatch[0]) leading = leadMatch[0].length;
+    var tailMatch = String(text || '').match(/\s+$/);
+    if (tailMatch && tailMatch[0]) trailing = tailMatch[0].length;
+    return { leading: leading, trailing: trailing };
+  }
+
+  function _boundaryIndex(indexData, node, offset) {
+    if (!indexData || !indexData.nodes || !node || node.nodeType !== 3) return -1;
+    var value = node.nodeValue || '';
+    var safeOffset = Number(offset);
+    if (!isFinite(safeOffset)) safeOffset = 0;
+    if (safeOffset < 0) safeOffset = 0;
+    if (safeOffset > value.length) safeOffset = value.length;
+    for (var i = 0; i < indexData.nodes.length; i++) {
+      var entry = indexData.nodes[i];
+      if (entry.node === node) {
+        return entry.start + safeOffset;
+      }
+    }
+    return -1;
+  }
+
+  function trimRangeWhitespace(range, indexData) {
+    if (!range || range.collapsed || !indexData) return range;
+    var startIndex = _boundaryIndex(indexData, range.startContainer, range.startOffset);
+    var endIndex = _boundaryIndex(indexData, range.endContainer, range.endOffset);
+    if (startIndex < 0 || endIndex <= startIndex) return range;
+
+    var fullText = String(indexData.text || '');
+    var selectedText = fullText.slice(startIndex, endIndex);
+    if (!selectedText) return range;
+
+    var edges = _whitespaceEdgeLengths(selectedText);
+    var trimmedStart = startIndex + edges.leading;
+    var trimmedEnd = endIndex - edges.trailing;
+    if (trimmedEnd <= trimmedStart) return null;
+
+    return rangeFromIndices(indexData, trimmedStart, trimmedEnd) || range;
+  }
+
   function buildHighlightFromRange(range, root) {
     if (!range || range.collapsed || !root) return null;
     if (!root.contains(range.startContainer) || !root.contains(range.endContainer)) return null;
-    var text = range.toString();
+    var text = _trimTextEdges(range.toString());
     if (!text || text.length < 2) return null;
     var prefix = getPrefixText(range, root, 32);
     var suffix = getSuffixText(range, root, 32);
@@ -658,31 +706,19 @@
     }
   }
 
-  function applyActiveHighlightClass() {
+  function clearActiveHighlightClasses() {
     if (!document || !document.querySelectorAll) return;
-    var activeId = '';
-    if (highlightNavState.currentIndex >= 0 && highlightNavState.currentIndex < highlightNavState.blocks.length) {
-      activeId = highlightNavState.blocks[highlightNavState.currentIndex].id || '';
-    }
-
-    var nodes = document.querySelectorAll('span.articlejs-highlight[data-highlight-id]');
+    var nodes = document.querySelectorAll('span.articlejs-highlight.articlejs-highlight-active');
     for (var i = 0; i < nodes.length; i++) {
       var node = nodes[i];
-      var nodeId = node.getAttribute('data-highlight-id') || '';
-      var active = !!activeId && nodeId === activeId;
-      if (node.classList && node.classList.toggle) {
-        node.classList.toggle('articlejs-highlight-active', active);
+      if (node.classList && node.classList.remove) {
+        node.classList.remove('articlejs-highlight-active');
       } else {
         var className = String(node.className || '');
-        var hasActive = /\barticlejs-highlight-active\b/.test(className);
-        if (active && !hasActive) {
-          node.className = (className ? className + ' ' : '') + 'articlejs-highlight-active';
-        } else if (!active && hasActive) {
-          node.className = className
-            .replace(/\barticlejs-highlight-active\b/g, '')
-            .replace(/\s+/g, ' ')
-            .replace(/^\s+|\s+$/g, '');
-        }
+        node.className = className
+          .replace(/\barticlejs-highlight-active\b/g, '')
+          .replace(/\s+/g, ' ')
+          .replace(/^\s+|\s+$/g, '');
       }
     }
   }
@@ -721,7 +757,7 @@
     }
 
     highlightNavState.currentIndex = nextIndex;
-    applyActiveHighlightClass();
+    clearActiveHighlightClasses();
     return highlightProgressSnapshot();
   }
 
@@ -758,7 +794,7 @@
     }
 
     highlightNavState.currentIndex = targetIndex;
-    applyActiveHighlightClass();
+    clearActiveHighlightClasses();
     if (options.scroll !== false) {
       scrollToHighlightBlock(highlightNavState.blocks[targetIndex], options);
     }
@@ -898,13 +934,15 @@
 
   function addHighlightFromRange(range) {
     var root = getRootElement();
-    var highlight = buildHighlightFromRange(range, root);
+    if (!range || !root) return Promise.resolve({ ok: false, reason: 'empty' });
+    var indexData = buildTextIndex(root);
+    var normalizedRange = trimRangeWhitespace(range, indexData);
+    var highlight = buildHighlightFromRange(normalizedRange, root);
     if (!highlight) return Promise.resolve({ ok: false, reason: 'empty' });
     return initHighlights().then(function() {
       if (isDuplicateHighlight(highlight, highlightState.highlights)) {
         return { ok: false, reason: 'duplicate' };
       }
-      var indexData = buildTextIndex(root);
       if (!applyHighlightFromData(highlight, indexData)) {
         return { ok: false, reason: 'apply' };
       }
