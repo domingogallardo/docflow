@@ -523,7 +523,22 @@
     if (idx < 0) return false;
     var range = rangeFromIndices(indexData, idx, idx + highlight.text.length);
     if (!range) return false;
-    return applyRangeHighlight(range, id);
+    if (!applyRangeHighlight(range, id)) return false;
+
+    // Guard against stale/corrupted anchors that can expand a highlight to a
+    // much larger span after DOM node splits.
+    var rendered = '';
+    if (document && document.querySelectorAll) {
+      var nodes = document.querySelectorAll('span.articlejs-highlight[data-highlight-id="' + id + '"]');
+      for (var i = 0; i < nodes.length; i++) {
+        rendered += nodes[i].textContent || '';
+      }
+    }
+    if (normalizeWhitespace(rendered) !== normalizeWhitespace(highlight.text)) {
+      unwrapHighlight(id);
+      return false;
+    }
+    return true;
   }
 
   function unwrapHighlight(id) {
@@ -889,10 +904,17 @@
     highlightsInitPromise = ensureHighlightState()
       .then(function() {
         if (!highlightState.highlights.length) return highlightState.highlights;
-        var indexData = buildTextIndex(root);
+        var appliedHighlights = [];
         for (var i = 0; i < highlightState.highlights.length; i++) {
-          applyHighlightFromData(highlightState.highlights[i], indexData);
+          // Applying a highlight mutates text nodes (splitText), so rebuild
+          // the index on each iteration to keep offsets aligned.
+          var indexData = buildTextIndex(root);
+          var item = highlightState.highlights[i];
+          if (applyHighlightFromData(item, indexData)) {
+            appliedHighlights.push(item);
+          }
         }
+        highlightState.highlights = appliedHighlights;
         return highlightState.highlights;
       })
       .catch(function() {
