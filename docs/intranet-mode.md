@@ -107,20 +107,40 @@ tailscale serve status
 
 ## Auto-start on macOS
 
-Use a user `LaunchAgent` (`~/Library/LaunchAgents/com.domingo.docflow.intranet.plist`) so intranet starts at login and restarts if it exits.
+Use a system `LaunchDaemon` (`/Library/LaunchDaemons/com.domingo.docflow.intranet.plist`) so intranet survives without a logged-in user session.
 
 Load/update it:
 
 ```bash
-launchctl bootout gui/$(id -u)/com.domingo.docflow.intranet 2>/dev/null || true
-launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.domingo.docflow.intranet.plist
-launchctl kickstart -k gui/$(id -u)/com.domingo.docflow.intranet
+sudo launchctl bootout system/com.domingo.docflow.intranet 2>/dev/null || true
+sudo launchctl bootstrap system /Library/LaunchDaemons/com.domingo.docflow.intranet.plist
+sudo launchctl kickstart -k system/com.domingo.docflow.intranet
 ```
 
-Check status and logs:
+Optional migration cleanup from old user LaunchAgent:
 
 ```bash
-launchctl print gui/$(id -u)/com.domingo.docflow.intranet | head -n 40
+launchctl bootout gui/$(id -u)/com.domingo.docflow.intranet 2>/dev/null || true
+launchctl disable gui/$(id -u)/com.domingo.docflow.intranet 2>/dev/null || true
+```
+
+Service operations:
+
+```bash
+# restart
+sudo launchctl kickstart -k system/com.domingo.docflow.intranet
+
+# check status
+sudo launchctl print system/com.domingo.docflow.intranet | head -n 40
+curl -sS -o /dev/null -w "%{http_code}\n" http://127.0.0.1:8088/
+
+# stop
+sudo launchctl bootout system/com.domingo.docflow.intranet
+```
+
+Logs:
+
+```bash
 tail -f ~/Library/Logs/docflow/intranet.out.log
 tail -f ~/Library/Logs/docflow/intranet.err.log
 ```

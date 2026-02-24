@@ -88,10 +88,10 @@ python utils/docflow_server.py --base-dir "/Users/domingo/⭐️ Documentación"
 
 ### Auto-start on macOS (launchd)
 
-To start intranet automatically at login and keep it alive, use a user `LaunchAgent`:
+To keep intranet alive without a logged-in GUI session, use a system `LaunchDaemon`:
 
 ```bash
-cat > ~/Library/LaunchAgents/com.domingo.docflow.intranet.plist <<'PLIST'
+sudo tee /Library/LaunchDaemons/com.domingo.docflow.intranet.plist >/dev/null <<'PLIST'
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
@@ -107,6 +107,12 @@ cat > ~/Library/LaunchAgents/com.domingo.docflow.intranet.plist <<'PLIST'
     <string>--rebuild-on-start</string>
   </array>
   <key>WorkingDirectory</key><string>/Users/domingo/Programacion/Python/docflow</string>
+  <key>UserName</key><string>domingo</string>
+  <key>GroupName</key><string>staff</string>
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>PYTHONUNBUFFERED</key><string>1</string>
+  </dict>
   <key>RunAtLoad</key><true/>
   <key>KeepAlive</key><true/>
   <key>StandardOutPath</key><string>/Users/domingo/Library/Logs/docflow/intranet.out.log</string>
@@ -115,8 +121,33 @@ cat > ~/Library/LaunchAgents/com.domingo.docflow.intranet.plist <<'PLIST'
 </plist>
 PLIST
 
-launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.domingo.docflow.intranet.plist
-launchctl kickstart -k gui/$(id -u)/com.domingo.docflow.intranet
+sudo chown root:wheel /Library/LaunchDaemons/com.domingo.docflow.intranet.plist
+sudo chmod 644 /Library/LaunchDaemons/com.domingo.docflow.intranet.plist
+
+# Optional migration cleanup if an old user LaunchAgent exists:
+launchctl bootout gui/$(id -u)/com.domingo.docflow.intranet 2>/dev/null || true
+launchctl disable gui/$(id -u)/com.domingo.docflow.intranet 2>/dev/null || true
+
+sudo launchctl bootout system/com.domingo.docflow.intranet 2>/dev/null || true
+sudo launchctl bootstrap system /Library/LaunchDaemons/com.domingo.docflow.intranet.plist
+sudo launchctl kickstart -k system/com.domingo.docflow.intranet
+```
+
+Service control commands:
+
+```bash
+# restart
+sudo launchctl kickstart -k system/com.domingo.docflow.intranet
+
+# check status
+sudo launchctl print system/com.domingo.docflow.intranet | head -n 40
+curl -sS -o /dev/null -w "%{http_code}\n" http://127.0.0.1:8080/
+
+# stop
+sudo launchctl bootout system/com.domingo.docflow.intranet
+
+# start again after stop
+sudo launchctl bootstrap system /Library/LaunchDaemons/com.domingo.docflow.intranet.plist
 ```
 
 ### Tailscale access (tailnet only)
