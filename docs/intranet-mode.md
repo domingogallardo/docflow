@@ -96,12 +96,12 @@ Optional override:
 ## Tailscale exposure
 
 ```bash
-python utils/docflow_server.py --base-dir "/Users/domingo/⭐️ Documentación" --host 127.0.0.1 --port 8088
+python utils/docflow_server.py --base-dir "/Users/domingo/⭐️ Documentación" --host 127.0.0.1 --port 8080
 # optional full rebuild before serving
 python utils/docflow_server.py --base-dir "/Users/domingo/⭐️ Documentación" --rebuild-on-start
 
 # publish inside your tailnet
-tailscale serve --bg 8088
+tailscale serve --bg 8080
 tailscale serve status
 ```
 

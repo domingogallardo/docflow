@@ -1053,7 +1053,7 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Run local docflow intranet server.")
     parser.add_argument("--base-dir", help="BASE_DIR with Incoming/Posts/Tweets/... and _site/")
     parser.add_argument("--host", default=os.getenv("DOCFLOW_HOST", "127.0.0.1"))
-    parser.add_argument("--port", type=int, default=int(os.getenv("DOCFLOW_PORT", "8088")))
+    parser.add_argument("--port", type=int, default=int(os.getenv("DOCFLOW_PORT", "8080")))
     parser.add_argument("--bump-years", type=int, default=int(os.getenv("DOCFLOW_BUMP_YEARS", "100")))
     parser.set_defaults(rebuild_on_start=False)
     parser.add_argument(

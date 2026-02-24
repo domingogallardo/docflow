@@ -19,7 +19,7 @@ This repository automates collecting and organizing personal documents (Instapap
 - Create/refresh X likes state: `python utils/create_x_state.py --state-path /Users/<you>/.secrets/docflow/x_state.json`
 - Build intranet browse index: `python utils/build_browse_index.py --base-dir "/path/to/BASE_DIR"`
 - Build intranet working index: `python utils/build_working_index.py --base-dir "/path/to/BASE_DIR"`
-- Run intranet server: `python utils/docflow_server.py --base-dir "/path/to/BASE_DIR" --port 8088`
+- Run intranet server: `python utils/docflow_server.py --base-dir "/path/to/BASE_DIR" --port 8080`
 - Unified wrapper (cron/manual): `bash bin/docflow.sh all`
 - Tests (verbose): `pytest -v`
 - Targeted tests: `pytest tests/test_docflow_server.py -q`
@@ -58,7 +58,7 @@ Useful setup (new environment):
 
 ### Fast path for article location (avoid full-disk search)
 
-- For URLs like `http://localhost:8088/posts/raw/Posts%202026/...html`:
+- For URLs like `http://localhost:8080/posts/raw/Posts%202026/...html`:
   1. Resolve `BASE_DIR` from `config.py`.
   2. Decode URL-encoded filename.
   3. Check exact path under `BASE_DIR/Posts/Posts <YEAR>/`.

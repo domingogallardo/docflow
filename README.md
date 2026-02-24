@@ -251,6 +251,12 @@ bash bin/build_tweet_consolidated.sh --all-days --cleanup-existing
 
 `--cleanup-existing` removes only source tweet `.html` files for consolidated days and keeps source `.md`.
 
+- Daily highlights report helper:
+
+```bash
+python utils/build_daily_highlights_report.py --day 2026-02-13 --output "/tmp/highlights-2026-02-13.md"
+```
+
 ## Tests
 
 Run all tests:
