@@ -578,6 +578,8 @@ OVERLAY_JS = """
   let highlightBusy = false;
   let highlightProgress = { current: 0, total: 0, label: '0 / 0' };
   let highlightProgressListenerAttached = false;
+  let hashListenerAttached = false;
+  let highlightRefreshTimer = 0;
 
   function callApi(action, path) {
     const body = path ? { path } : {};
@@ -720,6 +722,18 @@ OVERLAY_JS = """
     render();
   }
 
+  function scheduleHighlightProgressRefresh(delayMs) {
+    const delay = Number.isFinite(Number(delayMs)) ? Math.max(0, Number(delayMs)) : 0;
+    if (highlightRefreshTimer) {
+      window.clearTimeout(highlightRefreshTimer);
+      highlightRefreshTimer = 0;
+    }
+    highlightRefreshTimer = window.setTimeout(() => {
+      highlightRefreshTimer = 0;
+      refreshHighlightProgress();
+    }, delay);
+  }
+
   async function moveHighlight(direction) {
     if (busy || highlightBusy || !hasHighlightApi()) return;
     highlightBusy = true;
@@ -841,6 +855,12 @@ OVERLAY_JS = """
     render();
   }
 
+  function onHashChange() {
+    // Deep links can target a specific highlight id (#hl=...).
+    // Refresh shortly after hash changes to reflect the focused index.
+    scheduleHighlightProgressRefresh(60);
+  }
+
   function mount() {
     if (!document.body) return;
     if (!bar.isConnected) document.body.appendChild(bar);
@@ -848,8 +868,14 @@ OVERLAY_JS = """
       document.addEventListener('articlejs:highlight-progress', onHighlightProgress);
       highlightProgressListenerAttached = true;
     }
+    if (!hashListenerAttached && window && window.addEventListener) {
+      window.addEventListener('hashchange', onHashChange, { passive: true });
+      hashListenerAttached = true;
+    }
     render();
     refreshHighlightProgress();
+    // Re-sync once highlights finish hydration/focus on load.
+    scheduleHighlightProgressRefresh(180);
   }
 
   if (document.readyState === 'loading') {
