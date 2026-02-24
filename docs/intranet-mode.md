@@ -96,6 +96,19 @@ Daily cron entry at `01:00`:
 0 1 * * * cd /path/to/docflow && /bin/bash bin/docflow_tweet_daily.sh >> /path/to/docflow/cron.log 2>&1
 ```
 
+## `bin/docflow_highlights_daily.sh`
+
+Dedicated daily highlights report process:
+
+- builds previous day highlights with `utils/build_daily_highlights_report.py`
+- writes Markdown to Obsidian `Subrayados` with file name `Highlights YYYY-MM-DD.md`
+
+Daily cron entry at `01:05`:
+
+```cron
+5 1 * * * cd /Users/domingo/Programacion/Python/docflow && /bin/bash bin/docflow_highlights_daily.sh >> /Users/domingo/Programacion/Python/docflow/cron.log 2>&1
+```
+
 ## X Likes session state
 
 - Store Playwright `storage_state` outside the repository.

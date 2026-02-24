@@ -276,6 +276,18 @@ bash bin/build_tweet_consolidated.sh --all-days --cleanup-existing
 python utils/build_daily_highlights_report.py --day 2026-02-13 --output "/tmp/highlights-2026-02-13.md"
 ```
 
+- Daily highlights report runner (previous day to Obsidian `Subrayados`):
+
+```bash
+bash bin/docflow_highlights_daily.sh
+```
+
+Cron example (daily at `01:05`):
+
+```cron
+5 1 * * * cd /Users/domingo/Programacion/Python/docflow && /bin/bash bin/docflow_highlights_daily.sh >> /Users/domingo/Programacion/Python/docflow/cron.log 2>&1
+```
+
 ## Tests
 
 Run all tests:

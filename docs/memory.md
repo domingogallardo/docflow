@@ -31,6 +31,9 @@ This file stores stable, reusable operational notes for future agent runs.
 
 - Canonical generator: `utils/build_daily_highlights_report.py`.
 - Build one file per day using `--day YYYY-MM-DD` and `--output /path/report.md`.
+- Daily scheduler wrapper: `bin/docflow_highlights_daily.sh`.
+- Default output path for scheduled runs:
+  - `/Users/domingo/Library/Mobile Documents/com~apple~CloudDocs/ObsidianVault/🚀 Notas/Subrayados/Highlights YYYY-MM-DD.md`
 - For legacy highlight payloads, always read via `load_highlights_for_path(...)` before rendering so missing ids are normalized.
 - Output structure:
   - One header per source file: `### [<file stem>](<intranet raw url>)`.
