@@ -61,5 +61,7 @@ This file stores stable, reusable operational notes for future agent runs.
 ## Tweet Daily Consolidation Schedule
 
 - `bin/docflow.sh all` no longer runs tweet daily consolidation.
-- Daily tweet consolidation is handled by `bin/docflow_tweet_daily.sh`.
-- Schedule it as a separate cron job at `01:00` and keep intranet rebuilds in that process.
+- Recommended cron block:
+  - `0 */6 * * * /bin/bash /Users/domingo/Programacion/Python/docflow/bin/docflow.sh all >> /Users/domingo/Programacion/Python/docflow/cron.log 2>&1`
+  - `0 1 * * * /bin/bash /Users/domingo/Programacion/Python/docflow/bin/docflow_tweet_daily.sh >> /Users/domingo/Programacion/Python/docflow/cron.log 2>&1`
+  - `5 1 * * * /bin/bash /Users/domingo/Programacion/Python/docflow/bin/docflow_highlights_daily.sh >> /Users/domingo/Programacion/Python/docflow/cron.log 2>&1`

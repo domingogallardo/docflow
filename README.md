@@ -143,6 +143,36 @@ launchctl bootout gui/$(id -u)/com.domingo.docflow.intranet
 launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.domingo.docflow.intranet.plist
 ```
 
+### Cron setup (recommended)
+
+Edit cron:
+
+```bash
+crontab -e
+```
+
+Use these entries:
+
+```cron
+0 */6 * * * /bin/bash /Users/domingo/Programacion/Python/docflow/bin/docflow.sh all >> /Users/domingo/Programacion/Python/docflow/cron.log 2>&1
+0 1 * * * /bin/bash /Users/domingo/Programacion/Python/docflow/bin/docflow_tweet_daily.sh >> /Users/domingo/Programacion/Python/docflow/cron.log 2>&1
+5 1 * * * /bin/bash /Users/domingo/Programacion/Python/docflow/bin/docflow_highlights_daily.sh >> /Users/domingo/Programacion/Python/docflow/cron.log 2>&1
+```
+
+Check active tasks:
+
+```bash
+crontab -l
+```
+
+Run manually:
+
+```bash
+bash bin/docflow.sh all
+bash bin/docflow_tweet_daily.sh
+bash bin/docflow_highlights_daily.sh
+```
+
 ### Tailscale access (tailnet only)
 
 Expose intranet via Tailscale to your tailnet:
@@ -195,6 +225,7 @@ Behavior:
 - Loads `~/.docflow_env` if present.
 - Runs `process_documents.py` with your arguments.
 - Rebuilds intranet browse/working/done pages (`utils/build_browse_index.py`, `utils/build_working_index.py`, and `utils/build_done_index.py`) when processing succeeds.
+- Use `all` as the processing target.
 
 Optional override:
 
@@ -215,12 +246,6 @@ Behavior:
 - Loads `~/.docflow_env` if present.
 - Runs `bin/build_tweet_consolidated.sh --yesterday`.
 - Rebuilds intranet browse/working/done pages when consolidation succeeds.
-
-Cron example (daily at `01:00`):
-
-```cron
-0 1 * * * cd /path/to/docflow && /bin/bash bin/docflow_tweet_daily.sh >> /path/to/docflow/cron.log 2>&1
-```
 
 ## Intranet server API
 
@@ -280,12 +305,6 @@ python utils/build_daily_highlights_report.py --day 2026-02-13 --output "/tmp/hi
 
 ```bash
 bash bin/docflow_highlights_daily.sh
-```
-
-Cron example (daily at `01:05`):
-
-```cron
-5 1 * * * cd /Users/domingo/Programacion/Python/docflow && /bin/bash bin/docflow_highlights_daily.sh >> /Users/domingo/Programacion/Python/docflow/cron.log 2>&1
 ```
 
 ## Tests
