@@ -194,13 +194,32 @@ Behavior:
 
 - Loads `~/.docflow_env` if present.
 - Runs `process_documents.py` with your arguments.
-- If target is `all`, runs `bin/build_tweet_consolidated.sh --yesterday`.
 - Rebuilds intranet browse/working/done pages (`utils/build_browse_index.py`, `utils/build_working_index.py`, and `utils/build_done_index.py`) when processing succeeds.
 
 Optional override:
 
 ```bash
 INTRANET_BASE_DIR="/path/to/base" bash bin/docflow.sh all
+```
+
+## Daily tweet consolidation runner (`bin/docflow_tweet_daily.sh`)
+
+Use this dedicated process for daily tweet consolidation:
+
+```bash
+bash bin/docflow_tweet_daily.sh
+```
+
+Behavior:
+
+- Loads `~/.docflow_env` if present.
+- Runs `bin/build_tweet_consolidated.sh --yesterday`.
+- Rebuilds intranet browse/working/done pages when consolidation succeeds.
+
+Cron example (daily at `01:00`):
+
+```cron
+0 1 * * * cd /path/to/docflow && /bin/bash bin/docflow_tweet_daily.sh >> /path/to/docflow/cron.log 2>&1
 ```
 
 ## Intranet server API

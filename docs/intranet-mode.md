@@ -77,12 +77,24 @@ Local state under `BASE_DIR/state`:
 `bin/docflow.sh` now runs the local flow only:
 
 - executes `process_documents.py`
-- optionally runs tweet daily consolidation (`--yesterday` when target is `all`)
 - rebuilds intranet browse, working, and done
 
 Optional override:
 
 - `INTRANET_BASE_DIR=/path/to/base`
+
+## `bin/docflow_tweet_daily.sh`
+
+Dedicated daily tweet consolidation process:
+
+- runs `bin/build_tweet_consolidated.sh --yesterday`
+- rebuilds intranet browse, working, and done
+
+Daily cron entry at `01:00`:
+
+```cron
+0 1 * * * cd /path/to/docflow && /bin/bash bin/docflow_tweet_daily.sh >> /path/to/docflow/cron.log 2>&1
+```
 
 ## X Likes session state
 
