@@ -870,6 +870,60 @@
     });
   }
 
+  function focusHighlightById(id, options) {
+    var targetId = String(id || '').trim();
+    return initHighlights().then(function() {
+      var progressBefore = refreshHighlightNavigation({
+        currentId: targetId,
+        currentIndex: highlightNavState.currentIndex,
+        selectFirst: false
+      });
+      if (!progressBefore.total) {
+        emitHighlightProgress('empty');
+        return { ok: false, reason: 'empty', progress: progressBefore };
+      }
+      if (!targetId) {
+        return { ok: false, reason: 'missing-id', progress: progressBefore };
+      }
+
+      var targetIndex = -1;
+      for (var i = 0; i < highlightNavState.blocks.length; i++) {
+        if (highlightNavState.blocks[i].id === targetId) {
+          targetIndex = i;
+          break;
+        }
+      }
+      if (targetIndex < 0) {
+        emitHighlightProgress('missing');
+        return { ok: false, reason: 'missing', progress: progressBefore };
+      }
+      return focusHighlightAt(targetIndex, options);
+    });
+  }
+
+  function highlightIdFromHash() {
+    var hash = '';
+    try { hash = String(location.hash || ''); } catch (_) { hash = ''; }
+    if (!hash) return '';
+    if (hash.charAt(0) === '#') hash = hash.slice(1);
+    if (!hash) return '';
+
+    var raw = '';
+    if (hash.indexOf('hl=') === 0) raw = hash.slice(3);
+    else if (hash.indexOf('highlight=') === 0) raw = hash.slice('highlight='.length);
+    else return '';
+
+    if (!raw) return '';
+    try { raw = decodeURIComponent(raw); } catch (_) {}
+    return String(raw || '').trim();
+  }
+
+  function focusHighlightFromHash(options) {
+    var id = highlightIdFromHash();
+    if (!id) return Promise.resolve({ ok: false, reason: 'no-target' });
+    return focusHighlightById(id, options);
+  }
+
   function readHighlights() {
     if (!window.fetch) return Promise.resolve(null);
 
@@ -1086,7 +1140,8 @@
     removeHighlight: removeHighlightById,
     nextHighlight: nextHighlight,
     previousHighlight: previousHighlight,
-    getHighlightProgress: getHighlightProgress
+    getHighlightProgress: getHighlightProgress,
+    focusHighlightById: focusHighlightById
   };
 
   // ---- Discreet overlay button to copy current selection as Markdown ----
@@ -1302,7 +1357,18 @@
   function initArticleUi() {
     ensureMobileReadingTypography();
     ensureOverlay();
-    initHighlights();
+    initHighlights()
+      .then(function() {
+        return focusHighlightFromHash({ wrap: false, behavior: 'smooth', block: 'center' });
+      })
+      .catch(function() {});
+    if (window && window.addEventListener) {
+      window.addEventListener(
+        'hashchange',
+        function() { focusHighlightFromHash({ wrap: false, behavior: 'smooth', block: 'center' }); },
+        { passive: true }
+      );
+    }
   }
   // Initialize overlay late to ensure DOM is ready
   if (document && document.addEventListener) {

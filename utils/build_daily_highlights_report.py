@@ -23,6 +23,7 @@ if __package__ in (None, ""):
     if str(_REPO_ROOT) not in sys.path:
         sys.path.insert(0, str(_REPO_ROOT))
 
+from utils.highlight_store import load_highlights_for_path
 from utils.site_paths import normalize_rel_path, raw_url_for_rel_path, resolve_base_dir, state_root
 
 
@@ -175,6 +176,13 @@ def _build_text_fragment(value: str) -> str:
     return "#:~:text=" + quote(head, safe="") + "," + quote(tail, safe="")
 
 
+def _build_highlight_fragment(highlight_id: str) -> str:
+    value = str(highlight_id or "").strip()
+    if not value:
+        return ""
+    return "#hl=" + quote(value, safe="")
+
+
 def _iter_highlight_state_files(base_dir: Path) -> list[Path]:
     root = state_root(base_dir) / "highlights"
     if not root.is_dir():
@@ -184,6 +192,7 @@ def _iter_highlight_state_files(base_dir: Path) -> list[Path]:
 
 def _collect_daily_highlights(base_dir: Path, target_day: date) -> dict[str, list[HighlightRecord]]:
     grouped: dict[str, list[HighlightRecord]] = {}
+    processed_paths: set[str] = set()
     for state_file in _iter_highlight_state_files(base_dir):
         payload = _load_json(state_file)
         if payload is None:
@@ -197,11 +206,16 @@ def _collect_daily_highlights(base_dir: Path, target_day: date) -> dict[str, lis
         except Exception:
             continue
 
-        raw_highlights = payload.get("highlights")
+        if rel_path in processed_paths:
+            continue
+        processed_paths.add(rel_path)
+
+        normalized_payload = load_highlights_for_path(base_dir, rel_path)
+        raw_highlights = normalized_payload.get("highlights")
         if not isinstance(raw_highlights, list):
             continue
 
-        payload_title = str(payload.get("title") or "").strip()
+        payload_title = str(normalized_payload.get("title") or "").strip()
         file_title = Path(rel_path).stem.strip() or Path(rel_path).name
 
         for item in raw_highlights:
@@ -365,7 +379,9 @@ def _build_rendered_highlights(
         items: list[RenderedHighlight] = []
         for record in sorted(records, key=lambda r: (r.created_at, r.highlight_id, r.text)):
             section_title = _resolve_section_title(record, index)
-            fragment = _build_text_fragment(record.text)
+            fragment = _build_highlight_fragment(record.highlight_id)
+            if not fragment:
+                fragment = _build_text_fragment(record.text)
             highlight_url = page_url + fragment if fragment else page_url
             items.append(
                 RenderedHighlight(

@@ -81,7 +81,9 @@ def test_main_builds_daily_report_grouped_by_file_and_section(tmp_path: Path, mo
     assert "[Intranet page](" not in content
     assert content.count("[Highlight](") == 3
     assert "http://localhost:8080/posts/raw/Posts%202026/doc.html" in content
-    assert "#:~:text=Alpha%20quote%20text" in content
+    assert "#hl=h1" in content
+    assert "#hl=h1b" in content
+    assert "#hl=h2" in content
 
 
 def test_main_uses_payload_title_when_heading_is_missing(tmp_path: Path, monkeypatch) -> None:
@@ -127,6 +129,7 @@ def test_main_uses_payload_title_when_heading_is_missing(tmp_path: Path, monkeyp
     assert "### [tweet-1](<http://localhost:8080/tweets/raw/Tweets%202026/tweet-1.html>)" in content
     assert "**Tweet by Alice (@alice)**" in content
     assert "http://localhost:8080/tweets/raw/Tweets%202026/tweet-1.html" in content
+    assert "#hl=h1" in content
 
 
 def test_main_writes_empty_report_when_no_highlights_for_day(tmp_path: Path, monkeypatch) -> None:

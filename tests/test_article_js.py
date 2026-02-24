@@ -17,6 +17,8 @@ def test_article_js_includes_highlights():
     assert 'nextHighlight: nextHighlight' in content
     assert 'previousHighlight: previousHighlight' in content
     assert 'getHighlightProgress: getHighlightProgress' in content
+    assert 'focusHighlightById: focusHighlightById' in content
+    assert "hash.indexOf('hl=') === 0" in content
     assert 'articlejs:highlight-progress' in content
     assert '.articlejs-highlight.articlejs-highlight-active {' not in content
     assert 'box-shadow: 0 0 0 2px rgba(190, 126, 0, 0.35);' not in content
