@@ -403,17 +403,21 @@ def _render_markdown(day_value: date, rendered_by_path: dict[str, list[RenderedH
         items = rendered_by_path[rel_path]
         if not items:
             continue
-        lines.append(f"### {_escape_markdown(items[0].record.file_title)}")
+        lines.append(f"### [{_escape_markdown(items[0].record.file_title)}](<{items[0].page_url}>)")
         lines.append("")
+
+        grouped_by_section: dict[str, list[RenderedHighlight]] = {}
         for item in items:
-            lines.append(f"**{_escape_markdown(item.section_title)}**")
+            grouped_by_section.setdefault(item.section_title, []).append(item)
+
+        for section_title, section_items in grouped_by_section.items():
+            lines.append(f"**{_escape_markdown(section_title)}**")
             lines.append("")
-            lines.append(_escape_md_blockquote(item.record.text))
-            lines.append("")
-            lines.append(
-                f"[Intranet page](<{item.page_url}>) | [Highlight](<{item.highlight_url}>)"
-            )
-            lines.append("")
+            for item in section_items:
+                lines.append(_escape_md_blockquote(item.record.text))
+                lines.append("")
+                lines.append(f"[Highlight](<{item.highlight_url}>)")
+                lines.append("")
 
     return "\n".join(lines)
 

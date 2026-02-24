@@ -18,6 +18,7 @@ def test_main_builds_daily_report_grouped_by_file_and_section(tmp_path: Path, mo
         "<h1>Main article</h1>"
         "<h2>Section Alpha</h2>"
         "<p>Alpha quote text.</p>"
+        "<p>Another alpha quote.</p>"
         "<h2>Section Beta</h2>"
         "<p>Beta quote text.</p>"
         "</body></html>",
@@ -35,6 +36,11 @@ def test_main_builds_daily_report_grouped_by_file_and_section(tmp_path: Path, mo
                     "id": "h1",
                     "text": "Alpha quote text.",
                     "created_at": "2026-02-13T09:00:00Z",
+                },
+                {
+                    "id": "h1b",
+                    "text": "Another alpha quote.",
+                    "created_at": "2026-02-13T09:05:00Z",
                 },
                 {
                     "id": "h2",
@@ -64,12 +70,16 @@ def test_main_builds_daily_report_grouped_by_file_and_section(tmp_path: Path, mo
     assert out_path.is_file()
 
     content = out_path.read_text(encoding="utf-8")
-    assert "### doc" in content
+    assert "### [doc](<http://localhost:8080/posts/raw/Posts%202026/doc.html>)" in content
     assert "**Section Alpha**" in content
+    assert content.count("**Section Alpha**") == 1
     assert "**Section Beta**" in content
     assert "Alpha quote text." in content
+    assert "Another alpha quote." in content
     assert "Beta quote text." in content
     assert "Should be filtered out." not in content
+    assert "[Intranet page](" not in content
+    assert content.count("[Highlight](") == 3
     assert "http://localhost:8080/posts/raw/Posts%202026/doc.html" in content
     assert "#:~:text=Alpha%20quote%20text" in content
 
@@ -114,7 +124,7 @@ def test_main_uses_payload_title_when_heading_is_missing(tmp_path: Path, monkeyp
     assert exit_code == 0
 
     content = out_path.read_text(encoding="utf-8")
-    assert "### tweet-1" in content
+    assert "### [tweet-1](<http://localhost:8080/tweets/raw/Tweets%202026/tweet-1.html>)" in content
     assert "**Tweet by Alice (@alice)**" in content
     assert "http://localhost:8080/tweets/raw/Tweets%202026/tweet-1.html" in content
 
