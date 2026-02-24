@@ -471,12 +471,13 @@
     // Never wrap pure whitespace segments; they can add visible vertical gaps
     // when highlights cross line or paragraph boundaries.
     if (!selectedText || !/\S/.test(selectedText)) return;
+    var selectedLength = endOffset - startOffset;
     var selected = node;
     if (startOffset > 0) {
       selected = node.splitText(startOffset);
     }
-    if (endOffset < selected.nodeValue.length) {
-      selected.splitText(endOffset - startOffset);
+    if (selectedLength < selected.nodeValue.length) {
+      selected.splitText(selectedLength);
     }
     var mark = document.createElement('span');
     mark.className = 'articlejs-highlight';
@@ -515,6 +516,47 @@
     return true;
   }
 
+  function firstTextDescendant(node) {
+    if (!node || !document.createTreeWalker || typeof NodeFilter === 'undefined') return null;
+    var walker = document.createTreeWalker(node, NodeFilter.SHOW_TEXT, null);
+    return walker.nextNode() ? walker.currentNode : null;
+  }
+
+  function lastTextDescendant(node) {
+    if (!node || !document.createTreeWalker || typeof NodeFilter === 'undefined') return null;
+    var walker = document.createTreeWalker(node, NodeFilter.SHOW_TEXT, null);
+    var last = null;
+    while (walker.nextNode()) {
+      last = walker.currentNode;
+    }
+    return last;
+  }
+
+  function renderedHighlightText(id) {
+    if (!id || !document || !document.querySelectorAll) return '';
+    var nodes = document.querySelectorAll('span.articlejs-highlight[data-highlight-id="' + id + '"]');
+    if (!nodes.length) return '';
+
+    if (document.createRange) {
+      var firstText = firstTextDescendant(nodes[0]);
+      var lastText = lastTextDescendant(nodes[nodes.length - 1]);
+      if (firstText && lastText) {
+        try {
+          var range = document.createRange();
+          range.setStart(firstText, 0);
+          range.setEnd(lastText, (lastText.nodeValue || '').length);
+          return range.toString();
+        } catch (_) {}
+      }
+    }
+
+    var fallback = '';
+    for (var i = 0; i < nodes.length; i++) {
+      fallback += nodes[i].textContent || '';
+    }
+    return fallback;
+  }
+
   function applyHighlightFromData(highlight, indexData) {
     if (!highlight || !highlight.text || !indexData) return false;
     var id = highlight.id || makeId();
@@ -527,13 +569,7 @@
 
     // Guard against stale/corrupted anchors that can expand a highlight to a
     // much larger span after DOM node splits.
-    var rendered = '';
-    if (document && document.querySelectorAll) {
-      var nodes = document.querySelectorAll('span.articlejs-highlight[data-highlight-id="' + id + '"]');
-      for (var i = 0; i < nodes.length; i++) {
-        rendered += nodes[i].textContent || '';
-      }
-    }
+    var rendered = renderedHighlightText(id);
     if (normalizeWhitespace(rendered) !== normalizeWhitespace(highlight.text)) {
       unwrapHighlight(id);
       return false;
