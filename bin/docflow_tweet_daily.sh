@@ -4,7 +4,7 @@ set -euo pipefail
 # Daily tweet consolidation wrapper for automated/manual execution.
 # - Loads ~/.docflow_env if it exists
 # - Runs bin/build_tweet_consolidated.sh --yesterday
-# - Rebuilds local intranet browse/working/done outputs
+# - Rebuilds local intranet browse/reading/working/done outputs
 
 ENV_FILE="${HOME}/.docflow_env"
 if [ -f "${ENV_FILE}" ]; then
@@ -38,6 +38,7 @@ else
 fi
 
 intranet_browse_status=0
+intranet_reading_status=0
 intranet_working_status=0
 intranet_done_status=0
 intranet_status=0
@@ -48,6 +49,12 @@ if [ "${consolidate_status}" -eq 0 ]; then
     intranet_browse_status=$?
     set -e
     echo "[$(date -Iseconds)] Docflow tweet daily: intranet browse build exit=${intranet_browse_status}"
+
+    set +e
+    "${PYTHON_BIN}" utils/build_reading_index.py --base-dir "${INTRANET_BASE_DIR}"
+    intranet_reading_status=$?
+    set -e
+    echo "[$(date -Iseconds)] Docflow tweet daily: intranet reading build exit=${intranet_reading_status}"
 
     set +e
     "${PYTHON_BIN}" utils/build_working_index.py --base-dir "${INTRANET_BASE_DIR}"
@@ -61,7 +68,7 @@ if [ "${consolidate_status}" -eq 0 ]; then
     set -e
     echo "[$(date -Iseconds)] Docflow tweet daily: intranet done build exit=${intranet_done_status}"
 
-    if [ "${intranet_browse_status}" -ne 0 ] || [ "${intranet_working_status}" -ne 0 ] || [ "${intranet_done_status}" -ne 0 ]; then
+    if [ "${intranet_browse_status}" -ne 0 ] || [ "${intranet_reading_status}" -ne 0 ] || [ "${intranet_working_status}" -ne 0 ] || [ "${intranet_done_status}" -ne 0 ]; then
       intranet_status=1
     fi
   else

@@ -33,7 +33,6 @@ def test_build_browse_site_generates_indexes_and_actions(tmp_path: Path):
     stale_incoming.mkdir(parents=True)
     (stale_incoming / "index.html").write_text("<p>stale incoming</p>", encoding="utf-8")
 
-    site_state.set_bumped_path(base, "Posts/Posts 2026/doc.html", original_mtime=10.0, bumped_mtime=20.0)
     highlight_store.save_highlights_for_path(
         base,
         "Posts/Posts 2026/doc.html",
@@ -76,7 +75,7 @@ def test_build_browse_site_generates_indexes_and_actions(tmp_path: Path):
     assert "back_forward" in browse_sort_content
     assert "const sortableFiles = sortable.filter" in browse_sort_content
     assert "!href.endsWith('/')" in browse_sort_content
-    assert "ul.dg-index, ul.dg-done-list" in browse_sort_content
+    assert "ul.dg-index, ul.dg-done-list, ul.dg-reading-list, ul.dg-working-list" in browse_sort_content
     assert "dgWorking" not in browse_sort_content
 
     root_content = posts_root_page.read_text(encoding="utf-8")
@@ -90,7 +89,7 @@ def test_build_browse_site_generates_indexes_and_actions(tmp_path: Path):
     content = posts_year_page.read_text(encoding="utf-8")
     assert "Sample Title" not in content
     assert " · Sample Title" not in content
-    assert "🔥" in content
+    assert "🔥" not in content
     assert "🟡" in content
     assert "doc.md" not in content
     assert "data-dg-sort-toggle" in content
@@ -100,16 +99,15 @@ def test_build_browse_site_generates_indexes_and_actions(tmp_path: Path):
     assert "data-dg-done" not in content
     assert "data-dg-highlighted='1'" in content
     assert "<script src='/assets/browse-sort.js' defer></script>" in content
-    assert 'data-api-action="unbump"' not in content
+    assert 'data-api-action="to-reading"' not in content
     assert '/posts/raw/Posts%202026/doc.html' in content
 
     pdf_content = pdfs_year_page.read_text(encoding="utf-8")
-    assert 'data-api-action="to-working"' in pdf_content
-    assert 'data-api-action="bump"' in pdf_content or 'data-api-action="unbump"' in pdf_content
+    assert 'data-api-action="to-reading"' in pdf_content
 
     browse_home_content = browse_home.read_text(encoding="utf-8")
     assert "Incoming" not in browse_home_content
-    assert "🔥 bumped · 🟡 highlight" in browse_home_content
+    assert "🟡 highlight" in browse_home_content
     assert "data-dg-sort-toggle" not in browse_home_content
     assert "data-dg-search-input" in browse_home_content
     assert "data-dg-search-button" in browse_home_content
@@ -137,7 +135,7 @@ def test_collect_category_items_handles_missing_dirs(tmp_path: Path):
     assert items == []
 
 
-def test_browse_uses_bump_state_for_order_without_touching_mtime(tmp_path: Path):
+def test_browse_hides_reading_items_without_touching_mtime(tmp_path: Path):
     base = tmp_path / "base"
     posts = base / "Posts" / "Posts 2026"
     posts.mkdir(parents=True)
@@ -150,36 +148,41 @@ def test_browse_uses_bump_state_for_order_without_touching_mtime(tmp_path: Path)
     os.utime(second, (1_700_000_000, 1_700_000_000))
 
     mtime_b_before = second.stat().st_mtime
-    site_state.set_bumped_path(base, "Posts/Posts 2026/b.html", original_mtime=mtime_b_before, bumped_mtime=9_999_999_999.0)
+    site_state.set_reading_path(base, "Posts/Posts 2026/b.html")
 
     build_browse_index.build_browse_site(base)
     year_page = base / "_site" / "browse" / "posts" / "Posts 2026" / "index.html"
     html = year_page.read_text(encoding="utf-8")
 
-    assert html.find("b.html") < html.find("a.html")
+    assert "b.html" not in html
+    assert "a.html" in html
     assert abs(second.stat().st_mtime - mtime_b_before) < 0.001
     assert "<span class='dg-date'> — " not in html
 
 
-def test_browse_hides_working_and_done_items(tmp_path: Path, monkeypatch):
+def test_browse_hides_reading_working_and_done_items(tmp_path: Path, monkeypatch):
     base = tmp_path / "base"
     posts = base / "Posts" / "Posts 2026"
     posts.mkdir(parents=True)
 
+    reading_doc = posts / "reading.html"
     working_doc = posts / "working.html"
     done_doc = posts / "done.html"
     rest_doc = posts / "rest.html"
+    reading_doc.write_text("<html><body>Reading</body></html>", encoding="utf-8")
     working_doc.write_text("<html><body>Working</body></html>", encoding="utf-8")
     done_doc.write_text("<html><body>Done</body></html>", encoding="utf-8")
     rest_doc.write_text("<html><body>Rest</body></html>", encoding="utf-8")
 
+    os.utime(reading_doc, (1_700_000_050, 1_700_000_050))
     os.utime(working_doc, (1_700_000_000, 1_700_000_000))
     os.utime(done_doc, (1_700_000_100, 1_700_000_100))
     # Keep a very recent mtime so rest beats done once done has no stage priority.
     os.utime(rest_doc, (1_900_000_200, 1_900_000_200))
 
-    times = iter(["2026-02-01T10:00:00Z", "2026-02-01T10:00:05Z"])
+    times = iter(["2026-02-01T10:00:00Z", "2026-02-01T10:00:01Z", "2026-02-01T10:00:05Z"])
     monkeypatch.setattr(site_state, "_utc_now_iso", lambda: next(times))
+    site_state.set_reading_path(base, "Posts/Posts 2026/reading.html")
     site_state.set_working_path(base, "Posts/Posts 2026/working.html")
     site_state.set_done_path(base, "Posts/Posts 2026/done.html")
 
@@ -187,27 +190,27 @@ def test_browse_hides_working_and_done_items(tmp_path: Path, monkeypatch):
     year_page = base / "_site" / "browse" / "posts" / "Posts 2026" / "index.html"
     html = year_page.read_text(encoding="utf-8")
 
+    assert "reading.html" not in html
     assert "working.html" not in html
     assert "done.html" not in html
     assert "rest.html" in html
 
 
-def test_browse_keeps_bumped_and_hides_done(tmp_path: Path, monkeypatch):
+def test_browse_hides_reading_and_done(tmp_path: Path, monkeypatch):
     base = tmp_path / "base"
     posts = base / "Posts" / "Posts 2026"
     posts.mkdir(parents=True)
 
-    bumped = posts / "bumped.html"
+    reading = posts / "reading.html"
     done_old = posts / "done-old.html"
     done_new = posts / "done-new.html"
     other = posts / "other.html"
-    bumped.write_text("<html><body>Bumped</body></html>", encoding="utf-8")
+    reading.write_text("<html><body>Reading</body></html>", encoding="utf-8")
     done_old.write_text("<html><body>Done old</body></html>", encoding="utf-8")
     done_new.write_text("<html><body>Done new</body></html>", encoding="utf-8")
     other.write_text("<html><body>Other</body></html>", encoding="utf-8")
 
-    # Make file mtime conflict with desired order so state-driven priority is tested.
-    os.utime(bumped, (1_700_000_000, 1_700_000_000))
+    os.utime(reading, (1_700_000_000, 1_700_000_000))
     os.utime(done_old, (1_700_000_400, 1_700_000_400))
     os.utime(done_new, (1_700_000_100, 1_700_000_100))
     os.utime(other, (1_700_000_900, 1_700_000_900))
@@ -215,17 +218,18 @@ def test_browse_keeps_bumped_and_hides_done(tmp_path: Path, monkeypatch):
     done_times = iter(["2026-02-01T10:00:00Z", "2026-02-01T10:00:05Z", "2026-02-01T10:00:10Z"])
     monkeypatch.setattr(site_state, "_utc_now_iso", lambda: next(done_times))
 
+    site_state.set_reading_path(base, "Posts/Posts 2026/reading.html")
     site_state.set_done_path(base, "Posts/Posts 2026/done-old.html")
     site_state.set_done_path(base, "Posts/Posts 2026/done-new.html")
-    site_state.set_bumped_path(base, "Posts/Posts 2026/bumped.html", original_mtime=1_700_000_000.0, bumped_mtime=9_999_999_999.0)
 
     build_browse_index.build_browse_site(base)
     year_page = base / "_site" / "browse" / "posts" / "Posts 2026" / "index.html"
     html = year_page.read_text(encoding="utf-8")
 
-    assert html.find("bumped.html") < html.find("other.html")
+    assert "reading.html" not in html
     assert "done-new.html" not in html
     assert "done-old.html" not in html
+    assert "other.html" in html
 
 
 def test_tweets_listing_hides_secondary_title_text(tmp_path: Path):

@@ -1,4 +1,4 @@
-"""Persistent local state for done, working, and bumped entries."""
+"""Persistent local state for done, reading, and working entries."""
 
 from __future__ import annotations
 
@@ -11,9 +11,9 @@ from pathlib import Path
 from typing import Any
 
 from utils.site_paths import (
-    bump_state_path,
     done_state_path,
     normalize_rel_path,
+    reading_state_path,
     state_root,
     working_state_path,
 )
@@ -143,12 +143,25 @@ def list_working(base_dir: Path) -> set[str]:
     return set(state.get("items", {}).keys())
 
 
+def load_reading_state(base_dir: Path) -> dict[str, Any]:
+    return _read_state(reading_state_path(base_dir))
+
+
+def save_reading_state(base_dir: Path, state: dict[str, Any]) -> None:
+    _write_state(reading_state_path(base_dir), state)
+
+
+def list_reading(base_dir: Path) -> set[str]:
+    state = load_reading_state(base_dir)
+    return set(state.get("items", {}).keys())
+
+
 def set_done_path(
     base_dir: Path,
     rel_path: str,
     *,
+    reading_started_at: str | None = None,
     working_started_at: str | None = None,
-    bumped_started_at: str | None = None,
 ) -> bool:
     key = normalize_rel_path(rel_path)
     state = load_done_state(base_dir)
@@ -166,12 +179,12 @@ def set_done_path(
         entry["done_at"] = _utc_now_iso()
         changed = True
 
-    if isinstance(working_started_at, str) and working_started_at and "working_started_at" not in entry:
-        entry["working_started_at"] = working_started_at
+    if isinstance(reading_started_at, str) and reading_started_at and "reading_started_at" not in entry:
+        entry["reading_started_at"] = reading_started_at
         changed = True
 
-    if isinstance(bumped_started_at, str) and bumped_started_at and "bumped_started_at" not in entry:
-        entry["bumped_started_at"] = bumped_started_at
+    if isinstance(working_started_at, str) and working_started_at and "working_started_at" not in entry:
+        entry["working_started_at"] = working_started_at
         changed = True
 
     if changed:
@@ -194,6 +207,32 @@ def clear_done_path(base_dir: Path, rel_path: str) -> bool:
 def is_done(base_dir: Path, rel_path: str) -> bool:
     key = normalize_rel_path(rel_path)
     return key in list_done(base_dir)
+
+
+def set_reading_path(base_dir: Path, rel_path: str) -> bool:
+    key = normalize_rel_path(rel_path)
+    state = load_reading_state(base_dir)
+    items: dict[str, dict[str, Any]] = state["items"]
+    already = key in items
+    if not already:
+        items[key] = {"reading_at": _utc_now_iso()}
+        save_reading_state(base_dir, state)
+    return not already
+
+
+def pop_reading_path(base_dir: Path, rel_path: str) -> dict[str, Any] | None:
+    key = normalize_rel_path(rel_path)
+    state = load_reading_state(base_dir)
+    items: dict[str, dict[str, Any]] = state["items"]
+    value = items.pop(key, None)
+    if value is not None:
+        save_reading_state(base_dir, state)
+    return value
+
+
+def is_reading(base_dir: Path, rel_path: str) -> bool:
+    key = normalize_rel_path(rel_path)
+    return key in list_reading(base_dir)
 
 
 def set_working_path(base_dir: Path, rel_path: str) -> bool:
@@ -220,48 +259,3 @@ def pop_working_path(base_dir: Path, rel_path: str) -> dict[str, Any] | None:
 def is_working(base_dir: Path, rel_path: str) -> bool:
     key = normalize_rel_path(rel_path)
     return key in list_working(base_dir)
-
-
-def load_bump_state(base_dir: Path) -> dict[str, Any]:
-    return _read_state(bump_state_path(base_dir))
-
-
-def save_bump_state(base_dir: Path, state: dict[str, Any]) -> None:
-    _write_state(bump_state_path(base_dir), state)
-
-
-def set_bumped_path(base_dir: Path, rel_path: str, *, original_mtime: float, bumped_mtime: float) -> None:
-    key = normalize_rel_path(rel_path)
-    state = load_bump_state(base_dir)
-    items: dict[str, dict[str, Any]] = state["items"]
-    previous = items.get(key) or {}
-    original_value = previous.get("original_mtime", original_mtime)
-    try:
-        original_value = float(original_value)
-    except Exception:
-        original_value = float(original_mtime)
-
-    items[key] = {
-        "original_mtime": float(original_value),
-        "bumped_mtime": float(bumped_mtime),
-        "bumped_at": _utc_now_iso(),
-    }
-    save_bump_state(base_dir, state)
-
-
-def pop_bumped_path(base_dir: Path, rel_path: str) -> dict[str, Any] | None:
-    key = normalize_rel_path(rel_path)
-    state = load_bump_state(base_dir)
-    items: dict[str, dict[str, Any]] = state["items"]
-    value = items.pop(key, None)
-    if value is not None:
-        save_bump_state(base_dir, state)
-    return value
-
-
-def get_bumped_entry(base_dir: Path, rel_path: str) -> dict[str, Any] | None:
-    key = normalize_rel_path(rel_path)
-    state = load_bump_state(base_dir)
-    items: dict[str, dict[str, Any]] = state["items"]
-    value = items.get(key)
-    return value if isinstance(value, dict) else None

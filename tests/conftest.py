@@ -7,9 +7,8 @@ repo_root_str = str(REPO_ROOT)
 if repo_root_str not in sys.path:
     sys.path.insert(0, repo_root_str)
 
-# Also add the 'utils' folder to import 'bump' directly in tests.
+# Also add the 'utils' folder for direct utility imports in tests.
 UTILS_DIR = REPO_ROOT / "utils"
 utils_dir_str = str(UTILS_DIR)
 if utils_dir_str not in sys.path:
     sys.path.insert(0, utils_dir_str)
-

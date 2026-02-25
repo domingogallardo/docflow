@@ -5,7 +5,6 @@ from pathlib import Path as _Path
 __path__ = [str(_Path(__file__).resolve().parent / "utils")]
 
 from utils.file_ops import (
-    bump_files,
     iter_html_files,
     list_files,
     move_files,
@@ -37,7 +36,6 @@ from utils.podcasts import (
 
 __all__ = [
     "add_margins_to_html_files",
-    "bump_files",
     "clean_duplicate_markdown_links",
     "convert_newlines_to_br",
     "convert_urls_to_links",

@@ -11,7 +11,7 @@ from utils.highlight_store import load_highlights_for_path, save_highlights_for_
 
 
 def _start_server(base_dir: Path) -> tuple[ThreadingHTTPServer, int]:
-    app = docflow_server.DocflowApp(base_dir, bump_years=1)
+    app = docflow_server.DocflowApp(base_dir)
     app.rebuild()
     handler_cls = docflow_server.make_handler(app)
     server = ThreadingHTTPServer(("127.0.0.1", 0), handler_cls)

@@ -34,7 +34,7 @@ from utils.site_paths import (
     site_root,
 )
 from utils.highlight_store import has_highlights_for_path
-from utils.site_state import load_bump_state, load_done_state, load_working_state
+from utils.site_state import load_done_state, load_reading_state, load_working_state
 
 CATEGORY_KEYS = ("posts", "tweets", "podcasts", "pdfs", "images")
 CATEGORY_LABELS = {
@@ -56,8 +56,8 @@ class BrowseItem:
     rel_path: str
     name: str
     mtime: float
+    reading: bool
     working: bool
-    bumped: bool
     highlighted: bool
     sort_mtime: float | None = None
 
@@ -70,7 +70,6 @@ class BrowseEntry:
     is_dir: bool
     icon: str
     rel_path: str | None = None
-    bumped: bool = False
     highlighted: bool = False
     sort_mtime: float | None = None
     item_count: int | None = None
@@ -113,8 +112,6 @@ def _is_highlighted(base_dir: Path, rel_path: str) -> bool:
 
 def _entry_classes(entry: BrowseEntry) -> str:
     classes: list[str] = []
-    if entry.bumped:
-        classes.append("dg-bump")
     if entry.highlighted:
         classes.append("dg-hl")
     return f' class="{" ".join(classes)}"' if classes else ""
@@ -126,16 +123,13 @@ def _actions_html(entry: BrowseEntry) -> str:
     if not entry.name.lower().endswith(".pdf"):
         return ""
 
-    stage_buttons = [("to-working", "Move to Working")]
+    stage_buttons = [("to-reading", "Move to Reading")]
 
     path_attr = html.escape(entry.rel_path, quote=True)
     button_html = "".join(
         f"<button class='dg-act' data-api-action=\"{action}\" data-docflow-path=\"{path_attr}\">{label}</button>"
         for action, label in stage_buttons
     )
-    bump_action = "unbump" if entry.bumped else "bump"
-    bump_label = "Unbump" if entry.bumped else "Bump"
-    button_html += f"<button class='dg-act' data-api-action=\"{bump_action}\" data-docflow-path=\"{path_attr}\">{bump_label}</button>"
     return (
         "<span class='dg-actions'>"
         + button_html
@@ -149,14 +143,12 @@ def _render_entry(entry: BrowseEntry) -> str:
     count_html = f" <span class='dg-count'>({entry.item_count})</span>" if entry.item_count is not None else ""
 
     prefix = (
-        ("🔥 " if entry.bumped else "")
-        + ("🟡 " if entry.highlighted else "")
+        ("🟡 " if entry.highlighted else "")
         + entry.icon
     )
     cls_attr = _entry_classes(entry)
     attr_bits = [
         "data-dg-sortable='1'",
-        f"data-dg-bumped='{'1' if entry.bumped else '0'}'",
         f"data-dg-highlighted='{'1' if entry.highlighted else '0'}'",
         f"data-dg-sort-mtime='{_sort_mtime(entry):.6f}'",
         f"data-dg-name='{html.escape(entry.name.lower(), quote=True)}'",
@@ -195,14 +187,8 @@ def _iso_to_epoch(value: object) -> float | None:
     return parsed.timestamp()
 
 
-def _natural_priority(entry: BrowseEntry) -> int:
-    if entry.bumped:
-        return 0
-    return 1
-
-
-def _entry_sort_key(entry: BrowseEntry) -> tuple[int, float, str]:
-    return (_natural_priority(entry), -_sort_mtime(entry), entry.name.lower())
+def _entry_sort_key(entry: BrowseEntry) -> tuple[float, str]:
+    return (-_sort_mtime(entry), entry.name.lower())
 
 
 def _base_head(title: str) -> str:
@@ -214,7 +200,6 @@ def _base_head(title: str) -> str:
         "hr{border:0;border-top:1px solid #e6e6e6;margin:8px 0}"
         "ul.dg-index{list-style:none;padding-left:0}"
         ".dg-index li{padding:2px 6px;border-radius:6px;margin:2px 0;display:flex;justify-content:space-between;align-items:center;gap:10px}"
-        ".dg-bump{background:#fff6e5}"
         ".dg-legendbar{display:flex;align-items:center;justify-content:flex-start;gap:6px;flex-wrap:wrap;margin-bottom:6px}"
         ".dg-legend{color:#666;font:13px -apple-system,system-ui,Segoe UI,Roboto,Helvetica,Arial}"
         ".dg-nav{color:#666;font:13px -apple-system,system-ui,Segoe UI,Roboto,Helvetica,Arial;margin-bottom:8px}"
@@ -247,7 +232,7 @@ def _render_directory_page(
     pre_list_html: str = "",
 ) -> str:
     rows: list[str] = [_base_head(title)]
-    rows.append("<div class='dg-nav'><a href='/'>Home</a> · <a href='/browse/'>Browse</a> · <a href='/working/'>Working</a> · <a href='/done/'>Done</a></div>")
+    rows.append("<div class='dg-nav'><a href='/'>Home</a> · <a href='/browse/'>Browse</a> · <a href='/reading/'>Reading</a> · <a href='/working/'>Working</a> · <a href='/done/'>Done</a></div>")
     rows.append(f"<h2>Index of {html.escape(display_path)}</h2>")
     if controls_html is None:
         controls_html = (
@@ -257,7 +242,7 @@ def _render_directory_page(
         )
     rows.append(
         "<div class='dg-legendbar'>"
-        "<div class='dg-legend'>🔥 bumped · 🟡 highlight</div>"
+        "<div class='dg-legend'>🟡 highlight</div>"
         f"{controls_html}"
         "</div>"
     )
@@ -314,6 +299,7 @@ def _dir_has_visible_entries(
     cache: dict[str, bool],
     *,
     base_dir: Path,
+    reading_items: dict[str, dict],
     working_items: dict[str, dict],
     done_items: dict[str, dict],
 ) -> bool:
@@ -337,6 +323,7 @@ def _dir_has_visible_entries(
                             Path(entry.path),
                             cache,
                             base_dir=base_dir,
+                            reading_items=reading_items,
                             working_items=working_items,
                             done_items=done_items,
                         ):
@@ -348,7 +335,7 @@ def _dir_has_visible_entries(
                                 rel = rel_path_from_abs(base_dir, Path(entry.path))
                             except Exception:
                                 continue
-                            if rel in working_items or rel in done_items:
+                            if rel in reading_items or rel in working_items or rel in done_items:
                                 continue
                             cache[key] = True
                             return True
@@ -367,6 +354,7 @@ def _count_visible_files(
     cache: dict[str, int],
     *,
     base_dir: Path,
+    reading_items: dict[str, dict],
     working_items: dict[str, dict],
     done_items: dict[str, dict],
 ) -> int:
@@ -390,6 +378,7 @@ def _count_visible_files(
                             Path(entry.path),
                             cache,
                             base_dir=base_dir,
+                            reading_items=reading_items,
                             working_items=working_items,
                             done_items=done_items,
                         )
@@ -399,7 +388,7 @@ def _count_visible_files(
                                 rel = rel_path_from_abs(base_dir, Path(entry.path))
                             except Exception:
                                 continue
-                            if rel in working_items or rel in done_items:
+                            if rel in reading_items or rel in working_items or rel in done_items:
                                 continue
                             total += 1
                 except OSError:
@@ -418,6 +407,7 @@ def _annotate_root_year_counts(
     abs_dir: Path,
     entries: list[BrowseEntry],
     base_dir: Path,
+    reading_items: dict[str, dict],
     working_items: dict[str, dict],
     done_items: dict[str, dict],
 ) -> list[BrowseEntry]:
@@ -433,6 +423,7 @@ def _annotate_root_year_counts(
                 child_abs,
                 count_cache,
                 base_dir=base_dir,
+                reading_items=reading_items,
                 working_items=working_items,
                 done_items=done_items,
             )
@@ -487,9 +478,9 @@ def _scan_directory(
     *,
     base_dir: Path,
     abs_dir: Path,
+    reading_items: dict[str, dict],
     working_items: dict[str, dict],
     done_items: dict[str, dict],
-    bump_items: dict[str, dict],
     visibility_cache: dict[str, bool],
 ) -> tuple[list[BrowseEntry], list[str], int]:
     entries: list[BrowseEntry] = []
@@ -517,6 +508,7 @@ def _scan_directory(
                             child_abs,
                             visibility_cache,
                             base_dir=base_dir,
+                            reading_items=reading_items,
                             working_items=working_items,
                             done_items=done_items,
                         ):
@@ -542,23 +534,13 @@ def _scan_directory(
 
                 abs_path = Path(fs_entry.path)
                 rel = rel_path_from_abs(base_dir, abs_path)
-                if rel in working_items or rel in done_items:
+                if rel in reading_items or rel in working_items or rel in done_items:
                     continue
 
                 file_count += 1
 
-                bump_entry = bump_items.get(rel)
-                bumped_mtime = None
-                if isinstance(bump_entry, dict):
-                    try:
-                        bumped_mtime = float(bump_entry.get("bumped_mtime"))
-                    except Exception:
-                        bumped_mtime = None
                 display_mtime = st.st_mtime
-                effective_mtime = bumped_mtime
-                if effective_mtime is None:
-                    effective_mtime = display_mtime
-                bumped = bumped_mtime is not None
+                effective_mtime = display_mtime
                 entries.append(
                     BrowseEntry(
                         name=name,
@@ -568,7 +550,6 @@ def _scan_directory(
                         is_dir=False,
                         icon=_icon_for_filename(name),
                         rel_path=rel,
-                        bumped=bumped,
                         highlighted=_is_highlighted(base_dir, rel),
                     )
                 )
@@ -586,9 +567,9 @@ def _write_category_directory_page(
     category: str,
     category_root: Path,
     rel_dir: Path,
+    reading_items: dict[str, dict],
     working_items: dict[str, dict],
     done_items: dict[str, dict],
-    bump_items: dict[str, dict],
     visibility_cache: dict[str, bool],
 ) -> tuple[list[str], int]:
     out_root = site_root(base_dir) / "browse" / category
@@ -601,9 +582,9 @@ def _write_category_directory_page(
     entries, child_dirs, direct_files = _scan_directory(
         base_dir=base_dir,
         abs_dir=abs_dir,
+        reading_items=reading_items,
         working_items=working_items,
         done_items=done_items,
-        bump_items=bump_items,
         visibility_cache=visibility_cache,
     )
     if category in YEAR_SORT_CATEGORIES and rel_dir == Path("."):
@@ -614,6 +595,7 @@ def _write_category_directory_page(
         abs_dir=abs_dir,
         entries=entries,
         base_dir=base_dir,
+        reading_items=reading_items,
         working_items=working_items,
         done_items=done_items,
     )
@@ -660,9 +642,9 @@ def _write_category_tree(
     base_dir: Path,
     category: str,
     category_root: Path,
+    reading_items: dict[str, dict],
     working_items: dict[str, dict],
     done_items: dict[str, dict],
-    bump_items: dict[str, dict],
 ) -> int:
     visibility_cache: dict[str, bool] = {}
 
@@ -672,9 +654,9 @@ def _write_category_tree(
             category=category,
             category_root=category_root,
             rel_dir=rel_dir,
+            reading_items=reading_items,
             working_items=working_items,
             done_items=done_items,
-            bump_items=bump_items,
             visibility_cache=visibility_cache,
         )
 
@@ -769,7 +751,7 @@ def _write_browse_home(base_dir: Path, category_roots: dict[str, Path], counts: 
     )
     html_doc = html_doc.replace(
         "</ul><hr></body></html>",
-        "</ul><p><button class='dg-rebuild' data-api-action='rebuild'>Rebuild browse + working + done</button></p><hr></body></html>",
+        "</ul><p><button class='dg-rebuild' data-api-action='rebuild'>Rebuild browse + reading + working + done</button></p><hr></body></html>",
     )
     html_doc = html_doc.replace("</body></html>", f"{search_js}</body></html>")
     (out_dir / "index.html").write_text(html_doc, encoding="utf-8")
@@ -786,8 +768,8 @@ def write_site_home(base_dir: Path) -> None:
         ".dg-actions button{padding:2px 6px;border:1px solid #ccc;border-radius:6px;background:#f7f7f7;color:#333;font:12px -apple-system,system-ui,Segoe UI,Roboto,Helvetica,Arial;cursor:pointer}"
         "</style><script src='/assets/actions.js' defer></script></head><body>"
         "<h1>Docflow Intranet</h1>"
-        "<p><a href='/browse/'>Browse</a> · <a href='/working/'>Working</a> · <a href='/done/'>Done</a></p>"
-        "<p><button data-api-action='rebuild'>Rebuild browse + working + done</button></p>"
+        "<p><a href='/browse/'>Browse</a> · <a href='/reading/'>Reading</a> · <a href='/working/'>Working</a> · <a href='/done/'>Done</a></p>"
+        "<p><button data-api-action='rebuild'>Rebuild browse + reading + working + done</button></p>"
         "</body></html>"
     )
 
@@ -865,21 +847,12 @@ def ensure_assets(base_dir: Path) -> None:
     return Number.isFinite(num) ? num : 0;
   }
 
-  function naturalRank(node) {
-    if (node.dataset.dgBumped === '1') return 0;
-    return 1;
-  }
-
   function compareEntries(a, b, highlightsFirst) {
     if (highlightsFirst) {
       const aHl = a.dataset.dgHighlighted === '1' ? 0 : 1;
       const bHl = b.dataset.dgHighlighted === '1' ? 0 : 1;
       if (aHl !== bHl) return aHl - bHl;
     }
-
-    const aNatural = naturalRank(a);
-    const bNatural = naturalRank(b);
-    if (aNatural !== bNatural) return aNatural - bNatural;
 
     const aSort = asNumber(a.dataset.dgSortMtime);
     const bSort = asNumber(b.dataset.dgSortMtime);
@@ -892,7 +865,7 @@ def ensure_assets(base_dir: Path) -> None:
 
   document.addEventListener('DOMContentLoaded', () => {
     const toggle = document.querySelector('[data-dg-sort-toggle]');
-    const lists = Array.from(document.querySelectorAll('ul.dg-index, ul.dg-done-list'));
+    const lists = Array.from(document.querySelectorAll('ul.dg-index, ul.dg-done-list, ul.dg-reading-list, ul.dg-working-list'));
     if (!toggle || lists.length === 0) return;
 
     const groups = lists.map((list) => {
@@ -964,11 +937,12 @@ def collect_category_items(base_dir: Path, category: str) -> list[BrowseItem]:
     done_state = load_done_state(base_dir)
     done_state_items = done_state.get("items", {})
     done_items = done_state_items if isinstance(done_state_items, dict) else {}
+    reading_state = load_reading_state(base_dir)
+    reading_state_items = reading_state.get("items", {})
+    reading_items = reading_state_items if isinstance(reading_state_items, dict) else {}
     working_state = load_working_state(base_dir)
     working_state_items = working_state.get("items", {})
     working_items = working_state_items if isinstance(working_state_items, dict) else {}
-    bump_state = load_bump_state(base_dir)
-    bump_items = bump_state.get("items", {}) if isinstance(bump_state.get("items", {}), dict) else {}
 
     items: list[BrowseItem] = []
     for path in root.rglob("*"):
@@ -981,6 +955,8 @@ def collect_category_items(base_dir: Path, category: str) -> list[BrowseItem]:
             continue
 
         rel = rel_path_from_abs(base_dir, path)
+        reading_entry = reading_items.get(rel)
+        is_reading = rel in reading_items
         is_working = rel in working_items
         st = path.stat()
         done_entry = done_items.get(rel)
@@ -989,41 +965,40 @@ def collect_category_items(base_dir: Path, category: str) -> list[BrowseItem]:
             done_at_mtime = _iso_to_epoch(done_entry.get("done_at"))
         is_done = rel in done_items
         if is_done:
+            is_reading = False
             is_working = False
+        if is_working:
+            is_reading = False
 
-        bump_entry = bump_items.get(rel)
-        bumped_mtime = None
-        if isinstance(bump_entry, dict):
-            try:
-                bumped_mtime = float(bump_entry.get("bumped_mtime"))
-            except Exception:
-                bumped_mtime = None
+        reading_at_mtime = None
+        if isinstance(reading_entry, dict):
+            reading_at_mtime = _iso_to_epoch(reading_entry.get("reading_at"))
         display_mtime = st.st_mtime
-        effective_mtime = bumped_mtime
-        if effective_mtime is None:
-            if is_working and isinstance(working_items.get(rel), dict):
-                working_at_mtime = _iso_to_epoch(working_items.get(rel, {}).get("working_at"))
-                effective_mtime = working_at_mtime if working_at_mtime is not None else display_mtime
-            elif is_done and done_at_mtime is not None:
-                effective_mtime = done_at_mtime
-            else:
-                effective_mtime = display_mtime
-        is_bumped = bumped_mtime is not None and not is_working and not is_done
+        if is_reading and reading_at_mtime is not None:
+            effective_mtime = reading_at_mtime
+        elif is_working and isinstance(working_items.get(rel), dict):
+            working_at_mtime = _iso_to_epoch(working_items.get(rel, {}).get("working_at"))
+            effective_mtime = working_at_mtime if working_at_mtime is not None else display_mtime
+        elif is_done and done_at_mtime is not None:
+            effective_mtime = done_at_mtime
+        else:
+            effective_mtime = display_mtime
+
         items.append(
             BrowseItem(
                 rel_path=rel,
                 name=path.name,
                 mtime=display_mtime,
                 sort_mtime=effective_mtime,
+                reading=is_reading,
                 working=is_working,
-                bumped=is_bumped,
                 highlighted=_is_highlighted(base_dir, rel),
             )
         )
 
     items.sort(
         key=lambda item: (
-            0 if item.bumped else 1 if item.working else 2,
+            0 if item.reading else 1 if item.working else 2,
             -(item.sort_mtime if item.sort_mtime is not None else item.mtime),
             item.name.lower(),
         )
@@ -1065,11 +1040,12 @@ def rebuild_browse_for_path(base_dir: Path, rel_path: str) -> dict[str, object]:
     working_state = load_working_state(base_dir)
     working_state_items = working_state.get("items", {})
     working_items = working_state_items if isinstance(working_state_items, dict) else {}
+    reading_state = load_reading_state(base_dir)
+    reading_state_items = reading_state.get("items", {})
+    reading_items = reading_state_items if isinstance(reading_state_items, dict) else {}
     done_state = load_done_state(base_dir)
     done_state_items = done_state.get("items", {})
     done_items = done_state_items if isinstance(done_state_items, dict) else {}
-    bump_state = load_bump_state(base_dir)
-    bump_items = bump_state.get("items", {}) if isinstance(bump_state.get("items", {}), dict) else {}
     roots = _category_roots(base_dir)
     category_root = roots[category]
     visibility_cache: dict[str, bool] = {}
@@ -1092,9 +1068,9 @@ def rebuild_browse_for_path(base_dir: Path, rel_path: str) -> dict[str, object]:
             category=category,
             category_root=category_root,
             rel_dir=target_rel_dir,
+            reading_items=reading_items,
             working_items=working_items,
             done_items=done_items,
-            bump_items=bump_items,
             visibility_cache=visibility_cache,
         )
         updated_paths.append(_display_path_for_category_dir(category, target_rel_dir))
@@ -1113,11 +1089,12 @@ def build_browse_site(base_dir: Path) -> dict[str, int]:
     working_state = load_working_state(base_dir)
     working_state_items = working_state.get("items", {})
     working_items = working_state_items if isinstance(working_state_items, dict) else {}
+    reading_state = load_reading_state(base_dir)
+    reading_state_items = reading_state.get("items", {})
+    reading_items = reading_state_items if isinstance(reading_state_items, dict) else {}
     done_state = load_done_state(base_dir)
     done_state_items = done_state.get("items", {})
     done_items = done_state_items if isinstance(done_state_items, dict) else {}
-    bump_state = load_bump_state(base_dir)
-    bump_items = bump_state.get("items", {}) if isinstance(bump_state.get("items", {}), dict) else {}
     roots = _category_roots(base_dir)
 
     counts: dict[str, int] = {}
@@ -1126,9 +1103,9 @@ def build_browse_site(base_dir: Path) -> dict[str, int]:
             base_dir=base_dir,
             category=category,
             category_root=roots[category],
+            reading_items=reading_items,
             working_items=working_items,
             done_items=done_items,
-            bump_items=bump_items,
         )
 
     _write_browse_home(base_dir, roots, counts)

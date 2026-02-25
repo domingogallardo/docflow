@@ -70,6 +70,7 @@ python process_documents.py all --year 2026
 
 ```bash
 python utils/build_browse_index.py --base-dir "/Users/domingo/⭐️ Documentación"
+python utils/build_reading_index.py --base-dir "/Users/domingo/⭐️ Documentación"
 python utils/build_working_index.py --base-dir "/Users/domingo/⭐️ Documentación"
 python utils/build_done_index.py --base-dir "/Users/domingo/⭐️ Documentación"
 ```
@@ -98,7 +99,7 @@ Behavior:
 
 - Loads `~/.docflow_env` if present.
 - Runs `process_documents.py` with your arguments (`all` for full ingestion).
-- Rebuilds intranet browse/working/done pages (`utils/build_browse_index.py`, `utils/build_working_index.py`, and `utils/build_done_index.py`) when processing succeeds.
+- Rebuilds intranet browse/reading/working/done pages (`utils/build_browse_index.py`, `utils/build_reading_index.py`, `utils/build_working_index.py`, and `utils/build_done_index.py`) when processing succeeds.
 
 Optional override:
 
@@ -118,7 +119,7 @@ Behavior:
 
 - Loads `~/.docflow_env` if present.
 - Runs `bin/build_tweet_consolidated.sh --yesterday`.
-- Rebuilds intranet browse/working/done pages when consolidation succeeds.
+- Rebuilds intranet browse/reading/working/done pages when consolidation succeeds.
 
 ## Intranet server API
 
@@ -126,18 +127,18 @@ Behavior:
 
 - Static files from `BASE_DIR/_site`
 - Raw files from `BASE_DIR` routes (`/posts/raw/...`, `/tweets/raw/...`, etc.)
-- `browse` list default ordering: bumped entries first, then working entries, then the rest (done has no extra stage priority)
+- `browse` list default ordering: by file recency (items in Reading/Working/Done are hidden from browse)
 - `browse` pages include a top `Highlights first` toggle to prioritize highlighted items
+- `reading` list ordering: by `reading_at` (newest first)
 - `working` list ordering: by `working_at` (newest first)
 - `done` list ordering: by `done_at` (newest first)
-- `to-done` preserves stage start metadata in `state/done.json` when available (`working_started_at`, `bumped_started_at`)
+- `to-done` preserves stage start metadata in `state/done.json` when available (`reading_started_at`, `working_started_at`)
 - JSON API actions:
+  - `POST /api/to-reading`
   - `POST /api/to-working`
   - `POST /api/to-done`
   - `POST /api/to-browse`
   - `POST /api/reopen`
-  - `POST /api/bump`
-  - `POST /api/unbump`
   - `POST /api/delete`
   - `POST /api/rebuild`
   - `POST /api/rebuild-file`
@@ -148,11 +149,11 @@ Behavior:
 
 All state is stored under `BASE_DIR/state/`:
 
+- `reading.json`: per-path `reading_at` timestamp.
 - `working.json`: per-path `working_at` timestamp.
-- `bump.json`: per-path `bumped_at` timestamp for the latest bump, plus bump mtimes.
 - `done.json`: per-path `done_at` timestamp and optional transition metadata copied on `to-done`:
+  - `reading_started_at` (from `reading_at` when moving from Reading to Done)
   - `working_started_at` (from `working_at` when moving from Working to Done)
-  - `bumped_started_at` (from bump `bumped_at` when moving from Bumped/Browse to Done)
 
 These fields allow post-hoc lead-time calculations for completed items (for example `done_at - working_started_at`).
 

@@ -4,7 +4,7 @@
 Features:
 - Serves generated site files from BASE_DIR/_site
 - Serves raw files from BASE_DIR via dedicated routes (/posts/raw/..., /pdfs/raw/...)
-- Exposes API actions under /api/* (to-working, to-done, to-browse, reopen, bump, unbump, delete, rebuild, rebuild-file)
+- Exposes API actions under /api/* (to-reading, to-working, to-done, to-browse, reopen, delete, rebuild, rebuild-file)
 """
 
 from __future__ import annotations
@@ -14,13 +14,10 @@ import html
 import json
 import mimetypes
 import os
-from datetime import datetime
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 import sys
-import threading
-import time
 from urllib.parse import parse_qs, quote, urlparse, unquote
 
 # Support direct execution: `python utils/docflow_server.py ...`
@@ -29,7 +26,14 @@ if __package__ in (None, ""):
     if str(_REPO_ROOT) not in sys.path:
         sys.path.insert(0, str(_REPO_ROOT))
 
-from utils import add_margins_to_html_files, build_browse_index, build_done_index, build_working_index, markdown_to_html
+from utils import (
+    add_margins_to_html_files,
+    build_browse_index,
+    build_done_index,
+    build_reading_index,
+    build_working_index,
+    markdown_to_html,
+)
 from utils.site_paths import (
     PathValidationError,
     normalize_rel_path,
@@ -40,15 +44,15 @@ from utils.site_paths import (
     site_root,
 )
 from utils.site_state import (
-    get_bumped_entry,
-    is_done,
-    is_working,
-    pop_bumped_path,
-    pop_working_path,
-    set_done_path,
-    set_bumped_path,
-    set_working_path,
     clear_done_path,
+    is_done,
+    is_reading,
+    is_working,
+    pop_reading_path,
+    pop_working_path,
+    set_reading_path,
+    set_done_path,
+    set_working_path,
 )
 from utils.highlight_store import load_highlights_for_path, save_highlights_for_path
 
@@ -58,13 +62,6 @@ class ApiError(Exception):
         super().__init__(message)
         self.status = status
         self.message = message
-
-
-def _add_years(dt: datetime, years: int) -> datetime:
-    try:
-        return dt.replace(year=dt.year + years)
-    except ValueError:
-        return dt.replace(month=2, day=28, year=dt.year + years)
 
 
 def _browse_parent_url_for_rel_path(rel_path: str) -> str:
@@ -118,21 +115,17 @@ def _browse_index_url_for_raw_library_path(request_path: str) -> str:
 
 class DocflowApp:
     _PATH_ACTION_METHODS = {
+        "to-reading": "api_to_reading",
         "to-working": "api_to_working",
         "to-done": "api_to_done",
         "to-browse": "api_to_browse",
         "reopen": "api_reopen",
-        "bump": "api_bump",
-        "unbump": "api_unbump",
         "delete": "api_delete",
         "rebuild-file": "api_rebuild_file",
     }
 
-    def __init__(self, base_dir: Path, *, bump_years: int = 100):
+    def __init__(self, base_dir: Path):
         self.base_dir = base_dir
-        self.bump_years = bump_years
-        self._bump_lock = threading.Lock()
-        self._bump_counter = 0
 
     @property
     def site_dir(self) -> Path:
@@ -140,6 +133,7 @@ class DocflowApp:
 
     def rebuild(self) -> None:
         build_browse_index.build_browse_site(self.base_dir)
+        build_reading_index.write_site_reading_index(self.base_dir)
         build_working_index.write_site_working_index(self.base_dir)
         build_done_index.write_site_done_index(self.base_dir)
 
@@ -148,11 +142,14 @@ class DocflowApp:
         rel_path: str,
         *,
         rebuild_browse: bool = True,
+        rebuild_reading: bool = True,
         rebuild_working: bool = True,
         rebuild_done: bool = True,
     ) -> None:
         if rebuild_browse:
             build_browse_index.rebuild_browse_for_path(self.base_dir, rel_path)
+        if rebuild_reading:
+            build_reading_index.write_site_reading_index(self.base_dir)
         if rebuild_working:
             build_working_index.write_site_working_index(self.base_dir)
         if rebuild_done:
@@ -163,16 +160,10 @@ class DocflowApp:
         self.rebuild_for_path(
             rel_path,
             rebuild_browse="browse" in impacted_stages,
+            rebuild_reading="reading" in impacted_stages,
             rebuild_working="working" in impacted_stages,
             rebuild_done="done" in impacted_stages,
         )
-
-    def _next_bump_mtime(self) -> float:
-        with self._bump_lock:
-            self._bump_counter += 1
-            counter = self._bump_counter
-        base = _add_years(datetime.now().replace(microsecond=0), self.bump_years)
-        return float(int(base.timestamp()) + counter)
 
     def _normalize_rel_path_or_400(self, rel_path: str) -> str:
         try:
@@ -199,15 +190,30 @@ class DocflowApp:
             return "done"
         if is_working(self.base_dir, normalized):
             return "working"
+        if is_reading(self.base_dir, normalized):
+            return "reading"
         return "browse"
+
+    def api_to_reading(self, rel_path: str) -> dict[str, object]:
+        normalized = self._normalize_rel_path_or_400(rel_path)
+        self._require_existing_library_file(normalized)
+        before_stage = self.path_stage(normalized)
+        changed = set_reading_path(self.base_dir, normalized)
+        changed = (pop_working_path(self.base_dir, normalized) is not None) or changed
+        changed = clear_done_path(self.base_dir, normalized) or changed
+        if changed:
+            self.rebuild_for_stage_transition(normalized, before_stage, "reading")
+        return {"changed": changed, "path": normalized, "stage": "reading"}
 
     def api_to_working(self, rel_path: str) -> dict[str, object]:
         normalized = self._normalize_rel_path_or_400(rel_path)
         self._require_existing_library_file(normalized)
         before_stage = self.path_stage(normalized)
+        if before_stage != "reading":
+            raise ApiError(409, f"Move to Working is only allowed from reading stage: {normalized}")
         changed = set_working_path(self.base_dir, normalized)
+        changed = (pop_reading_path(self.base_dir, normalized) is not None) or changed
         changed = clear_done_path(self.base_dir, normalized) or changed
-        changed = (pop_bumped_path(self.base_dir, normalized) is not None) or changed
         if changed:
             self.rebuild_for_stage_transition(normalized, before_stage, "working")
         return {"changed": changed, "path": normalized, "stage": "working"}
@@ -216,26 +222,26 @@ class DocflowApp:
         normalized = self._normalize_rel_path_or_400(rel_path)
         self._require_existing_library_file(normalized)
         before_stage = self.path_stage(normalized)
+        reading_entry = pop_reading_path(self.base_dir, normalized)
         working_entry = pop_working_path(self.base_dir, normalized)
-        bump_entry = pop_bumped_path(self.base_dir, normalized)
+        reading_started_at = (
+            reading_entry.get("reading_at")
+            if isinstance(reading_entry, dict) and isinstance(reading_entry.get("reading_at"), str)
+            else None
+        )
         working_started_at = (
             working_entry.get("working_at")
             if isinstance(working_entry, dict) and isinstance(working_entry.get("working_at"), str)
             else None
         )
-        bumped_started_at = (
-            bump_entry.get("bumped_at")
-            if isinstance(bump_entry, dict) and isinstance(bump_entry.get("bumped_at"), str)
-            else None
-        )
         changed = set_done_path(
             self.base_dir,
             normalized,
+            reading_started_at=reading_started_at,
             working_started_at=working_started_at,
-            bumped_started_at=bumped_started_at,
         )
+        changed = (reading_entry is not None) or changed
         changed = (working_entry is not None) or changed
-        changed = (bump_entry is not None) or changed
         if changed:
             self.rebuild_for_stage_transition(normalized, before_stage, "done")
         return {"changed": changed, "path": normalized, "stage": "done"}
@@ -244,48 +250,17 @@ class DocflowApp:
         normalized = self._normalize_rel_path_or_400(rel_path)
         self._require_existing_library_file(normalized)
         before_stage = self.path_stage(normalized)
-        changed = (pop_working_path(self.base_dir, normalized) is not None)
+        changed = (pop_reading_path(self.base_dir, normalized) is not None)
+        changed = (pop_working_path(self.base_dir, normalized) is not None) or changed
         changed = clear_done_path(self.base_dir, normalized) or changed
-        changed = (pop_bumped_path(self.base_dir, normalized) is not None) or changed
         if changed:
             self.rebuild_for_stage_transition(normalized, before_stage, "browse")
         return {"changed": changed, "path": normalized, "stage": "browse"}
 
     def api_reopen(self, rel_path: str) -> dict[str, object]:
-        result = self.api_to_working(rel_path)
+        result = self.api_to_reading(rel_path)
         result["transition"] = "reopen"
         return result
-
-    def api_bump(self, rel_path: str) -> dict[str, object]:
-        normalized = self._normalize_rel_path_or_400(rel_path)
-        abs_path = self._require_existing_library_file(normalized)
-        if self.path_stage(normalized) != "browse":
-            raise ApiError(409, f"Bump is only allowed in browse stage: {normalized}")
-        entry = get_bumped_entry(self.base_dir, normalized)
-
-        st = abs_path.stat()
-        original_mtime = float(entry.get("original_mtime", st.st_mtime)) if entry else float(st.st_mtime)
-        bumped_mtime = self._next_bump_mtime()
-
-        set_bumped_path(
-            self.base_dir,
-            normalized,
-            original_mtime=original_mtime,
-            bumped_mtime=bumped_mtime,
-        )
-        self.rebuild_for_path(normalized, rebuild_working=False, rebuild_done=False)
-        return {"path": normalized, "bumped_mtime": bumped_mtime}
-
-    def api_unbump(self, rel_path: str) -> dict[str, object]:
-        normalized = self._normalize_rel_path_or_400(rel_path)
-        self._require_existing_library_file(normalized)
-        entry = pop_bumped_path(self.base_dir, normalized)
-        if entry is None:
-            raise ApiError(409, f"Path is not bumped: {normalized}")
-
-        original_mtime = float(entry.get("original_mtime", time.time()))
-        self.rebuild_for_path(normalized, rebuild_working=False, rebuild_done=False)
-        return {"path": normalized, "restored_mtime": original_mtime}
 
     def api_delete(self, rel_path: str) -> dict[str, object]:
         normalized = self._normalize_rel_path_or_400(rel_path)
@@ -315,17 +290,18 @@ class DocflowApp:
                 raise ApiError(500, f"Could not delete associated Markdown: {exc}") from exc
 
         removed_done = clear_done_path(self.base_dir, normalized)
+        removed_reading = pop_reading_path(self.base_dir, normalized) is not None
         removed_working = pop_working_path(self.base_dir, normalized) is not None
-        pop_bumped_path(self.base_dir, normalized)
 
         if sibling_md_rel:
             clear_done_path(self.base_dir, sibling_md_rel)
+            pop_reading_path(self.base_dir, sibling_md_rel)
             pop_working_path(self.base_dir, sibling_md_rel)
-            pop_bumped_path(self.base_dir, sibling_md_rel)
 
         self.rebuild_for_path(
             normalized,
             rebuild_browse=True,
+            rebuild_reading=(before_stage == "reading") or removed_reading,
             rebuild_working=(before_stage == "working") or removed_working,
             rebuild_done=(before_stage == "done") or removed_done,
         )
@@ -333,6 +309,7 @@ class DocflowApp:
             "path": normalized,
             "deleted_md": deleted_md,
             "removed_done": removed_done,
+            "removed_reading": removed_reading,
             "removed_working": removed_working,
             "redirect": _browse_parent_url_for_rel_path(normalized),
         }
@@ -380,6 +357,7 @@ class DocflowApp:
         self.rebuild_for_path(
             html_rel,
             rebuild_browse=(stage == "browse"),
+            rebuild_reading=(stage == "reading"),
             rebuild_working=(stage == "working"),
             rebuild_done=(stage == "done"),
         )
@@ -402,6 +380,7 @@ class DocflowApp:
         self.rebuild_for_path(
             normalized,
             rebuild_browse=(stage == "browse"),
+            rebuild_reading=(stage == "reading"),
             rebuild_working=(stage == "working"),
             rebuild_done=(stage == "done"),
         )
@@ -589,7 +568,6 @@ OVERLAY_JS = """
   });
 
   let stage = script.getAttribute('data-stage') || 'browse';
-  let bumped = script.getAttribute('data-bumped') === '1';
   const browseIndexUrl = script.getAttribute('data-browse-url') || '/browse/';
   let busy = false;
   let highlightBusy = false;
@@ -628,17 +606,10 @@ OVERLAY_JS = """
           render();
           return;
         }
-        if (action === 'to-working' || action === 'reopen') stage = 'working';
+        if (action === 'to-reading' || action === 'reopen') stage = 'reading';
+        if (action === 'to-working') stage = 'working';
         if (action === 'to-done') stage = 'done';
-        if (action === 'to-browse') {
-          stage = 'browse';
-          bumped = false;
-        }
-        if (action === 'to-working' || action === 'to-done' || action === 'reopen') {
-          bumped = false;
-        }
-        if (action === 'bump') bumped = true;
-        if (action === 'unbump') bumped = false;
+        if (action === 'to-browse') stage = 'browse';
         if (action === 'delete') {
           let redirectTo = '/browse/';
           try {
@@ -660,12 +631,14 @@ OVERLAY_JS = """
   }
 
   function currentIndexUrl() {
+    if (stage === 'reading') return '/reading/';
     if (stage === 'working') return '/working/';
     if (stage === 'done') return '/done/';
     return browseIndexUrl;
   }
 
   function currentInsideLabel() {
+    if (stage === 'reading') return 'Inside Reading';
     if (stage === 'working') return 'Inside Working';
     if (stage === 'done') return 'Inside Done';
     return 'Inside Browse';
@@ -816,20 +789,25 @@ OVERLAY_JS = """
   }
 
   function stageActions() {
-    if (stage === 'working') {
+    if (stage === 'reading') {
       return [
         ['Back to Browse', 'to-browse'],
+        ['Move to Working', 'to-working']
+      ];
+    }
+    if (stage === 'working') {
+      return [
+        ['Back to Reading', 'to-reading'],
         ['Move to Done', 'to-done']
       ];
     }
     if (stage === 'done') {
       return [
-        ['Reopen to Working', 'reopen']
+        ['Reopen to Reading', 'reopen']
       ];
     }
     return [
-      ['Move to Working', 'to-working'],
-      [bumped ? 'Unbump' : 'Bump', bumped ? 'unbump' : 'bump']
+      ['Move to Reading', 'to-reading']
     ];
   }
 
@@ -929,7 +907,7 @@ def _ensure_viewport_meta(html_text: str) -> str:
     return f"<head>{viewport}</head>{html_text}"
 
 
-def _inject_html_overlay(*, html_text: str, rel_path: str, stage: str, bumped: bool) -> bytes:
+def _inject_html_overlay(*, html_text: str, rel_path: str, stage: str) -> bytes:
     html_text = _ensure_viewport_meta(html_text)
     path_attr = html.escape(rel_path, quote=True)
     browse_url_attr = html.escape(_browse_parent_url_for_rel_path(rel_path), quote=True)
@@ -940,7 +918,7 @@ def _inject_html_overlay(*, html_text: str, rel_path: str, stage: str, bumped: b
         article_js
         + f"<style>{OVERLAY_CSS}</style>"
         + f"<script defer data-path=\"{path_attr}\" data-stage=\"{html.escape(stage, quote=True)}\" "
-        + f"data-bumped=\"{'1' if bumped else '0'}\" data-browse-url=\"{browse_url_attr}\">{OVERLAY_JS}</script>"
+        + f"data-browse-url=\"{browse_url_attr}\">{OVERLAY_JS}</script>"
     )
     lower = html_text.lower()
     idx = lower.rfind("</body>")
@@ -956,8 +934,7 @@ def _send_overlay_html(handler: BaseHTTPRequestHandler, app: DocflowApp, abs_pat
         return
 
     stage = app.path_stage(rel_path)
-    bumped = get_bumped_entry(app.base_dir, rel_path) is not None
-    payload = _inject_html_overlay(html_text=text, rel_path=rel_path, stage=stage, bumped=bumped)
+    payload = _inject_html_overlay(html_text=text, rel_path=rel_path, stage=stage)
 
     handler.send_response(HTTPStatus.OK)
     handler.send_header("Content-Type", "text/html; charset=utf-8")
@@ -1034,7 +1011,7 @@ def make_handler(app: DocflowApp):
                 _send_json(self, 404, {"ok": False, "error": "Raw file not found"})
                 return
 
-            if path in ("/browse", "/working", "/done"):
+            if path in ("/browse", "/reading", "/working", "/done"):
                 self.send_response(302)
                 self.send_header("Location", path + "/")
                 self.end_headers()
@@ -1097,15 +1074,13 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--base-dir", help="BASE_DIR with Incoming/Posts/Tweets/... and _site/")
     parser.add_argument("--host", default=os.getenv("DOCFLOW_HOST", "127.0.0.1"))
     parser.add_argument("--port", type=int, default=int(os.getenv("DOCFLOW_PORT", "8080")))
-    parser.add_argument("--bump-years", type=int, default=int(os.getenv("DOCFLOW_BUMP_YEARS", "100")))
     parser.set_defaults(rebuild_on_start=False)
     parser.add_argument(
         "--rebuild-on-start",
         dest="rebuild_on_start",
         action="store_true",
-        help="Rebuild browse/working/done static pages before serving.",
+        help="Rebuild browse/reading/working/done static pages before serving.",
     )
-    # Backward compatibility: previously this was the explicit opt-out flag.
     parser.add_argument("--no-rebuild-on-start", dest="rebuild_on_start", action="store_false", help=argparse.SUPPRESS)
     return parser.parse_args()
 
@@ -1114,7 +1089,7 @@ def main() -> int:
     args = parse_args()
     base_dir = resolve_base_dir(args.base_dir)
 
-    app = DocflowApp(base_dir, bump_years=args.bump_years)
+    app = DocflowApp(base_dir)
     if args.rebuild_on_start:
         app.rebuild()
 

@@ -55,26 +55,6 @@ def iter_html_files(directory: Path, file_filter=None):
                     yield file_path
 
 
-def _add_years(dt: datetime, years: int) -> datetime:
-    """Add calendar years. If it lands on Feb-29 in a non-leap year, use Feb-28."""
-    try:
-        return dt.replace(year=dt.year + years)
-    except ValueError:
-        # Feb-29 → Feb-28 in a non-leap year.
-        return dt.replace(month=2, day=28, year=dt.year + years)
-
-
-def bump_files(files, years: int = 100):
-    """Set file mtime to (now + years) + i seconds."""
-    if not files:
-        return
-    base_time = _add_years(datetime.now().replace(microsecond=0), years)
-    base_ts = int(base_time.timestamp())
-    for i, f in enumerate(files, start=1):
-        ts = base_ts + i
-        os.utime(f, (ts, ts))  # atime, mtime
-
-
 def register_paths(paths, base_dir: Path = None, historial_path: Path = None):
     """Register processed paths in the main log. Params overridable for tests."""
     if not paths:

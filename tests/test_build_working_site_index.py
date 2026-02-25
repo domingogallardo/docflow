@@ -29,16 +29,21 @@ def test_write_site_working_index_uses_working_state(tmp_path: Path):
     content = out.read_text(encoding="utf-8")
     assert "/posts/raw/Posts%202026/doc.html" in content
     assert '<a href="/browse/">Browse</a>' in content
+    assert '<a href="/reading/">Reading</a>' in content
     assert '<a href="/done/">Done</a>' in content
     assert "<h1>Working</h1>" in content
     assert "🟡 highlight" in content
-    assert "data-dg-sort-toggle" not in content
+    assert "data-dg-sort-toggle" in content
+    assert "Highlight: off" in content
+    assert "data-dg-sortable='1'" in content
+    assert "data-dg-highlighted='1'" in content
+    assert "data-dg-sort-mtime=" in content
+    assert "<script src=\"/assets/browse-sort.js\" defer></script>" in content
     assert "<h2>Tweets</h2>" not in content
     assert "github.com/domingogallardo/docflow" not in content
     assert "domingogallardo.com" not in content
     assert "🟡" in content
     assert "🔥" not in content
-    assert 'class="dg-bump"' not in content
     assert "Posts/Posts 2026/doc.html" not in content
     assert "data-api-action" not in content
     assert (base / "_site" / "working" / "article.js").exists()
@@ -118,5 +123,5 @@ def test_working_index_shows_state_actions_for_pdfs(tmp_path: Path):
 
     assert "/pdfs/raw/Pdfs%202026/paper.pdf" in content
     assert 'data-api-action="to-done"' in content
-    assert 'data-api-action="to-browse"' in content
+    assert 'data-api-action="to-reading"' in content
     assert 'data-docflow-path="Pdfs/Pdfs 2026/paper.pdf"' in content

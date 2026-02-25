@@ -74,7 +74,7 @@ def _actions_html(item: SiteDoneItem) -> str:
     path_attr = html.escape(item.rel_path, quote=True)
     return (
         "<span class='dg-actions'>"
-        f"<button data-api-action=\"reopen\" data-docflow-path=\"{path_attr}\">Reopen to Working</button>"
+        f"<button data-api-action=\"reopen\" data-docflow-path=\"{path_attr}\">Reopen to Reading</button>"
         f"<button data-api-action=\"to-browse\" data-docflow-path=\"{path_attr}\">Back to Browse</button>"
         "</span>"
     )
@@ -174,7 +174,6 @@ def build_site_done_html(items: list[SiteDoneItem]) -> str:
                 row_class = ' class="dg-hl"' if item.highlighted else ""
                 row_attrs = (
                     "data-dg-sortable='1' "
-                    "data-dg-bumped='0' "
                     f"data-dg-highlighted='{'1' if item.highlighted else '0'}' "
                     f"data-dg-sort-mtime='{item.sort_mtime:.6f}' "
                     f"data-dg-name='{html.escape(item.name.lower(), quote=True)}'"
@@ -194,7 +193,7 @@ def build_site_done_html(items: list[SiteDoneItem]) -> str:
         '<script src="/assets/actions.js" defer></script>'
         '<script src="/assets/browse-sort.js" defer></script>'
         "<title>Done</title></head><body>"
-        '<div class="dg-nav"><a href="/">Home</a> · <a href="/browse/">Browse</a> · <a href="/working/">Working</a> · <a href="/done/">Done</a></div>'
+        '<div class="dg-nav"><a href="/">Home</a> · <a href="/browse/">Browse</a> · <a href="/reading/">Reading</a> · <a href="/working/">Working</a> · <a href="/done/">Done</a></div>'
         '<h1>Done</h1>'
         '<div class="dg-legendbar"><div class="dg-legend">🟡 highlight</div><button type="button" class="dg-sort-toggle" data-dg-sort-toggle aria-pressed="false">Highlight: off</button></div><hr>'
         + list_html

@@ -10,17 +10,17 @@ from urllib.parse import quote
 
 from utils import docflow_server
 from utils.site_state import (
-    get_bumped_entry,
     is_done,
+    is_reading,
     is_working,
-    load_bump_state,
     load_done_state,
+    load_reading_state,
     load_working_state,
 )
 
 
 def _start_server(base_dir: Path) -> tuple[ThreadingHTTPServer, int]:
-    app = docflow_server.DocflowApp(base_dir, bump_years=1)
+    app = docflow_server.DocflowApp(base_dir)
     app.rebuild()
     handler_cls = docflow_server.make_handler(app)
 
@@ -112,10 +112,19 @@ def test_api_stage_transitions_roundtrip(tmp_path: Path):
 
     server, port = _start_server(base)
     try:
+        status, payload = _post_json(port, "/api/to-reading", {"path": rel})
+        assert status == 200
+        assert payload["ok"] is True
+        assert payload["data"]["stage"] == "reading"
+        assert is_reading(base, rel) is True
+        assert is_working(base, rel) is False
+        assert is_done(base, rel) is False
+
         status, payload = _post_json(port, "/api/to-working", {"path": rel})
         assert status == 200
         assert payload["ok"] is True
         assert payload["data"]["stage"] == "working"
+        assert is_reading(base, rel) is False
         assert is_working(base, rel) is True
         assert is_done(base, rel) is False
 
@@ -129,15 +138,17 @@ def test_api_stage_transitions_roundtrip(tmp_path: Path):
         status, payload = _post_json(port, "/api/reopen", {"path": rel})
         assert status == 200
         assert payload["ok"] is True
-        assert payload["data"]["stage"] == "working"
+        assert payload["data"]["stage"] == "reading"
         assert payload["data"]["transition"] == "reopen"
-        assert is_working(base, rel) is True
+        assert is_reading(base, rel) is True
+        assert is_working(base, rel) is False
         assert is_done(base, rel) is False
 
         status, payload = _post_json(port, "/api/to-browse", {"path": rel})
         assert status == 200
         assert payload["ok"] is True
         assert payload["data"]["stage"] == "browse"
+        assert is_reading(base, rel) is False
         assert is_working(base, rel) is False
         assert is_done(base, rel) is False
     finally:
@@ -154,6 +165,10 @@ def test_api_to_done_keeps_working_start_time_in_done_state(tmp_path: Path):
 
     server, port = _start_server(base)
     try:
+        status, payload = _post_json(port, "/api/to-reading", {"path": rel})
+        assert status == 200
+        assert payload["ok"] is True
+
         status, payload = _post_json(port, "/api/to-working", {"path": rel})
         assert status == 200
         assert payload["ok"] is True
@@ -175,7 +190,7 @@ def test_api_to_done_keeps_working_start_time_in_done_state(tmp_path: Path):
         server.server_close()
 
 
-def test_api_to_done_keeps_bump_start_time_in_done_state(tmp_path: Path):
+def test_api_to_done_keeps_reading_start_time_in_done_state(tmp_path: Path):
     base = tmp_path / "base"
     posts = base / "Posts" / "Posts 2026"
     posts.mkdir(parents=True)
@@ -184,13 +199,13 @@ def test_api_to_done_keeps_bump_start_time_in_done_state(tmp_path: Path):
 
     server, port = _start_server(base)
     try:
-        status, payload = _post_json(port, "/api/bump", {"path": rel})
+        status, payload = _post_json(port, "/api/to-reading", {"path": rel})
         assert status == 200
         assert payload["ok"] is True
 
-        bump_state = load_bump_state(base)
-        bumped_started_at = bump_state["items"][rel]["bumped_at"]
-        assert isinstance(bumped_started_at, str)
+        reading_state = load_reading_state(base)
+        reading_started_at = reading_state["items"][rel]["reading_at"]
+        assert isinstance(reading_started_at, str)
 
         status, payload = _post_json(port, "/api/to-done", {"path": rel})
         assert status == 200
@@ -198,42 +213,39 @@ def test_api_to_done_keeps_bump_start_time_in_done_state(tmp_path: Path):
 
         done_state = load_done_state(base)
         done_entry = done_state["items"][rel]
-        assert done_entry["bumped_started_at"] == bumped_started_at
-        assert get_bumped_entry(base, rel) is None
+        assert done_entry["reading_started_at"] == reading_started_at
+        assert is_reading(base, rel) is False
     finally:
         server.shutdown()
         server.server_close()
 
 
-def test_api_bump_unbump_roundtrip(tmp_path: Path):
+def test_api_to_reading_roundtrip(tmp_path: Path):
     base = tmp_path / "base"
     posts = base / "Posts" / "Posts 2026"
     posts.mkdir(parents=True)
     html = posts / "doc.html"
     html.write_text("<html><body>Doc</body></html>", encoding="utf-8")
 
-    original_mtime = html.stat().st_mtime
-
     server, port = _start_server(base)
     try:
-        mtime_before_bump = html.stat().st_mtime
-        status, payload = _post_json(port, "/api/bump", {"path": "Posts/Posts 2026/doc.html"})
+        status, payload = _post_json(port, "/api/to-reading", {"path": "Posts/Posts 2026/doc.html"})
         assert status == 200
         assert payload["ok"] is True
-        assert abs(html.stat().st_mtime - mtime_before_bump) < 0.001
-        assert get_bumped_entry(base, "Posts/Posts 2026/doc.html") is not None
+        assert payload["data"]["stage"] == "reading"
+        assert is_reading(base, "Posts/Posts 2026/doc.html") is True
 
-        status, payload = _post_json(port, "/api/unbump", {"path": "Posts/Posts 2026/doc.html"})
+        status, payload = _post_json(port, "/api/to-browse", {"path": "Posts/Posts 2026/doc.html"})
         assert status == 200
         assert payload["ok"] is True
-        assert abs(html.stat().st_mtime - original_mtime) < 0.001
-        assert get_bumped_entry(base, "Posts/Posts 2026/doc.html") is None
+        assert payload["data"]["stage"] == "browse"
+        assert is_reading(base, "Posts/Posts 2026/doc.html") is False
     finally:
         server.shutdown()
         server.server_close()
 
 
-def test_api_bump_is_restricted_to_browse_stage(tmp_path: Path):
+def test_api_to_working_is_restricted_to_reading_stage(tmp_path: Path):
     base = tmp_path / "base"
     posts = base / "Posts" / "Posts 2026"
     posts.mkdir(parents=True)
@@ -243,28 +255,32 @@ def test_api_bump_is_restricted_to_browse_stage(tmp_path: Path):
     server, port = _start_server(base)
     try:
         status, payload = _post_json(port, "/api/to-working", {"path": rel})
+        assert status == 409
+        assert payload["ok"] is False
+        assert "only allowed from reading stage" in payload["error"]
+
+        status, payload = _post_json(port, "/api/to-reading", {"path": rel})
         assert status == 200
         assert payload["ok"] is True
 
-        status, payload = _post_json(port, "/api/bump", {"path": rel})
-        assert status == 409
-        assert payload["ok"] is False
-        assert "only allowed in browse stage" in payload["error"]
+        status, payload = _post_json(port, "/api/to-working", {"path": rel})
+        assert status == 200
+        assert payload["ok"] is True
 
         status, payload = _post_json(port, "/api/to-done", {"path": rel})
         assert status == 200
         assert payload["ok"] is True
 
-        status, payload = _post_json(port, "/api/bump", {"path": rel})
+        status, payload = _post_json(port, "/api/to-working", {"path": rel})
         assert status == 409
         assert payload["ok"] is False
-        assert "only allowed in browse stage" in payload["error"]
+        assert "only allowed from reading stage" in payload["error"]
 
-        status, payload = _post_json(port, "/api/to-browse", {"path": rel})
+        status, payload = _post_json(port, "/api/reopen", {"path": rel})
         assert status == 200
         assert payload["ok"] is True
 
-        status, payload = _post_json(port, "/api/bump", {"path": rel})
+        status, payload = _post_json(port, "/api/to-working", {"path": rel})
         assert status == 200
         assert payload["ok"] is True
     finally:
@@ -285,7 +301,7 @@ def test_api_delete_removes_local_markdown_and_state_entries(tmp_path: Path):
 
     server, port = _start_server(base)
     try:
-        status, payload = _post_json(port, "/api/bump", {"path": rel_path})
+        status, payload = _post_json(port, "/api/to-reading", {"path": rel_path})
         assert status == 200
         assert payload["ok"] is True
 
@@ -302,8 +318,8 @@ def test_api_delete_removes_local_markdown_and_state_entries(tmp_path: Path):
         assert not html.exists()
         assert not md.exists()
         assert is_done(base, rel_path) is False
+        assert is_reading(base, rel_path) is False
         assert is_working(base, rel_path) is False
-        assert get_bumped_entry(base, rel_path) is None
 
         working_status, working_html = _get(port, "/working/")
         assert working_status == 200
@@ -333,12 +349,11 @@ def test_raw_route_serves_library_file(tmp_path: Path):
         assert '/working/article.js' in body
         assert 'name="viewport"' in body
         assert "data-stage" in body
-        assert 'data-bumped="0"' in body
         assert 'data-browse-url="/browse/posts/Posts%202026/"' in body
         assert "window.addEventListener('pageshow'" in body
         assert "back_forward" in body
         assert "Inside Browse" in body
-        assert "to-working" in body
+        assert "to-reading" in body
         assert "Rebuild" in body
         assert "Delete" in body
         assert "dg-hl-nav" in body
@@ -357,7 +372,7 @@ def test_raw_route_serves_library_file(tmp_path: Path):
         server.server_close()
 
 
-def test_raw_route_overlay_marks_bumped_state(tmp_path: Path):
+def test_raw_route_overlay_marks_reading_stage(tmp_path: Path):
     base = tmp_path / "base"
     posts = base / "Posts" / "Posts 2026"
     posts.mkdir(parents=True)
@@ -366,17 +381,13 @@ def test_raw_route_overlay_marks_bumped_state(tmp_path: Path):
 
     server, port = _start_server(base)
     try:
-        status, payload = _post_json(port, "/api/to-browse", {"path": rel})
-        assert status == 200
-        assert payload["ok"] is True
-
-        status, payload = _post_json(port, "/api/bump", {"path": rel})
+        status, payload = _post_json(port, "/api/to-reading", {"path": rel})
         assert status == 200
         assert payload["ok"] is True
 
         status, body = _get(port, "/posts/raw/Posts%202026/doc.html")
         assert status == 200
-        assert 'data-bumped="1"' in body
+        assert 'data-stage="reading"' in body
     finally:
         server.shutdown()
         server.server_close()
@@ -548,7 +559,7 @@ def test_to_done_does_not_rewrite_unrelated_browse_branch(tmp_path: Path):
         server.server_close()
 
 
-def test_api_to_working_rebuilds_only_browse_and_working(tmp_path: Path, monkeypatch):
+def test_api_to_working_rebuilds_only_reading_and_working(tmp_path: Path, monkeypatch):
     base = tmp_path / "base"
     posts = base / "Posts" / "Posts 2026"
     posts.mkdir(parents=True)
@@ -556,11 +567,15 @@ def test_api_to_working_rebuilds_only_browse_and_working(tmp_path: Path, monkeyp
     (posts / "doc.html").write_text("<html><body>Doc</body></html>", encoding="utf-8")
 
     app = docflow_server.DocflowApp(base)
+    docflow_server.set_reading_path(base, rel)
     calls: list[str] = []
 
     def _browse(*_args, **_kwargs):
         calls.append("browse")
         return {"mode": "partial"}
+
+    def _reading(*_args, **_kwargs):
+        calls.append("reading")
 
     def _working(*_args, **_kwargs):
         calls.append("working")
@@ -569,13 +584,14 @@ def test_api_to_working_rebuilds_only_browse_and_working(tmp_path: Path, monkeyp
         calls.append("done")
 
     monkeypatch.setattr(docflow_server.build_browse_index, "rebuild_browse_for_path", _browse)
+    monkeypatch.setattr(docflow_server.build_reading_index, "write_site_reading_index", _reading)
     monkeypatch.setattr(docflow_server.build_working_index, "write_site_working_index", _working)
     monkeypatch.setattr(docflow_server.build_done_index, "write_site_done_index", _done)
 
     result = app.api_to_working(rel)
     assert result["stage"] == "working"
     assert result["changed"] is True
-    assert calls == ["browse", "working"]
+    assert calls == ["reading", "working"]
 
 
 def test_api_to_done_from_working_rebuilds_only_working_and_done(tmp_path: Path, monkeypatch):
@@ -593,6 +609,9 @@ def test_api_to_done_from_working_rebuilds_only_working_and_done(tmp_path: Path,
         calls.append("browse")
         return {"mode": "partial"}
 
+    def _reading(*_args, **_kwargs):
+        calls.append("reading")
+
     def _working(*_args, **_kwargs):
         calls.append("working")
 
@@ -600,6 +619,7 @@ def test_api_to_done_from_working_rebuilds_only_working_and_done(tmp_path: Path,
         calls.append("done")
 
     monkeypatch.setattr(docflow_server.build_browse_index, "rebuild_browse_for_path", _browse)
+    monkeypatch.setattr(docflow_server.build_reading_index, "write_site_reading_index", _reading)
     monkeypatch.setattr(docflow_server.build_working_index, "write_site_working_index", _working)
     monkeypatch.setattr(docflow_server.build_done_index, "write_site_done_index", _done)
 
