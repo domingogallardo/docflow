@@ -189,7 +189,7 @@ def test_api_to_done_keeps_bump_start_time_in_done_state(tmp_path: Path):
         assert payload["ok"] is True
 
         bump_state = load_bump_state(base)
-        bumped_started_at = bump_state["items"][rel]["updated_at"]
+        bumped_started_at = bump_state["items"][rel]["bumped_at"]
         assert isinstance(bumped_started_at, str)
 
         status, payload = _post_json(port, "/api/to-done", {"path": rel})

@@ -224,8 +224,8 @@ class DocflowApp:
             else None
         )
         bumped_started_at = (
-            bump_entry.get("updated_at")
-            if isinstance(bump_entry, dict) and isinstance(bump_entry.get("updated_at"), str)
+            bump_entry.get("bumped_at")
+            if isinstance(bump_entry, dict) and isinstance(bump_entry.get("bumped_at"), str)
             else None
         )
         changed = set_done_path(

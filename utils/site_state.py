@@ -244,7 +244,7 @@ def set_bumped_path(base_dir: Path, rel_path: str, *, original_mtime: float, bum
     items[key] = {
         "original_mtime": float(original_value),
         "bumped_mtime": float(bumped_mtime),
-        "updated_at": _utc_now_iso(),
+        "bumped_at": _utc_now_iso(),
     }
     save_bump_state(base_dir, state)
 

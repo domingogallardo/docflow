@@ -66,6 +66,8 @@ def test_bump_state_keeps_original_mtime(tmp_path: Path):
     assert entry is not None
     assert entry["original_mtime"] == 100.0
     assert entry["bumped_mtime"] == 2000.0
+    assert isinstance(entry["bumped_at"], str)
+    assert set(entry.keys()) == {"original_mtime", "bumped_mtime", "bumped_at"}
 
     removed = site_state.pop_bumped_path(base, rel)
     assert removed is not None

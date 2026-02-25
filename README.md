@@ -149,10 +149,10 @@ Behavior:
 All state is stored under `BASE_DIR/state/`:
 
 - `working.json`: per-path `working_at` timestamp.
-- `bump.json`: per-path `updated_at` timestamp for the latest bump, plus bump mtimes.
+- `bump.json`: per-path `bumped_at` timestamp for the latest bump, plus bump mtimes.
 - `done.json`: per-path `done_at` timestamp and optional transition metadata copied on `to-done`:
   - `working_started_at` (from `working_at` when moving from Working to Done)
-  - `bumped_started_at` (from bump `updated_at` when moving from Bumped/Browse to Done)
+  - `bumped_started_at` (from bump `bumped_at` when moving from Bumped/Browse to Done)
 
 These fields allow post-hoc lead-time calculations for completed items (for example `done_at - working_started_at`).
 
