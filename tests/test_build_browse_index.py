@@ -48,6 +48,7 @@ def test_build_browse_site_generates_indexes_and_actions(tmp_path: Path):
     assert "incoming" not in counts
 
     browse_home = base / "_site" / "browse" / "index.html"
+    site_home = base / "_site" / "index.html"
     posts_root_page = base / "_site" / "browse" / "posts" / "index.html"
     posts_year_page = base / "_site" / "browse" / "posts" / "Posts 2026" / "index.html"
     pdfs_year_page = base / "_site" / "browse" / "pdfs" / "Pdfs 2026" / "index.html"
@@ -57,6 +58,7 @@ def test_build_browse_site_generates_indexes_and_actions(tmp_path: Path):
     browse_sort_js = base / "_site" / "assets" / "browse-sort.js"
 
     assert browse_home.exists()
+    assert site_home.exists()
     assert posts_root_page.exists()
     assert posts_year_page.exists()
     assert pdfs_year_page.exists()
@@ -109,10 +111,9 @@ def test_build_browse_site_generates_indexes_and_actions(tmp_path: Path):
     assert "Incoming" not in browse_home_content
     assert "🟡 highlight" in browse_home_content
     assert "data-dg-sort-toggle" not in browse_home_content
-    assert "data-dg-search-input" in browse_home_content
-    assert "data-dg-search-button" in browse_home_content
-    assert "dg-browse-search-data" in browse_home_content
-    assert '"stem": "doc"' in browse_home_content
+    assert "data-dg-search-input" not in browse_home_content
+    assert "data-dg-search-button" not in browse_home_content
+    assert "dg-browse-search-data" not in browse_home_content
     assert "🔵 working" not in browse_home_content
     assert "🟢 done" not in browse_home_content
     assert 'href="podcasts/">Podcasts/</a> <span class=\'dg-count\'>(1)</span>' in browse_home_content
@@ -125,6 +126,12 @@ def test_build_browse_site_generates_indexes_and_actions(tmp_path: Path):
     assert browse_home_content.find('href="tweets/">Tweets/') < browse_home_content.find('href="podcasts/">Podcasts/')
     assert browse_home_content.find('href="podcasts/">Podcasts/') < browse_home_content.find('href="pdfs/">Pdfs/')
     assert browse_home_content.find('href="pdfs/">Pdfs/') < browse_home_content.find('href="images/">Images/')
+
+    site_home_content = site_home.read_text(encoding="utf-8")
+    assert "data-dg-search-input" in site_home_content
+    assert "data-dg-search-button" in site_home_content
+    assert "dg-browse-search-data" in site_home_content
+    assert '"stem": "doc"' in site_home_content
 
 
 def test_collect_category_items_handles_missing_dirs(tmp_path: Path):
