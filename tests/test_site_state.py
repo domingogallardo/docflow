@@ -20,6 +20,40 @@ def test_done_roundtrip(tmp_path: Path):
     assert site_state.is_done(base, "Posts/Posts 2026/doc.html") is False
 
 
+def test_done_entry_keeps_transition_start_timestamps(tmp_path: Path, monkeypatch):
+    base = tmp_path / "base"
+    base.mkdir()
+    rel = "Posts/Posts 2026/doc.html"
+    monkeypatch.setattr(site_state, "_utc_now_iso", lambda: "2026-02-25T09:00:00Z")
+
+    changed = site_state.set_done_path(
+        base,
+        rel,
+        working_started_at="2026-02-18T08:16:36Z",
+        bumped_started_at="2026-02-16T21:14:43Z",
+    )
+    assert changed is True
+
+    state = site_state.load_done_state(base)
+    entry = state["items"][rel]
+    assert entry["done_at"] == "2026-02-25T09:00:00Z"
+    assert entry["working_started_at"] == "2026-02-18T08:16:36Z"
+    assert entry["bumped_started_at"] == "2026-02-16T21:14:43Z"
+
+    changed_again = site_state.set_done_path(
+        base,
+        rel,
+        working_started_at="2026-01-01T00:00:00Z",
+        bumped_started_at="2026-01-01T00:00:00Z",
+    )
+    assert changed_again is False
+
+    state_after = site_state.load_done_state(base)
+    entry_after = state_after["items"][rel]
+    assert entry_after["working_started_at"] == "2026-02-18T08:16:36Z"
+    assert entry_after["bumped_started_at"] == "2026-02-16T21:14:43Z"
+
+
 def test_bump_state_keeps_original_mtime(tmp_path: Path):
     base = tmp_path / "base"
     base.mkdir()

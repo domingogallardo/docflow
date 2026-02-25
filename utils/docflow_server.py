@@ -216,9 +216,26 @@ class DocflowApp:
         normalized = self._normalize_rel_path_or_400(rel_path)
         self._require_existing_library_file(normalized)
         before_stage = self.path_stage(normalized)
-        changed = set_done_path(self.base_dir, normalized)
-        changed = (pop_working_path(self.base_dir, normalized) is not None) or changed
-        changed = (pop_bumped_path(self.base_dir, normalized) is not None) or changed
+        working_entry = pop_working_path(self.base_dir, normalized)
+        bump_entry = pop_bumped_path(self.base_dir, normalized)
+        working_started_at = (
+            working_entry.get("working_at")
+            if isinstance(working_entry, dict) and isinstance(working_entry.get("working_at"), str)
+            else None
+        )
+        bumped_started_at = (
+            bump_entry.get("updated_at")
+            if isinstance(bump_entry, dict) and isinstance(bump_entry.get("updated_at"), str)
+            else None
+        )
+        changed = set_done_path(
+            self.base_dir,
+            normalized,
+            working_started_at=working_started_at,
+            bumped_started_at=bumped_started_at,
+        )
+        changed = (working_entry is not None) or changed
+        changed = (bump_entry is not None) or changed
         if changed:
             self.rebuild_for_stage_transition(normalized, before_stage, "done")
         return {"changed": changed, "path": normalized, "stage": "done"}

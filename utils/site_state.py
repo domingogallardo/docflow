@@ -143,14 +143,40 @@ def list_working(base_dir: Path) -> set[str]:
     return set(state.get("items", {}).keys())
 
 
-def set_done_path(base_dir: Path, rel_path: str) -> bool:
+def set_done_path(
+    base_dir: Path,
+    rel_path: str,
+    *,
+    working_started_at: str | None = None,
+    bumped_started_at: str | None = None,
+) -> bool:
     key = normalize_rel_path(rel_path)
     state = load_done_state(base_dir)
     items: dict[str, dict[str, Any]] = state["items"]
     already = key in items
-    if not already:
-        items[key] = {"done_at": _utc_now_iso()}
+    entry = items.get(key)
+    changed = False
+
+    if not isinstance(entry, dict):
+        entry = {}
+        items[key] = entry
+        changed = True
+
+    if not already or "done_at" not in entry:
+        entry["done_at"] = _utc_now_iso()
+        changed = True
+
+    if isinstance(working_started_at, str) and working_started_at and "working_started_at" not in entry:
+        entry["working_started_at"] = working_started_at
+        changed = True
+
+    if isinstance(bumped_started_at, str) and bumped_started_at and "bumped_started_at" not in entry:
+        entry["bumped_started_at"] = bumped_started_at
+        changed = True
+
+    if changed:
         save_done_state(base_dir, state)
+
     return not already
 
 
