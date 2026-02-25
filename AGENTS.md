@@ -19,8 +19,9 @@ This repository automates collecting and organizing personal documents (Instapap
 - Create/refresh X likes state: `python utils/create_x_state.py --state-path /Users/<you>/.secrets/docflow/x_state.json`
 - Build intranet browse index: `python utils/build_browse_index.py --base-dir "/path/to/BASE_DIR"`
 - Build intranet working index: `python utils/build_working_index.py --base-dir "/path/to/BASE_DIR"`
+- Build intranet done index: `python utils/build_done_index.py --base-dir "/path/to/BASE_DIR"`
 - Run intranet server: `python utils/docflow_server.py --base-dir "/path/to/BASE_DIR" --port 8080`
-- Unified wrapper: `bash bin/docflow.sh all`
+- Full document ingestion runner: `bash bin/docflow.sh all`
 - Tests (verbose): `pytest -v`
 - Targeted tests: `pytest tests/test_docflow_server.py -q`
 

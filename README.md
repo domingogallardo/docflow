@@ -77,7 +77,7 @@ python utils/build_done_index.py --base-dir "/Users/domingo/⭐️ Documentació
 4. Run local server:
 
 ```bash
-python utils/docflow_server.py --base-dir "/Users/domingo/⭐️ Documentación" --host 127.0.0.1 --port 8080
+python utils/docflow_server.py --base-dir "/Users/domingo/⭐️ Documentación" --host localhost --port 8080
 ```
 
 Optional full rebuild at startup:
@@ -86,9 +86,9 @@ Optional full rebuild at startup:
 python utils/docflow_server.py --base-dir "/Users/domingo/⭐️ Documentación" --rebuild-on-start
 ```
 
-## Unified runner (`bin/docflow.sh`)
+## Full document ingestion runner (`bin/docflow.sh`)
 
-Use this wrapper for manual runs:
+Use this command to download/process all document types:
 
 ```bash
 bash bin/docflow.sh all
@@ -97,9 +97,8 @@ bash bin/docflow.sh all
 Behavior:
 
 - Loads `~/.docflow_env` if present.
-- Runs `process_documents.py` with your arguments.
+- Runs `process_documents.py` with your arguments (`all` for full ingestion).
 - Rebuilds intranet browse/working/done pages (`utils/build_browse_index.py`, `utils/build_working_index.py`, and `utils/build_done_index.py`) when processing succeeds.
-- Use `all` as the processing target.
 
 Optional override:
 
