@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Unified wrapper for cron and manual execution.
+# Unified wrapper for pipeline execution.
 # - Loads ~/.docflow_env if it exists
 # - Runs process_documents.py
 # - Rebuilds local intranet browse/working/done outputs

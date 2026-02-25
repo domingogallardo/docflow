@@ -86,135 +86,9 @@ Optional full rebuild at startup:
 python utils/docflow_server.py --base-dir "/Users/domingo/⭐️ Documentación" --rebuild-on-start
 ```
 
-### Auto-start on macOS (launchd)
-
-To start intranet automatically at login and keep it alive, use a user `LaunchAgent`:
-
-```bash
-cat > ~/Library/LaunchAgents/com.domingo.docflow.intranet.plist <<'PLIST'
-<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<plist version="1.0">
-<dict>
-  <key>Label</key><string>com.domingo.docflow.intranet</string>
-  <key>ProgramArguments</key>
-  <array>
-    <string>/opt/homebrew/bin/python3.11</string>
-    <string>/Users/domingo/Programacion/Python/docflow/utils/docflow_server.py</string>
-    <string>--base-dir</string><string>/Users/domingo/⭐️ Documentación</string>
-    <string>--host</string><string>127.0.0.1</string>
-    <string>--port</string><string>8080</string>
-    <string>--rebuild-on-start</string>
-  </array>
-  <key>WorkingDirectory</key><string>/Users/domingo/Programacion/Python/docflow</string>
-  <key>EnvironmentVariables</key>
-  <dict>
-    <key>PYTHONUNBUFFERED</key><string>1</string>
-  </dict>
-  <key>RunAtLoad</key><true/>
-  <key>KeepAlive</key><true/>
-  <key>StandardOutPath</key><string>/Users/domingo/Library/Logs/docflow/intranet.out.log</string>
-  <key>StandardErrorPath</key><string>/Users/domingo/Library/Logs/docflow/intranet.err.log</string>
-</dict>
-</plist>
-PLIST
-
-launchctl bootout gui/$(id -u)/com.domingo.docflow.intranet 2>/dev/null || true
-launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.domingo.docflow.intranet.plist
-launchctl kickstart -k gui/$(id -u)/com.domingo.docflow.intranet
-```
-
-Service control commands:
-
-```bash
-# restart
-launchctl kickstart -k gui/$(id -u)/com.domingo.docflow.intranet
-
-# check status
-launchctl print gui/$(id -u)/com.domingo.docflow.intranet | head -n 40
-curl -sS -o /dev/null -w "%{http_code}\n" http://127.0.0.1:8080/
-tail -n 40 ~/Library/Logs/docflow/intranet.out.log
-tail -n 40 ~/Library/Logs/docflow/intranet.err.log
-
-# stop
-launchctl bootout gui/$(id -u)/com.domingo.docflow.intranet
-
-# start again after stop
-launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.domingo.docflow.intranet.plist
-```
-
-### Cron setup (recommended)
-
-Edit cron:
-
-```bash
-crontab -e
-```
-
-Use these entries:
-
-```cron
-0 */6 * * * /bin/bash /Users/domingo/Programacion/Python/docflow/bin/docflow.sh all >> /Users/domingo/Programacion/Python/docflow/cron.log 2>&1
-0 1 * * * /bin/bash /Users/domingo/Programacion/Python/docflow/bin/docflow_tweet_daily.sh >> /Users/domingo/Programacion/Python/docflow/cron.log 2>&1
-5 1 * * * /bin/bash /Users/domingo/Programacion/Python/docflow/bin/docflow_highlights_daily.sh >> /Users/domingo/Programacion/Python/docflow/cron.log 2>&1
-```
-
-Check active tasks:
-
-```bash
-crontab -l
-```
-
-Run manually:
-
-```bash
-bash bin/docflow.sh all
-bash bin/docflow_tweet_daily.sh
-bash bin/docflow_highlights_daily.sh
-```
-
-### Tailscale access (tailnet only)
-
-Expose intranet via Tailscale to your tailnet:
-
-```bash
-tailscale up
-tailscale serve --bg 8080
-tailscale serve status
-```
-
-### Auto-start Tailscale serve on macOS
-
-Use a second `LaunchAgent` so login starts Tailscale and reapplies `serve`:
-
-```bash
-cat > ~/Library/LaunchAgents/com.domingo.tailscale.autostart.plist <<'PLIST'
-<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<plist version="1.0">
-<dict>
-  <key>Label</key><string>com.domingo.tailscale.autostart</string>
-  <key>ProgramArguments</key>
-  <array>
-    <string>/bin/zsh</string>
-    <string>-lc</string>
-    <string>tailscale up && tailscale serve --bg 8080</string>
-  </array>
-  <key>RunAtLoad</key><true/>
-  <key>KeepAlive</key><false/>
-  <key>StandardOutPath</key><string>/Users/domingo/Library/Logs/docflow/tailscale.autostart.out.log</string>
-  <key>StandardErrorPath</key><string>/Users/domingo/Library/Logs/docflow/tailscale.autostart.err.log</string>
-</dict>
-</plist>
-PLIST
-
-launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.domingo.tailscale.autostart.plist
-launchctl kickstart -k gui/$(id -u)/com.domingo.tailscale.autostart
-```
-
 ## Unified runner (`bin/docflow.sh`)
 
-Use this wrapper for cron/manual runs:
+Use this wrapper for manual runs:
 
 ```bash
 bash bin/docflow.sh all
@@ -321,6 +195,6 @@ Targeted example:
 pytest tests/test_docflow_server.py -q
 ```
 
-## Documentation
+## Optional remote access
 
-- `docs/intranet-mode.md`: canonical intranet behavior and rebuild model.
+You can expose the local docflow server (`http://127.0.0.1:8080`) through a private VPN (for example, Tailscale).

@@ -31,9 +31,6 @@ This file stores stable, reusable operational notes for future agent runs.
 
 - Canonical generator: `utils/build_daily_highlights_report.py`.
 - Build one file per day using `--day YYYY-MM-DD` and `--output /path/report.md`.
-- Daily scheduler wrapper: `bin/docflow_highlights_daily.sh`.
-- Default output path for scheduled runs:
-  - `/Users/domingo/Library/Mobile Documents/com~apple~CloudDocs/ObsidianVault/🚀 Notas/Subrayados/Highlights YYYY-MM-DD.md`
 - For legacy highlight payloads, always read via `load_highlights_for_path(...)` before rendering so missing ids are normalized.
 - Output structure:
   - One header per source file: `### [<file stem>](<intranet raw url>)`.
@@ -57,11 +54,3 @@ This file stores stable, reusable operational notes for future agent runs.
   - `utils/docflow_server.py` (`DOCFLOW_PORT` fallback)
   - `utils/random-post.py` (fallback base URL)
 - Documentation examples should use `http://localhost:8080` unless explicitly overridden.
-
-## Tweet Daily Consolidation Schedule
-
-- `bin/docflow.sh all` no longer runs tweet daily consolidation.
-- Recommended cron block:
-  - `0 */6 * * * /bin/bash /Users/domingo/Programacion/Python/docflow/bin/docflow.sh all >> /Users/domingo/Programacion/Python/docflow/cron.log 2>&1`
-  - `0 1 * * * /bin/bash /Users/domingo/Programacion/Python/docflow/bin/docflow_tweet_daily.sh >> /Users/domingo/Programacion/Python/docflow/cron.log 2>&1`
-  - `5 1 * * * /bin/bash /Users/domingo/Programacion/Python/docflow/bin/docflow_highlights_daily.sh >> /Users/domingo/Programacion/Python/docflow/cron.log 2>&1`

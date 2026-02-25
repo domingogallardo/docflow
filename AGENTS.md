@@ -20,7 +20,7 @@ This repository automates collecting and organizing personal documents (Instapap
 - Build intranet browse index: `python utils/build_browse_index.py --base-dir "/path/to/BASE_DIR"`
 - Build intranet working index: `python utils/build_working_index.py --base-dir "/path/to/BASE_DIR"`
 - Run intranet server: `python utils/docflow_server.py --base-dir "/path/to/BASE_DIR" --port 8080`
-- Unified wrapper (cron/manual): `bash bin/docflow.sh all`
+- Unified wrapper: `bash bin/docflow.sh all`
 - Tests (verbose): `pytest -v`
 - Targeted tests: `pytest tests/test_docflow_server.py -q`
 

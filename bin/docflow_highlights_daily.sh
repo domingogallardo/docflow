@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Daily highlights report wrapper for cron/manual execution.
+# Daily highlights report wrapper for automated/manual execution.
 # - Loads ~/.docflow_env if it exists
 # - Builds the previous day's highlights report Markdown
 

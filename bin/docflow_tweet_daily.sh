@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Daily tweet consolidation wrapper for cron/manual execution.
+# Daily tweet consolidation wrapper for automated/manual execution.
 # - Loads ~/.docflow_env if it exists
 # - Runs bin/build_tweet_consolidated.sh --yesterday
 # - Rebuilds local intranet browse/working/done outputs
