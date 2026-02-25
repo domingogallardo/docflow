@@ -100,6 +100,46 @@ def test_process_tweet_urls_retries_failed_on_next_run(tmp_path, monkeypatch):
     assert not processor.tweets_failed.exists()
 
 
+def test_process_tweet_urls_retry_keeps_existing_anchor_first(tmp_path, monkeypatch):
+    processor, _ = prepare_processor(tmp_path)
+    anchor_url = "https://x.com/user/status/10"
+    retry_url = "https://x.com/user/status/99"
+    processor.tweets_processed.write_text(anchor_url + "\n", encoding="utf-8")
+    processor.tweets_failed.write_text(retry_url + "\n", encoding="utf-8")
+    mock_likes(monkeypatch, [])
+
+    with patch(
+        "pipeline_manager.fetch_tweet_thread_markdown",
+        return_value=(
+            "---\nsource: tweet\n---\n\n# Retry\n\n[View on X](https://x.com/99)\n",
+            "Tweet - user-99.md",
+        ),
+    ):
+        processor.process_tweet_urls()
+
+    lines = processor.tweets_processed.read_text(encoding="utf-8").splitlines()
+    assert lines == [anchor_url, retry_url]
+
+
+def test_process_tweet_urls_reanchors_when_previous_first_url_disappears(tmp_path, monkeypatch):
+    processor, _ = prepare_processor(tmp_path)
+    stale_first = "https://x.com/user/status/999"
+    expected_anchor = "https://x.com/user/status/10"
+    older = "https://x.com/user/status/9"
+    processor.tweets_processed.write_text(
+        "\n".join([stale_first, expected_anchor, older]) + "\n",
+        encoding="utf-8",
+    )
+    mock_likes(monkeypatch, [expected_anchor, older], stop_found=False)
+
+    created = processor.process_tweet_urls()
+
+    assert created == []
+    lines = processor.tweets_processed.read_text(encoding="utf-8").splitlines()
+    assert lines[0] == expected_anchor
+    assert lines[1:] == [stale_first, older]
+
+
 def test_process_tweets_pipeline_runs_markdown_subset(tmp_path, monkeypatch):
     processor, _ = prepare_processor(tmp_path)
     mock_likes(monkeypatch, ["https://x.com/user/status/1"])
