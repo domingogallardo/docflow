@@ -197,4 +197,4 @@ pytest tests/test_docflow_server.py -q
 
 ## Optional remote access
 
-You can expose the local docflow server (`http://127.0.0.1:8080`) through a private VPN (for example, Tailscale).
+You can expose the local intranet through a private VPN (for example, Tailscale).
