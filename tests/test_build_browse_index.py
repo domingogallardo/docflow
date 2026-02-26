@@ -78,6 +78,8 @@ def test_build_browse_site_generates_indexes_and_actions(tmp_path: Path):
     assert "const sortableFiles = sortable.filter" in browse_sort_content
     assert "!href.endsWith('/')" in browse_sort_content
     assert "ul.dg-index, ul.dg-done-list, ul.dg-reading-list, ul.dg-working-list" in browse_sort_content
+    assert "data-dg-sort-direction" in browse_sort_content
+    assert "defaultSortDirection" in browse_sort_content
     assert "dgWorking" not in browse_sort_content
 
     root_content = posts_root_page.read_text(encoding="utf-8")

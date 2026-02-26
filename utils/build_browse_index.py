@@ -867,7 +867,7 @@ def ensure_assets(base_dir: Path) -> None:
     return Number.isFinite(num) ? num : 0;
   }
 
-  function compareEntries(a, b, highlightsFirst) {
+  function compareEntries(a, b, highlightsFirst, sortDirection) {
     if (highlightsFirst) {
       const aHl = a.dataset.dgHighlighted === '1' ? 0 : 1;
       const bHl = b.dataset.dgHighlighted === '1' ? 0 : 1;
@@ -876,7 +876,10 @@ def ensure_assets(base_dir: Path) -> None:
 
     const aSort = asNumber(a.dataset.dgSortMtime);
     const bSort = asNumber(b.dataset.dgSortMtime);
-    if (aSort !== bSort) return bSort - aSort;
+    if (aSort !== bSort) {
+      if (sortDirection === 'asc') return aSort - bSort;
+      return bSort - aSort;
+    }
 
     const aName = a.dataset.dgName || '';
     const bName = b.dataset.dgName || '';
@@ -904,11 +907,16 @@ def ensure_assets(base_dir: Path) -> None:
       return;
     }
 
+    const defaultSortDirection = (toggle.getAttribute('data-dg-sort-direction') || 'desc').toLowerCase() === 'asc'
+      ? 'asc'
+      : 'desc';
     let highlightsFirst = false;
 
     function renderOrder() {
       for (const group of groups) {
-        const sorted = [...group.sortableFiles].sort((a, b) => compareEntries(a, b, highlightsFirst));
+        const sorted = [...group.sortableFiles].sort((a, b) =>
+          compareEntries(a, b, highlightsFirst, defaultSortDirection)
+        );
         for (const node of sorted) {
           group.list.appendChild(node);
         }

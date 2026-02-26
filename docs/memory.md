@@ -2,7 +2,9 @@
 
 This file stores stable, reusable operational notes for future agent runs.
 
-## Reading/Working Are State-Driven
+## Notes
+
+### Reading/Working Are State-Driven
 
 - `Reading` and `Working` are managed through state, not by moving files into stage directories.
 - Canonical source of truth for Reading: `BASE_DIR/state/reading.json`.
@@ -17,7 +19,7 @@ This file stores stable, reusable operational notes for future agent runs.
 - Regenerate Done index only if Done state changed:
   - `python utils/build_done_index.py --base-dir "/path/to/BASE_DIR"`
 
-## Highlight Navigation Overlay
+### Highlight Navigation Overlay
 
 - Canonical highlight navigation logic lives in `utils/static/article.js` and is exposed via:
   - `ArticleJS.nextHighlight()`
@@ -31,7 +33,7 @@ This file stores stable, reusable operational notes for future agent runs.
   - Keep the third row hidden when highlight progress total is `0`.
 - Highlight payload normalization in `utils/highlight_store.py` must keep stable `id` values; when a highlight arrives without `id`, generate one deterministically to support legacy data and navigation state.
 
-## Daily Highlights Report
+### Daily Highlights Report
 
 - Canonical generator: `utils/build_daily_highlights_report.py`.
 - Build one file per day using `--day YYYY-MM-DD` and `--output /path/report.md`.
@@ -43,7 +45,7 @@ This file stores stable, reusable operational notes for future agent runs.
   - Only fall back to `#:~:text=...` when an id is not available.
 - If highlights point to deleted source files, remove those stale highlights from `BASE_DIR/state/highlights` and regenerate daily reports.
 
-## Hash Deep Links
+### Hash Deep Links
 
 - `utils/static/article.js` supports deep links to a highlight id in the URL hash:
   - `#hl=<id>` (primary)
@@ -51,10 +53,27 @@ This file stores stable, reusable operational notes for future agent runs.
 - Public API includes `ArticleJS.focusHighlightById(id, options)` and it is used to focus entries opened from report links.
 - `utils/docflow_server.py` overlay script must refresh highlight progress after hash changes and shortly after mount so the `Jump to highlight` counter reflects the focused item.
 
-## Intranet Port
+### Intranet Port
 
 - Local intranet default port is standardized to `8080`.
 - Keep defaults aligned in:
   - `utils/docflow_server.py` (`DOCFLOW_PORT` fallback)
   - `utils/random-post.py` (fallback base URL)
 - Documentation examples should use `http://localhost:8080` unless explicitly overridden.
+
+### Client-Side Sort Direction For Kanban Lists
+
+- List pages using `assets/browse-sort.js` are reordered client-side on `DOMContentLoaded` using `data-dg-sort-mtime`.
+- Default direction is descending (`newest first`) unless the page sets `data-dg-sort-direction="asc"` on the `data-dg-sort-toggle` element.
+- For `Reading` (`oldest first`), server-side ordering alone is not enough; the page must explicitly set `data-dg-sort-direction="asc"` or the browser will show newest first.
+- After changing sort behavior in `utils/build_browse_index.py`, regenerate browse assets (`python utils/build_browse_index.py --base-dir "<BASE_DIR>"`) so `_site/assets/browse-sort.js` is updated.
+
+## Diary
+
+### 2026-02-26
+
+- Moved exact filename search from `/browse/` to home (`/`) and updated tests.
+- Changed Reading ordering to `reading_at` oldest first (inverse of previous behavior) in generator + docs + tests.
+- Found and fixed a client-side override: `assets/browse-sort.js` was forcing descending order on load.
+- Added support for per-page sort direction in `browse-sort.js` and set `Reading` toggle to `data-dg-sort-direction="asc"`.
+- Rebuilt indexes/assets, restarted `docflow_server`, and verified in browser (`/reading/?_r=...`) that oldest appears first.

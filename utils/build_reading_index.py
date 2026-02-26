@@ -164,7 +164,7 @@ def build_site_reading_html(items: list[SiteReadingItem]) -> str:
         '<title>Reading</title></head><body>'
         '<div class="dg-nav"><a href="/">Home</a> · <a href="/browse/">Browse</a> · <a href="/reading/">Reading</a> · <a href="/working/">Working</a> · <a href="/done/">Done</a></div>'
         '<h1>Reading</h1>'
-        '<div class="dg-legendbar"><div class="dg-legend">🟡 highlight</div><button type="button" class="dg-sort-toggle" data-dg-sort-toggle aria-pressed="false">Highlight: off</button></div><hr>'
+        '<div class="dg-legendbar"><div class="dg-legend">🟡 highlight</div><button type="button" class="dg-sort-toggle" data-dg-sort-toggle data-dg-sort-direction="asc" aria-pressed="false">Highlight: off</button></div><hr>'
         + list_html
         + "</body></html>"
     )
