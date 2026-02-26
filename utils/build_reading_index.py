@@ -128,7 +128,7 @@ def collect_site_reading_items(base_dir: Path) -> list[SiteReadingItem]:
             )
         )
 
-    items.sort(key=lambda item: item.sort_mtime, reverse=True)
+    items.sort(key=lambda item: item.sort_mtime)
     return items
 
 

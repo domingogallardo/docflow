@@ -67,7 +67,7 @@ def test_site_reading_orders_by_reading_time(tmp_path: Path, monkeypatch):
     out = build_reading_index.write_site_reading_index(base)
     content = out.read_text(encoding="utf-8")
 
-    assert content.find("newer.html") < content.find("older.html")
+    assert content.find("older.html") < content.find("newer.html")
 
 
 def test_build_reading_index_cli_generates_site_index(tmp_path: Path):
