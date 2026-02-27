@@ -194,6 +194,30 @@ python utils/build_daily_highlights_report.py --day 2026-02-13 --output "/tmp/hi
 bash bin/docflow_highlights_daily.sh
 ```
 
+## Clipboard Markdown helper (`bin/mdclip`)
+
+Use this helper to clean rich content from the macOS clipboard and convert it to compact Markdown (optimized for Obsidian paste behavior):
+
+```bash
+bin/mdclip
+```
+
+Behavior:
+
+- Reads HTML from clipboard when available (`pbpaste -Prefer html`, then macOS pasteboard fallbacks).
+- Converts to Markdown and removes extra blank lines between list items.
+- Writes cleaned Markdown back to clipboard by default.
+
+Useful flags:
+
+```bash
+bin/mdclip --print
+bin/mdclip --no-copy
+bin/mdclip --from-stdin --no-copy --print < /path/to/input.html
+```
+
+Keyboard shortcut bindings (for example `cmd+shift+L`) are configured outside this repo (Shortcuts/automation tool). The versioned command to invoke is `bin/mdclip`.
+
 ## Tests
 
 Run all tests:

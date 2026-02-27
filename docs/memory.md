@@ -61,6 +61,13 @@ This file stores stable, reusable operational notes for future agent runs.
   - `utils/random-post.py` (fallback base URL)
 - Documentation examples should use `http://localhost:8080` unless explicitly overridden.
 
+### Clipboard Cleaner Shortcut
+
+- Canonical clipboard-cleaning command is `bin/mdclip` (wrapper for `utils/clipboard_cleaner.py`).
+- `utils/clipboard_cleaner.py` is the source of truth for HTML-to-Markdown cleanup behavior.
+- Keyboard shortcut mapping (for example `cmd+shift+L`) is managed outside this repo; only the executable command is versioned here.
+- If cleanup behavior changes, update `tests/test_clipboard_cleaner.py` accordingly.
+
 ### Client-Side Sort Direction For Kanban Lists
 
 - List pages using `assets/browse-sort.js` are reordered client-side on `DOMContentLoaded` using `data-dg-sort-mtime`.
