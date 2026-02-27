@@ -87,7 +87,7 @@ def test_done_index_shows_state_actions_for_pdfs(tmp_path: Path):
     assert 'data-docflow-path="Pdfs/Pdfs 2026/paper.pdf"' in content
 
 
-def test_done_index_groups_items_by_year_headers(tmp_path: Path, monkeypatch):
+def test_done_index_groups_items_by_done_year_headers(tmp_path: Path, monkeypatch):
     base = tmp_path / "base"
     posts_2025 = base / "Posts" / "Posts 2025"
     posts_2026 = base / "Posts" / "Posts 2026"
@@ -105,6 +105,23 @@ def test_done_index_groups_items_by_year_headers(tmp_path: Path, monkeypatch):
     content = out.read_text(encoding="utf-8")
 
     assert '<h2 class="dg-year">2026</h2>' in content
-    assert '<h2 class="dg-year">2025</h2>' in content
-    assert content.find('<h2 class="dg-year">2026</h2>') < content.find('<h2 class="dg-year">2025</h2>')
+    assert '<h2 class="dg-year">2025</h2>' not in content
     assert content.find("new.html") < content.find("old.html")
+
+
+def test_done_index_falls_back_to_path_year_when_done_at_missing(tmp_path: Path):
+    base = tmp_path / "base"
+    posts_2025 = base / "Posts" / "Posts 2025"
+    posts_2025.mkdir(parents=True)
+    (posts_2025 / "legacy.html").write_text("<html><body>Legacy</body></html>", encoding="utf-8")
+
+    site_state.save_done_state(
+        base,
+        {"version": site_state.STATE_VERSION, "items": {"Posts/Posts 2025/legacy.html": {}}},
+    )
+
+    out = build_done_index.write_site_done_index(base)
+    content = out.read_text(encoding="utf-8")
+
+    assert '<h2 class="dg-year">2025</h2>' in content
+    assert "legacy.html" in content

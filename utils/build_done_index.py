@@ -50,6 +50,7 @@ class SiteDoneItem(NamedTuple):
     name: str
     mtime: float
     sort_mtime: float
+    group_year: str
     highlighted: bool
 
 
@@ -112,8 +113,7 @@ def _year_for_item(rel_path: str) -> str:
 def _group_items_by_year(items: list[SiteDoneItem]) -> list[tuple[str, list[SiteDoneItem]]]:
     grouped: dict[str, list[SiteDoneItem]] = {}
     for item in items:
-        year = _year_for_item(item.rel_path)
-        grouped.setdefault(year, []).append(item)
+        grouped.setdefault(item.group_year, []).append(item)
 
     def _sort_key(year: str) -> tuple[int, int | str]:
         if year.isdigit():
@@ -122,6 +122,10 @@ def _group_items_by_year(items: list[SiteDoneItem]) -> list[tuple[str, list[Site
 
     ordered_years = sorted(grouped.keys(), key=_sort_key)
     return [(year, grouped[year]) for year in ordered_years]
+
+
+def _year_from_epoch(epoch: float) -> str:
+    return str(datetime.fromtimestamp(epoch, tz=timezone.utc).year)
 
 
 def collect_site_done_items(base_dir: Path) -> list[SiteDoneItem]:
@@ -145,12 +149,14 @@ def collect_site_done_items(base_dir: Path) -> list[SiteDoneItem]:
             done_mtime = _done_at_to_epoch(done_entry.get("done_at"))
         display_mtime = st.st_mtime
         effective_mtime = done_mtime if done_mtime is not None else display_mtime
+        group_year = _year_from_epoch(done_mtime) if done_mtime is not None else _year_for_item(rel)
         items.append(
             SiteDoneItem(
                 rel_path=rel,
                 name=abs_path.name,
                 mtime=display_mtime,
                 sort_mtime=effective_mtime,
+                group_year=group_year,
                 highlighted=_is_site_highlighted(base_dir, rel),
             )
         )
