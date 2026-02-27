@@ -11,6 +11,7 @@ This file stores stable, reusable operational notes for future agent runs.
 - Canonical source of truth: `BASE_DIR/state/working.json`.
 - To move an item to Reading, set state with `set_reading_path` (or API `POST /api/to-reading`) using normalized relative paths (for example `Posts/Posts 2026/file.html`).
 - To move an item to Working, set state with `set_working_path` (or API `POST /api/to-working`) from Reading.
+- To move an item to Done, use `set_done_path` (or API `POST /api/to-done`) from Browse, Reading, or Working.
 - On `POST /api/to-done`, `reading_at` and `working_at` (when present) are copied into `done.json` as `reading_started_at` and `working_started_at` so lead time can be computed after completion.
 - After Working-related stage changes, regenerate intranet indexes:
   - `python utils/build_browse_index.py --base-dir "/path/to/BASE_DIR"`

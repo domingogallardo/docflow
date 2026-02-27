@@ -792,7 +792,8 @@ OVERLAY_JS = """
     if (stage === 'reading') {
       return [
         ['Back to Browse', 'to-browse'],
-        ['Move to Working', 'to-working']
+        ['Move to Working', 'to-working'],
+        ['Move to Done', 'to-done']
       ];
     }
     if (stage === 'working') {
@@ -807,7 +808,8 @@ OVERLAY_JS = """
       ];
     }
     return [
-      ['Move to Reading', 'to-reading']
+      ['Move to Reading', 'to-reading'],
+      ['Move to Done', 'to-done']
     ];
   }
 

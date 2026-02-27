@@ -97,5 +97,6 @@ def test_reading_index_shows_state_actions_for_pdfs(tmp_path: Path):
 
     assert "/pdfs/raw/Pdfs%202026/paper.pdf" in content
     assert 'data-api-action="to-working"' in content
+    assert 'data-api-action="to-done"' in content
     assert 'data-api-action="to-browse"' in content
     assert 'data-docflow-path="Pdfs/Pdfs 2026/paper.pdf"' in content

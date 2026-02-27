@@ -72,6 +72,7 @@ def _actions_html(item: SiteReadingItem) -> str:
         "<span class='dg-actions'>"
         f"<button data-api-action=\"to-browse\" data-docflow-path=\"{path_attr}\">Back to Browse</button>"
         f"<button data-api-action=\"to-working\" data-docflow-path=\"{path_attr}\">Move to Working</button>"
+        f"<button data-api-action=\"to-done\" data-docflow-path=\"{path_attr}\">Move to Done</button>"
         "</span>"
     )
 

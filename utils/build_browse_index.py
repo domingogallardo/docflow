@@ -123,7 +123,10 @@ def _actions_html(entry: BrowseEntry) -> str:
     if not entry.name.lower().endswith(".pdf"):
         return ""
 
-    stage_buttons = [("to-reading", "Move to Reading")]
+    stage_buttons = [
+        ("to-reading", "Move to Reading"),
+        ("to-done", "Move to Done"),
+    ]
 
     path_attr = html.escape(entry.rel_path, quote=True)
     button_html = "".join(

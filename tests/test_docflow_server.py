@@ -354,6 +354,7 @@ def test_raw_route_serves_library_file(tmp_path: Path):
         assert "back_forward" in body
         assert "Inside Browse" in body
         assert "to-reading" in body
+        assert "to-done" in body
         assert "Rebuild" in body
         assert "Delete" in body
         assert "dg-hl-nav" in body
@@ -388,6 +389,8 @@ def test_raw_route_overlay_marks_reading_stage(tmp_path: Path):
         status, body = _get(port, "/posts/raw/Posts%202026/doc.html")
         assert status == 200
         assert 'data-stage="reading"' in body
+        assert "to-working" in body
+        assert "to-done" in body
     finally:
         server.shutdown()
         server.server_close()

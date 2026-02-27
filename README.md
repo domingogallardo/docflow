@@ -132,7 +132,7 @@ Behavior:
 - `reading` list ordering: by `reading_at` (oldest first)
 - `working` list ordering: by `working_at` (newest first)
 - `done` list ordering: by `done_at` (newest first)
-- `to-done` preserves stage start metadata in `state/done.json` when available (`reading_started_at`, `working_started_at`)
+- `to-done` can be triggered from Browse, Reading, or Working, and preserves stage start metadata in `state/done.json` when available (`reading_started_at`, `working_started_at`)
 - JSON API actions:
   - `POST /api/to-reading`
   - `POST /api/to-working`
