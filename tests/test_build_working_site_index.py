@@ -31,7 +31,8 @@ def test_write_site_working_index_uses_working_state(tmp_path: Path):
     assert '<a href="/browse/">Browse</a>' in content
     assert '<a href="/reading/">Reading</a>' in content
     assert '<a href="/done/">Done</a>' in content
-    assert "<h1>Working</h1>" in content
+    assert "<title>Working (1)</title>" in content
+    assert "<h1>Working (1)</h1>" in content
     assert "🟡 highlight" in content
     assert "data-dg-sort-toggle" in content
     assert "Highlight: off" in content

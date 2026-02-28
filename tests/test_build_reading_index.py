@@ -32,7 +32,8 @@ def test_write_site_reading_index_uses_reading_state(tmp_path: Path):
     assert '<a href="/reading/">Reading</a>' in content
     assert '<a href="/working/">Working</a>' in content
     assert '<a href="/done/">Done</a>' in content
-    assert "<h1>Reading</h1>" in content
+    assert "<title>Reading (1)</title>" in content
+    assert "<h1>Reading (1)</h1>" in content
     assert "🟡 highlight" in content
     assert "data-dg-sort-toggle" in content
     assert 'data-dg-sort-direction="asc"' in content

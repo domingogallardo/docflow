@@ -134,6 +134,7 @@ def collect_site_reading_items(base_dir: Path) -> list[SiteReadingItem]:
 
 
 def build_site_reading_html(items: list[SiteReadingItem]) -> str:
+    title = f"Reading ({len(items)})"
     if not items:
         list_html = '<ul class="dg-reading-list"></ul>'
     else:
@@ -162,9 +163,9 @@ def build_site_reading_html(items: list[SiteReadingItem]) -> str:
         f"<style>{READING_BASE_STYLE}</style>"
         '<script src="/assets/actions.js" defer></script>'
         '<script src="/assets/browse-sort.js" defer></script>'
-        '<title>Reading</title></head><body>'
+        f"<title>{title}</title></head><body>"
         '<div class="dg-nav"><a href="/">Home</a> · <a href="/browse/">Browse</a> · <a href="/reading/">Reading</a> · <a href="/working/">Working</a> · <a href="/done/">Done</a></div>'
-        '<h1>Reading</h1>'
+        f"<h1>{title}</h1>"
         '<div class="dg-legendbar"><div class="dg-legend">🟡 highlight</div><button type="button" class="dg-sort-toggle" data-dg-sort-toggle data-dg-sort-direction="asc" aria-pressed="false">Highlight: off</button></div><hr>'
         + list_html
         + "</body></html>"
