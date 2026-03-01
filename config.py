@@ -3,6 +3,7 @@ import os
 from datetime import datetime
 
 DOCPIPE_YEAR_ENV = "DOCPIPE_YEAR"
+DOCFLOW_BASE_DIR_ENV = "DOCFLOW_BASE_DIR"
 
 
 def _system_year() -> int:
@@ -23,7 +24,16 @@ def get_default_year() -> int:
     return _system_year()
 
 
-BASE_DIR = Path("/Users/domingo/⭐️ Documentación")
+def _require_path_env(var_name: str) -> Path:
+    value = os.getenv(var_name)
+    if not value:
+        raise RuntimeError(
+            f"{var_name} is not set. Define it in ~/.docflow_env before running docflow."
+        )
+    return Path(value).expanduser()
+
+
+BASE_DIR = _require_path_env(DOCFLOW_BASE_DIR_ENV)
 INCOMING = BASE_DIR / "Incoming"
 PROCESSED_HISTORY = INCOMING / "processed_history.txt"
 

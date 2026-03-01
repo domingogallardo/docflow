@@ -16,7 +16,7 @@ This repository automates collecting and organizing personal documents (Instapap
 - Run full pipeline: `python process_documents.py all --year 2026`
 - Selective run: `python process_documents.py pdfs md`
 - Tweet queue: `python process_documents.py tweets`
-- Create/refresh X likes state: `python utils/create_x_state.py --state-path /Users/<you>/.secrets/docflow/x_state.json`
+- Create/refresh X likes state: `python utils/create_x_state.py --state-path "$HOME/.secrets/docflow/x_state.json"`
 - Build intranet browse index: `python utils/build_browse_index.py --base-dir "/path/to/BASE_DIR"`
 - Build intranet reading index: `python utils/build_reading_index.py --base-dir "/path/to/BASE_DIR"`
 - Build intranet working index: `python utils/build_working_index.py --base-dir "/path/to/BASE_DIR"`
@@ -52,6 +52,8 @@ Useful setup (new environment):
 ## Notes for Agents
 
 - Keep all script messages in English.
+- `BASE_DIR` location moved: do not hardcode it in `config.py`; use `DOCFLOW_BASE_DIR` in `~/.docflow_env`.
+- For direct local commands in this repo, ensure environment is loaded first (`source ~/.docflow_env`) so `config.py` resolves `BASE_DIR`.
 - Preserve file `mtime` only for existing content files inside `BASE_DIR` (for example articles/pages under `Posts`, `Tweets`, etc.) unless the task explicitly requires changing ordering semantics.
 - Do not preserve `mtime` for repository code/docs files outside `BASE_DIR` (for example `docs/*.md`, `utils/*.py`, tests).
 - Use intranet routes and local state as canonical behavior (`docflow_server.py`, `_site`, `state`).
@@ -61,7 +63,7 @@ Useful setup (new environment):
 ### Fast path for article location (avoid full-disk search)
 
 - For URLs like `http://localhost:8080/posts/raw/Posts%202026/...html`:
-  1. Resolve `BASE_DIR` from `config.py`.
+  1. Resolve `BASE_DIR` from `DOCFLOW_BASE_DIR` (`~/.docflow_env`) or config fallback.
   2. Decode URL-encoded filename.
   3. Check exact path under `BASE_DIR/Posts/Posts <YEAR>/`.
   4. If needed, do narrow search under `"$BASE_DIR/Posts"` only.
@@ -93,5 +95,5 @@ Useful setup (new environment):
 - Do not commit secrets.
 - Use env vars for credentials: `OPENAI_API_KEY`, `INSTAPAPER_USERNAME`, `INSTAPAPER_PASSWORD`.
 - Optional year override: `DOCPIPE_YEAR`.
-- Keep `TWEET_LIKES_STATE` outside the repo (for example `/Users/<you>/.secrets/docflow/x_state.json`) to avoid losing session state during repo cleanup.
-- Keep `BASE_DIR` in `config.py` aligned with your local environment.
+- Keep `TWEET_LIKES_STATE` outside the repo (for example `"$HOME/.secrets/docflow/x_state.json"`) to avoid losing session state during repo cleanup.
+- Keep `DOCFLOW_BASE_DIR` in `~/.docflow_env` aligned with your local environment.

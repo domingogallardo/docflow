@@ -7,7 +7,7 @@ Usage:
     python update_font.py /path/to/html/files
 
 Example:
-    python update_font.py "/Users/domingo/⭐️ Documentación/Posts/Posts 2025"
+    python update_font.py "/path/to/BASE_DIR/Posts/Posts 2025"
 """
 import sys
 import argparse

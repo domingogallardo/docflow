@@ -1,3 +1,4 @@
+import os
 import sys
 from pathlib import Path
 
@@ -6,6 +7,9 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 repo_root_str = str(REPO_ROOT)
 if repo_root_str not in sys.path:
     sys.path.insert(0, repo_root_str)
+
+# Tests import modules that depend on config.BASE_DIR. Provide a stable default.
+os.environ.setdefault("DOCFLOW_BASE_DIR", repo_root_str)
 
 # Also add the 'utils' folder for direct utility imports in tests.
 UTILS_DIR = REPO_ROOT / "utils"

@@ -17,11 +17,15 @@ cd "${REPO_DIR}"
 
 PYTHON_BIN="${PYTHON_BIN:-python3}"
 HIGHLIGHTS_BUILDER="${HIGHLIGHTS_BUILDER:-${REPO_DIR}/utils/build_daily_highlights_report.py}"
-HIGHLIGHTS_DAILY_DIR="${HIGHLIGHTS_DAILY_DIR:-/Users/domingo/Library/Mobile Documents/com~apple~CloudDocs/ObsidianVault/🚀 Notas/Subrayados}"
 HIGHLIGHTS_INTRASITE_BASE_URL="${HIGHLIGHTS_INTRASITE_BASE_URL:-http://localhost:8080}"
 
 if [ ! -f "${HIGHLIGHTS_BUILDER}" ]; then
   echo "[$(date -Iseconds)] Docflow highlights daily: builder not found: ${HIGHLIGHTS_BUILDER}"
+  exit 1
+fi
+
+if [ -z "${HIGHLIGHTS_DAILY_DIR:-}" ]; then
+  echo "[$(date -Iseconds)] Docflow highlights daily: HIGHLIGHTS_DAILY_DIR is not set (define it in ~/.docflow_env)"
   exit 1
 fi
 

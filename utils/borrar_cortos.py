@@ -1,29 +1,35 @@
 import os
+from pathlib import Path
 
-ruta_base = "/Users/domingo/⭐️ Documentación/Posts/"
-min_palabras = 24  # adjust the minimum word count you want here
+BASE_DIR_ENV = "DOCFLOW_BASE_DIR"
+MIN_WORDS = int(os.getenv("BORRAR_CORTOS_MIN_WORDS", "24"))
 
-def contar_palabras_en_archivo(ruta_archivo):
-    with open(ruta_archivo, "r", encoding="utf-8") as archivo:
-        contenido = archivo.read()
-        palabras = contenido.split()
-        return len(palabras)
 
-def eliminar_archivos_cortos_y_html():
-    for raiz, _, archivos in os.walk(ruta_base):
-        for archivo in archivos:
-            if archivo.endswith(".md"):
-                ruta_md = os.path.join(raiz, archivo)
-                num_palabras = contar_palabras_en_archivo(ruta_md)
+def _posts_root() -> Path:
+    base_dir = os.getenv(BASE_DIR_ENV)
+    if not base_dir:
+        raise RuntimeError(
+            f"{BASE_DIR_ENV} is not set. Define it in ~/.docflow_env before running this script."
+        )
+    return Path(base_dir).expanduser() / "Posts"
 
-                if num_palabras < min_palabras:
-                    os.remove(ruta_md)
 
-                    nombre_base = os.path.splitext(archivo)[0]
-                    ruta_html = os.path.join(raiz, nombre_base + ".html")
+def contar_palabras_en_archivo(ruta_archivo: Path) -> int:
+    with ruta_archivo.open("r", encoding="utf-8") as archivo:
+        return len(archivo.read().split())
 
-                    if os.path.exists(ruta_html):
-                        os.remove(ruta_html)
+
+def eliminar_archivos_cortos_y_html() -> None:
+    for ruta_md in _posts_root().rglob("*.md"):
+        num_palabras = contar_palabras_en_archivo(ruta_md)
+        if num_palabras >= MIN_WORDS:
+            continue
+
+        ruta_md.unlink()
+        ruta_html = ruta_md.with_suffix(".html")
+        if ruta_html.exists():
+            ruta_html.unlink()
+
 
 if __name__ == "__main__":
     eliminar_archivos_cortos_y_html()

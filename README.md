@@ -10,11 +10,31 @@ Podcast snippets are typically captured in [Snipd](https://www.snipd.com) and th
 
 ## What this repo does now
 
-- Single local source of truth: `BASE_DIR` (configured in `config.py`).
+- Single local source of truth: `BASE_DIR` (resolved from `DOCFLOW_BASE_DIR`, typically in `~/.docflow_env`).
 - Single local server: `python utils/docflow_server.py`.
 - Static site output under `BASE_DIR/_site`.
 - Local state under `BASE_DIR/state`.
 - No remote deploy flow in this repository.
+
+## BASE_DIR Location (Important)
+
+- `BASE_DIR` is no longer hardcoded in `config.py`.
+- `BASE_DIR` now comes from environment variable `DOCFLOW_BASE_DIR`.
+- Canonical place to set it: `~/.docflow_env`.
+- If `DOCFLOW_BASE_DIR` is missing, importing `config.py` fails with a clear error.
+- For direct commands from this repo, load your environment first:
+
+```bash
+source ~/.docflow_env
+```
+
+Recommended `~/.docflow_env` snippet:
+
+```bash
+export DOCFLOW_BASE_DIR="/path/to/BASE_DIR"
+export INTRANET_BASE_DIR="$DOCFLOW_BASE_DIR"
+export HIGHLIGHTS_DAILY_DIR="/path/to/Obsidian/Subrayados"
+```
 
 ## Main folders
 
@@ -53,9 +73,11 @@ playwright install chromium
 export OPENAI_API_KEY=...
 export INSTAPAPER_USERNAME=...
 export INSTAPAPER_PASSWORD=...
-export TWEET_LIKES_STATE=/Users/<you>/.secrets/docflow/x_state.json
+export DOCFLOW_BASE_DIR="/path/to/BASE_DIR"
+export TWEET_LIKES_STATE="$HOME/.secrets/docflow/x_state.json"
 export TWEET_LIKES_URL=https://x.com/<user>/likes
 export TWEET_LIKES_MAX=50
+export HIGHLIGHTS_DAILY_DIR="/path/to/Obsidian/Subrayados"
 ```
 
 Keep `TWEET_LIKES_STATE` outside the repo so cleanup operations do not delete it.
@@ -69,22 +91,22 @@ python process_documents.py all --year 2026
 3. Build local intranet pages:
 
 ```bash
-python utils/build_browse_index.py --base-dir "/Users/domingo/⭐️ Documentación"
-python utils/build_reading_index.py --base-dir "/Users/domingo/⭐️ Documentación"
-python utils/build_working_index.py --base-dir "/Users/domingo/⭐️ Documentación"
-python utils/build_done_index.py --base-dir "/Users/domingo/⭐️ Documentación"
+python utils/build_browse_index.py --base-dir "$DOCFLOW_BASE_DIR"
+python utils/build_reading_index.py --base-dir "$DOCFLOW_BASE_DIR"
+python utils/build_working_index.py --base-dir "$DOCFLOW_BASE_DIR"
+python utils/build_done_index.py --base-dir "$DOCFLOW_BASE_DIR"
 ```
 
 4. Run local server:
 
 ```bash
-python utils/docflow_server.py --base-dir "/Users/domingo/⭐️ Documentación" --host localhost --port 8080
+python utils/docflow_server.py --base-dir "$DOCFLOW_BASE_DIR" --host localhost --port 8080
 ```
 
 Optional full rebuild at startup:
 
 ```bash
-python utils/docflow_server.py --base-dir "/Users/domingo/⭐️ Documentación" --rebuild-on-start
+python utils/docflow_server.py --base-dir "$DOCFLOW_BASE_DIR" --rebuild-on-start
 ```
 
 ## Full document ingestion runner (`bin/docflow.sh`)
@@ -168,7 +190,7 @@ python process_documents.py tweets
 - One-time browser state creation:
 
 ```bash
-python utils/create_x_state.py --state-path /Users/<you>/.secrets/docflow/x_state.json
+python utils/create_x_state.py --state-path "$HOME/.secrets/docflow/x_state.json"
 ```
 
 - Daily consolidated tweets helper:
