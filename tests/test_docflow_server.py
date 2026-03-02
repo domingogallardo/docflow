@@ -666,6 +666,7 @@ def test_api_export_pdf_returns_503_when_pandoc_missing(tmp_path: Path, monkeypa
             return None
         return original_which(name)
 
+    monkeypatch.setattr(docflow_server, "_PDF_PANDOC_CANDIDATES", ())
     monkeypatch.setattr(docflow_server.shutil, "which", _which)
 
     server, port = _start_server(base)
@@ -693,6 +694,7 @@ def test_api_export_pdf_returns_503_when_pdflatex_missing(tmp_path: Path, monkey
             return None
         return original_which(name)
 
+    monkeypatch.setattr(docflow_server, "_PDF_PDFLATEX_CANDIDATES", ())
     monkeypatch.setattr(docflow_server.shutil, "which", _which)
 
     server, port = _start_server(base)
@@ -721,7 +723,7 @@ def test_api_export_pdf_prefers_markdown_source(tmp_path: Path, monkeypatch):
 
     monkeypatch.setattr(docflow_server.shutil, "which", lambda _name: "/usr/bin/fake")
 
-    def _fake_render(source_abs: Path, _suffix: str) -> bytes:
+    def _fake_render(source_abs: Path, _suffix: str, _pandoc: str, _pdflatex: str) -> bytes:
         captured["source_abs"] = source_abs
         return b"%PDF-1.4\n%mock\n"
 
@@ -745,7 +747,7 @@ def test_api_export_pdf_falls_back_to_html_when_markdown_missing(tmp_path: Path,
 
     monkeypatch.setattr(docflow_server.shutil, "which", lambda _name: "/usr/bin/fake")
 
-    def _fake_render(source_abs: Path, _suffix: str) -> bytes:
+    def _fake_render(source_abs: Path, _suffix: str, _pandoc: str, _pdflatex: str) -> bytes:
         captured["source_abs"] = source_abs
         return b"%PDF-1.4\n%mock\n"
 

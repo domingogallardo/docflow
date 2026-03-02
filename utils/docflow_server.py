@@ -63,6 +63,17 @@ from utils.highlight_store import load_highlights_for_path, save_highlights_for_
 
 DONE_LINKS_FILE_ENV = "DONE_LINKS_FILE"
 DONE_LINKS_BASE_URL_ENV = "DONE_LINKS_BASE_URL"
+_PDF_PANDOC_CANDIDATES = (
+    "/opt/homebrew/bin/pandoc",
+    "/usr/local/bin/pandoc",
+    "/usr/bin/pandoc",
+)
+_PDF_PDFLATEX_CANDIDATES = (
+    "/Library/TeX/texbin/pdflatex",
+    "/opt/homebrew/bin/pdflatex",
+    "/usr/local/bin/pdflatex",
+    "/usr/bin/pdflatex",
+)
 
 
 class ApiError(Exception):
@@ -106,6 +117,17 @@ _PDF_SANITIZE_TRANSLATION_MAP = {
     ord("\uFE0F"): None,
     ord("\uFFFD"): None,
 }
+
+
+def _resolve_executable_or_none(name: str, candidates: tuple[str, ...]) -> str | None:
+    resolved = shutil.which(name)
+    if resolved:
+        return resolved
+    for raw_path in candidates:
+        candidate = Path(raw_path)
+        if candidate.is_file() and os.access(candidate, os.X_OK):
+            return str(candidate)
+    return None
 
 
 def _sanitize_pdf_source_text(text: str) -> str:
@@ -491,7 +513,13 @@ class DocflowApp:
 
         raise ApiError(400, "PDF export is only supported for .md/.html files")
 
-    def _render_pdf_bytes(self, source_abs: Path, source_suffix: str) -> bytes:
+    def _render_pdf_bytes(
+        self,
+        source_abs: Path,
+        source_suffix: str,
+        pandoc_executable: str,
+        pdflatex_executable: str,
+    ) -> bytes:
         sanitized_text = _sanitize_pdf_source_text(source_abs.read_text(encoding="utf-8", errors="replace"))
         output_name = "document.pdf"
         source_name = f"source{source_suffix}"
@@ -502,9 +530,9 @@ class DocflowApp:
             output_tmp = temp_path / output_name
             source_tmp.write_text(sanitized_text, encoding="utf-8")
             cmd = [
-                "pandoc",
+                pandoc_executable,
                 str(source_tmp),
-                "--pdf-engine=pdflatex",
+                f"--pdf-engine={pdflatex_executable}",
                 "-o",
                 str(output_tmp),
             ]
@@ -530,12 +558,19 @@ class DocflowApp:
     def api_export_pdf(self, rel_path: str) -> tuple[bytes, str]:
         source_rel, source_abs = self._resolve_pdf_source_target(rel_path)
 
-        if shutil.which("pandoc") is None:
+        pandoc_executable = _resolve_executable_or_none("pandoc", _PDF_PANDOC_CANDIDATES)
+        if pandoc_executable is None:
             raise ApiError(503, "Missing required executable: pandoc")
-        if shutil.which("pdflatex") is None:
+        pdflatex_executable = _resolve_executable_or_none("pdflatex", _PDF_PDFLATEX_CANDIDATES)
+        if pdflatex_executable is None:
             raise ApiError(503, "Missing required executable: pdflatex")
 
-        pdf_bytes = self._render_pdf_bytes(source_abs, source_abs.suffix.lower())
+        pdf_bytes = self._render_pdf_bytes(
+            source_abs,
+            source_abs.suffix.lower(),
+            pandoc_executable,
+            pdflatex_executable,
+        )
         filename = f"{Path(source_rel).stem}.pdf"
         return pdf_bytes, filename
 
