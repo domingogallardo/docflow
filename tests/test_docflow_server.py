@@ -794,7 +794,7 @@ def test_api_export_pdf_returns_503_when_pdflatex_missing(tmp_path: Path, monkey
         server.server_close()
 
 
-def test_api_export_pdf_prefers_markdown_source(tmp_path: Path, monkeypatch):
+def test_api_export_pdf_prefers_html_source(tmp_path: Path, monkeypatch):
     base = tmp_path / "base"
     posts = base / "Posts" / "Posts 2026"
     posts.mkdir(parents=True)
@@ -817,15 +817,15 @@ def test_api_export_pdf_prefers_markdown_source(tmp_path: Path, monkeypatch):
     data, filename = app.api_export_pdf("Posts/Posts 2026/doc.html")
     assert data.startswith(b"%PDF")
     assert filename == "doc.pdf"
-    assert captured["source_abs"] == md
+    assert captured["source_abs"] == html
 
 
-def test_api_export_pdf_falls_back_to_html_when_markdown_missing(tmp_path: Path, monkeypatch):
+def test_api_export_pdf_falls_back_to_markdown_when_html_missing(tmp_path: Path, monkeypatch):
     base = tmp_path / "base"
     posts = base / "Posts" / "Posts 2026"
     posts.mkdir(parents=True)
-    html = posts / "doc.html"
-    html.write_text("<html><body>HTML Doc</body></html>", encoding="utf-8")
+    md = posts / "doc.md"
+    md.write_text("# Markdown Doc\\n", encoding="utf-8")
 
     app = docflow_server.DocflowApp(base)
     captured: dict[str, Path] = {}
@@ -838,7 +838,33 @@ def test_api_export_pdf_falls_back_to_html_when_markdown_missing(tmp_path: Path,
 
     monkeypatch.setattr(app, "_render_pdf_bytes", _fake_render)
 
-    data, filename = app.api_export_pdf("Posts/Posts 2026/doc.html")
+    data, filename = app.api_export_pdf("Posts/Posts 2026/doc.md")
+    assert data.startswith(b"%PDF")
+    assert filename == "doc.pdf"
+    assert captured["source_abs"] == md
+
+
+def test_api_export_pdf_prefers_html_even_when_path_points_to_markdown(tmp_path: Path, monkeypatch):
+    base = tmp_path / "base"
+    posts = base / "Posts" / "Posts 2026"
+    posts.mkdir(parents=True)
+    md = posts / "doc.md"
+    html = posts / "doc.html"
+    md.write_text("# Markdown Doc\\n", encoding="utf-8")
+    html.write_text("<html><body>HTML Doc</body></html>", encoding="utf-8")
+
+    app = docflow_server.DocflowApp(base)
+    captured: dict[str, Path] = {}
+
+    monkeypatch.setattr(docflow_server.shutil, "which", lambda _name: "/usr/bin/fake")
+
+    def _fake_render(source_abs: Path, _suffix: str, _pandoc: str, _pdflatex: str) -> bytes:
+        captured["source_abs"] = source_abs
+        return b"%PDF-1.4\\n%mock\\n"
+
+    monkeypatch.setattr(app, "_render_pdf_bytes", _fake_render)
+
+    data, filename = app.api_export_pdf("Posts/Posts 2026/doc.md")
     assert data.startswith(b"%PDF")
     assert filename == "doc.pdf"
     assert captured["source_abs"] == html

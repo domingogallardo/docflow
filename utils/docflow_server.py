@@ -504,13 +504,13 @@ class DocflowApp:
         suffix = abs_path.suffix.lower()
 
         if suffix == ".md":
+            sibling_html = abs_path.with_suffix(".html")
+            if sibling_html.is_file():
+                sibling_rel = normalize_rel_path(str(Path(normalized).with_suffix(".html")))
+                return sibling_rel, sibling_html
             return normalized, abs_path
 
         if suffix in {".html", ".htm"}:
-            sibling_md = abs_path.with_suffix(".md")
-            if sibling_md.is_file():
-                sibling_rel = normalize_rel_path(str(Path(normalized).with_suffix(".md")))
-                return sibling_rel, sibling_md
             return normalized, abs_path
 
         raise ApiError(400, "PDF export is only supported for .md/.html files")
