@@ -151,6 +151,23 @@ def _escape_md_blockquote(value: str) -> str:
     return "\n".join(f"> {line}" if line else ">" for line in lines)
 
 
+def _inline_link_blockquote(value: str, url: str) -> str:
+    quoted = _escape_md_blockquote(value)
+    lines = quoted.splitlines()
+    if not lines:
+        return f"> [link](<{url}>)"
+
+    for idx in range(len(lines) - 1, -1, -1):
+        line = lines[idx]
+        if line.strip() != ">":
+            lines[idx] = f"{line.rstrip()} [link](<{url}>)"
+            break
+    else:
+        lines[-1] = f"{lines[-1].rstrip()} [link](<{url}>)"
+
+    return "\n".join(lines)
+
+
 def _strip_edge_punctuation(value: str) -> str:
     text = str(value or "")
     return _EDGE_PUNCT_RE.sub("", text)
@@ -430,9 +447,7 @@ def _render_markdown(day_value: date, rendered_by_path: dict[str, list[RenderedH
             lines.append(f"**{_escape_markdown(section_title)}**")
             lines.append("")
             for item in section_items:
-                lines.append(_escape_md_blockquote(item.record.text))
-                lines.append("")
-                lines.append(f"[Highlight](<{item.highlight_url}>)")
+                lines.append(_inline_link_blockquote(item.record.text, item.highlight_url))
                 lines.append("")
 
     return "\n".join(lines)

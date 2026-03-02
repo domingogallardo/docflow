@@ -42,7 +42,7 @@ This file stores stable, reusable operational notes for future agent runs.
 - Output structure:
   - One header per source file: `### [<file stem>](<intranet raw url>)`.
   - Highlights grouped by subsection title (title shown once in bold per group).
-  - Each highlight block contains quoted text plus `[Highlight](<...#hl=<id>>)` deep link.
+  - Each highlight block contains quoted text and appends an inline `[link](<...#hl=<id>>)` deep link in the same blockquote paragraph.
   - Only fall back to `#:~:text=...` when an id is not available.
 - If highlights point to deleted source files, remove those stale highlights from `BASE_DIR/state/highlights` and regenerate daily reports.
 
