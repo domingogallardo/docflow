@@ -270,6 +270,34 @@ def test_api_to_done_links_file_skips_duplicate_url(tmp_path: Path, monkeypatch)
     assert content.count("http://localhost:8080/posts/raw/Posts%202026/doc.html") == 1
 
 
+def test_api_to_done_prepends_entry_as_first_bullet(tmp_path: Path, monkeypatch):
+    base = tmp_path / "base"
+    posts = base / "Posts" / "Posts 2026"
+    posts.mkdir(parents=True)
+    rel = "Posts/Posts 2026/new.html"
+    (posts / "new.html").write_text("<html><body>Doc</body></html>", encoding="utf-8")
+
+    done_links_file = tmp_path / "obsidian" / "Leidos.md"
+    done_links_file.parent.mkdir(parents=True, exist_ok=True)
+    done_links_file.write_text(
+        "- (01/03/2026) [old-1.html](http://localhost:8080/posts/raw/Posts%202026/old-1.html)\n"
+        "- (28/02/2026) [old-2.html](http://localhost:8080/posts/raw/Posts%202026/old-2.html)\n",
+        encoding="utf-8",
+    )
+
+    monkeypatch.setenv("DONE_LINKS_FILE", str(done_links_file))
+    monkeypatch.setenv("DONE_LINKS_BASE_URL", "http://localhost:8080")
+
+    app = docflow_server.DocflowApp(base)
+    result = app.api_to_done(rel)
+    assert result["stage"] == "done"
+    assert result["changed"] is True
+
+    bullets = [line for line in done_links_file.read_text(encoding="utf-8").splitlines() if line.startswith("- ")]
+    assert bullets
+    assert "new.html" in bullets[0]
+
+
 def test_api_to_reading_roundtrip(tmp_path: Path):
     base = tmp_path / "base"
     posts = base / "Posts" / "Posts 2026"

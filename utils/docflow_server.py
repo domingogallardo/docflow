@@ -137,10 +137,19 @@ def _append_done_link_entry(rel_path: str) -> None:
 
     line = f"- ({datetime.now().strftime('%d/%m/%Y')}) [{Path(normalized).name}]({absolute_url})"
     log_file.parent.mkdir(parents=True, exist_ok=True)
-    with log_file.open("a", encoding="utf-8") as fh:
-        if existing and not existing.endswith("\n"):
-            fh.write("\n")
-        fh.write(line + "\n")
+
+    if not existing:
+        log_file.write_text(line + "\n", encoding="utf-8")
+        return
+
+    lines = existing.splitlines()
+    insert_at = next((idx for idx, value in enumerate(lines) if value.strip().startswith("- ")), len(lines))
+    lines.insert(insert_at, line)
+
+    updated = "\n".join(lines)
+    if existing.endswith("\n"):
+        updated += "\n"
+    log_file.write_text(updated, encoding="utf-8")
 
 
 class DocflowApp:
