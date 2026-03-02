@@ -166,6 +166,7 @@ Behavior:
   - `POST /api/delete`
   - `POST /api/rebuild`
   - `POST /api/rebuild-file`
+  - `GET /api/export-pdf?path=<rel_path>`
   - `GET /api/highlights?path=<rel_path>`
   - `PUT /api/highlights?path=<rel_path>`
 

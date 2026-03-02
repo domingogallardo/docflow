@@ -2,12 +2,15 @@ from __future__ import annotations
 
 import http.client
 import json
+import shutil
 from datetime import datetime
 import threading
 import time
 from http.server import ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import quote
+
+import pytest
 
 from utils import docflow_server
 from utils.site_state import (
@@ -59,6 +62,18 @@ def _get_with_headers(port: int, path: str) -> tuple[int, str, dict[str, str]]:
         conn.request("GET", path)
         res = conn.getresponse()
         body = res.read().decode("utf-8", errors="ignore")
+        headers = {k.lower(): v for k, v in res.getheaders()}
+        return res.status, body, headers
+    finally:
+        conn.close()
+
+
+def _get_bytes_with_headers(port: int, path: str) -> tuple[int, bytes, dict[str, str]]:
+    conn = http.client.HTTPConnection("127.0.0.1", port, timeout=5)
+    try:
+        conn.request("GET", path)
+        res = conn.getresponse()
+        body = res.read()
         headers = {k.lower(): v for k, v in res.getheaders()}
         return res.status, body, headers
     finally:
@@ -431,6 +446,8 @@ def test_raw_route_serves_library_file(tmp_path: Path):
         assert "window.addEventListener('pageshow'" in body
         assert "back_forward" in body
         assert "Inside Browse" in body
+        assert "PDF" in body
+        assert "/api/export-pdf?path=" in body
         assert "to-reading" in body
         assert "to-done" in body
         assert "Rebuild" in body
@@ -467,11 +484,277 @@ def test_raw_route_overlay_marks_reading_stage(tmp_path: Path):
         status, body = _get(port, "/posts/raw/Posts%202026/doc.html")
         assert status == 200
         assert 'data-stage="reading"' in body
+        assert "/api/export-pdf?path=" in body
         assert "to-working" in body
         assert "to-done" in body
     finally:
         server.shutdown()
         server.server_close()
+
+
+def test_api_export_pdf_serves_inline_pdf_bytes(tmp_path: Path, monkeypatch):
+    base = tmp_path / "base"
+    posts = base / "Posts" / "Posts 2026"
+    posts.mkdir(parents=True)
+    (posts / "doc.html").write_text("<html><body>Raw Doc</body></html>", encoding="utf-8")
+
+    def _fake_export(_self: docflow_server.DocflowApp, _rel_path: str) -> tuple[bytes, str]:
+        return b"%PDF-1.4\n%mock\n", "doc.pdf"
+
+    monkeypatch.setattr(docflow_server.DocflowApp, "api_export_pdf", _fake_export)
+
+    server, port = _start_server(base)
+    try:
+        status, body, headers = _get_bytes_with_headers(
+            port,
+            "/api/export-pdf?path=Posts%2FPosts%202026%2Fdoc.html",
+        )
+        assert status == 200
+        assert headers.get("content-type") == "application/pdf"
+        assert headers.get("content-disposition") == 'inline; filename="doc.pdf"'
+        assert headers.get("cache-control") == "no-store"
+        assert body.startswith(b"%PDF")
+    finally:
+        server.shutdown()
+        server.server_close()
+
+
+def test_sanitize_pdf_source_text_replaces_common_pdflatex_breakers():
+    raw = (
+        "x\u2208y\u00B7z \u221A \u2265 \u2260 \u2212 \u2211 \u222B \u221E "
+        "\u03B4\u0394\u03C0\u03A9\u03BC\u03BD "
+        "\u2B50\u2605\u2666 \uF8FF a\u2032b c\u2074 d\u2085 "
+        "p\u2009q r\u200As \u2061\uFE0F\uFFFD"
+    )
+    cleaned = docflow_server._sanitize_pdf_source_text(raw)
+
+    assert "\u2208" not in cleaned
+    assert "\u00B7" not in cleaned
+    assert "\u221A" not in cleaned
+    assert "\u2265" not in cleaned
+    assert "\u2260" not in cleaned
+    assert "\u2212" not in cleaned
+    assert "\u2211" not in cleaned
+    assert "\u222B" not in cleaned
+    assert "\u221E" not in cleaned
+    assert "\u03B4" not in cleaned
+    assert "\u0394" not in cleaned
+    assert "\u03C0" not in cleaned
+    assert "\u03A9" not in cleaned
+    assert "\u03BC" not in cleaned
+    assert "\u03BD" not in cleaned
+    assert "\u2B50" not in cleaned
+    assert "\u2605" not in cleaned
+    assert "\u2666" not in cleaned
+    assert "\uF8FF" not in cleaned
+    assert "\u2009" not in cleaned
+    assert "\u200A" not in cleaned
+    assert "\u2061" not in cleaned
+    assert "\uFE0F" not in cleaned
+    assert "\uFFFD" not in cleaned
+
+    assert "in" in cleaned
+    assert "sqrt" in cleaned
+    assert ">=" in cleaned
+    assert "!=" in cleaned
+    assert "sum" in cleaned
+    assert "integral" in cleaned
+    assert "infinity" in cleaned
+    assert "deltaDeltapiOmegamunu" in cleaned
+    assert "Apple" in cleaned
+    assert "a'b" in cleaned
+    assert "c4" in cleaned
+    assert "d5" in cleaned
+    assert "p q" in cleaned
+    assert "r s" in cleaned
+
+
+def test_sanitize_pdf_source_text_strips_supplementary_plane_emoji():
+    raw = "ok \U0001F60A keep \U0001F633 done"
+    cleaned = docflow_server._sanitize_pdf_source_text(raw)
+    assert "\U0001F60A" not in cleaned
+    assert "\U0001F633" not in cleaned
+    assert cleaned == "ok  keep  done"
+
+
+def test_api_export_pdf_generates_real_pdf_when_tools_available(tmp_path: Path):
+    if shutil.which("pandoc") is None or shutil.which("pdflatex") is None:
+        pytest.skip("pandoc and pdflatex are required for PDF export test")
+
+    base = tmp_path / "base"
+    posts = base / "Posts" / "Posts 2026"
+    posts.mkdir(parents=True)
+    # Exercise the sanitizer path for unicode symbols seen in real documents.
+    (posts / "doc.md").write_text("# Real PDF\n\nx ∈ y\n\nfoo · bar\n", encoding="utf-8")
+
+    server, port = _start_server(base)
+    try:
+        status, body, headers = _get_bytes_with_headers(
+            port,
+            "/api/export-pdf?path=Posts%2FPosts%202026%2Fdoc.md",
+        )
+        assert status == 200
+        assert headers.get("content-type") == "application/pdf"
+        assert headers.get("content-disposition") == 'inline; filename="doc.pdf"'
+        assert headers.get("cache-control") == "no-store"
+        assert body.startswith(b"%PDF")
+    finally:
+        server.shutdown()
+        server.server_close()
+
+
+def test_api_export_pdf_requires_query_path(tmp_path: Path):
+    base = tmp_path / "base"
+    (base / "Posts" / "Posts 2026").mkdir(parents=True)
+
+    server, port = _start_server(base)
+    try:
+        status, body = _get(port, "/api/export-pdf")
+        payload = json.loads(body)
+        assert status == 400
+        assert payload["ok"] is False
+        assert "Query parameter 'path' is required" in payload["error"]
+    finally:
+        server.shutdown()
+        server.server_close()
+
+
+def test_api_export_pdf_returns_404_for_missing_file(tmp_path: Path):
+    base = tmp_path / "base"
+    (base / "Posts" / "Posts 2026").mkdir(parents=True)
+
+    server, port = _start_server(base)
+    try:
+        status, body = _get(port, "/api/export-pdf?path=Posts%2FPosts%202026%2Fmissing.html")
+        payload = json.loads(body)
+        assert status == 404
+        assert payload["ok"] is False
+        assert "File not found" in payload["error"]
+    finally:
+        server.shutdown()
+        server.server_close()
+
+
+def test_api_export_pdf_returns_400_for_unsupported_extension(tmp_path: Path):
+    base = tmp_path / "base"
+    posts = base / "Posts" / "Posts 2026"
+    posts.mkdir(parents=True)
+    (posts / "doc.txt").write_text("text", encoding="utf-8")
+
+    server, port = _start_server(base)
+    try:
+        status, body = _get(port, "/api/export-pdf?path=Posts%2FPosts%202026%2Fdoc.txt")
+        payload = json.loads(body)
+        assert status == 400
+        assert payload["ok"] is False
+        assert "only supported for .md/.html files" in payload["error"]
+    finally:
+        server.shutdown()
+        server.server_close()
+
+
+def test_api_export_pdf_returns_503_when_pandoc_missing(tmp_path: Path, monkeypatch):
+    base = tmp_path / "base"
+    posts = base / "Posts" / "Posts 2026"
+    posts.mkdir(parents=True)
+    (posts / "doc.md").write_text("# Doc\n", encoding="utf-8")
+
+    original_which = docflow_server.shutil.which
+
+    def _which(name: str) -> str | None:
+        if name == "pandoc":
+            return None
+        return original_which(name)
+
+    monkeypatch.setattr(docflow_server.shutil, "which", _which)
+
+    server, port = _start_server(base)
+    try:
+        status, body = _get(port, "/api/export-pdf?path=Posts%2FPosts%202026%2Fdoc.md")
+        payload = json.loads(body)
+        assert status == 503
+        assert payload["ok"] is False
+        assert "Missing required executable: pandoc" == payload["error"]
+    finally:
+        server.shutdown()
+        server.server_close()
+
+
+def test_api_export_pdf_returns_503_when_pdflatex_missing(tmp_path: Path, monkeypatch):
+    base = tmp_path / "base"
+    posts = base / "Posts" / "Posts 2026"
+    posts.mkdir(parents=True)
+    (posts / "doc.md").write_text("# Doc\n", encoding="utf-8")
+
+    original_which = docflow_server.shutil.which
+
+    def _which(name: str) -> str | None:
+        if name == "pdflatex":
+            return None
+        return original_which(name)
+
+    monkeypatch.setattr(docflow_server.shutil, "which", _which)
+
+    server, port = _start_server(base)
+    try:
+        status, body = _get(port, "/api/export-pdf?path=Posts%2FPosts%202026%2Fdoc.md")
+        payload = json.loads(body)
+        assert status == 503
+        assert payload["ok"] is False
+        assert "Missing required executable: pdflatex" == payload["error"]
+    finally:
+        server.shutdown()
+        server.server_close()
+
+
+def test_api_export_pdf_prefers_markdown_source(tmp_path: Path, monkeypatch):
+    base = tmp_path / "base"
+    posts = base / "Posts" / "Posts 2026"
+    posts.mkdir(parents=True)
+    html = posts / "doc.html"
+    md = posts / "doc.md"
+    html.write_text("<html><body>HTML Doc</body></html>", encoding="utf-8")
+    md.write_text("# Markdown Doc\n", encoding="utf-8")
+
+    app = docflow_server.DocflowApp(base)
+    captured: dict[str, Path] = {}
+
+    monkeypatch.setattr(docflow_server.shutil, "which", lambda _name: "/usr/bin/fake")
+
+    def _fake_render(source_abs: Path, _suffix: str) -> bytes:
+        captured["source_abs"] = source_abs
+        return b"%PDF-1.4\n%mock\n"
+
+    monkeypatch.setattr(app, "_render_pdf_bytes", _fake_render)
+
+    data, filename = app.api_export_pdf("Posts/Posts 2026/doc.html")
+    assert data.startswith(b"%PDF")
+    assert filename == "doc.pdf"
+    assert captured["source_abs"] == md
+
+
+def test_api_export_pdf_falls_back_to_html_when_markdown_missing(tmp_path: Path, monkeypatch):
+    base = tmp_path / "base"
+    posts = base / "Posts" / "Posts 2026"
+    posts.mkdir(parents=True)
+    html = posts / "doc.html"
+    html.write_text("<html><body>HTML Doc</body></html>", encoding="utf-8")
+
+    app = docflow_server.DocflowApp(base)
+    captured: dict[str, Path] = {}
+
+    monkeypatch.setattr(docflow_server.shutil, "which", lambda _name: "/usr/bin/fake")
+
+    def _fake_render(source_abs: Path, _suffix: str) -> bytes:
+        captured["source_abs"] = source_abs
+        return b"%PDF-1.4\n%mock\n"
+
+    monkeypatch.setattr(app, "_render_pdf_bytes", _fake_render)
+
+    data, filename = app.api_export_pdf("Posts/Posts 2026/doc.html")
+    assert data.startswith(b"%PDF")
+    assert filename == "doc.pdf"
+    assert captured["source_abs"] == html
 
 
 def test_read_route_is_removed(tmp_path: Path):

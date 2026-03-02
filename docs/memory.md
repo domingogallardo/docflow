@@ -28,7 +28,7 @@ This file stores stable, reusable operational notes for future agent runs.
   - `ArticleJS.getHighlightProgress()`
   - `articlejs:highlight-progress` (document event)
 - Overlay integration lives in `utils/docflow_server.py` and is intentionally split in three rows:
-  - First row: status context link (`Inside Browse|Reading|Working|Done`) to the current Kanban list view.
+  - First row: status context link (`Inside Browse|Reading|Working|Done`) plus `PDF` export on the fly.
   - Second row: stage actions (`to-reading`, `to-working`, `to-done`, etc.).
   - Third row: highlight jump controls (`Jump to highlight:` + counter + up/down controls).
   - Keep the third row hidden when highlight progress total is `0`.

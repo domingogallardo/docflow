@@ -15,6 +15,9 @@ import html
 import json
 import mimetypes
 import os
+import shutil
+import subprocess
+import tempfile
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -67,6 +70,48 @@ class ApiError(Exception):
         super().__init__(message)
         self.status = status
         self.message = message
+
+
+_PDF_SANITIZE_TRANSLATION_MAP = {
+    ord("\u2208"): "in",
+    ord("\u00B7"): "-",
+    ord("\u221A"): "sqrt",
+    ord("\u2265"): ">=",
+    ord("\u2260"): "!=",
+    ord("\u2212"): "-",
+    ord("\u2211"): "sum",
+    ord("\u222B"): "integral",
+    ord("\u221E"): "infinity",
+    ord("\u03B4"): "delta",
+    ord("\u0394"): "Delta",
+    ord("\u03C0"): "pi",
+    ord("\u03A9"): "Omega",
+    ord("\u03BC"): "mu",
+    ord("\u03BD"): "nu",
+    ord("\u2B50"): "*",
+    ord("\u2605"): "*",
+    ord("\u2666"): "diamond",
+    ord("\uF8FF"): "Apple",
+    ord("\u2032"): "'",
+    ord("\u2070"): "0",
+    ord("\u2074"): "4",
+    ord("\u2075"): "5",
+    ord("\u2076"): "6",
+    ord("\u2078"): "8",
+    ord("\u2079"): "9",
+    ord("\u2085"): "5",
+    ord("\u2009"): " ",
+    ord("\u200A"): " ",
+    ord("\u2061"): None,
+    ord("\uFE0F"): None,
+    ord("\uFFFD"): None,
+}
+
+
+def _sanitize_pdf_source_text(text: str) -> str:
+    sanitized = text.translate(_PDF_SANITIZE_TRANSLATION_MAP)
+    # pdflatex usually fails with supplementary-plane emoji/symbols.
+    return "".join(ch for ch in sanitized if not (0x1F000 <= ord(ch) <= 0x1FAFF))
 
 
 def _browse_parent_url_for_rel_path(rel_path: str) -> str:
@@ -429,6 +474,71 @@ class DocflowApp:
         )
         return saved
 
+    def _resolve_pdf_source_target(self, rel_path: str) -> tuple[str, Path]:
+        normalized = self._normalize_rel_path_or_400(rel_path)
+        abs_path = self._require_existing_library_file(normalized)
+        suffix = abs_path.suffix.lower()
+
+        if suffix == ".md":
+            return normalized, abs_path
+
+        if suffix in {".html", ".htm"}:
+            sibling_md = abs_path.with_suffix(".md")
+            if sibling_md.is_file():
+                sibling_rel = normalize_rel_path(str(Path(normalized).with_suffix(".md")))
+                return sibling_rel, sibling_md
+            return normalized, abs_path
+
+        raise ApiError(400, "PDF export is only supported for .md/.html files")
+
+    def _render_pdf_bytes(self, source_abs: Path, source_suffix: str) -> bytes:
+        sanitized_text = _sanitize_pdf_source_text(source_abs.read_text(encoding="utf-8", errors="replace"))
+        output_name = "document.pdf"
+        source_name = f"source{source_suffix}"
+
+        with tempfile.TemporaryDirectory(prefix="docflow-pdf-") as temp_dir:
+            temp_path = Path(temp_dir)
+            source_tmp = temp_path / source_name
+            output_tmp = temp_path / output_name
+            source_tmp.write_text(sanitized_text, encoding="utf-8")
+            cmd = [
+                "pandoc",
+                str(source_tmp),
+                "--pdf-engine=pdflatex",
+                "-o",
+                str(output_tmp),
+            ]
+            try:
+                subprocess.run(cmd, check=True, capture_output=True, text=True)
+            except FileNotFoundError as exc:
+                missing_name = Path(exc.filename).name if exc.filename else "pandoc"
+                raise ApiError(503, f"Missing required executable: {missing_name}") from exc
+            except subprocess.CalledProcessError as exc:
+                stderr = (exc.stderr or "").strip()
+                stdout = (exc.stdout or "").strip()
+                detail = stderr or stdout or "Unknown pandoc failure"
+                lowered = detail.lower()
+                if "pdflatex" in lowered and ("not found" in lowered or "missing" in lowered):
+                    raise ApiError(503, f"PDF engine unavailable: {detail}") from exc
+                raise ApiError(500, f"Could not generate PDF: {detail}") from exc
+
+            try:
+                return output_tmp.read_bytes()
+            except OSError as exc:
+                raise ApiError(500, f"Could not read generated PDF: {exc}") from exc
+
+    def api_export_pdf(self, rel_path: str) -> tuple[bytes, str]:
+        source_rel, source_abs = self._resolve_pdf_source_target(rel_path)
+
+        if shutil.which("pandoc") is None:
+            raise ApiError(503, "Missing required executable: pandoc")
+        if shutil.which("pdflatex") is None:
+            raise ApiError(503, "Missing required executable: pdflatex")
+
+        pdf_bytes = self._render_pdf_bytes(source_abs, source_abs.suffix.lower())
+        filename = f"{Path(source_rel).stem}.pdf"
+        return pdf_bytes, filename
+
     def handle_api(self, action: str, payload: dict[str, object]) -> dict[str, object]:
         action_name = action.strip("/")
         if action_name == "rebuild":
@@ -485,6 +595,17 @@ def _send_file(handler: BaseHTTPRequestHandler, path: Path) -> None:
 
     handler.send_response(HTTPStatus.OK)
     handler.send_header("Content-Type", content_type)
+    handler.send_header("Content-Length", str(len(data)))
+    handler.end_headers()
+    handler.wfile.write(data)
+
+
+def _send_pdf(handler: BaseHTTPRequestHandler, *, filename: str, data: bytes) -> None:
+    safe_filename = filename.replace('"', "")
+    handler.send_response(HTTPStatus.OK)
+    handler.send_header("Content-Type", "application/pdf")
+    handler.send_header("Content-Disposition", f'inline; filename="{safe_filename}"')
+    handler.send_header("Cache-Control", "no-store")
     handler.send_header("Content-Length", str(len(data)))
     handler.end_headers()
     handler.wfile.write(data)
@@ -705,6 +826,16 @@ OVERLAY_JS = """
     return link;
   }
 
+  function makePdfLink() {
+    const link = document.createElement('a');
+    link.className = 'dg-link';
+    link.textContent = 'PDF';
+    link.href = `/api/export-pdf?path=${encodeURIComponent(relPath)}&_r=${Date.now()}`;
+    link.target = '_blank';
+    link.rel = 'noopener';
+    return link;
+  }
+
   function makeChevronIcon(direction) {
     const ns = 'http://www.w3.org/2000/svg';
     const svg = document.createElementNS(ns, 'svg');
@@ -861,6 +992,7 @@ OVERLAY_JS = """
     const statusRow = document.createElement('div');
     statusRow.className = 'dg-row dg-row-status';
     statusRow.appendChild(makeInsideLink());
+    statusRow.appendChild(makePdfLink());
     bar.appendChild(statusRow);
 
     const actionsRow = document.createElement('div');
@@ -1024,6 +1156,17 @@ def make_handler(app: DocflowApp):
             parsed = urlparse(self.path)
             path = parsed.path
 
+            if path == "/api/export-pdf":
+                try:
+                    rel_path = _get_query_path(parsed)
+                    pdf_bytes, filename = app.api_export_pdf(rel_path)
+                    _send_pdf(self, filename=filename, data=pdf_bytes)
+                except ApiError as exc:
+                    _send_json(self, exc.status, {"ok": False, "error": exc.message})
+                except Exception as exc:
+                    _send_json(self, 500, {"ok": False, "error": str(exc)})
+                return
+
             if path == "/api/highlights":
                 try:
                     rel_path = _get_query_path(parsed)
@@ -1036,7 +1179,7 @@ def make_handler(app: DocflowApp):
                 return
 
             if path.startswith("/api/"):
-                _send_json(self, 405, {"ok": False, "error": "Use POST for API endpoints"})
+                _send_json(self, 405, {"ok": False, "error": "Use POST for API endpoints (except /api/highlights and /api/export-pdf)"})
                 return
 
             raw_target = resolve_raw_path(app.base_dir, path)
