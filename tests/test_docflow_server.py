@@ -511,8 +511,38 @@ def test_api_export_pdf_serves_inline_pdf_bytes(tmp_path: Path, monkeypatch):
         )
         assert status == 200
         assert headers.get("content-type") == "application/pdf"
-        assert headers.get("content-disposition") == 'inline; filename="doc.pdf"'
+        content_disposition = headers.get("content-disposition") or ""
+        assert 'inline; filename="doc.pdf"' in content_disposition
+        assert "filename*=UTF-8''doc.pdf" in content_disposition
         assert headers.get("cache-control") == "no-store"
+        assert body.startswith(b"%PDF")
+    finally:
+        server.shutdown()
+        server.server_close()
+
+
+def test_api_export_pdf_content_disposition_supports_unicode_filename(tmp_path: Path, monkeypatch):
+    base = tmp_path / "base"
+    posts = base / "Posts" / "Posts 2026"
+    posts.mkdir(parents=True)
+    (posts / "doc.html").write_text("<html><body>Raw Doc</body></html>", encoding="utf-8")
+
+    def _fake_export(_self: docflow_server.DocflowApp, _rel_path: str) -> tuple[bytes, str]:
+        return b"%PDF-1.4\n%mock\n", "ARC‑AGI evaluación.pdf"
+
+    monkeypatch.setattr(docflow_server.DocflowApp, "api_export_pdf", _fake_export)
+
+    server, port = _start_server(base)
+    try:
+        status, body, headers = _get_bytes_with_headers(
+            port,
+            "/api/export-pdf?path=Posts%2FPosts%202026%2Fdoc.html",
+        )
+        assert status == 200
+        assert headers.get("content-type") == "application/pdf"
+        content_disposition = headers.get("content-disposition") or ""
+        assert 'inline; filename="ARC-AGI evaluacion.pdf"' in content_disposition
+        assert "filename*=UTF-8''ARC%E2%80%91AGI%20evaluaci%C3%B3n.pdf" in content_disposition
         assert body.startswith(b"%PDF")
     finally:
         server.shutdown()
@@ -595,7 +625,9 @@ def test_api_export_pdf_generates_real_pdf_when_tools_available(tmp_path: Path):
         )
         assert status == 200
         assert headers.get("content-type") == "application/pdf"
-        assert headers.get("content-disposition") == 'inline; filename="doc.pdf"'
+        content_disposition = headers.get("content-disposition") or ""
+        assert 'inline; filename="doc.pdf"' in content_disposition
+        assert "filename*=UTF-8''doc.pdf" in content_disposition
         assert headers.get("cache-control") == "no-store"
         assert body.startswith(b"%PDF")
     finally:

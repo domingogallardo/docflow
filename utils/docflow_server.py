@@ -18,6 +18,7 @@ import os
 import shutil
 import subprocess
 import tempfile
+import unicodedata
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -635,11 +636,44 @@ def _send_file(handler: BaseHTTPRequestHandler, path: Path) -> None:
     handler.wfile.write(data)
 
 
+def _content_disposition_filename_parts(filename: str) -> tuple[str, str]:
+    cleaned = (
+        filename.replace('"', "")
+        .replace("\\", "")
+        .replace("\r", "")
+        .replace("\n", "")
+        .replace(";", "_")
+    )
+    dash_normalized = cleaned.translate(
+        {
+            ord("\u2010"): "-",
+            ord("\u2011"): "-",
+            ord("\u2012"): "-",
+            ord("\u2013"): "-",
+            ord("\u2014"): "-",
+            ord("\u2212"): "-",
+        }
+    )
+    normalized = unicodedata.normalize("NFKD", dash_normalized)
+    fallback = normalized.encode("ascii", "ignore").decode("ascii")
+    fallback = fallback.strip().strip(".")
+    if not fallback:
+        fallback = "document.pdf"
+    if not fallback.lower().endswith(".pdf"):
+        fallback += ".pdf"
+    utf8_filename = quote(cleaned, safe="")
+    return fallback, utf8_filename
+
+
 def _send_pdf(handler: BaseHTTPRequestHandler, *, filename: str, data: bytes) -> None:
-    safe_filename = filename.replace('"', "")
+    fallback_filename, utf8_filename = _content_disposition_filename_parts(filename)
+    content_disposition = (
+        f'inline; filename="{fallback_filename}"; '
+        f"filename*=UTF-8''{utf8_filename}"
+    )
     handler.send_response(HTTPStatus.OK)
     handler.send_header("Content-Type", "application/pdf")
-    handler.send_header("Content-Disposition", f'inline; filename="{safe_filename}"')
+    handler.send_header("Content-Disposition", content_disposition)
     handler.send_header("Cache-Control", "no-store")
     handler.send_header("Content-Length", str(len(data)))
     handler.end_headers()
