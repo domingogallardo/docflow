@@ -540,19 +540,51 @@ class DocflowApp:
                 "-o",
                 str(output_tmp),
             ]
+
+            def _run_pandoc(command: list[str]) -> None:
+                subprocess.run(command, check=True, capture_output=True, text=True)
+
             try:
-                subprocess.run(cmd, check=True, capture_output=True, text=True)
+                _run_pandoc(cmd)
             except FileNotFoundError as exc:
                 missing_name = Path(exc.filename).name if exc.filename else "pandoc"
                 raise ApiError(503, f"Missing required executable: {missing_name}") from exc
             except subprocess.CalledProcessError as exc:
-                stderr = (exc.stderr or "").strip()
-                stdout = (exc.stdout or "").strip()
-                detail = stderr or stdout or "Unknown pandoc failure"
-                lowered = detail.lower()
-                if "pdflatex" in lowered and ("not found" in lowered or "missing" in lowered):
-                    raise ApiError(503, f"PDF engine unavailable: {detail}") from exc
-                raise ApiError(500, f"Could not generate PDF: {detail}") from exc
+                if source_suffix == ".md" and _is_pandoc_yaml_metadata_parse_error(
+                    stderr=exc.stderr or "",
+                    stdout=exc.stdout or "",
+                ):
+                    retry_cmd = [
+                        pandoc_executable,
+                        str(source_tmp),
+                        "--from=markdown-yaml_metadata_block",
+                        f"--pdf-engine={pdflatex_executable}",
+                        "-V",
+                        f"geometry:margin={_PDF_LATEX_MARGIN}",
+                        "-o",
+                        str(output_tmp),
+                    ]
+                    try:
+                        _run_pandoc(retry_cmd)
+                    except FileNotFoundError as retry_exc:
+                        missing_name = Path(retry_exc.filename).name if retry_exc.filename else "pandoc"
+                        raise ApiError(503, f"Missing required executable: {missing_name}") from retry_exc
+                    except subprocess.CalledProcessError as retry_exc:
+                        stderr = (retry_exc.stderr or "").strip()
+                        stdout = (retry_exc.stdout or "").strip()
+                        detail = stderr or stdout or "Unknown pandoc failure"
+                        lowered = detail.lower()
+                        if "pdflatex" in lowered and ("not found" in lowered or "missing" in lowered):
+                            raise ApiError(503, f"PDF engine unavailable: {detail}") from retry_exc
+                        raise ApiError(500, f"Could not generate PDF: {detail}") from retry_exc
+                else:
+                    stderr = (exc.stderr or "").strip()
+                    stdout = (exc.stdout or "").strip()
+                    detail = stderr or stdout or "Unknown pandoc failure"
+                    lowered = detail.lower()
+                    if "pdflatex" in lowered and ("not found" in lowered or "missing" in lowered):
+                        raise ApiError(503, f"PDF engine unavailable: {detail}") from exc
+                    raise ApiError(500, f"Could not generate PDF: {detail}") from exc
 
             try:
                 return output_tmp.read_bytes()
@@ -666,6 +698,11 @@ def _content_disposition_filename_parts(filename: str) -> tuple[str, str]:
         fallback += ".pdf"
     utf8_filename = quote(cleaned, safe="")
     return fallback, utf8_filename
+
+
+def _is_pandoc_yaml_metadata_parse_error(*, stderr: str, stdout: str) -> bool:
+    detail = ((stderr or "") + "\n" + (stdout or "")).lower()
+    return "error parsing yaml metadata" in detail or "yaml parse exception" in detail
 
 
 def _send_pdf(handler: BaseHTTPRequestHandler, *, filename: str, data: bytes) -> None:

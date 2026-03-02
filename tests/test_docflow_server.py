@@ -3,6 +3,7 @@ from __future__ import annotations
 import http.client
 import json
 import shutil
+import subprocess
 from datetime import datetime
 import threading
 import time
@@ -547,6 +548,58 @@ def test_api_export_pdf_content_disposition_supports_unicode_filename(tmp_path: 
     finally:
         server.shutdown()
         server.server_close()
+
+
+def test_is_pandoc_yaml_metadata_parse_error_detects_known_messages():
+    assert docflow_server._is_pandoc_yaml_metadata_parse_error(
+        stderr='Error parsing YAML metadata at "/tmp/x.md" (line 10, column 1): YAML parse exception',
+        stdout="",
+    )
+    assert docflow_server._is_pandoc_yaml_metadata_parse_error(
+        stderr="",
+        stdout="YAML parse exception at line 1, column 2",
+    )
+    assert not docflow_server._is_pandoc_yaml_metadata_parse_error(
+        stderr="Error producing PDF. Something else",
+        stdout="",
+    )
+
+
+def test_render_pdf_bytes_retries_markdown_without_yaml_metadata_block(tmp_path: Path, monkeypatch):
+    base = tmp_path / "base"
+    base.mkdir(parents=True)
+    source = tmp_path / "source.md"
+    source.write_text("# T\\n\\n---\\n[link](https://example.com)\\n", encoding="utf-8")
+    app = docflow_server.DocflowApp(base)
+
+    calls: list[list[str]] = []
+
+    def _fake_run(cmd: list[str], **_kwargs):
+        calls.append(cmd)
+        output_idx = cmd.index("-o") + 1
+        output_pdf = Path(cmd[output_idx])
+        if len(calls) == 1:
+            raise subprocess.CalledProcessError(
+                returncode=43,
+                cmd=cmd,
+                output="",
+                stderr='Error parsing YAML metadata at "/tmp/source.md" (line 412, column 1): YAML parse exception',
+            )
+        output_pdf.write_bytes(b"%PDF-1.4\\n%mock\\n")
+        return subprocess.CompletedProcess(cmd, 0, "", "")
+
+    monkeypatch.setattr(docflow_server.subprocess, "run", _fake_run)
+
+    payload = app._render_pdf_bytes(
+        source,
+        ".md",
+        "/usr/bin/pandoc",
+        "/usr/bin/pdflatex",
+    )
+    assert payload.startswith(b"%PDF")
+    assert len(calls) == 2
+    assert "--from=markdown-yaml_metadata_block" not in calls[0]
+    assert "--from=markdown-yaml_metadata_block" in calls[1]
 
 
 def test_sanitize_pdf_source_text_replaces_common_pdflatex_breakers():
