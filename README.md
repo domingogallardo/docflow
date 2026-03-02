@@ -34,6 +34,7 @@ Recommended `~/.docflow_env` snippet:
 export DOCFLOW_BASE_DIR="/path/to/BASE_DIR"
 export INTRANET_BASE_DIR="$DOCFLOW_BASE_DIR"
 export HIGHLIGHTS_DAILY_DIR="/path/to/Obsidian/Subrayados"
+export DONE_LINKS_FILE="/path/to/Obsidian/Leidos.md"
 ```
 
 ## Main folders
@@ -78,6 +79,7 @@ export TWEET_LIKES_STATE="$HOME/.secrets/docflow/x_state.json"
 export TWEET_LIKES_URL=https://x.com/<user>/likes
 export TWEET_LIKES_MAX=50
 export HIGHLIGHTS_DAILY_DIR="/path/to/Obsidian/Subrayados"
+export DONE_LINKS_FILE="/path/to/Obsidian/Leidos.md"
 ```
 
 Keep `TWEET_LIKES_STATE` outside the repo so cleanup operations do not delete it.
@@ -166,6 +168,8 @@ Behavior:
   - `POST /api/rebuild-file`
   - `GET /api/highlights?path=<rel_path>`
   - `PUT /api/highlights?path=<rel_path>`
+
+If `DONE_LINKS_FILE` is set, each `POST /api/to-done` transition appends a Markdown link entry to that file.
 
 ## Local state files
 

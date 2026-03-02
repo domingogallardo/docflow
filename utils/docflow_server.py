@@ -10,6 +10,7 @@ Features:
 from __future__ import annotations
 
 import argparse
+from datetime import datetime
 import html
 import json
 import mimetypes
@@ -37,6 +38,7 @@ from utils import (
 from utils.site_paths import (
     PathValidationError,
     normalize_rel_path,
+    raw_url_for_rel_path,
     rel_path_from_abs,
     resolve_base_dir,
     resolve_library_path,
@@ -55,6 +57,9 @@ from utils.site_state import (
     set_working_path,
 )
 from utils.highlight_store import load_highlights_for_path, save_highlights_for_path
+
+DONE_LINKS_FILE_ENV = "DONE_LINKS_FILE"
+DONE_LINKS_BASE_URL_ENV = "DONE_LINKS_BASE_URL"
 
 
 class ApiError(Exception):
@@ -111,6 +116,31 @@ def _browse_index_url_for_raw_library_path(request_path: str) -> str:
             return f"/browse/{category}/{encoded}/"
 
     return "/browse/"
+
+
+def _append_done_link_entry(rel_path: str) -> None:
+    log_file_raw = str(os.getenv(DONE_LINKS_FILE_ENV, "")).strip()
+    if not log_file_raw:
+        return
+
+    normalized = normalize_rel_path(rel_path)
+    log_file = Path(log_file_raw).expanduser()
+    base_url = str(os.getenv(DONE_LINKS_BASE_URL_ENV, "http://localhost:8080")).strip() or "http://localhost:8080"
+    raw_url = raw_url_for_rel_path(normalized)
+    absolute_url = base_url.rstrip("/") + raw_url
+    existing = ""
+    if log_file.exists():
+        existing = log_file.read_text(encoding="utf-8", errors="replace")
+        # Avoid duplicates even if an optional markdown title is present.
+        if f"]({absolute_url}" in existing:
+            return
+
+    line = f"- ({datetime.now().strftime('%d/%m/%Y')}) [{Path(normalized).name}]({absolute_url})"
+    log_file.parent.mkdir(parents=True, exist_ok=True)
+    with log_file.open("a", encoding="utf-8") as fh:
+        if existing and not existing.endswith("\n"):
+            fh.write("\n")
+        fh.write(line + "\n")
 
 
 class DocflowApp:
@@ -244,6 +274,10 @@ class DocflowApp:
         changed = (working_entry is not None) or changed
         if changed:
             self.rebuild_for_stage_transition(normalized, before_stage, "done")
+            try:
+                _append_done_link_entry(normalized)
+            except Exception as exc:
+                print(f"Docflow: could not append done link entry: {exc}", file=sys.stderr)
         return {"changed": changed, "path": normalized, "stage": "done"}
 
     def api_to_browse(self, rel_path: str) -> dict[str, object]:

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import http.client
 import json
+from datetime import datetime
 import threading
 import time
 from http.server import ThreadingHTTPServer
@@ -218,6 +219,55 @@ def test_api_to_done_keeps_reading_start_time_in_done_state(tmp_path: Path):
     finally:
         server.shutdown()
         server.server_close()
+
+
+def test_api_to_done_appends_entry_to_done_links_file(tmp_path: Path, monkeypatch):
+    base = tmp_path / "base"
+    posts = base / "Posts" / "Posts 2026"
+    posts.mkdir(parents=True)
+    rel = "Posts/Posts 2026/doc.html"
+    (posts / "doc.html").write_text("<html><body>Doc</body></html>", encoding="utf-8")
+
+    done_links_file = tmp_path / "obsidian" / "Leidos.md"
+    monkeypatch.setenv("DONE_LINKS_FILE", str(done_links_file))
+    monkeypatch.setenv("DONE_LINKS_BASE_URL", "http://localhost:8080")
+
+    app = docflow_server.DocflowApp(base)
+    result = app.api_to_done(rel)
+    assert result["stage"] == "done"
+    assert result["changed"] is True
+
+    content = done_links_file.read_text(encoding="utf-8")
+    today = datetime.now().strftime("%d/%m/%Y")
+    expected = f"- ({today}) [doc.html](http://localhost:8080/posts/raw/Posts%202026/doc.html)"
+    assert expected in content
+
+
+def test_api_to_done_links_file_skips_duplicate_url(tmp_path: Path, monkeypatch):
+    base = tmp_path / "base"
+    posts = base / "Posts" / "Posts 2026"
+    posts.mkdir(parents=True)
+    rel = "Posts/Posts 2026/doc.html"
+    (posts / "doc.html").write_text("<html><body>Doc</body></html>", encoding="utf-8")
+
+    done_links_file = tmp_path / "obsidian" / "Leidos.md"
+    done_links_file.parent.mkdir(parents=True, exist_ok=True)
+    existing = (
+        '- (01/03/2026) [doc.html]'
+        '(http://localhost:8080/posts/raw/Posts%202026/doc.html "doc.html")\n'
+    )
+    done_links_file.write_text(existing, encoding="utf-8")
+
+    monkeypatch.setenv("DONE_LINKS_FILE", str(done_links_file))
+    monkeypatch.setenv("DONE_LINKS_BASE_URL", "http://localhost:8080")
+
+    app = docflow_server.DocflowApp(base)
+    result = app.api_to_done(rel)
+    assert result["stage"] == "done"
+    assert result["changed"] is True
+
+    content = done_links_file.read_text(encoding="utf-8")
+    assert content.count("http://localhost:8080/posts/raw/Posts%202026/doc.html") == 1
 
 
 def test_api_to_reading_roundtrip(tmp_path: Path):
