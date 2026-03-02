@@ -75,6 +75,7 @@ _PDF_PDFLATEX_CANDIDATES = (
     "/usr/local/bin/pdflatex",
     "/usr/bin/pdflatex",
 )
+_PDF_LATEX_MARGIN = "2.5cm"
 
 
 class ApiError(Exception):
@@ -534,6 +535,8 @@ class DocflowApp:
                 pandoc_executable,
                 str(source_tmp),
                 f"--pdf-engine={pdflatex_executable}",
+                "-V",
+                f"geometry:margin={_PDF_LATEX_MARGIN}",
                 "-o",
                 str(output_tmp),
             ]
