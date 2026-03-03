@@ -148,6 +148,8 @@ def _resolve_executable_or_none(name: str, candidates: tuple[str, ...]) -> str |
 
 def _sanitize_pdf_source_text(text: str) -> str:
     sanitized = text.translate(_PDF_SANITIZE_TRANSLATION_MAP)
+    # Normalize compatibility forms (e.g., mathematical alphabets like 𝕖 -> e).
+    sanitized = unicodedata.normalize("NFKC", sanitized)
     # pdflatex usually fails with emoji/pictographic symbols.
     def _is_unsupported_symbol(ch: str) -> bool:
         if unicodedata.category(ch) == "Cf":

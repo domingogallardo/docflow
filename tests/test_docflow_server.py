@@ -841,6 +841,13 @@ def test_sanitize_pdf_source_text_strips_bmp_emoji_like_symbols():
     assert cleaned == "In today\u2019s edition  ready  done"
 
 
+def test_sanitize_pdf_source_text_normalizes_mathematical_unicode_letters():
+    raw = "Author 𝕖"
+    cleaned = docflow_server._sanitize_pdf_source_text(raw)
+    assert "𝕖" not in cleaned
+    assert cleaned == "Author e"
+
+
 def test_api_export_pdf_generates_real_pdf_when_tools_available(tmp_path: Path):
     if shutil.which("pandoc") is None or shutil.which("pdflatex") is None:
         pytest.skip("pandoc and pdflatex are required for PDF export test")
