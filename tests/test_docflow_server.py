@@ -565,6 +565,66 @@ def test_is_pandoc_yaml_metadata_parse_error_detects_known_messages():
     )
 
 
+def test_extract_pdflatex_unicode_error_codepoints_parses_hex_values():
+    points = docflow_server._extract_pdflatex_unicode_error_codepoints(
+        stderr=(
+            "Error producing PDF.\n"
+            "! LaTeX Error: Unicode character ⚡ (U+26A1)\n"
+            "! LaTeX Error: Unicode character ≈ (U+2248)\n"
+        ),
+        stdout="",
+    )
+    assert points == {0x26A1, 0x2248}
+
+
+@pytest.mark.parametrize(
+    ("stderr", "stdout", "expected"),
+    [
+        ("Could not convert image /tmp/a.svg", "", True),
+        ("", "Unknown graphics extension: .so", True),
+        ("pdfTeX error: reading image file failed", "", True),
+        ("Error producing PDF. Something else", "", False),
+    ],
+)
+def test_is_pandoc_image_asset_error_detects_known_messages(stderr: str, stdout: str, expected: bool):
+    assert docflow_server._is_pandoc_image_asset_error(stderr=stderr, stdout=stdout) is expected
+
+
+def test_pdf_image_scale_header_tex_caps_height_without_upscaling():
+    header_tex = docflow_server._pdf_image_scale_header_tex()
+    assert "\\setlength\\docflowmaximgheight{7cm}" in header_tex
+    assert "\\ifdim\\Gin@nat@height>\\docflowmaximgheight" in header_tex
+    assert "\\else\\Gin@nat@height\\fi" in header_tex
+    assert "\\ifdim\\Gin@nat@width>\\linewidth" in header_tex
+    assert "\\setkeys{Gin}{width=\\docflowmaxwidth,height=\\docflowmaxheight,keepaspectratio}" in header_tex
+
+
+def test_pdf_media_filter_lua_disables_svg_when_converter_missing():
+    lua = docflow_server._pdf_media_filter_lua(keep_svg=False)
+    assert "local KEEP_SVG = false" in lua
+    assert "local ALLOW_REMOTE_IMAGES = true" in lua
+    assert "function Header(el)" in lua
+    assert "gsub('%%', ' percent ')" in lua
+    assert "format=([a-z0-9]+)" in lua
+    assert "s = s:gsub('&amp;', '&')" in lua
+    assert "pbs%.twimg%.com/media/" in lua
+    assert "return allowed_ext[ext] == true" in lua
+
+
+def test_pdf_media_filter_lua_enables_svg_when_converter_present():
+    lua = docflow_server._pdf_media_filter_lua(keep_svg=True)
+    assert "local KEEP_SVG = true" in lua
+    assert "local ALLOW_REMOTE_IMAGES = true" in lua
+    assert "if ext == 'svg' then" in lua
+    assert "return KEEP_SVG" in lua
+
+
+def test_pdf_media_filter_lua_can_disable_remote_images():
+    lua = docflow_server._pdf_media_filter_lua(keep_svg=False, allow_remote_images=False)
+    assert "local ALLOW_REMOTE_IMAGES = false" in lua
+    assert "s:match('^https?://')" in lua
+
+
 def test_render_pdf_bytes_retries_markdown_without_yaml_metadata_block(tmp_path: Path, monkeypatch):
     base = tmp_path / "base"
     base.mkdir(parents=True)
@@ -598,16 +658,126 @@ def test_render_pdf_bytes_retries_markdown_without_yaml_metadata_block(tmp_path:
     )
     assert payload.startswith(b"%PDF")
     assert len(calls) == 2
+    assert "--lua-filter" in calls[0]
+    assert "--lua-filter" in calls[1]
     assert "--from=markdown-yaml_metadata_block" not in calls[0]
     assert "--from=markdown-yaml_metadata_block" in calls[1]
+
+
+def test_render_pdf_bytes_retries_after_pdflatex_unicode_error(tmp_path: Path, monkeypatch):
+    base = tmp_path / "base"
+    base.mkdir(parents=True)
+    source = tmp_path / "source.html"
+    source.write_text("<h1>Approx ≈ value</h1>", encoding="utf-8")
+    app = docflow_server.DocflowApp(base)
+
+    calls: list[list[str]] = []
+
+    def _fake_run(cmd: list[str], **_kwargs):
+        calls.append(cmd)
+        source_tmp = Path(cmd[1])
+        output_idx = cmd.index("-o") + 1
+        output_pdf = Path(cmd[output_idx])
+        current_text = source_tmp.read_text(encoding="utf-8")
+        if len(calls) == 1:
+            assert "≈" in current_text
+            raise subprocess.CalledProcessError(
+                returncode=43,
+                cmd=cmd,
+                output="",
+                stderr=(
+                    "Error producing PDF.\n"
+                    "! LaTeX Error: Unicode character ≈ (U+2248)\n"
+                    "not set up for use with LaTeX."
+                ),
+            )
+        assert "≈" not in current_text
+        output_pdf.write_bytes(b"%PDF-1.4\\n%mock\\n")
+        return subprocess.CompletedProcess(cmd, 0, "", "")
+
+    monkeypatch.setattr(docflow_server.subprocess, "run", _fake_run)
+
+    payload = app._render_pdf_bytes(
+        source,
+        ".html",
+        "/usr/bin/pandoc",
+        "/usr/bin/pdflatex",
+    )
+    assert payload.startswith(b"%PDF")
+    assert len(calls) == 2
+
+
+def test_render_pdf_bytes_retries_without_remote_images_after_asset_error(tmp_path: Path, monkeypatch):
+    base = tmp_path / "base"
+    base.mkdir(parents=True)
+    source = tmp_path / "source.html"
+    source.write_text('<img src="https://pbs.twimg.com/card_img/1/x?format=jpg&amp;name=small">', encoding="utf-8")
+    app = docflow_server.DocflowApp(base)
+
+    calls: list[list[str]] = []
+
+    def _fake_run(cmd: list[str], **_kwargs):
+        calls.append(cmd)
+        filter_idx = cmd.index("--lua-filter") + 1
+        filter_lua = Path(cmd[filter_idx]).read_text(encoding="utf-8")
+        output_idx = cmd.index("-o") + 1
+        output_pdf = Path(cmd[output_idx])
+
+        if len(calls) == 1:
+            assert "ALLOW_REMOTE_IMAGES = true" in filter_lua
+            raise subprocess.CalledProcessError(
+                returncode=43,
+                cmd=cmd,
+                output="",
+                stderr="Error producing PDF.\n! LaTeX Error: Unknown graphics extension: .so.",
+            )
+
+        assert "ALLOW_REMOTE_IMAGES = false" in filter_lua
+        output_pdf.write_bytes(b"%PDF-1.4\\n%mock\\n")
+        return subprocess.CompletedProcess(cmd, 0, "", "")
+
+    monkeypatch.setattr(docflow_server.subprocess, "run", _fake_run)
+
+    payload = app._render_pdf_bytes(
+        source,
+        ".html",
+        "/usr/bin/pandoc",
+        "/usr/bin/pdflatex",
+    )
+    assert payload.startswith(b"%PDF")
+    assert len(calls) == 2
+
+
+def test_render_pdf_bytes_accepts_nonzero_pandoc_exit_when_pdf_exists(tmp_path: Path, monkeypatch):
+    base = tmp_path / "base"
+    base.mkdir(parents=True)
+    source = tmp_path / "source.html"
+    source.write_text("<h1>hello</h1>", encoding="utf-8")
+    app = docflow_server.DocflowApp(base)
+
+    def _fake_run(cmd: list[str], **_kwargs):
+        output_idx = cmd.index("-o") + 1
+        output_pdf = Path(cmd[output_idx])
+        output_pdf.write_bytes(b"%PDF-1.4\\n%mock\\n")
+        return subprocess.CompletedProcess(cmd, 1, "stdout warn", "stderr warn")
+
+    monkeypatch.setattr(docflow_server.subprocess, "run", _fake_run)
+
+    payload = app._render_pdf_bytes(
+        source,
+        ".html",
+        "/usr/bin/pandoc",
+        "/usr/bin/pdflatex",
+    )
+    assert payload.startswith(b"%PDF")
 
 
 def test_sanitize_pdf_source_text_replaces_common_pdflatex_breakers():
     raw = (
         "x\u2208y\u00B7z \u221A \u2265 \u2260 \u2212 \u2211 \u222B \u221E "
         "\u03B4\u0394\u03C0\u03A9\u03BC\u03BD "
-        "\u2B50\u2605\u2666 \uF8FF a\u2032b c\u2074 d\u2085 "
-        "p\u2009q r\u200As \u2061\uFE0F\uFFFD"
+        "\u2B50\u2605\u2666\u26A1 \uF8FF a\u2032b c\u2074 d\u2085 "
+        "p\u2009q r\u200As \u2061\u200D\uFE0F\uFFFD"
     )
     cleaned = docflow_server._sanitize_pdf_source_text(raw)
 
@@ -629,10 +799,12 @@ def test_sanitize_pdf_source_text_replaces_common_pdflatex_breakers():
     assert "\u2B50" not in cleaned
     assert "\u2605" not in cleaned
     assert "\u2666" not in cleaned
+    assert "\u26A1" not in cleaned
     assert "\uF8FF" not in cleaned
     assert "\u2009" not in cleaned
     assert "\u200A" not in cleaned
     assert "\u2061" not in cleaned
+    assert "\u200D" not in cleaned
     assert "\uFE0F" not in cleaned
     assert "\uFFFD" not in cleaned
 
@@ -660,6 +832,15 @@ def test_sanitize_pdf_source_text_strips_supplementary_plane_emoji():
     assert cleaned == "ok  keep  done"
 
 
+def test_sanitize_pdf_source_text_strips_bmp_emoji_like_symbols():
+    raw = "⚡In today\u2019s edition ✅ ready ✨ done"
+    cleaned = docflow_server._sanitize_pdf_source_text(raw)
+    assert "⚡" not in cleaned
+    assert "✅" not in cleaned
+    assert "✨" not in cleaned
+    assert cleaned == "In today\u2019s edition  ready  done"
+
+
 def test_api_export_pdf_generates_real_pdf_when_tools_available(tmp_path: Path):
     if shutil.which("pandoc") is None or shutil.which("pdflatex") is None:
         pytest.skip("pandoc and pdflatex are required for PDF export test")
@@ -668,7 +849,7 @@ def test_api_export_pdf_generates_real_pdf_when_tools_available(tmp_path: Path):
     posts = base / "Posts" / "Posts 2026"
     posts.mkdir(parents=True)
     # Exercise the sanitizer path for unicode symbols seen in real documents.
-    (posts / "doc.md").write_text("# Real PDF\n\nx ∈ y\n\nfoo · bar\n", encoding="utf-8")
+    (posts / "doc.md").write_text("# Real PDF\n\n⚡In today\n\nx ∈ y\n\nfoo · bar\n", encoding="utf-8")
 
     server, port = _start_server(base)
     try:

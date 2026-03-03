@@ -15,6 +15,7 @@ import html
 import json
 import mimetypes
 import os
+import re
 import shutil
 import subprocess
 import tempfile
@@ -75,7 +76,13 @@ _PDF_PDFLATEX_CANDIDATES = (
     "/usr/local/bin/pdflatex",
     "/usr/bin/pdflatex",
 )
+_PDF_RSVG_CONVERT_CANDIDATES = (
+    "/opt/homebrew/bin/rsvg-convert",
+    "/usr/local/bin/rsvg-convert",
+    "/usr/bin/rsvg-convert",
+)
 _PDF_LATEX_MARGIN = "2.5cm"
+_PDF_IMAGE_MAX_HEIGHT = "7cm"
 
 
 class ApiError(Exception):
@@ -119,6 +126,13 @@ _PDF_SANITIZE_TRANSLATION_MAP = {
     ord("\uFE0F"): None,
     ord("\uFFFD"): None,
 }
+_PDF_BMP_SYMBOL_STRIP_RANGES = (
+    # Misc symbols + dingbats (includes characters like ⚡, ✅, ✨).
+    (0x2600, 0x27BF),
+    # Additional arrows/shapes often used as decorative emoji-like glyphs.
+    (0x2B00, 0x2BFF),
+)
+_PDFLATEX_UNICODE_CHAR_RE = re.compile(r"Unicode character .*?\(U\+([0-9A-Fa-f]{4,6})\)")
 
 
 def _resolve_executable_or_none(name: str, candidates: tuple[str, ...]) -> str | None:
@@ -134,8 +148,16 @@ def _resolve_executable_or_none(name: str, candidates: tuple[str, ...]) -> str |
 
 def _sanitize_pdf_source_text(text: str) -> str:
     sanitized = text.translate(_PDF_SANITIZE_TRANSLATION_MAP)
-    # pdflatex usually fails with supplementary-plane emoji/symbols.
-    return "".join(ch for ch in sanitized if not (0x1F000 <= ord(ch) <= 0x1FAFF))
+    # pdflatex usually fails with emoji/pictographic symbols.
+    def _is_unsupported_symbol(ch: str) -> bool:
+        if unicodedata.category(ch) == "Cf":
+            return True
+        codepoint = ord(ch)
+        if 0x1F000 <= codepoint <= 0x1FAFF:
+            return True
+        return any(start <= codepoint <= end for start, end in _PDF_BMP_SYMBOL_STRIP_RANGES)
+
+    return "".join(ch for ch in sanitized if not _is_unsupported_symbol(ch))
 
 
 def _browse_parent_url_for_rel_path(rel_path: str) -> str:
@@ -530,61 +552,123 @@ class DocflowApp:
             temp_path = Path(temp_dir)
             source_tmp = temp_path / source_name
             output_tmp = temp_path / output_name
+            header_tmp = temp_path / "docflow_pdf_header.tex"
+            media_filter_tmp = temp_path / "docflow_pdf_media_filter.lua"
             source_tmp.write_text(sanitized_text, encoding="utf-8")
-            cmd = [
-                pandoc_executable,
-                str(source_tmp),
-                f"--pdf-engine={pdflatex_executable}",
-                "-V",
-                f"geometry:margin={_PDF_LATEX_MARGIN}",
-                "-o",
-                str(output_tmp),
-            ]
+            header_tmp.write_text(_pdf_image_scale_header_tex(), encoding="utf-8")
+            keep_svg = _resolve_executable_or_none("rsvg-convert", _PDF_RSVG_CONVERT_CANDIDATES) is not None
+            allow_remote_images = True
 
-            def _run_pandoc(command: list[str]) -> None:
-                subprocess.run(command, check=True, capture_output=True, text=True)
+            def _write_media_filter() -> None:
+                media_filter_tmp.write_text(
+                    _pdf_media_filter_lua(
+                        keep_svg=keep_svg,
+                        allow_remote_images=allow_remote_images,
+                    ),
+                    encoding="utf-8",
+                )
 
-            try:
-                _run_pandoc(cmd)
-            except FileNotFoundError as exc:
-                missing_name = Path(exc.filename).name if exc.filename else "pandoc"
-                raise ApiError(503, f"Missing required executable: {missing_name}") from exc
-            except subprocess.CalledProcessError as exc:
-                if source_suffix == ".md" and _is_pandoc_yaml_metadata_parse_error(
-                    stderr=exc.stderr or "",
-                    stdout=exc.stdout or "",
-                ):
-                    retry_cmd = [
-                        pandoc_executable,
-                        str(source_tmp),
-                        "--from=markdown-yaml_metadata_block",
+            _write_media_filter()
+
+            def _build_pandoc_command(*, markdown_yaml_metadata: bool = False) -> list[str]:
+                command = [pandoc_executable, str(source_tmp)]
+                if markdown_yaml_metadata:
+                    command.append("--from=markdown-yaml_metadata_block")
+                command.extend(
+                    [
                         f"--pdf-engine={pdflatex_executable}",
                         "-V",
                         f"geometry:margin={_PDF_LATEX_MARGIN}",
+                        "-H",
+                        str(header_tmp),
+                        "--lua-filter",
+                        str(media_filter_tmp),
                         "-o",
                         str(output_tmp),
                     ]
+                )
+                return command
+
+            def _run_pandoc(command: list[str]) -> None:
+                completed = subprocess.run(command, check=False, capture_output=True, text=True)
+                if completed.returncode == 0:
+                    return
+
+                if output_tmp.is_file():
                     try:
-                        _run_pandoc(retry_cmd)
-                    except FileNotFoundError as retry_exc:
-                        missing_name = Path(retry_exc.filename).name if retry_exc.filename else "pandoc"
-                        raise ApiError(503, f"Missing required executable: {missing_name}") from retry_exc
-                    except subprocess.CalledProcessError as retry_exc:
-                        stderr = (retry_exc.stderr or "").strip()
-                        stdout = (retry_exc.stdout or "").strip()
-                        detail = stderr or stdout or "Unknown pandoc failure"
-                        lowered = detail.lower()
-                        if "pdflatex" in lowered and ("not found" in lowered or "missing" in lowered):
-                            raise ApiError(503, f"PDF engine unavailable: {detail}") from retry_exc
-                        raise ApiError(500, f"Could not generate PDF: {detail}") from retry_exc
-                else:
-                    stderr = (exc.stderr or "").strip()
-                    stdout = (exc.stdout or "").strip()
-                    detail = stderr or stdout or "Unknown pandoc failure"
-                    lowered = detail.lower()
-                    if "pdflatex" in lowered and ("not found" in lowered or "missing" in lowered):
-                        raise ApiError(503, f"PDF engine unavailable: {detail}") from exc
-                    raise ApiError(500, f"Could not generate PDF: {detail}") from exc
+                        if output_tmp.read_bytes().startswith(b"%PDF"):
+                            return
+                    except OSError:
+                        pass
+
+                raise subprocess.CalledProcessError(
+                    returncode=completed.returncode,
+                    cmd=command,
+                    output=completed.stdout,
+                    stderr=completed.stderr,
+                )
+
+            def _run_with_unicode_retry(command: list[str]) -> None:
+                nonlocal sanitized_text
+                retries = 0
+                max_unicode_retries = 6
+                while True:
+                    try:
+                        _run_pandoc(command)
+                        return
+                    except subprocess.CalledProcessError as exc:
+                        codepoints = _extract_pdflatex_unicode_error_codepoints(
+                            stderr=exc.stderr or "",
+                            stdout=exc.stdout or "",
+                        )
+                        if not codepoints or retries >= max_unicode_retries:
+                            raise
+
+                        updated_text = "".join(ch for ch in sanitized_text if ord(ch) not in codepoints)
+                        if updated_text == sanitized_text:
+                            raise
+
+                        sanitized_text = updated_text
+                        source_tmp.write_text(sanitized_text, encoding="utf-8")
+                        retries += 1
+
+            def _run_with_asset_fallback(command: list[str]) -> None:
+                nonlocal allow_remote_images, keep_svg
+                try:
+                    _run_with_unicode_retry(command)
+                    return
+                except subprocess.CalledProcessError as exc:
+                    if not allow_remote_images or not _is_pandoc_image_asset_error(
+                        stderr=exc.stderr or "",
+                        stdout=exc.stdout or "",
+                    ):
+                        raise
+
+                    # Last-resort fallback: drop remote images to avoid flaky or unsupported downloads.
+                    allow_remote_images = False
+                    keep_svg = False
+                    _write_media_filter()
+                    _run_with_unicode_retry(command)
+                    return
+
+            def _run_or_capture_error(command: list[str]) -> subprocess.CalledProcessError | None:
+                try:
+                    _run_with_asset_fallback(command)
+                    return None
+                except FileNotFoundError as exc:
+                    missing_name = Path(exc.filename).name if exc.filename else "pandoc"
+                    raise ApiError(503, f"Missing required executable: {missing_name}") from exc
+                except subprocess.CalledProcessError as exc:
+                    return exc
+
+            conversion_error = _run_or_capture_error(_build_pandoc_command())
+            if conversion_error and source_suffix == ".md" and _is_pandoc_yaml_metadata_parse_error(
+                stderr=conversion_error.stderr or "",
+                stdout=conversion_error.stdout or "",
+            ):
+                conversion_error = _run_or_capture_error(_build_pandoc_command(markdown_yaml_metadata=True))
+            if conversion_error:
+                _raise_pdf_generation_error(conversion_error)
 
             try:
                 return output_tmp.read_bytes()
@@ -703,6 +787,129 @@ def _content_disposition_filename_parts(filename: str) -> tuple[str, str]:
 def _is_pandoc_yaml_metadata_parse_error(*, stderr: str, stdout: str) -> bool:
     detail = ((stderr or "") + "\n" + (stdout or "")).lower()
     return "error parsing yaml metadata" in detail or "yaml parse exception" in detail
+
+
+def _extract_pdflatex_unicode_error_codepoints(*, stderr: str, stdout: str) -> set[int]:
+    detail = (stderr or "") + "\n" + (stdout or "")
+    codepoints: set[int] = set()
+    for match in _PDFLATEX_UNICODE_CHAR_RE.finditer(detail):
+        try:
+            codepoints.add(int(match.group(1), 16))
+        except ValueError:
+            continue
+    return codepoints
+
+
+def _is_pandoc_image_asset_error(*, stderr: str, stdout: str) -> bool:
+    detail = ((stderr or "") + "\n" + (stdout or "")).lower()
+    markers = (
+        "could not convert image",
+        "unknown graphics extension",
+        "reading image file failed",
+        "package svg error",
+    )
+    return any(marker in detail for marker in markers)
+
+
+def _raise_pdf_generation_error(exc: subprocess.CalledProcessError) -> None:
+    stderr = (exc.stderr or "").strip()
+    stdout = (exc.stdout or "").strip()
+    detail = stderr or stdout or "Unknown pandoc failure"
+    lowered = detail.lower()
+    if "pdflatex" in lowered and ("not found" in lowered or "missing" in lowered):
+        raise ApiError(503, f"PDF engine unavailable: {detail}") from exc
+    raise ApiError(500, f"Could not generate PDF: {detail}") from exc
+
+
+def _pdf_image_scale_header_tex() -> str:
+    return (
+        "\\usepackage{graphicx}\n"
+        "\\makeatletter\n"
+        "\\newlength\\docflowmaximgheight\n"
+        f"\\setlength\\docflowmaximgheight{{{_PDF_IMAGE_MAX_HEIGHT}}}\n"
+        "\\def\\docflowmaxwidth{\\ifdim\\Gin@nat@width>\\linewidth\\linewidth\\else\\Gin@nat@width\\fi}\n"
+        "\\def\\docflowmaxheight{\\ifdim\\Gin@nat@height>\\docflowmaximgheight\\docflowmaximgheight\\else\\Gin@nat@height\\fi}\n"
+        "\\setkeys{Gin}{width=\\docflowmaxwidth,height=\\docflowmaxheight,keepaspectratio}\n"
+        "\\makeatother\n"
+    )
+
+
+def _pdf_media_filter_lua(*, keep_svg: bool, allow_remote_images: bool = True) -> str:
+    keep_svg_flag = "true" if keep_svg else "false"
+    allow_remote_flag = "true" if allow_remote_images else "false"
+    return (
+        f"local KEEP_SVG = {keep_svg_flag}\n"
+        f"local ALLOW_REMOTE_IMAGES = {allow_remote_flag}\n"
+        "local allowed_ext = {\n"
+        "  png = true,\n"
+        "  jpg = true,\n"
+        "  jpeg = true,\n"
+        "  pdf = true,\n"
+        "}\n"
+        "local function lower(s)\n"
+        "  if not s then return \"\" end\n"
+        "  return string.lower(s)\n"
+        "end\n"
+        "local function strip_query_and_fragment(s)\n"
+        "  local out = s:gsub('#.*$', '')\n"
+        "  out = out:gsub('%?.*$', '')\n"
+        "  return out\n"
+        "end\n"
+        "local function is_supported_image_src(src)\n"
+        "  local s = lower(src)\n"
+        "  if s == \"\" then return false end\n"
+        "  s = s:gsub('&amp;', '&')\n"
+        "  if (not ALLOW_REMOTE_IMAGES) and s:match('^https?://') then\n"
+        "    return false\n"
+        "  end\n"
+        "  if s:match('^data:image/') then\n"
+        "    if s:match('^data:image/png') or s:match('^data:image/jpeg') then\n"
+        "      return true\n"
+        "    end\n"
+        "    if KEEP_SVG and s:match('^data:image/svg%+xml') then\n"
+        "      return true\n"
+        "    end\n"
+        "    return false\n"
+        "  end\n"
+        "  local path = strip_query_and_fragment(s)\n"
+        "  local ext = path:match('%.([a-z0-9]+)$')\n"
+        "  if ext then\n"
+        "    if ext == 'svg' then\n"
+        "      return KEEP_SVG\n"
+        "    end\n"
+        "    return allowed_ext[ext] == true\n"
+        "  end\n"
+        "  local fmt = s:match('[?&]format=([a-z0-9]+)')\n"
+        "  if fmt then\n"
+        "    if fmt == 'svg' then\n"
+        "      return KEEP_SVG\n"
+        "    end\n"
+        "    if allowed_ext[fmt] ~= true then\n"
+        "      return false\n"
+        "    end\n"
+        "    if s:match('://pbs%.twimg%.com/media/') then\n"
+        "      return true\n"
+        "    end\n"
+        "    return false\n"
+        "  end\n"
+        "  return false\n"
+        "end\n"
+        "function Image(el)\n"
+        "  if is_supported_image_src(el.src) then\n"
+        "    return el\n"
+        "  end\n"
+        "  return {}\n"
+        "end\n"
+        "function Header(el)\n"
+        "  for i, inline in ipairs(el.content) do\n"
+        "    if inline.t == 'Str' then\n"
+        "      inline.text = inline.text:gsub('%%', ' percent ')\n"
+        "      el.content[i] = inline\n"
+        "    end\n"
+        "  end\n"
+        "  return el\n"
+        "end\n"
+    )
 
 
 def _send_pdf(handler: BaseHTTPRequestHandler, *, filename: str, data: bytes) -> None:
