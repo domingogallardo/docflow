@@ -37,6 +37,7 @@ PARAGRAPH_BLOCK_TAG_RE = re.compile(
     r"</?(?:address|article|aside|blockquote|div|dl|fieldset|figcaption|figure|footer|form|h[1-6]|header|hr|li|main|nav|ol|p|pre|section|table|tbody|td|tfoot|th|thead|tr|ul)\b",
     re.IGNORECASE,
 )
+DASH_LIST_LINE_RE = re.compile(r"^-\s*(.*)$")
 METRIC_NUMBER_RE = re.compile(r"^\d[\d.,]*(?:\s?[kmbKMB])?$")
 METRIC_TIME_RE = re.compile(r"\b\d{1,2}:\d{2}\b")
 _CONSOLIDATED_PREFIXES = ("Tweets ", "Consolidado Tweets ", "Consolidados Tweets ")
@@ -255,6 +256,7 @@ def _clean_body(body: str) -> str:
 
     text = _strip_stats_by_sections("\n".join(lines).strip())
     text = _blockquote_quoted_sections(text)
+    text = _normalize_wrapped_dash_lists(text)
     return text + ("\n" if text else "")
 
 
@@ -498,6 +500,96 @@ def _blockquote_quoted_sections(text: str) -> str:
         out.append(line)
 
     return "\n".join(out).strip()
+
+
+def _normalize_wrapped_dash_lists(text: str) -> str:
+    """Normalize wrapped dash bullets into proper Markdown list items."""
+    if not text:
+        return ""
+
+    lines = text.splitlines()
+    merged: list[str] = []
+    idx = 0
+
+    while idx < len(lines):
+        raw = lines[idx]
+        stripped = raw.strip()
+        if stripped == "":
+            merged.append("")
+            idx += 1
+            continue
+        if stripped == "---":
+            merged.append(raw)
+            idx += 1
+            continue
+
+        # Preserve indented lines (nested lists / code blocks) as-is.
+        if raw.lstrip() != raw:
+            merged.append(raw)
+            idx += 1
+            continue
+
+        bullet_match = DASH_LIST_LINE_RE.match(stripped)
+        if bullet_match is None:
+            merged.append(raw)
+            idx += 1
+            continue
+
+        first_part = (bullet_match.group(1) or "").strip()
+        parts: list[str] = [first_part] if first_part else []
+        cursor = idx + 1
+
+        while cursor < len(lines):
+            nxt = lines[cursor]
+            nxt_stripped = nxt.strip()
+            if nxt_stripped == "" or nxt_stripped == "---":
+                break
+            if nxt.lstrip() != nxt:
+                break
+            if DASH_LIST_LINE_RE.match(nxt_stripped):
+                break
+            if nxt_stripped.startswith("#"):
+                break
+            if nxt_stripped.startswith("<") and not nxt_stripped.startswith("@"):
+                break
+            parts.append(nxt_stripped)
+            cursor += 1
+
+        if parts:
+            merged.append(f"- {' '.join(parts)}")
+
+        idx = cursor
+
+    normalized: list[str] = []
+    for i, line in enumerate(merged):
+        current = line.strip()
+        next_line = merged[i + 1].strip() if i + 1 < len(merged) else ""
+        normalized.append(line)
+
+        # Start a list after a regular line when the next one is a dash bullet.
+        if (
+            current
+            and current != "---"
+            and not current.startswith("- ")
+            and next_line.startswith("- ")
+        ):
+            normalized.append("")
+
+        # End a list before resuming normal paragraph text.
+        if (
+            current.startswith("- ")
+            and next_line
+            and next_line != "---"
+            and not next_line.startswith("- ")
+        ):
+            normalized.append("")
+
+        if current.endswith(":") and next_line.startswith("- "):
+            normalized.append("")
+        if current.startswith("- ") and next_line.endswith(":") and not next_line.startswith("- "):
+            normalized.append("")
+
+    return "\n".join(normalized).strip()
 
 
 def _preserve_paragraph_line_breaks(html_fragment: str) -> str:

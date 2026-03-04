@@ -207,3 +207,99 @@ def test_markdown_to_html_fragment_keeps_tight_list_items_clean() -> None:
     assert "<li><p>" not in html_fragment
     assert "<li><br>" not in html_fragment
     assert html_fragment.count("<li>") == 3
+
+
+def test_normalize_wrapped_dash_lists_merges_broken_items() -> None:
+    import re
+
+    body = "\n".join(
+        [
+            "TL;DR:",
+            "- Results replicated -",
+            "@AnthropicAI",
+            "latest models are scoring exceptionally well",
+            "-",
+            "@Alibaba_Qwen",
+            "is another very strong performer",
+            "- OpenAI and Google models are not doing well and are not improving",
+            "Links:",
+            "- Data explorer:",
+            "https://petergpt.github.io/bullshit-benchmark/viewer/index.v2.html",
+            "- GitHub:",
+            "https://github.com/petergpt/bullshit-benchmark",
+        ]
+    )
+
+    normalized = mod._normalize_wrapped_dash_lists(body)
+
+    assert re.search(r"TL;DR:\n+\- Results replicated -", normalized) is not None
+    assert "- Results replicated - @AnthropicAI latest models are scoring exceptionally well" in normalized
+    assert "- @Alibaba_Qwen is another very strong performer" in normalized
+    assert "\n-\n" not in normalized
+
+
+def test_clean_body_renders_wrapped_dash_lists_as_proper_ul() -> None:
+    from bs4 import BeautifulSoup
+
+    body = "\n".join(
+        [
+            "TL;DR:",
+            "- Results replicated -",
+            "@AnthropicAI",
+            "latest models are scoring exceptionally well",
+            "-",
+            "@Alibaba_Qwen",
+            "is another very strong performer",
+            "- OpenAI and Google models are not doing well and are not improving",
+            "",
+            "Links:",
+            "- Data explorer:",
+            "https://petergpt.github.io/bullshit-benchmark/viewer/index.v2.html",
+            "- GitHub:",
+            "https://github.com/petergpt/bullshit-benchmark",
+        ]
+    )
+
+    cleaned = mod._clean_body(body)
+    html_fragment = mod._markdown_to_html_fragment(cleaned)
+    soup = BeautifulSoup(html_fragment, "html.parser")
+
+    items = [li.get_text(" ", strip=True) for li in soup.find_all("li")]
+    assert "Results replicated - @AnthropicAI latest models are scoring exceptionally well" in items
+    assert "@Alibaba_Qwen is another very strong performer" in items
+    assert any(item.startswith("Data explorer:") for item in items)
+    assert all(li.find("p") is None for li in soup.find_all("li"))
+
+
+def test_clean_body_renders_arc_links_block_as_list_not_paragraph_breaks() -> None:
+    from bs4 import BeautifulSoup
+
+    body = "\n".join(
+        [
+            "ARC Prize",
+            "@arcprize",
+            "- Leaderboard:",
+            "http://arcprize.org/leaderboard",
+            "- Reproduce the results:",
+            "http://github.com/arcprize/arc-a...",
+            "- Testing policy:",
+            "http://arcprize.org/policy",
+            "- ARC Prize Foundation is hiring:",
+            "http://arcprize.org/jobs",
+            "- View raw results:",
+            "https://huggingface.co/datasets/arcprize/arc_agi_v1_public_eval/tree/main",
+            "",
+            "Original link: https://t.co/G6cE2A4K7U",
+        ]
+    )
+
+    cleaned = mod._clean_body(body)
+    html_fragment = mod._markdown_to_html_fragment(cleaned)
+    soup = BeautifulSoup(html_fragment, "html.parser")
+
+    assert "<br>\n- Leaderboard:" not in html_fragment
+    items = [li.get_text(" ", strip=True) for li in soup.find_all("li")]
+    assert any(item.startswith("Leaderboard:") for item in items)
+    assert any(item.startswith("Reproduce the results:") for item in items)
+    assert any(item.startswith("View raw results:") for item in items)
+    assert "Original link:" in soup.get_text(" ", strip=True)
