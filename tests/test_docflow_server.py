@@ -255,7 +255,7 @@ def test_api_to_done_appends_entry_to_done_links_file(tmp_path: Path, monkeypatc
 
     content = done_links_file.read_text(encoding="utf-8")
     today = datetime.now().strftime("%d/%m/%Y")
-    expected = f"- ({today}) [doc.html](http://localhost:8080/posts/raw/Posts%202026/doc.html)"
+    expected = f"- **{today}**: [doc.html](http://localhost:8080/posts/raw/Posts%202026/doc.html)"
     assert expected in content
 
 
@@ -269,7 +269,7 @@ def test_api_to_done_links_file_skips_duplicate_url(tmp_path: Path, monkeypatch)
     done_links_file = tmp_path / "obsidian" / "Leidos.md"
     done_links_file.parent.mkdir(parents=True, exist_ok=True)
     existing = (
-        '- (01/03/2026) [doc.html]'
+        '- **01/03/2026**: [doc.html]'
         '(http://localhost:8080/posts/raw/Posts%202026/doc.html "doc.html")\n'
     )
     done_links_file.write_text(existing, encoding="utf-8")
@@ -296,8 +296,8 @@ def test_api_to_done_prepends_entry_as_first_bullet(tmp_path: Path, monkeypatch)
     done_links_file = tmp_path / "obsidian" / "Leidos.md"
     done_links_file.parent.mkdir(parents=True, exist_ok=True)
     done_links_file.write_text(
-        "- (01/03/2026) [old-1.html](http://localhost:8080/posts/raw/Posts%202026/old-1.html)\n"
-        "- (28/02/2026) [old-2.html](http://localhost:8080/posts/raw/Posts%202026/old-2.html)\n",
+        "- **01/03/2026**: [old-1.html](http://localhost:8080/posts/raw/Posts%202026/old-1.html)\n"
+        "- **28/02/2026**: [old-2.html](http://localhost:8080/posts/raw/Posts%202026/old-2.html)\n",
         encoding="utf-8",
     )
 

@@ -228,7 +228,7 @@ def _append_done_link_entry(rel_path: str) -> None:
         if f"]({absolute_url}" in existing:
             return
 
-    line = f"- ({datetime.now().strftime('%d/%m/%Y')}) [{Path(normalized).name}]({absolute_url})"
+    line = f"- **{datetime.now().strftime('%d/%m/%Y')}**: [{Path(normalized).name}]({absolute_url})"
     log_file.parent.mkdir(parents=True, exist_ok=True)
 
     if not existing:
