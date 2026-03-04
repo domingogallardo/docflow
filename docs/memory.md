@@ -83,6 +83,15 @@ This file stores stable, reusable operational notes for future agent runs.
 - For `Reading` (`oldest first`), server-side ordering alone is not enough; the page must explicitly set `data-dg-sort-direction="asc"` or the browser will show newest first.
 - After changing sort behavior in `utils/build_browse_index.py`, regenerate browse assets (`python utils/build_browse_index.py --base-dir "<BASE_DIR>"`) so `_site/assets/browse-sort.js` is updated.
 
+### Daily Tweet Consolidation Rendering
+
+- `utils/build_daily_tweet_consolidated.py` has its own Markdown-to-HTML path for entry bodies (`_markdown_to_html_fragment`) and does not use `utils.markdown_to_html`.
+- To preserve tweet hard line breaks without breaking list markup, keep line-break conversion scoped to plain paragraph content only (current helper: `_preserve_paragraph_line_breaks`).
+- Do not apply global newline-to-`<br>` transforms on container tags (`div/ul/li/...`) in consolidated tweet output; that can reintroduce artifacts like `<li><br>` and malformed list spacing.
+- Preferred execution from repo root is module mode:
+  - `python -m utils.build_daily_tweet_consolidated --day YYYY-MM-DD`
+  This avoids import-path issues seen when running the script file directly in some environments.
+
 ## Diary
 
 ### 2026-02-26
@@ -92,3 +101,9 @@ This file stores stable, reusable operational notes for future agent runs.
 - Found and fixed a client-side override: `assets/browse-sort.js` was forcing descending order on load.
 - Added support for per-page sort direction in `browse-sort.js` and set `Reading` toggle to `data-dg-sort-direction="asc"`.
 - Rebuilt indexes/assets, restarted `docflow_server`, and verified in browser (`/reading/?_r=...`) that oldest appears first.
+
+### 2026-03-04
+
+- Fixed consolidated tweet rendering to preserve hard line breaks inside paragraph blocks (for cases like `TL;DR`/`Links`) while avoiding regressions in lists.
+- Added regression tests in `tests/test_build_daily_tweet_consolidated.py` for both paragraph line breaks and clean list markup.
+- Regenerated `Tweets 2026-03-03` consolidated output and validated `TL;DR`/`Links` formatting in HTML.
