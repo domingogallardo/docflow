@@ -32,6 +32,11 @@ TITLE_PREFIX_RE = re.compile(r"^Tweet\s*-\s*", re.IGNORECASE)
 GENERIC_H1_RE = re.compile(r"^#\s*(tweet|thread)\b", re.IGNORECASE)
 X_URL_RE = re.compile(r"https?://x\.com/[^\s)]+")
 VIEW_QUOTED_RE = re.compile(r"^\[view quoted tweet\]\(", re.IGNORECASE)
+PARAGRAPH_TAG_RE = re.compile(r"(<p[^>]*>)(.*?)(</p>)", re.IGNORECASE | re.DOTALL)
+PARAGRAPH_BLOCK_TAG_RE = re.compile(
+    r"</?(?:address|article|aside|blockquote|div|dl|fieldset|figcaption|figure|footer|form|h[1-6]|header|hr|li|main|nav|ol|p|pre|section|table|tbody|td|tfoot|th|thead|tr|ul)\b",
+    re.IGNORECASE,
+)
 METRIC_NUMBER_RE = re.compile(r"^\d[\d.,]*(?:\s?[kmbKMB])?$")
 METRIC_TIME_RE = re.compile(r"\b\d{1,2}:\d{2}\b")
 _CONSOLIDATED_PREFIXES = ("Tweets ", "Consolidado Tweets ", "Consolidados Tweets ")
@@ -495,6 +500,29 @@ def _blockquote_quoted_sections(text: str) -> str:
     return "\n".join(out).strip()
 
 
+def _preserve_paragraph_line_breaks(html_fragment: str) -> str:
+    """Keep source hard line breaks only inside plain <p> blocks."""
+    if not html_fragment or "<p" not in html_fragment.lower():
+        return html_fragment
+
+    def _replace(match: re.Match[str]) -> str:
+        open_tag, content, close_tag = match.groups()
+        normalized = content.replace("\r\n", "\n").replace("\r", "\n")
+        if "\n" not in normalized:
+            return match.group(0)
+        if "<br" in normalized.lower():
+            return match.group(0)
+        if PARAGRAPH_BLOCK_TAG_RE.search(normalized):
+            return match.group(0)
+
+        with_breaks = normalized.replace("\n", "<br>\n")
+        with_breaks = re.sub(r"^(?:<br>\n)+", "", with_breaks)
+        with_breaks = re.sub(r"(?:<br>\n)+$", "", with_breaks)
+        return f"{open_tag}{with_breaks}{close_tag}"
+
+    return PARAGRAPH_TAG_RE.sub(_replace, html_fragment)
+
+
 def _markdown_to_html_fragment(md_text: str) -> str:
     if not md_text.strip():
         return ""
@@ -502,7 +530,7 @@ def _markdown_to_html_fragment(md_text: str) -> str:
     linked_text = U.convert_urls_to_links(md_text)
 
     try:
-        return markdown.markdown(
+        rendered = markdown.markdown(
             linked_text,
             extensions=[
                 "fenced_code",
@@ -511,6 +539,7 @@ def _markdown_to_html_fragment(md_text: str) -> str:
             ],
             output_format="html5",
         )
+        return _preserve_paragraph_line_breaks(rendered)
     except Exception:
         safe = html.escape(linked_text).replace("\n", "<br>\n")
         return f"<p>{safe}</p>"

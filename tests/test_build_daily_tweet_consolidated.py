@@ -167,3 +167,43 @@ def test_clean_body_keeps_compact_line_with_real_content() -> None:
 
     assert "OpenClaw se va a OpenAi" in cleaned
     assert "image 1" in cleaned
+
+
+def test_markdown_to_html_fragment_preserves_paragraph_hard_breaks() -> None:
+    body = "\n".join(
+        [
+            "TL;DR:",
+            "- Results replicated -",
+            "@AnthropicAI",
+            "latest models are scoring exceptionally well",
+            "- OpenAI and Google models are not doing well and are not improving",
+            "",
+            "Links:",
+            "- Data explorer:",
+            "https://petergpt.github.io/bullshit-benchmark/viewer/index.v2.html",
+            "- GitHub:",
+            "https://github.com/petergpt/bullshit-benchmark",
+        ]
+    )
+
+    html_fragment = mod._markdown_to_html_fragment(body)
+
+    assert "TL;DR:<br>" in html_fragment
+    assert "Links:<br>" in html_fragment
+    assert "<a href=\"https://github.com/petergpt/bullshit-benchmark\">" in html_fragment
+
+
+def test_markdown_to_html_fragment_keeps_tight_list_items_clean() -> None:
+    body = "\n".join(
+        [
+            "- Parent item",
+            "  - Child item",
+            "- Sibling item",
+        ]
+    )
+
+    html_fragment = mod._markdown_to_html_fragment(body)
+
+    assert "<li><p>" not in html_fragment
+    assert "<li><br>" not in html_fragment
+    assert html_fragment.count("<li>") == 3
