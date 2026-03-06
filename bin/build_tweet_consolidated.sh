@@ -157,9 +157,24 @@ fi
 # mode = all_days
 echo "🧾 Scanning all tweet days..."
 mapfile -t rows < <("${PYTHON_BIN}" - <<'PY'
-from datetime import datetime
+from datetime import datetime, timedelta
+import os
 from pathlib import Path
 import config as cfg
+
+rollover_raw = os.getenv("DOCFLOW_TWEET_DAY_ROLLOVER_HOUR", "3").strip()
+try:
+    rollover_hour = int(rollover_raw)
+except ValueError:
+    rollover_hour = 3
+if rollover_hour < 0 or rollover_hour > 23:
+    rollover_hour = 3
+
+def operational_day_from_mtime(mtime: float) -> str:
+    dt = datetime.fromtimestamp(mtime)
+    if rollover_hour > 0 and dt.hour < rollover_hour:
+        dt -= timedelta(days=1)
+    return dt.strftime("%Y-%m-%d")
 
 base = Path(cfg.BASE_DIR) / "Tweets"
 seen: set[tuple[str, str]] = set()
@@ -174,7 +189,7 @@ for year_dir in sorted(base.glob("Tweets *")):
             continue
         if md.name.startswith(("Tweets ", "Consolidado Tweets ", "Consolidados Tweets ")):
             continue
-        day = datetime.fromtimestamp(md.stat().st_mtime).strftime("%Y-%m-%d")
+        day = operational_day_from_mtime(md.stat().st_mtime)
         seen.add((year, day))
 
 for year, day in sorted(seen):

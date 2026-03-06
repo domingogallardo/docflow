@@ -207,6 +207,10 @@ bash bin/build_tweet_consolidated.sh --all-days
 bash bin/build_tweet_consolidated.sh --all-days --cleanup-existing
 ```
 
+By default, daily grouping for tweet source files uses a local rollover hour at `03:00`
+to include just-after-midnight downloads in the previous day. Override with
+`DOCFLOW_TWEET_DAY_ROLLOVER_HOUR` (`0`-`23`) when needed.
+
 `--cleanup-existing` removes only source tweet `.html` files for consolidated days and keeps source `.md`.
 
 - Daily highlights report helper:

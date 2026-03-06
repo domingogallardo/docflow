@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import argparse
 import os
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 
 from utils import build_daily_tweet_consolidated as mod
@@ -31,6 +31,59 @@ def _write_tweet_pair(tweets_dir: Path, stem: str, day: str, *, hour: int) -> tu
     _set_mtime_for_day(md_path, day, hour=hour)
     _set_mtime_for_day(html_path, day, hour=hour)
     return md_path, html_path
+
+
+def test_collect_daily_source_markdown_uses_rollover_hour_for_early_next_day(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    day = "2026-02-13"
+    next_day = (datetime.strptime(day, "%Y-%m-%d") + timedelta(days=1)).strftime("%Y-%m-%d")
+    tweets_dir = tmp_path / "Tweets 2026"
+    tweets_dir.mkdir(parents=True)
+
+    same_day_md, _ = _write_tweet_pair(tweets_dir, "Tweet - same-day", day, hour=23)
+    early_next_day_md, _ = _write_tweet_pair(tweets_dir, "Tweet - early-next-day", next_day, hour=1)
+    boundary_next_day_md, _ = _write_tweet_pair(tweets_dir, "Tweet - boundary-next-day", next_day, hour=3)
+
+    monkeypatch.setenv("DOCFLOW_TWEET_DAY_ROLLOVER_HOUR", "3")
+
+    selected = mod._collect_daily_source_markdown(tweets_dir, day)
+    selected_set = set(selected)
+
+    assert same_day_md in selected_set
+    assert early_next_day_md in selected_set
+    assert boundary_next_day_md not in selected_set
+
+
+def test_main_includes_early_next_day_files_in_previous_day_consolidation(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    day = "2026-02-13"
+    next_day = (datetime.strptime(day, "%Y-%m-%d") + timedelta(days=1)).strftime("%Y-%m-%d")
+    tweets_dir = tmp_path / "Tweets 2026"
+    tweets_dir.mkdir(parents=True)
+
+    _write_tweet_pair(tweets_dir, "Tweet - same-day", day, hour=23)
+    _write_tweet_pair(tweets_dir, "Tweet - early-next-day", next_day, hour=1)
+    monkeypatch.setenv("DOCFLOW_TWEET_DAY_ROLLOVER_HOUR", "3")
+
+    args = argparse.Namespace(
+        day=day,
+        year=2026,
+        tweets_dir=tweets_dir,
+        output_base=None,
+        cleanup_if_consolidated=False,
+    )
+    monkeypatch.setattr(mod, "parse_args", lambda: args)
+
+    exit_code = mod.main()
+    assert exit_code == 0
+
+    consolidated_md = tweets_dir / f"Tweets {day}.md"
+    assert consolidated_md.is_file()
+    assert "Total de ficheros: **2**" in consolidated_md.read_text(encoding="utf-8")
 
 
 def test_main_keeps_source_markdown_and_removes_source_html_after_consolidation(

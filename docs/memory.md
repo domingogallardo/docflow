@@ -62,6 +62,14 @@ This file stores stable, reusable operational notes for future agent runs.
   - `utils/random-post.py` (fallback base URL)
 - Documentation examples should use `http://localhost:8080` unless explicitly overridden.
 
+### Intranet Service Restart
+
+- The intranet server is managed by LaunchAgent `com.domingo.docflow.intranet`.
+- LaunchAgent plist path: `~/Library/LaunchAgents/com.domingo.docflow.intranet.plist`.
+- Preferred restart command:
+  - `launchctl kickstart -k "gui/$(id -u)/com.domingo.docflow.intranet"`
+- Avoid manual restarts with `nohup python ... docflow_server.py` unless explicitly troubleshooting.
+
 ### BASE_DIR Source
 
 - `BASE_DIR` is resolved from env var `DOCFLOW_BASE_DIR` (not hardcoded in `config.py`).

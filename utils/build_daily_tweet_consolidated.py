@@ -14,7 +14,7 @@ import html
 import os
 import re
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Iterable
 
@@ -41,6 +41,8 @@ DASH_LIST_LINE_RE = re.compile(r"^-\s*(.*)$")
 METRIC_NUMBER_RE = re.compile(r"^\d[\d.,]*(?:\s?[kmbKMB])?$")
 METRIC_TIME_RE = re.compile(r"\b\d{1,2}:\d{2}\b")
 _CONSOLIDATED_PREFIXES = ("Tweets ", "Consolidado Tweets ", "Consolidados Tweets ")
+DEFAULT_TWEET_DAY_ROLLOVER_HOUR = 3
+TWEET_DAY_ROLLOVER_ENV = "DOCFLOW_TWEET_DAY_ROLLOVER_HOUR"
 METRIC_TOKEN_RE = re.compile(r"[0-9]+(?:[.,][0-9]+)?[kmb]?|[a-záéíóúñü]+", re.IGNORECASE)
 METRIC_NUMBER_TOKEN_RE = re.compile(r"^\d+(?:[.,]\d+)?[kmb]?$", re.IGNORECASE)
 METRIC_WORD_TOKENS = {
@@ -158,6 +160,25 @@ def _tweets_dir(base_dir: Path, year: int, override: Path | None) -> Path:
     return base_dir / "Tweets" / f"Tweets {year}"
 
 
+def _tweet_day_rollover_hour() -> int:
+    raw = os.getenv(TWEET_DAY_ROLLOVER_ENV, str(DEFAULT_TWEET_DAY_ROLLOVER_HOUR)).strip()
+    try:
+        parsed = int(raw)
+    except ValueError:
+        return DEFAULT_TWEET_DAY_ROLLOVER_HOUR
+    if 0 <= parsed <= 23:
+        return parsed
+    return DEFAULT_TWEET_DAY_ROLLOVER_HOUR
+
+
+def _tweet_operational_day_from_mtime(mtime: float, *, rollover_hour: int | None = None) -> str:
+    hour = _tweet_day_rollover_hour() if rollover_hour is None else rollover_hour
+    dt = datetime.fromtimestamp(mtime)
+    if hour > 0 and dt.hour < hour:
+        dt -= timedelta(days=1)
+    return dt.strftime("%Y-%m-%d")
+
+
 def _collect_daily_source_markdown(tweets_dir: Path, day: str) -> list[Path]:
     selected: list[Path] = []
     for path in tweets_dir.glob("*.md"):
@@ -165,7 +186,7 @@ def _collect_daily_source_markdown(tweets_dir: Path, day: str) -> list[Path]:
             continue
         if path.name.startswith(_CONSOLIDATED_PREFIXES):
             continue
-        local_day = datetime.fromtimestamp(path.stat().st_mtime).strftime("%Y-%m-%d")
+        local_day = _tweet_operational_day_from_mtime(path.stat().st_mtime)
         if local_day == day:
             selected.append(path)
     return selected
