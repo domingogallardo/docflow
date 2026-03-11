@@ -522,6 +522,23 @@ class DocflowApp:
         )
         return saved
 
+    def _resolve_markdown_source_target(self, rel_path: str) -> tuple[str, Path]:
+        normalized = self._normalize_rel_path_or_400(rel_path)
+        abs_path = self._require_existing_library_file(normalized)
+        suffix = abs_path.suffix.lower()
+
+        if suffix == ".md":
+            return normalized, abs_path
+
+        if suffix in {".html", ".htm"}:
+            sibling_md = abs_path.with_suffix(".md")
+            sibling_rel = normalize_rel_path(str(Path(normalized).with_suffix(".md")))
+            if sibling_md.is_file():
+                return sibling_rel, sibling_md
+            raise ApiError(404, f"Associated Markdown file not found: {sibling_rel}")
+
+        raise ApiError(400, "Markdown export is only supported for .md/.html files")
+
     def _resolve_pdf_source_target(self, rel_path: str) -> tuple[str, Path]:
         normalized = self._normalize_rel_path_or_400(rel_path)
         abs_path = self._require_existing_library_file(normalized)
@@ -696,6 +713,14 @@ class DocflowApp:
         filename = f"{Path(source_rel).stem}.pdf"
         return pdf_bytes, filename
 
+    def api_export_markdown(self, rel_path: str) -> tuple[bytes, str]:
+        source_rel, source_abs = self._resolve_markdown_source_target(rel_path)
+        try:
+            markdown_bytes = source_abs.read_bytes()
+        except OSError as exc:
+            raise ApiError(500, f"Could not read Markdown file: {exc}") from exc
+        return markdown_bytes, Path(source_rel).name
+
     def handle_api(self, action: str, payload: dict[str, object]) -> dict[str, object]:
         action_name = action.strip("/")
         if action_name == "rebuild":
@@ -757,7 +782,7 @@ def _send_file(handler: BaseHTTPRequestHandler, path: Path) -> None:
     handler.wfile.write(data)
 
 
-def _content_disposition_filename_parts(filename: str) -> tuple[str, str]:
+def _content_disposition_filename_parts(filename: str, *, default_filename: str) -> tuple[str, str]:
     cleaned = (
         filename.replace('"', "")
         .replace("\\", "")
@@ -779,9 +804,10 @@ def _content_disposition_filename_parts(filename: str) -> tuple[str, str]:
     fallback = normalized.encode("ascii", "ignore").decode("ascii")
     fallback = fallback.strip().strip(".")
     if not fallback:
-        fallback = "document.pdf"
-    if not fallback.lower().endswith(".pdf"):
-        fallback += ".pdf"
+        fallback = default_filename
+    default_suffix = Path(default_filename).suffix
+    if default_suffix and not fallback.lower().endswith(default_suffix.lower()):
+        fallback += default_suffix
     utf8_filename = quote(cleaned, safe="")
     return fallback, utf8_filename
 
@@ -915,7 +941,10 @@ def _pdf_media_filter_lua(*, keep_svg: bool, allow_remote_images: bool = True) -
 
 
 def _send_pdf(handler: BaseHTTPRequestHandler, *, filename: str, data: bytes) -> None:
-    fallback_filename, utf8_filename = _content_disposition_filename_parts(filename)
+    fallback_filename, utf8_filename = _content_disposition_filename_parts(
+        filename,
+        default_filename="document.pdf",
+    )
     content_disposition = (
         f'inline; filename="{fallback_filename}"; '
         f"filename*=UTF-8''{utf8_filename}"
@@ -929,7 +958,35 @@ def _send_pdf(handler: BaseHTTPRequestHandler, *, filename: str, data: bytes) ->
     handler.wfile.write(data)
 
 
+def _send_markdown_download(handler: BaseHTTPRequestHandler, *, filename: str, data: bytes) -> None:
+    fallback_filename, utf8_filename = _content_disposition_filename_parts(
+        filename,
+        default_filename="document.md",
+    )
+    content_disposition = (
+        f'attachment; filename="{fallback_filename}"; '
+        f"filename*=UTF-8''{utf8_filename}"
+    )
+    handler.send_response(HTTPStatus.OK)
+    handler.send_header("Content-Type", "text/markdown; charset=utf-8")
+    handler.send_header("Content-Disposition", content_disposition)
+    handler.send_header("Cache-Control", "no-store")
+    handler.send_header("Content-Length", str(len(data)))
+    handler.end_headers()
+    handler.wfile.write(data)
+
+
 OVERLAY_CSS = """
+pre {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  overflow-x: auto;
+  max-width: 100%;
+}
+pre code {
+  white-space: inherit;
+}
 #dg-overlay {
   position: fixed;
   right: 12px;
@@ -1051,6 +1108,7 @@ OVERLAY_JS = """
 
   let stage = script.getAttribute('data-stage') || 'browse';
   const browseIndexUrl = script.getAttribute('data-browse-url') || '/browse/';
+  const hasMarkdownDownload = script.getAttribute('data-has-markdown') === 'true';
   let busy = false;
   let highlightBusy = false;
   let highlightProgress = { current: 0, total: 0, label: '0 / 0' };
@@ -1151,6 +1209,15 @@ OVERLAY_JS = """
     link.href = `/api/export-pdf?path=${encodeURIComponent(relPath)}&_r=${Date.now()}`;
     link.target = '_blank';
     link.rel = 'noopener';
+    return link;
+  }
+
+  function makeMarkdownLink() {
+    const link = document.createElement('a');
+    link.className = 'dg-link';
+    link.textContent = 'MD';
+    link.href = `/api/export-markdown?path=${encodeURIComponent(relPath)}&_r=${Date.now()}`;
+    link.download = '';
     return link;
   }
 
@@ -1311,6 +1378,9 @@ OVERLAY_JS = """
     statusRow.className = 'dg-row dg-row-status';
     statusRow.appendChild(makeInsideLink());
     statusRow.appendChild(makePdfLink());
+    if (hasMarkdownDownload) {
+      statusRow.appendChild(makeMarkdownLink());
+    }
     bar.appendChild(statusRow);
 
     const actionsRow = document.createElement('div');
@@ -1402,10 +1472,11 @@ def _ensure_viewport_meta(html_text: str) -> str:
     return f"<head>{viewport}</head>{html_text}"
 
 
-def _inject_html_overlay(*, html_text: str, rel_path: str, stage: str) -> bytes:
+def _inject_html_overlay(*, html_text: str, rel_path: str, stage: str, has_markdown_download: bool) -> bytes:
     html_text = _ensure_viewport_meta(html_text)
     path_attr = html.escape(rel_path, quote=True)
     browse_url_attr = html.escape(_browse_parent_url_for_rel_path(rel_path), quote=True)
+    has_markdown_attr = "true" if has_markdown_download else "false"
     article_js = ""
     if "/working/article.js" not in html_text:
         article_js = f"<script defer src=\"/working/article.js\" data-docflow-path=\"{path_attr}\"></script>"
@@ -1413,7 +1484,7 @@ def _inject_html_overlay(*, html_text: str, rel_path: str, stage: str) -> bytes:
         article_js
         + f"<style>{OVERLAY_CSS}</style>"
         + f"<script defer data-path=\"{path_attr}\" data-stage=\"{html.escape(stage, quote=True)}\" "
-        + f"data-browse-url=\"{browse_url_attr}\">{OVERLAY_JS}</script>"
+        + f"data-browse-url=\"{browse_url_attr}\" data-has-markdown=\"{has_markdown_attr}\">{OVERLAY_JS}</script>"
     )
     lower = html_text.lower()
     idx = lower.rfind("</body>")
@@ -1429,7 +1500,17 @@ def _send_overlay_html(handler: BaseHTTPRequestHandler, app: DocflowApp, abs_pat
         return
 
     stage = app.path_stage(rel_path)
-    payload = _inject_html_overlay(html_text=text, rel_path=rel_path, stage=stage)
+    try:
+        app._resolve_markdown_source_target(rel_path)
+        has_markdown_download = True
+    except ApiError:
+        has_markdown_download = False
+    payload = _inject_html_overlay(
+        html_text=text,
+        rel_path=rel_path,
+        stage=stage,
+        has_markdown_download=has_markdown_download,
+    )
 
     handler.send_response(HTTPStatus.OK)
     handler.send_header("Content-Type", "text/html; charset=utf-8")
@@ -1474,6 +1555,17 @@ def make_handler(app: DocflowApp):
             parsed = urlparse(self.path)
             path = parsed.path
 
+            if path == "/api/export-markdown":
+                try:
+                    rel_path = _get_query_path(parsed)
+                    markdown_bytes, filename = app.api_export_markdown(rel_path)
+                    _send_markdown_download(self, filename=filename, data=markdown_bytes)
+                except ApiError as exc:
+                    _send_json(self, exc.status, {"ok": False, "error": exc.message})
+                except Exception as exc:
+                    _send_json(self, 500, {"ok": False, "error": str(exc)})
+                return
+
             if path == "/api/export-pdf":
                 try:
                     rel_path = _get_query_path(parsed)
@@ -1497,7 +1589,14 @@ def make_handler(app: DocflowApp):
                 return
 
             if path.startswith("/api/"):
-                _send_json(self, 405, {"ok": False, "error": "Use POST for API endpoints (except /api/highlights and /api/export-pdf)"})
+                _send_json(
+                    self,
+                    405,
+                    {
+                        "ok": False,
+                        "error": "Use POST for API endpoints (except /api/highlights, /api/export-pdf and /api/export-markdown)",
+                    },
+                )
                 return
 
             raw_target = resolve_raw_path(app.base_dir, path)

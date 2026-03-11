@@ -433,6 +433,7 @@ def test_raw_route_serves_library_file(tmp_path: Path):
     posts.mkdir(parents=True)
     html = posts / "doc.html"
     html.write_text("<html><body>Raw Doc</body></html>", encoding="utf-8")
+    (posts / "doc.md").write_text("# Raw Doc\n", encoding="utf-8")
 
     server, port = _start_server(base)
     try:
@@ -448,7 +449,9 @@ def test_raw_route_serves_library_file(tmp_path: Path):
         assert "back_forward" in body
         assert "Inside Browse" in body
         assert "PDF" in body
+        assert "MD" in body
         assert "/api/export-pdf?path=" in body
+        assert "/api/export-markdown?path=" in body
         assert "to-reading" in body
         assert "to-done" in body
         assert "Rebuild" in body
@@ -464,6 +467,8 @@ def test_raw_route_serves_library_file(tmp_path: Path):
         assert "makeChevronIcon('up')" in body
         assert "makeChevronIcon('down')" in body
         assert "http://www.w3.org/2000/svg" in body
+        assert "white-space: pre-wrap" in body
+        assert "overflow-wrap: anywhere" in body
     finally:
         server.shutdown()
         server.server_close()
@@ -545,6 +550,65 @@ def test_api_export_pdf_content_disposition_supports_unicode_filename(tmp_path: 
         assert 'inline; filename="ARC-AGI evaluacion.pdf"' in content_disposition
         assert "filename*=UTF-8''ARC%E2%80%91AGI%20evaluaci%C3%B3n.pdf" in content_disposition
         assert body.startswith(b"%PDF")
+    finally:
+        server.shutdown()
+        server.server_close()
+
+
+def test_api_export_markdown_serves_attachment_bytes(tmp_path: Path, monkeypatch):
+    base = tmp_path / "base"
+    posts = base / "Posts" / "Posts 2026"
+    posts.mkdir(parents=True)
+    (posts / "doc.html").write_text("<html><body>Raw Doc</body></html>", encoding="utf-8")
+    (posts / "doc.md").write_text("# Doc\n", encoding="utf-8")
+
+    def _fake_export(_self: docflow_server.DocflowApp, _rel_path: str) -> tuple[bytes, str]:
+        return b"# Doc\n", "doc.md"
+
+    monkeypatch.setattr(docflow_server.DocflowApp, "api_export_markdown", _fake_export)
+
+    server, port = _start_server(base)
+    try:
+        status, body, headers = _get_bytes_with_headers(
+            port,
+            "/api/export-markdown?path=Posts%2FPosts%202026%2Fdoc.html",
+        )
+        assert status == 200
+        assert headers.get("content-type") == "text/markdown; charset=utf-8"
+        content_disposition = headers.get("content-disposition") or ""
+        assert 'attachment; filename="doc.md"' in content_disposition
+        assert "filename*=UTF-8''doc.md" in content_disposition
+        assert headers.get("cache-control") == "no-store"
+        assert body == b"# Doc\n"
+    finally:
+        server.shutdown()
+        server.server_close()
+
+
+def test_api_export_markdown_content_disposition_supports_unicode_filename(tmp_path: Path, monkeypatch):
+    base = tmp_path / "base"
+    posts = base / "Posts" / "Posts 2026"
+    posts.mkdir(parents=True)
+    (posts / "doc.html").write_text("<html><body>Raw Doc</body></html>", encoding="utf-8")
+    (posts / "doc.md").write_text("# Doc\n", encoding="utf-8")
+
+    def _fake_export(_self: docflow_server.DocflowApp, _rel_path: str) -> tuple[bytes, str]:
+        return b"# Doc\n", "ARC‑AGI evaluación.md"
+
+    monkeypatch.setattr(docflow_server.DocflowApp, "api_export_markdown", _fake_export)
+
+    server, port = _start_server(base)
+    try:
+        status, body, headers = _get_bytes_with_headers(
+            port,
+            "/api/export-markdown?path=Posts%2FPosts%202026%2Fdoc.html",
+        )
+        assert status == 200
+        assert headers.get("content-type") == "text/markdown; charset=utf-8"
+        content_disposition = headers.get("content-disposition") or ""
+        assert 'attachment; filename="ARC-AGI evaluacion.md"' in content_disposition
+        assert "filename*=UTF-8''ARC%E2%80%91AGI%20evaluaci%C3%B3n.md" in content_disposition
+        assert body == b"# Doc\n"
     finally:
         server.shutdown()
         server.server_close()
@@ -1056,6 +1120,34 @@ def test_api_export_pdf_prefers_html_even_when_path_points_to_markdown(tmp_path:
     assert data.startswith(b"%PDF")
     assert filename == "doc.pdf"
     assert captured["source_abs"] == html
+
+
+def test_api_export_markdown_uses_associated_markdown_when_path_points_to_html(tmp_path: Path):
+    base = tmp_path / "base"
+    posts = base / "Posts" / "Posts 2026"
+    posts.mkdir(parents=True)
+    html = posts / "doc.html"
+    md = posts / "doc.md"
+    html.write_text("<html><body>HTML Doc</body></html>", encoding="utf-8")
+    md.write_text("# Markdown Doc\n", encoding="utf-8")
+
+    app = docflow_server.DocflowApp(base)
+
+    data, filename = app.api_export_markdown("Posts/Posts 2026/doc.html")
+    assert data == b"# Markdown Doc\n"
+    assert filename == "doc.md"
+
+
+def test_api_export_markdown_rejects_html_without_associated_markdown(tmp_path: Path):
+    base = tmp_path / "base"
+    posts = base / "Posts" / "Posts 2026"
+    posts.mkdir(parents=True)
+    (posts / "doc.html").write_text("<html><body>HTML Doc</body></html>", encoding="utf-8")
+
+    app = docflow_server.DocflowApp(base)
+
+    with pytest.raises(docflow_server.ApiError, match="Associated Markdown file not found"):
+        app.api_export_markdown("Posts/Posts 2026/doc.html")
 
 
 def test_read_route_is_removed(tmp_path: Path):

@@ -62,12 +62,25 @@ This file stores stable, reusable operational notes for future agent runs.
   - `utils/random-post.py` (fallback base URL)
 - Documentation examples should use `http://localhost:8080` unless explicitly overridden.
 
-### Intranet Service Restart
+### Intranet Launch And LaunchAgent
 
-- The intranet server is managed by LaunchAgent `com.domingo.docflow.intranet`.
+- For direct manual runs from the repo, always load env first:
+  - `source ~/.docflow_env`
+  - `python utils/docflow_server.py --base-dir "$DOCFLOW_BASE_DIR" --host localhost --port 8080`
+- The day-to-day intranet server is managed by LaunchAgent `com.domingo.docflow.intranet`.
 - LaunchAgent plist path: `~/Library/LaunchAgents/com.domingo.docflow.intranet.plist`.
+- Current LaunchAgent wrapper script: `/Users/domingo/Programacion/computer-ops/ops/bin/docflow_intranet.sh`.
 - Preferred restart command:
   - `launchctl kickstart -k "gui/$(id -u)/com.domingo.docflow.intranet"`
+- If the agent is not loaded yet, bootstrap it with:
+  - `launchctl bootstrap "gui/$(id -u)" ~/Library/LaunchAgents/com.domingo.docflow.intranet.plist`
+- Quick status check:
+  - `launchctl print "gui/$(id -u)/com.domingo.docflow.intranet" | rg 'state =|pid =|last exit code =|program ='`
+- Quick HTTP smoke test:
+  - `curl -s -o /dev/null -w '%{http_code}\n' http://127.0.0.1:8080/`
+- LaunchAgent logs:
+  - stdout: `~/Library/Logs/remotecontrol/docflow.intranet.out.log`
+  - stderr: `~/Library/Logs/remotecontrol/docflow.intranet.err.log`
 - Avoid manual restarts with `nohup python ... docflow_server.py` unless explicitly troubleshooting.
 
 ### BASE_DIR Source

@@ -102,13 +102,34 @@ python utils/build_done_index.py --base-dir "$DOCFLOW_BASE_DIR"
 4. Run local server:
 
 ```bash
+source ~/.docflow_env
 python utils/docflow_server.py --base-dir "$DOCFLOW_BASE_DIR" --host localhost --port 8080
 ```
 
 Optional full rebuild at startup:
 
 ```bash
+source ~/.docflow_env
 python utils/docflow_server.py --base-dir "$DOCFLOW_BASE_DIR" --rebuild-on-start
+```
+
+Preferred day-to-day usage is the LaunchAgent-managed intranet service:
+
+```bash
+launchctl kickstart -k "gui/$(id -u)/com.domingo.docflow.intranet"
+```
+
+Useful service commands:
+
+```bash
+launchctl print "gui/$(id -u)/com.domingo.docflow.intranet" | rg 'state =|pid =|last exit code ='
+curl -s -o /dev/null -w '%{http_code}\n' http://127.0.0.1:8080/
+```
+
+If the agent is not loaded yet in a new environment:
+
+```bash
+launchctl bootstrap "gui/$(id -u)" ~/Library/LaunchAgents/com.domingo.docflow.intranet.plist
 ```
 
 ## Full document ingestion runner (`bin/docflow.sh`)
