@@ -670,6 +670,8 @@ def test_pdf_media_filter_lua_disables_svg_when_converter_missing():
     assert "function Header(el)" in lua
     assert "gsub('%%', ' percent ')" in lua
     assert "format=([a-z0-9]+)" in lua
+    assert "is_known_extensionless_remote_image_src" in lua
+    assert "res%.cloudinary%.com/.+/image/upload/" in lua
     assert "s = s:gsub('&amp;', '&')" in lua
     assert "pbs%.twimg%.com/media/" in lua
     assert "return allowed_ext[ext] == true" in lua
@@ -687,6 +689,13 @@ def test_pdf_media_filter_lua_can_disable_remote_images():
     lua = docflow_server._pdf_media_filter_lua(keep_svg=False, allow_remote_images=False)
     assert "local ALLOW_REMOTE_IMAGES = false" in lua
     assert "s:match('^https?://')" in lua
+
+
+def test_pdf_media_filter_lua_allows_extensionless_cloudinary_images():
+    lua = docflow_server._pdf_media_filter_lua(keep_svg=False)
+    assert "is_known_extensionless_remote_image_src(path)" in lua
+    assert "res%.cloudinary%.com/.+/image/upload/" in lua
+    assert "res%.cloudinary%.com/.+/image/fetch/" in lua
 
 
 def test_render_pdf_bytes_retries_markdown_without_yaml_metadata_block(tmp_path: Path, monkeypatch):

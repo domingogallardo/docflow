@@ -16,6 +16,7 @@ failed.txt
 procesados.txt
 Misc/
 .playwright/
+.playwright-cli/
 x_state.json
 *_state.json
 *.log
