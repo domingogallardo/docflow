@@ -671,7 +671,9 @@ def test_pdf_media_filter_lua_disables_svg_when_converter_missing():
     assert "gsub('%%', ' percent ')" in lua
     assert "format=([a-z0-9]+)" in lua
     assert "is_known_extensionless_remote_image_src" in lua
+    assert "is_known_proxy_image_src" in lua
     assert "res%.cloudinary%.com/.+/image/upload/" in lua
+    assert "substackcdn%.com/image/fetch/" in lua
     assert "s = s:gsub('&amp;', '&')" in lua
     assert "pbs%.twimg%.com/media/" in lua
     assert "return allowed_ext[ext] == true" in lua
@@ -696,6 +698,12 @@ def test_pdf_media_filter_lua_allows_extensionless_cloudinary_images():
     assert "is_known_extensionless_remote_image_src(path)" in lua
     assert "res%.cloudinary%.com/.+/image/upload/" in lua
     assert "res%.cloudinary%.com/.+/image/fetch/" in lua
+
+
+def test_pdf_media_filter_lua_allows_substack_webp_proxy_images():
+    lua = docflow_server._pdf_media_filter_lua(keep_svg=False)
+    assert "ext == 'webp'" in lua
+    assert "substackcdn%.com/image/fetch/" in lua
 
 
 def test_render_pdf_bytes_retries_markdown_without_yaml_metadata_block(tmp_path: Path, monkeypatch):

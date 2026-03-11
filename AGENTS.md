@@ -54,6 +54,7 @@ Useful setup (new environment):
 - Keep all script messages in English.
 - `BASE_DIR` location moved: do not hardcode it in `config.py`; use `DOCFLOW_BASE_DIR` in `~/.docflow_env`.
 - For direct local commands in this repo, ensure environment is loaded first (`source ~/.docflow_env`) so `config.py` resolves `BASE_DIR`.
+- When the user asks to restart the intranet service, do not restart `python utils/docflow_server.py` manually. It is mandatory to restart the LaunchAgent `com.domingo.docflow.intranet` instead, for example with `launchctl kickstart -k gui/$(id -u)/com.domingo.docflow.intranet`.
 - Preserve file `mtime` only for existing content files inside `BASE_DIR` (for example articles/pages under `Posts`, `Tweets`, etc.) unless the task explicitly requires changing ordering semantics.
 - Do not preserve `mtime` for repository code/docs files outside `BASE_DIR` (for example `docs/*.md`, `utils/*.py`, tests).
 - Use intranet routes and local state as canonical behavior (`docflow_server.py`, `_site`, `state`).

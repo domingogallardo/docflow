@@ -3,6 +3,51 @@ from pathlib import Path
 from utils.file_ops import iter_html_files
 
 
+def _image_anchor_ancestors(img) -> list:
+    return [
+        ancestor
+        for ancestor in img.parents
+        if getattr(ancestor, "name", None) == "a" and ancestor.get("href")
+    ]
+
+
+def _normalized_anchor_classes(anchor) -> list[str]:
+    classes = list(anchor.get("class") or [])
+    if not classes and anchor.has_attr("class_"):
+        class_attr = anchor.get("class_")
+        if isinstance(class_attr, list):
+            classes = class_attr
+        elif class_attr:
+            classes = [str(class_attr)]
+        anchor.attrs.pop("class_", None)
+    return [str(class_name) for class_name in classes]
+
+
+def _ensure_image_zoom_class(anchor) -> None:
+    classes = _normalized_anchor_classes(anchor)
+    if "image-zoom" not in classes:
+        classes.append("image-zoom")
+    if classes:
+        anchor["class"] = classes
+
+
+def _simplify_anchor_image_path(anchor, img) -> None:
+    while True:
+        parent = img.parent
+        if parent is None or parent is anchor:
+            return
+        grandparent = parent.parent
+        if parent.name == "picture" and grandparent is anchor:
+            return
+        if grandparent is not None and grandparent is not anchor and getattr(grandparent, "name", None) == "div":
+            grandparent.unwrap()
+            continue
+        if grandparent is anchor and getattr(parent, "name", None) == "div":
+            parent.unwrap()
+            continue
+        return
+
+
 def add_margins_to_html_files(directory: Path, file_filter=None):
     """
     Add 6% margins to all HTML files in a directory.
@@ -15,6 +60,11 @@ def add_margins_to_html_files(directory: Path, file_filter=None):
 
     margin_style = "body { margin-left: 6%; margin-right: 6%; }"
     img_rule = "img { max-width: 300px; height: auto; cursor: zoom-in; }"
+    pre_rule = (
+        "pre { white-space: pre-wrap; overflow-wrap: anywhere; word-break: break-word; "
+        "overflow-x: auto; max-width: 100%; }\n"
+        "pre code { white-space: inherit; }\n"
+    )
     viewer_css = (
         ".image-viewer-overlay { position: fixed; inset: 0; background: #111; display: none; "
         "align-items: center; justify-content: center; z-index: 9999; }\n"
@@ -93,21 +143,16 @@ def add_margins_to_html_files(directory: Path, file_filter=None):
                 src = img.get("src")
                 if not src:
                     continue
-                parent = img.parent
-                if parent and parent.name == "a" and parent.get("href") == src:
-                    classes = list(parent.get("class") or [])
-                    if not classes and parent.has_attr("class_"):
-                        class_attr = parent.get("class_")
-                        if isinstance(class_attr, list):
-                            classes = class_attr
-                        elif class_attr:
-                            classes = [str(class_attr)]
-                        parent.attrs.pop("class_", None)
-                    if "image-zoom" not in classes:
-                        classes.append("image-zoom")
-                    if classes:
-                        parent["class"] = classes
+
+                anchor_ancestors = _image_anchor_ancestors(img)
+                if anchor_ancestors:
+                    keep_anchor = anchor_ancestors[-1]
+                    for nested_anchor in anchor_ancestors[:-1]:
+                        nested_anchor.unwrap()
+                    _ensure_image_zoom_class(keep_anchor)
+                    _simplify_anchor_image_path(keep_anchor, img)
                     continue
+
                 link = soup.new_tag("a", href=src, target="_blank", rel="noopener")
                 link["class"] = ["image-zoom"]
                 img.replace_with(link)
@@ -117,7 +162,7 @@ def add_margins_to_html_files(directory: Path, file_filter=None):
             if head is None:
                 head = soup.new_tag("head")
                 style_tag = soup.new_tag("style")
-                style_tag.string = margin_style + "\n" + img_rule + "\n" + viewer_css
+                style_tag.string = margin_style + "\n" + img_rule + "\n" + pre_rule + "\n" + viewer_css
                 head.append(style_tag)
                 script_tag = soup.new_tag("script", id="image-viewer")
                 script_tag.string = viewer_script
@@ -133,11 +178,13 @@ def add_margins_to_html_files(directory: Path, file_filter=None):
                         existing = style_tag.string
                     if img_rule not in (style_tag.string or ""):
                         style_tag.string += "\n" + img_rule
+                    if pre_rule not in (style_tag.string or ""):
+                        style_tag.string += "\n" + pre_rule
                     if viewer_css not in (style_tag.string or ""):
                         style_tag.string += "\n" + viewer_css
                 else:
                     style_tag = soup.new_tag("style")
-                    style_tag.string = margin_style + "\n" + img_rule + "\n" + viewer_css
+                    style_tag.string = margin_style + "\n" + img_rule + "\n" + pre_rule + "\n" + viewer_css
                     head.append(style_tag)
                 script_tag = head.find("script", id="image-viewer")
                 if not script_tag:

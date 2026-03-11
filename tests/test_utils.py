@@ -97,6 +97,51 @@ def test_add_margins_wraps_images(tmp_path):
     assert "cursor: zoom-in" in out
 
 
+def test_add_margins_reuses_existing_anchor_and_fixes_nested_image_links(tmp_path):
+    from bs4 import BeautifulSoup
+
+    html = tmp_path / "sample.html"
+    html.write_text(
+        (
+            "<html><head></head><body><figure>"
+            '<a href="https://img.test/full.jpg"><div><picture>'
+            '<a class="image-zoom" href="https://img.test/thumb.jpg">'
+            '<img src="https://img.test/thumb.jpg"></a>'
+            "</picture></div></a>"
+            '<figcaption><a href="https://example.com/caption">Caption</a></figcaption>'
+            "</figure></body></html>"
+        ),
+        encoding="utf-8",
+    )
+
+    utils.add_margins_to_html_files(tmp_path)
+
+    out = html.read_text(encoding="utf-8")
+    soup = BeautifulSoup(out, "html.parser")
+    figure = soup.find("figure")
+    assert figure is not None
+    wrapped = figure.find("a", class_="image-zoom")
+    assert wrapped is not None
+    assert wrapped.get("href") == "https://img.test/full.jpg"
+    assert "image-zoom" in (wrapped.get("class") or [])
+    assert wrapped.find("div") is None
+    assert wrapped.find("picture") is not None
+    img = wrapped.find("img")
+    assert img is not None
+    assert img.get("src") == "https://img.test/thumb.jpg"
+
+
+def test_add_margins_adds_wrapped_pre_styles(tmp_path):
+    html = tmp_path / "sample.html"
+    html.write_text("<html><head></head><body><pre><code>Long prose line</code></pre></body></html>", encoding="utf-8")
+
+    utils.add_margins_to_html_files(tmp_path)
+
+    out = html.read_text(encoding="utf-8")
+    assert "pre { white-space: pre-wrap;" in out
+    assert "pre code { white-space: inherit; }" in out
+
+
 def test_convert_urls_integration():
     """End-to-end test for URL processing (dedupe + conversion)."""
     from utils import convert_urls_to_links
