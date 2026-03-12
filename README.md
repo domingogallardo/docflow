@@ -8,18 +8,118 @@ Podcast snippets are typically captured in [Snipd](https://www.snipd.com) and th
 
 ![docflow architecture](docs/images/docflow-architecture.webp)
 
-## What this repo does now
+## Current functionality
 
 - Single local source of truth: `BASE_DIR` (resolved from `DOCFLOW_BASE_DIR`, typically in `~/.docflow_env`).
-- Single local server: `python utils/docflow_server.py`.
 - Static site output under `BASE_DIR/_site`.
-- Local state under `BASE_DIR/state`.
+- Local workflow state under `BASE_DIR/state`.
 - No remote deploy flow in this repository.
 
-## BASE_DIR Location (Important)
+### Local services currently in use
+
+- Intranet at `http://localhost:8080`
+  - Managed day to day by LaunchAgent `com.domingo.docflow.intranet`.
+  - Serves the generated site plus raw content under `/posts/raw/...`, `/tweets/raw/...`, `/pdfs/raw/...`, `/images/raw/...`, and `/podcasts/raw/...`.
+- RemoteControl at `http://localhost:3000`
+  - Managed by LaunchAgent `com.domingo.remotecontrol.web`.
+  - Exposes an on-demand docflow task (`Docflow: descargar/documentar`) alongside non-docflow tasks.
+
+### Intranet capabilities
+
+`utils/docflow_server.py` currently offers:
+
+- Home page with exact filename search.
+- Browse / Reading / Working / Done views.
+- Browse hides items already in Reading / Working / Done.
+- Highlight-first toggle on list pages.
+- Reading ordered by `reading_at` (oldest first).
+- Working ordered by `working_at` (newest first).
+- Done ordered by `done_at` (newest first).
+- Stage transitions from the UI (`Move to Reading`, `Move to Working`, `Move to Done`, `Back to Browse`, `Reopen to Reading`).
+- Per-article actions in the overlay:
+  - Context link (`Inside Browse`, `Inside Reading`, `Inside Working`, `Inside Done`)
+  - `PDF` export
+  - `MD` export
+  - `Rebuild`
+  - `Delete`
+- Highlight navigation on article pages when highlights exist (`Jump to highlight`, previous/next controls).
+
+### Intranet API
+
+Documented and currently available endpoints:
+
+- `POST /api/to-reading`
+- `POST /api/to-working`
+- `POST /api/to-done`
+- `POST /api/to-browse`
+- `POST /api/reopen`
+- `POST /api/delete`
+- `POST /api/rebuild`
+- `POST /api/rebuild-file`
+- `GET /api/export-pdf?path=<rel_path>`
+- `GET /api/export-markdown?path=<rel_path>`
+- `GET /api/highlights?path=<rel_path>`
+- `PUT /api/highlights?path=<rel_path>`
+
+If `DONE_LINKS_FILE` is set, each `POST /api/to-done` transition appends a Markdown link entry to that file.
+
+### Local state files
+
+All state is stored under `BASE_DIR/state/`:
+
+- `reading.json`: per-path `reading_at` timestamp.
+- `working.json`: per-path `working_at` timestamp.
+- `done.json`: per-path `done_at` timestamp and optional transition metadata copied on `to-done`:
+  - `reading_started_at` (from `reading_at` when moving from Reading to Done)
+  - `working_started_at` (from `working_at` when moving from Working to Done)
+
+These fields allow post-hoc lead-time calculations for completed items (for example `done_at - working_started_at`).
+
+### Background automations currently in use
+
+The current local setup uses both LaunchAgents and `cron`.
+
+LaunchAgents:
+
+- `~/Library/LaunchAgents/com.domingo.docflow.intranet.plist`
+  - Starts the docflow intranet on port `8080`.
+- `~/Library/LaunchAgents/com.domingo.remotecontrol.web.plist`
+  - Starts the RemoteControl web UI on port `3000`.
+
+Current `crontab` jobs related to docflow:
+
+- Every 6 hours: `/Users/domingo/Programacion/computer-ops/ops/bin/docflow_all.sh`
+  - Runs the full ingestion pipeline and rebuilds the intranet outputs.
+- Daily at `02:00`: `/Users/domingo/Programacion/computer-ops/ops/bin/docflow_tweet_daily.sh`
+  - Builds the previous day's consolidated tweets and rebuilds the intranet outputs.
+- Daily at `02:05`: `/Users/domingo/Programacion/computer-ops/ops/bin/docflow_highlights_daily.sh`
+  - Builds the previous day's highlights report Markdown.
+
+The shared cron log is:
+
+```bash
+~/Library/Logs/remotecontrol/docflow.cron.log
+```
+
+### Main folders
+
+`BASE_DIR` is expected to contain:
+
+- `Incoming/`
+- `Posts/Posts <YEAR>/`
+- `Tweets/Tweets <YEAR>/`
+- `Podcasts/Podcasts <YEAR>/`
+- `Pdfs/Pdfs <YEAR>/`
+- `Images/Images <YEAR>/`
+- `_site/` (generated)
+- `state/` (generated)
+
+## Operation and maintenance
+
+### BASE_DIR location
 
 - `BASE_DIR` is no longer hardcoded in `config.py`.
-- `BASE_DIR` now comes from environment variable `DOCFLOW_BASE_DIR`.
+- `BASE_DIR` comes from environment variable `DOCFLOW_BASE_DIR`.
 - Canonical place to set it: `~/.docflow_env`.
 - If `DOCFLOW_BASE_DIR` is missing, importing `config.py` fails with a clear error.
 - For direct commands from this repo, load your environment first:
@@ -37,20 +137,7 @@ export HIGHLIGHTS_DAILY_DIR="/path/to/Obsidian/Subrayados"
 export DONE_LINKS_FILE="/path/to/Obsidian/Leidos.md"
 ```
 
-## Main folders
-
-`BASE_DIR` is expected to contain:
-
-- `Incoming/`
-- `Posts/Posts <YEAR>/`
-- `Tweets/Tweets <YEAR>/`
-- `Podcasts/Podcasts <YEAR>/`
-- `Pdfs/Pdfs <YEAR>/`
-- `Images/Images <YEAR>/`
-- `_site/` (generated)
-- `state/` (generated)
-
-## Requirements
+### Requirements
 
 - Python 3.10+
 - Core dependencies:
@@ -66,7 +153,7 @@ pip install "playwright>=1.55"
 playwright install chromium
 ```
 
-## Quick start
+### Manual quick start
 
 1. Configure environment variables (as needed):
 
@@ -90,7 +177,7 @@ Keep `TWEET_LIKES_STATE` outside the repo so cleanup operations do not delete it
 python process_documents.py all --year 2026
 ```
 
-3. Build local intranet pages:
+3. Build local intranet pages manually:
 
 ```bash
 python utils/build_browse_index.py --base-dir "$DOCFLOW_BASE_DIR"
@@ -99,7 +186,7 @@ python utils/build_working_index.py --base-dir "$DOCFLOW_BASE_DIR"
 python utils/build_done_index.py --base-dir "$DOCFLOW_BASE_DIR"
 ```
 
-4. Run local server:
+4. Run the intranet server manually (mainly for troubleshooting):
 
 ```bash
 source ~/.docflow_env
@@ -113,28 +200,41 @@ source ~/.docflow_env
 python utils/docflow_server.py --base-dir "$DOCFLOW_BASE_DIR" --rebuild-on-start
 ```
 
+### LaunchAgent management
+
 Preferred day-to-day usage is the LaunchAgent-managed intranet service:
 
 ```bash
 launchctl kickstart -k "gui/$(id -u)/com.domingo.docflow.intranet"
 ```
 
-Useful service commands:
+Useful status checks:
 
 ```bash
 launchctl print "gui/$(id -u)/com.domingo.docflow.intranet" | rg 'state =|pid =|last exit code ='
+launchctl print "gui/$(id -u)/com.domingo.remotecontrol.web" | rg 'state =|pid =|last exit code ='
 curl -s -o /dev/null -w '%{http_code}\n' http://127.0.0.1:8080/
+curl -s -o /dev/null -w '%{http_code}\n' http://127.0.0.1:3000/
 ```
 
-If the agent is not loaded yet in a new environment:
+If a LaunchAgent is not loaded yet in a new environment:
 
 ```bash
 launchctl bootstrap "gui/$(id -u)" ~/Library/LaunchAgents/com.domingo.docflow.intranet.plist
+launchctl bootstrap "gui/$(id -u)" ~/Library/LaunchAgents/com.domingo.remotecontrol.web.plist
 ```
 
-## Full document ingestion runner (`bin/docflow.sh`)
+### Cron inspection
 
-Use this command to download/process all document types:
+Inspect the current scheduled jobs with:
+
+```bash
+crontab -l
+```
+
+### Manual runners
+
+Full document ingestion runner:
 
 ```bash
 bash bin/docflow.sh all
@@ -144,7 +244,7 @@ Behavior:
 
 - Loads `~/.docflow_env` if present.
 - Runs `process_documents.py` with your arguments (`all` for full ingestion).
-- Rebuilds intranet browse/reading/working/done pages (`utils/build_browse_index.py`, `utils/build_reading_index.py`, `utils/build_working_index.py`, and `utils/build_done_index.py`) when processing succeeds.
+- Rebuilds intranet browse/reading/working/done pages when processing succeeds.
 
 Optional override:
 
@@ -152,9 +252,7 @@ Optional override:
 INTRANET_BASE_DIR="/path/to/base" bash bin/docflow.sh all
 ```
 
-## Daily tweet consolidation runner (`bin/docflow_tweet_daily.sh`)
-
-Use this dedicated process for daily tweet consolidation:
+Dedicated daily tweet consolidation runner:
 
 ```bash
 bash bin/docflow_tweet_daily.sh
@@ -166,60 +264,19 @@ Behavior:
 - Runs `bin/build_tweet_consolidated.sh --yesterday`.
 - Rebuilds intranet browse/reading/working/done pages when consolidation succeeds.
 
-## Intranet server API
-
-`utils/docflow_server.py` serves:
-
-- Static files from `BASE_DIR/_site`
-- Raw files from `BASE_DIR` routes (`/posts/raw/...`, `/tweets/raw/...`, etc.)
-- `browse` list default ordering: by file recency (items in Reading/Working/Done are hidden from browse)
-- `browse` pages include a top `Highlights first` toggle to prioritize highlighted items
-- `reading` list ordering: by `reading_at` (oldest first)
-- `working` list ordering: by `working_at` (newest first)
-- `done` list ordering: by `done_at` (newest first)
-- `to-done` can be triggered from Browse, Reading, or Working, and preserves stage start metadata in `state/done.json` when available (`reading_started_at`, `working_started_at`)
-- JSON API actions:
-  - `POST /api/to-reading`
-  - `POST /api/to-working`
-  - `POST /api/to-done`
-  - `POST /api/to-browse`
-  - `POST /api/reopen`
-  - `POST /api/delete`
-  - `POST /api/rebuild`
-  - `POST /api/rebuild-file`
-  - `GET /api/export-pdf?path=<rel_path>`
-  - `GET /api/highlights?path=<rel_path>`
-  - `PUT /api/highlights?path=<rel_path>`
-
-If `DONE_LINKS_FILE` is set, each `POST /api/to-done` transition appends a Markdown link entry to that file.
-
-## Local state files
-
-All state is stored under `BASE_DIR/state/`:
-
-- `reading.json`: per-path `reading_at` timestamp.
-- `working.json`: per-path `working_at` timestamp.
-- `done.json`: per-path `done_at` timestamp and optional transition metadata copied on `to-done`:
-  - `reading_started_at` (from `reading_at` when moving from Reading to Done)
-  - `working_started_at` (from `working_at` when moving from Working to Done)
-
-These fields allow post-hoc lead-time calculations for completed items (for example `done_at - working_started_at`).
-
-## Tweet pipeline
-
-- Queue from likes feed:
+Tweet queue from likes feed:
 
 ```bash
 python process_documents.py tweets
 ```
 
-- One-time browser state creation:
+One-time browser state creation:
 
 ```bash
 python utils/create_x_state.py --state-path "$HOME/.secrets/docflow/x_state.json"
 ```
 
-- Daily consolidated tweets helper:
+Daily consolidated tweets helper:
 
 ```bash
 bash bin/build_tweet_consolidated.sh
@@ -234,21 +291,19 @@ to include just-after-midnight downloads in the previous day. Override with
 
 `--cleanup-existing` removes only source tweet `.html` files for consolidated days and keeps source `.md`.
 
-- Daily highlights report helper:
+Daily highlights report helper:
 
 ```bash
 python utils/build_daily_highlights_report.py --day 2026-02-13 --output "/tmp/highlights-2026-02-13.md"
 ```
 
-- Daily highlights report runner (previous day to Obsidian `Subrayados`):
+Daily highlights report runner:
 
 ```bash
 bash bin/docflow_highlights_daily.sh
 ```
 
-## Clipboard Markdown helper (`bin/mdclip`)
-
-Use this helper to clean rich content from the macOS clipboard and convert it to compact Markdown (optimized for Obsidian paste behavior):
+Clipboard Markdown helper:
 
 ```bash
 bin/mdclip
