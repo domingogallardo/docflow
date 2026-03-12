@@ -170,6 +170,17 @@ def test_convert_newlines_to_br_does_not_inject_breaks_in_list_items():
     assert "<p>Item A</p>" in converted
 
 
+def test_convert_newlines_to_br_does_not_treat_pre_as_paragraph():
+    from utils import convert_newlines_to_br
+
+    html = "<pre><code>Intro line\n</code></pre>\n<blockquote>\n<p>Quote</p>\n</blockquote>"
+    converted = convert_newlines_to_br(html)
+
+    assert "</code></pre><br>" not in converted
+    assert "<blockquote><br>" not in converted
+    assert "<pre><code>Intro line\n</code></pre>" in converted
+
+
 def test_markdown_to_html_avoids_list_item_br_artifacts():
     from bs4 import BeautifulSoup
     from utils import markdown_to_html
@@ -188,6 +199,23 @@ def test_markdown_to_html_avoids_list_item_br_artifacts():
 
     soup = BeautifulSoup(html, "html.parser")
     assert len(soup.find_all("li")) == 3
+
+
+def test_markdown_to_html_does_not_inject_breaks_around_pre_blocks():
+    from utils import markdown_to_html
+
+    md = """```
+Intro paragraph in code block
+```
+
+> Quote one
+>
+> Quote two
+"""
+    html = markdown_to_html(md, title="Demo")
+
+    assert "</code></pre><br>" not in html
+    assert "<blockquote><br>" not in html
 
 
 # (tests for Instapaper-starred utils were removed)

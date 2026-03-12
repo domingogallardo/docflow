@@ -128,8 +128,8 @@ def convert_newlines_to_br(html_text: str) -> str:
 
         return f"{tag_open}{content_with_br}{tag_close}"
 
-    html_text = re.sub(r'(<p[^>]*>)(.*?)(</p>)', replace_in_content, html_text, flags=re.DOTALL)
-    return re.sub(r'(<div[^>]*>)(.*?)(</div>)', replace_in_content, html_text, flags=re.DOTALL)
+    html_text = re.sub(r'(<p\b[^>]*>)(.*?)(</p>)', replace_in_content, html_text, flags=re.DOTALL)
+    return re.sub(r'(<div\b[^>]*>)(.*?)(</div>)', replace_in_content, html_text, flags=re.DOTALL)
 
 
 def markdown_to_html(md_text: str, title: str = None) -> str:
