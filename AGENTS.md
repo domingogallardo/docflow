@@ -31,7 +31,6 @@ This repository automates collecting and organizing personal documents (Instapap
 - Single source of truth: `BASE_DIR`.
 - Generated site: `BASE_DIR/_site/`.
 - Local state: `BASE_DIR/state/` (`reading.json`, `working.json`, `done.json`, `highlights/`).
-- No remote deploy flow in this repository.
 
 ## Git: Pre-commit/push checks
 

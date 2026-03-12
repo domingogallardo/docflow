@@ -13,7 +13,6 @@ Podcast snippets are typically captured in [Snipd](https://www.snipd.com) and th
 - Single local source of truth: `BASE_DIR` (resolved from `DOCFLOW_BASE_DIR`, typically in `~/.docflow_env`).
 - Static site output under `BASE_DIR/_site`.
 - Local workflow state under `BASE_DIR/state`.
-- No remote deploy flow in this repository.
 
 ### Local services currently in use
 
