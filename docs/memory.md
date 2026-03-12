@@ -59,7 +59,6 @@ This file stores stable, reusable operational notes for future agent runs.
 - Local intranet default port is standardized to `8080`.
 - Keep defaults aligned in:
   - `utils/docflow_server.py` (`DOCFLOW_PORT` fallback)
-  - `utils/random-post.py` (fallback base URL)
 - Documentation examples should use `http://localhost:8080` unless explicitly overridden.
 
 ### Intranet Launch And LaunchAgent
