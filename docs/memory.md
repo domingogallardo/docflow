@@ -84,7 +84,7 @@ This file stores stable, reusable operational notes for future agent runs.
 
 ### BASE_DIR Source
 
-- `BASE_DIR` is resolved from env var `DOCFLOW_BASE_DIR` (not hardcoded in `config.py`).
+- `BASE_DIR` is resolved from env var `DOCFLOW_BASE_DIR`.
 - Canonical place to define it: `~/.docflow_env`.
 - For direct shell commands in this repo, run `source ~/.docflow_env` first so imports of `config.py` work consistently.
 - Keep related env vars in the same file when possible (`INTRANET_BASE_DIR`, `HIGHLIGHTS_DAILY_DIR`, `TWEET_LIKES_STATE`).

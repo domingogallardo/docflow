@@ -117,7 +117,6 @@ The shared cron log is:
 
 ### BASE_DIR location
 
-- `BASE_DIR` is no longer hardcoded in `config.py`.
 - `BASE_DIR` comes from environment variable `DOCFLOW_BASE_DIR`.
 - Canonical place to set it: `~/.docflow_env`.
 - If `DOCFLOW_BASE_DIR` is missing, importing `config.py` fails with a clear error.
