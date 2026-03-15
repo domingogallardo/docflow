@@ -2,12 +2,16 @@
 """ImageProcessor - manage images in the yearly pipeline."""
 from __future__ import annotations
 
+import re
 from pathlib import Path
 from typing import List
 import html
 from urllib.parse import quote
 
+import config as cfg
 import utils as U
+from image_ai import ImageAIDescriber
+from openai_client import build_openai_client
 from path_utils import unique_path
 
 
@@ -16,10 +20,18 @@ class ImageProcessor:
 
     SUPPORTED_EXTS = {".jpg", ".jpeg", ".png", ".gif", ".bmp", ".tiff", ".webp"}
 
-    def __init__(self, incoming_dir: Path, destination_dir: Path):
+    def __init__(
+        self,
+        incoming_dir: Path,
+        destination_dir: Path,
+        image_namer: ImageAIDescriber | None = None,
+    ) -> None:
         self.incoming_dir = incoming_dir
         self.destination_dir = destination_dir
         self.gallery_name = "gallery.html"
+        self.image_namer = image_namer or ImageAIDescriber(
+            build_openai_client(cfg.OPENAI_KEY)
+        )
 
     def process_images(self) -> List[Path]:
         """Move images from Incoming and update the yearly gallery."""
@@ -34,9 +46,12 @@ class ImageProcessor:
 
         moved: List[Path] = []
         for image_path in images:
-            dest_path = self._unique_destination(image_path.name)
+            target_filename = self._build_target_filename(image_path)
+            dest_path = self._unique_destination(target_filename)
             image_path.rename(dest_path)
             moved.append(dest_path)
+            if dest_path.name != image_path.name:
+                print(f"🖼️ Renamed {image_path.name} -> {dest_path.name}")
 
         self._build_gallery()
 
@@ -47,9 +62,24 @@ class ImageProcessor:
     def _list_incoming_images(self) -> List[Path]:
         return [p for p in U.list_files(self.SUPPORTED_EXTS, root=self.incoming_dir)]
 
+    def _build_target_filename(self, image_path: Path) -> str:
+        description = self.image_namer.describe_filename(image_path)
+        if not description:
+            return image_path.name
+        normalized = self._normalize_stem(description)
+        if not normalized:
+            return image_path.name
+        return f"{normalized}{image_path.suffix}"
+
     def _unique_destination(self, filename: str) -> Path:
         base = self.destination_dir / filename
         return unique_path(base)
+
+    @staticmethod
+    def _normalize_stem(value: str) -> str:
+        normalized = value.replace("_", " ")
+        normalized = re.sub(r"\s+", " ", normalized)
+        return normalized.strip(" .-_")
 
     def _build_gallery(self) -> None:
         images = [

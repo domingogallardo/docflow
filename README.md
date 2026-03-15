@@ -13,6 +13,7 @@ Podcast snippets are typically captured in [Snipd](https://www.snipd.com) and th
 - Single local source of truth: `BASE_DIR` (resolved from `DOCFLOW_BASE_DIR`, typically in `~/.docflow_env`).
 - Static site output under `BASE_DIR/_site`.
 - Local workflow state under `BASE_DIR/state`.
+- Image ingestion moves files into the yearly folder and, when `OPENAI_API_KEY` is configured, renames them with an AI-generated descriptive filename before rebuilding the gallery.
 
 ### Local services currently in use
 
