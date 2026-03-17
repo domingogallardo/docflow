@@ -15,7 +15,7 @@ if __package__ in (None, ""):
     if str(_REPO_ROOT) not in sys.path:
         sys.path.insert(0, str(_REPO_ROOT))
 
-from utils.highlight_store import has_highlights_for_path
+from utils.highlight_store import highlight_status_for_path
 from utils.site_paths import raw_url_for_rel_path, resolve_base_dir, resolve_library_path, site_root
 from utils.site_state import load_reading_state
 
@@ -47,6 +47,7 @@ class SiteReadingItem(NamedTuple):
     mtime: float
     sort_mtime: float
     highlighted: bool
+    highlight_last_epoch: float | None
 
 
 def _icon_for(name: str) -> str:
@@ -58,10 +59,10 @@ def _icon_for(name: str) -> str:
     return ""
 
 
-def _is_site_highlighted(base_dir: Path, rel_path: str) -> bool:
+def _site_highlight_status(base_dir: Path, rel_path: str) -> tuple[bool, float | None]:
     if not Path(rel_path).name.lower().endswith((".html", ".htm")):
-        return False
-    return has_highlights_for_path(base_dir, rel_path)
+        return False, None
+    return highlight_status_for_path(base_dir, rel_path)
 
 
 def _actions_html(item: SiteReadingItem) -> str:
@@ -119,13 +120,15 @@ def collect_site_reading_items(base_dir: Path) -> list[SiteReadingItem]:
             reading_mtime = _iso_to_epoch(reading_entry.get("reading_at"))
         display_mtime = st.st_mtime
         effective_mtime = reading_mtime if reading_mtime is not None else display_mtime
+        highlighted, highlight_last_epoch = _site_highlight_status(base_dir, rel)
         items.append(
             SiteReadingItem(
                 rel_path=rel,
                 name=abs_path.name,
                 mtime=display_mtime,
                 sort_mtime=effective_mtime,
-                highlighted=_is_site_highlighted(base_dir, rel),
+                highlighted=highlighted,
+                highlight_last_epoch=highlight_last_epoch,
             )
         )
 
@@ -148,6 +151,7 @@ def build_site_reading_html(items: list[SiteReadingItem]) -> str:
             row_attrs = (
                 "data-dg-sortable='1' "
                 f"data-dg-highlighted='{'1' if item.highlighted else '0'}' "
+                f"data-dg-highlight-last='{(item.highlight_last_epoch or 0):.6f}' "
                 f"data-dg-sort-mtime='{item.sort_mtime:.6f}' "
                 f"data-dg-name='{html.escape(item.name.lower(), quote=True)}'"
             )

@@ -16,7 +16,7 @@ if __package__ in (None, ""):
     if str(_REPO_ROOT) not in sys.path:
         sys.path.insert(0, str(_REPO_ROOT))
 
-from utils.highlight_store import has_highlights_for_path
+from utils.highlight_store import highlight_status_for_path
 from utils.site_paths import raw_url_for_rel_path, resolve_base_dir, resolve_library_path, site_root
 from utils.site_state import load_working_state
 
@@ -48,6 +48,8 @@ class SiteWorkingItem(NamedTuple):
     mtime: float
     sort_mtime: float
     highlighted: bool
+    highlight_last_epoch: float | None
+
 
 def _icon_for(name: str) -> str:
     lower = name.lower()
@@ -57,12 +59,10 @@ def _icon_for(name: str) -> str:
         return '<span class="file-icon html-icon" aria-hidden="true">📄</span> '
     return ""
 
-
-
-def _is_site_highlighted(base_dir: Path, rel_path: str) -> bool:
+def _site_highlight_status(base_dir: Path, rel_path: str) -> tuple[bool, float | None]:
     if not Path(rel_path).name.lower().endswith((".html", ".htm")):
-        return False
-    return has_highlights_for_path(base_dir, rel_path)
+        return False, None
+    return highlight_status_for_path(base_dir, rel_path)
 
 
 def _actions_html(item: SiteWorkingItem) -> str:
@@ -75,8 +75,6 @@ def _actions_html(item: SiteWorkingItem) -> str:
         f"<button data-api-action=\"to-done\" data-docflow-path=\"{path_attr}\">Move to Done</button>"
         "</span>"
     )
-
-
 
 def _iso_to_epoch(value: object) -> float | None:
     if not isinstance(value, str):
@@ -120,20 +118,20 @@ def collect_site_working_items(base_dir: Path) -> list[SiteWorkingItem]:
             working_mtime = _iso_to_epoch(working_entry.get("working_at"))
         display_mtime = st.st_mtime
         effective_mtime = working_mtime if working_mtime is not None else display_mtime
+        highlighted, highlight_last_epoch = _site_highlight_status(base_dir, rel)
         items.append(
             SiteWorkingItem(
                 rel_path=rel,
                 name=abs_path.name,
                 mtime=display_mtime,
                 sort_mtime=effective_mtime,
-                highlighted=_is_site_highlighted(base_dir, rel),
+                highlighted=highlighted,
+                highlight_last_epoch=highlight_last_epoch,
             )
         )
 
     items.sort(key=lambda item: item.sort_mtime, reverse=True)
     return items
-
-
 
 def build_site_working_html(items: list[SiteWorkingItem]) -> str:
     title = f"Working ({len(items)})"
@@ -150,6 +148,7 @@ def build_site_working_html(items: list[SiteWorkingItem]) -> str:
             row_attrs = (
                 "data-dg-sortable='1' "
                 f"data-dg-highlighted='{'1' if item.highlighted else '0'}' "
+                f"data-dg-highlight-last='{(item.highlight_last_epoch or 0):.6f}' "
                 f"data-dg-sort-mtime='{item.sort_mtime:.6f}' "
                 f"data-dg-name='{html.escape(item.name.lower(), quote=True)}'"
             )
@@ -174,8 +173,6 @@ def build_site_working_html(items: list[SiteWorkingItem]) -> str:
         + "</body></html>"
     )
 
-
-
 def _copy_site_working_assets(out_dir: Path) -> None:
     source = Path(__file__).resolve().parent / "static" / "article.js"
     if not source.is_file():
@@ -183,8 +180,6 @@ def _copy_site_working_assets(out_dir: Path) -> None:
 
     target = out_dir / "article.js"
     target.write_text(source.read_text(encoding="utf-8"), encoding="utf-8")
-
-
 
 def write_site_working_index(base_dir: Path, output_dir: Path | None = None) -> Path:
     out_dir = output_dir or (site_root(base_dir) / "working")
@@ -208,15 +203,11 @@ def write_site_working_index(base_dir: Path, output_dir: Path | None = None) -> 
     _copy_site_working_assets(out_dir)
     return out_path
 
-
-
 def parse_args(argv: list[str]) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Build intranet Working index pages.")
     parser.add_argument("--base-dir", help="BASE_DIR with Incoming/Posts/Tweets/... and _site/")
     parser.add_argument("--output-dir", help="Output dir (default BASE_DIR/_site/working)")
     return parser.parse_args(argv)
-
-
 
 def main(argv: list[str]) -> int:
     args = parse_args(argv[1:])

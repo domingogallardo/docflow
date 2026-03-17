@@ -21,6 +21,27 @@ def _utc_now_iso() -> str:
     return datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
 
 
+def _iso_to_epoch(value: object) -> float | None:
+    if not isinstance(value, str):
+        return None
+
+    iso_value = value.strip()
+    if not iso_value:
+        return None
+
+    if iso_value.endswith("Z"):
+        iso_value = iso_value[:-1] + "+00:00"
+
+    try:
+        parsed = datetime.fromisoformat(iso_value)
+    except ValueError:
+        return None
+
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=timezone.utc)
+    return parsed.timestamp()
+
+
 def highlights_state_root(base_dir: Path) -> Path:
     return state_root(base_dir) / "highlights"
 
@@ -119,6 +140,33 @@ def load_highlights_for_path(base_dir: Path, rel_path: str) -> dict[str, Any]:
     return _coerce_payload(normalized, {"highlights": []})
 
 
+def latest_highlight_epoch(payload: dict[str, Any]) -> float | None:
+    highlights = payload.get("highlights")
+    latest_epoch: float | None = None
+    if isinstance(highlights, list):
+        for item in highlights:
+            if not isinstance(item, dict):
+                continue
+            created_epoch = _iso_to_epoch(item.get("created_at"))
+            if created_epoch is None:
+                continue
+            if latest_epoch is None or created_epoch > latest_epoch:
+                latest_epoch = created_epoch
+
+    if latest_epoch is not None:
+        return latest_epoch
+    return _iso_to_epoch(payload.get("updated_at"))
+
+
+def highlight_status_for_path(base_dir: Path, rel_path: str) -> tuple[bool, float | None]:
+    payload = load_highlights_for_path(base_dir, rel_path)
+    highlights = payload.get("highlights")
+    has_highlights = isinstance(highlights, list) and bool(highlights)
+    if not has_highlights:
+        return False, None
+    return True, latest_highlight_epoch(payload)
+
+
 def save_highlights_for_path(base_dir: Path, rel_path: str, payload: dict[str, Any]) -> dict[str, Any]:
     normalized = normalize_rel_path(rel_path)
     normalized_payload = _coerce_payload(normalized, payload)
@@ -135,6 +183,4 @@ def save_highlights_for_path(base_dir: Path, rel_path: str, payload: dict[str, A
 
 
 def has_highlights_for_path(base_dir: Path, rel_path: str) -> bool:
-    payload = load_highlights_for_path(base_dir, rel_path)
-    highlights = payload.get("highlights")
-    return isinstance(highlights, list) and bool(highlights)
+    return highlight_status_for_path(base_dir, rel_path)[0]

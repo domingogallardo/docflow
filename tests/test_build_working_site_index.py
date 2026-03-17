@@ -5,7 +5,6 @@ from utils import build_working_index
 from utils import highlight_store
 from utils import site_state
 
-
 def test_write_site_working_index_uses_working_state(tmp_path: Path):
     base = tmp_path / "base"
     posts = base / "Posts" / "Posts 2026"
@@ -15,10 +14,13 @@ def test_write_site_working_index_uses_working_state(tmp_path: Path):
     html.write_text("<html><body>Doc</body></html>", encoding="utf-8")
 
     site_state.set_working_path(base, "Posts/Posts 2026/doc.html")
-    highlight_store.save_highlights_for_path(
+    saved_highlights = highlight_store.save_highlights_for_path(
         base,
         "Posts/Posts 2026/doc.html",
-        {"highlights": [{"id": "h1", "text": "Doc"}]},
+        {
+            "updated_at": "2026-02-03T10:06:00Z",
+            "highlights": [{"id": "h1", "text": "Doc", "created_at": "2026-02-03T10:05:00Z"}],
+        },
     )
 
     out = build_working_index.write_site_working_index(base)
@@ -38,6 +40,7 @@ def test_write_site_working_index_uses_working_state(tmp_path: Path):
     assert "Highlight: off" in content
     assert "data-dg-sortable='1'" in content
     assert "data-dg-highlighted='1'" in content
+    assert f"data-dg-highlight-last='{highlight_store.latest_highlight_epoch(saved_highlights):.6f}'" in content
     assert "data-dg-sort-mtime=" in content
     assert "<script src=\"/assets/browse-sort.js\" defer></script>" in content
     assert "<h2>Tweets</h2>" not in content

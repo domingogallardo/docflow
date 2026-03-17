@@ -4,7 +4,6 @@ from utils import build_done_index
 from utils import highlight_store
 from utils import site_state
 
-
 def test_write_site_done_index_uses_done_state(tmp_path: Path):
     base = tmp_path / "base"
     posts = base / "Posts" / "Posts 2026"
@@ -14,10 +13,13 @@ def test_write_site_done_index_uses_done_state(tmp_path: Path):
     html.write_text("<html><body>Doc</body></html>", encoding="utf-8")
 
     site_state.set_done_path(base, "Posts/Posts 2026/doc.html")
-    highlight_store.save_highlights_for_path(
+    saved_highlights = highlight_store.save_highlights_for_path(
         base,
         "Posts/Posts 2026/doc.html",
-        {"highlights": [{"id": "h1", "text": "Doc"}]},
+        {
+            "updated_at": "2026-02-03T10:06:00Z",
+            "highlights": [{"id": "h1", "text": "Doc", "created_at": "2026-02-03T10:05:00Z"}],
+        },
     )
 
     out = build_done_index.write_site_done_index(base)
@@ -32,6 +34,10 @@ def test_write_site_done_index_uses_done_state(tmp_path: Path):
     assert "data-dg-sort-toggle" in content
     assert "Highlight: off" in content
     assert "data-dg-highlighted='1'" in content
+    assert f"data-dg-highlight-last='{highlight_store.latest_highlight_epoch(saved_highlights):.6f}'" in content
+    assert "data-dg-group-year='2026'" in content
+    assert 'data-dg-highlight-view="default"' in content
+    assert 'data-dg-highlight-view="highlight"' in content
     assert "data-dg-sort-mtime=" in content
     assert "data-dg-working" not in content
     assert "data-dg-done" not in content
@@ -125,3 +131,35 @@ def test_done_index_falls_back_to_path_year_when_done_at_missing(tmp_path: Path)
 
     assert '<h2 class="dg-year">2025</h2>' in content
     assert "legacy.html" in content
+
+
+def test_done_highlight_view_promotes_old_item_to_highlight_year(tmp_path: Path):
+    base = tmp_path / "base"
+    posts_2024 = base / "Posts" / "Posts 2024"
+    posts_2024.mkdir(parents=True)
+    (posts_2024 / "legacy.html").write_text("<html><body>Legacy</body></html>", encoding="utf-8")
+
+    site_state.save_done_state(
+        base,
+        {"version": site_state.STATE_VERSION, "items": {"Posts/Posts 2024/legacy.html": {}}},
+    )
+    highlight_store.save_highlights_for_path(
+        base,
+        "Posts/Posts 2024/legacy.html",
+        {
+            "updated_at": "2026-03-17T10:05:00Z",
+            "highlights": [{"id": "h1", "text": "Legacy", "created_at": "2026-03-17T10:05:00Z"}],
+        },
+    )
+
+    out = build_done_index.write_site_done_index(base)
+    content = out.read_text(encoding="utf-8")
+
+    default_view = content.split('data-dg-highlight-view="default"', 1)[1].split('data-dg-highlight-view="highlight"', 1)[0]
+    highlight_view = content.split('data-dg-highlight-view="highlight"', 1)[1]
+
+    assert '<h2 class="dg-year">2024</h2>' in default_view
+    assert "legacy.html" in default_view
+    assert "data-dg-group-year='2024'" in highlight_view
+    assert '<h2 class="dg-year">2026</h2>' in highlight_view
+    assert highlight_view.find('<h2 class="dg-year">2026</h2>') < highlight_view.find("legacy.html")

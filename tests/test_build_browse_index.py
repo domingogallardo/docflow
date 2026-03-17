@@ -6,7 +6,6 @@ from utils import build_browse_index
 from utils import highlight_store
 from utils import site_state
 
-
 def test_build_browse_site_generates_indexes_and_actions(tmp_path: Path):
     base = tmp_path / "base"
     posts = base / "Posts" / "Posts 2026"
@@ -33,10 +32,13 @@ def test_build_browse_site_generates_indexes_and_actions(tmp_path: Path):
     stale_incoming.mkdir(parents=True)
     (stale_incoming / "index.html").write_text("<p>stale incoming</p>", encoding="utf-8")
 
-    highlight_store.save_highlights_for_path(
+    saved_highlights = highlight_store.save_highlights_for_path(
         base,
         "Posts/Posts 2026/doc.html",
-        {"highlights": [{"id": "h1", "text": "Doc"}]},
+        {
+            "updated_at": "2026-02-03T10:06:00Z",
+            "highlights": [{"id": "h1", "text": "Doc", "created_at": "2026-02-03T10:05:00Z"}],
+        },
     )
 
     counts = build_browse_index.build_browse_site(base)
@@ -80,6 +82,14 @@ def test_build_browse_site_generates_indexes_and_actions(tmp_path: Path):
     assert "ul.dg-index, ul.dg-done-list, ul.dg-reading-list, ul.dg-working-list" in browse_sort_content
     assert "data-dg-sort-direction" in browse_sort_content
     assert "defaultSortDirection" in browse_sort_content
+    assert 'data-dg-highlight-view="default"' in browse_sort_content
+    assert "renderDoneViews" in browse_sort_content
+    assert "highlightPreferenceKey = 'docflow.highlight-sort'" in browse_sort_content
+    assert "window.localStorage.getItem(highlightPreferenceKey) === 'on'" in browse_sort_content
+    assert "window.localStorage.setItem(highlightPreferenceKey, highlightsFirst ? 'on' : 'off')" in browse_sort_content
+    assert "syncToggleState(toggle, highlightsFirst)" in browse_sort_content
+    assert "dataset.dgHighlightLast" in browse_sort_content
+    assert "bLast - aLast" in browse_sort_content
     assert "dgWorking" not in browse_sort_content
 
     root_content = posts_root_page.read_text(encoding="utf-8")
@@ -102,6 +112,7 @@ def test_build_browse_site_generates_indexes_and_actions(tmp_path: Path):
     assert "data-dg-working" not in content
     assert "data-dg-done" not in content
     assert "data-dg-highlighted='1'" in content
+    assert f"data-dg-highlight-last='{highlight_store.latest_highlight_epoch(saved_highlights):.6f}'" in content
     assert "<script src='/assets/browse-sort.js' defer></script>" in content
     assert 'data-api-action="to-reading"' not in content
     assert '/posts/raw/Posts%202026/doc.html' in content

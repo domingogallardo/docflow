@@ -33,7 +33,7 @@ from utils.site_paths import (
     resolve_base_dir,
     site_root,
 )
-from utils.highlight_store import has_highlights_for_path
+from utils.highlight_store import highlight_status_for_path
 from utils.site_state import load_done_state, load_reading_state, load_working_state
 
 CATEGORY_KEYS = ("posts", "tweets", "podcasts", "pdfs", "images")
@@ -59,6 +59,7 @@ class BrowseItem:
     reading: bool
     working: bool
     highlighted: bool
+    highlight_last_epoch: float | None = None
     sort_mtime: float | None = None
 
 
@@ -71,6 +72,7 @@ class BrowseEntry:
     icon: str
     rel_path: str | None = None
     highlighted: bool = False
+    highlight_last_epoch: float | None = None
     sort_mtime: float | None = None
     item_count: int | None = None
 
@@ -103,11 +105,11 @@ def _icon_for_filename(name: str) -> str:
     return ""
 
 
-def _is_highlighted(base_dir: Path, rel_path: str) -> bool:
+def _highlight_status(base_dir: Path, rel_path: str) -> tuple[bool, float | None]:
     low_name = Path(rel_path).name.lower()
     if not low_name.endswith((".html", ".htm")):
-        return False
-    return has_highlights_for_path(base_dir, rel_path)
+        return False, None
+    return highlight_status_for_path(base_dir, rel_path)
 
 
 def _entry_classes(entry: BrowseEntry) -> str:
@@ -153,6 +155,7 @@ def _render_entry(entry: BrowseEntry) -> str:
     attr_bits = [
         "data-dg-sortable='1'",
         f"data-dg-highlighted='{'1' if entry.highlighted else '0'}'",
+        f"data-dg-highlight-last='{(entry.highlight_last_epoch or 0):.6f}'",
         f"data-dg-sort-mtime='{_sort_mtime(entry):.6f}'",
         f"data-dg-name='{html.escape(entry.name.lower(), quote=True)}'",
     ]
@@ -594,6 +597,7 @@ def _scan_directory(
 
                 display_mtime = st.st_mtime
                 effective_mtime = display_mtime
+                highlighted, highlight_last_epoch = _highlight_status(base_dir, rel)
                 entries.append(
                     BrowseEntry(
                         name=name,
@@ -603,7 +607,8 @@ def _scan_directory(
                         is_dir=False,
                         icon=_icon_for_filename(name),
                         rel_path=rel,
-                        highlighted=_is_highlighted(base_dir, rel),
+                        highlighted=highlighted,
+                        highlight_last_epoch=highlight_last_epoch,
                     )
                 )
     except OSError:
@@ -870,11 +875,39 @@ def ensure_assets(base_dir: Path) -> None:
     return Number.isFinite(num) ? num : 0;
   }
 
+  const highlightPreferenceKey = 'docflow.highlight-sort';
+
+  function loadHighlightPreference() {
+    try {
+      return window.localStorage.getItem(highlightPreferenceKey) === 'on';
+    } catch (error) {
+      return false;
+    }
+  }
+
+  function saveHighlightPreference(highlightsFirst) {
+    try {
+      window.localStorage.setItem(highlightPreferenceKey, highlightsFirst ? 'on' : 'off');
+    } catch (error) {}
+  }
+
+  function syncToggleState(toggle, highlightsFirst) {
+    toggle.textContent = highlightsFirst ? 'Highlight: on' : 'Highlight: off';
+    toggle.classList.toggle('is-active', highlightsFirst);
+    toggle.setAttribute('aria-pressed', highlightsFirst ? 'true' : 'false');
+  }
+
   function compareEntries(a, b, highlightsFirst, sortDirection) {
     if (highlightsFirst) {
       const aHl = a.dataset.dgHighlighted === '1' ? 0 : 1;
       const bHl = b.dataset.dgHighlighted === '1' ? 0 : 1;
       if (aHl !== bHl) return aHl - bHl;
+
+      if (aHl === 0) {
+        const aLast = asNumber(a.dataset.dgHighlightLast);
+        const bLast = asNumber(b.dataset.dgHighlightLast);
+        if (aLast !== bLast) return bLast - aLast;
+      }
     }
 
     const aSort = asNumber(a.dataset.dgSortMtime);
@@ -891,6 +924,37 @@ def ensure_assets(base_dir: Path) -> None:
 
   document.addEventListener('DOMContentLoaded', () => {
     const toggle = document.querySelector('[data-dg-sort-toggle]');
+    const doneDefaultView = document.querySelector('[data-dg-highlight-view="default"]');
+    const doneHighlightView = document.querySelector('[data-dg-highlight-view="highlight"]');
+    if (toggle && doneDefaultView && doneHighlightView) {
+      const hasDoneItems = !!doneDefaultView.querySelector('li[data-dg-sortable="1"]');
+      let highlightsFirst = loadHighlightPreference();
+
+      if (!hasDoneItems) {
+        syncToggleState(toggle, highlightsFirst);
+        toggle.setAttribute('disabled', '');
+        doneDefaultView.hidden = highlightsFirst;
+        doneHighlightView.hidden = !highlightsFirst;
+        return;
+      }
+
+      function renderDoneViews() {
+        doneDefaultView.hidden = highlightsFirst;
+        doneHighlightView.hidden = !highlightsFirst;
+        syncToggleState(toggle, highlightsFirst);
+      }
+
+      toggle.addEventListener('click', () => {
+        if (!hasDoneItems) return;
+        highlightsFirst = !highlightsFirst;
+        saveHighlightPreference(highlightsFirst);
+        renderDoneViews();
+      });
+
+      renderDoneViews();
+      return;
+    }
+
     const lists = Array.from(document.querySelectorAll('ul.dg-index, ul.dg-done-list, ul.dg-reading-list, ul.dg-working-list'));
     if (!toggle || lists.length === 0) return;
 
@@ -905,7 +969,10 @@ def ensure_assets(base_dir: Path) -> None:
       return { list, sortableFiles };
     }).filter((group) => group.sortableFiles.length > 0);
 
+    let highlightsFirst = loadHighlightPreference();
+
     if (groups.length === 0) {
+      syncToggleState(toggle, highlightsFirst);
       toggle.setAttribute('disabled', '');
       return;
     }
@@ -913,7 +980,6 @@ def ensure_assets(base_dir: Path) -> None:
     const defaultSortDirection = (toggle.getAttribute('data-dg-sort-direction') || 'desc').toLowerCase() === 'asc'
       ? 'asc'
       : 'desc';
-    let highlightsFirst = false;
 
     function renderOrder() {
       for (const group of groups) {
@@ -924,13 +990,12 @@ def ensure_assets(base_dir: Path) -> None:
           group.list.appendChild(node);
         }
       }
-      toggle.textContent = highlightsFirst ? 'Highlight: on' : 'Highlight: off';
-      toggle.classList.toggle('is-active', highlightsFirst);
-      toggle.setAttribute('aria-pressed', highlightsFirst ? 'true' : 'false');
+      syncToggleState(toggle, highlightsFirst);
     }
 
     toggle.addEventListener('click', () => {
       highlightsFirst = !highlightsFirst;
+      saveHighlightPreference(highlightsFirst);
       renderOrder();
     });
 
@@ -1014,6 +1079,7 @@ def collect_category_items(base_dir: Path, category: str) -> list[BrowseItem]:
             effective_mtime = done_at_mtime
         else:
             effective_mtime = display_mtime
+        highlighted, highlight_last_epoch = _highlight_status(base_dir, rel)
 
         items.append(
             BrowseItem(
@@ -1023,7 +1089,8 @@ def collect_category_items(base_dir: Path, category: str) -> list[BrowseItem]:
                 sort_mtime=effective_mtime,
                 reading=is_reading,
                 working=is_working,
-                highlighted=_is_highlighted(base_dir, rel),
+                highlighted=highlighted,
+                highlight_last_epoch=highlight_last_epoch,
             )
         )
 

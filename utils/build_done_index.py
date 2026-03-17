@@ -16,7 +16,7 @@ if __package__ in (None, ""):
     if str(_REPO_ROOT) not in sys.path:
         sys.path.insert(0, str(_REPO_ROOT))
 
-from utils.highlight_store import has_highlights_for_path
+from utils.highlight_store import highlight_status_for_path
 from utils.site_paths import raw_url_for_rel_path, resolve_base_dir, resolve_library_path, site_root
 from utils.site_state import load_done_state
 
@@ -52,6 +52,7 @@ class SiteDoneItem(NamedTuple):
     sort_mtime: float
     group_year: str
     highlighted: bool
+    highlight_last_epoch: float | None
 
 
 def _icon_for(name: str) -> str:
@@ -63,10 +64,10 @@ def _icon_for(name: str) -> str:
     return ""
 
 
-def _is_site_highlighted(base_dir: Path, rel_path: str) -> bool:
+def _site_highlight_status(base_dir: Path, rel_path: str) -> tuple[bool, float | None]:
     if not Path(rel_path).name.lower().endswith((".html", ".htm")):
-        return False
-    return has_highlights_for_path(base_dir, rel_path)
+        return False, None
+    return highlight_status_for_path(base_dir, rel_path)
 
 
 def _actions_html(item: SiteDoneItem) -> str:
@@ -110,22 +111,79 @@ def _year_for_item(rel_path: str) -> str:
     return "Unknown"
 
 
-def _group_items_by_year(items: list[SiteDoneItem]) -> list[tuple[str, list[SiteDoneItem]]]:
-    grouped: dict[str, list[SiteDoneItem]] = {}
-    for item in items:
-        grouped.setdefault(item.group_year, []).append(item)
-
+def _sort_year_keys(years: list[str]) -> list[str]:
     def _sort_key(year: str) -> tuple[int, int | str]:
         if year.isdigit():
             return (0, -int(year))
         return (1, year.lower())
 
-    ordered_years = sorted(grouped.keys(), key=_sort_key)
-    return [(year, grouped[year]) for year in ordered_years]
+    return sorted(years, key=_sort_key)
 
 
 def _year_from_epoch(epoch: float) -> str:
     return str(datetime.fromtimestamp(epoch, tz=timezone.utc).year)
+
+
+def _highlight_group_year(item: SiteDoneItem) -> str:
+    if item.highlighted and item.highlight_last_epoch is not None:
+        return _year_from_epoch(item.highlight_last_epoch)
+    return item.group_year
+
+
+def _render_done_sections(
+    items: list[SiteDoneItem],
+    *,
+    highlight_mode: bool,
+    hidden: bool,
+) -> str:
+    if not items:
+        hidden_attr = " hidden" if hidden else ""
+        return f'<div class="dg-done-sections" data-dg-highlight-view="{"highlight" if highlight_mode else "default"}"{hidden_attr}><ul class="dg-done-list"></ul></div>'
+
+    grouped: dict[str, list[SiteDoneItem]] = {}
+    for item in items:
+        year = _highlight_group_year(item) if highlight_mode else item.group_year
+        grouped.setdefault(year, []).append(item)
+
+    sections: list[str] = []
+    for year in _sort_year_keys(list(grouped.keys())):
+        year_items = grouped[year]
+        if highlight_mode:
+            year_items = sorted(
+                year_items,
+                key=lambda item: (
+                    0 if item.highlighted else 1,
+                    -(item.highlight_last_epoch or 0),
+                    -item.sort_mtime,
+                    item.name.lower(),
+                ),
+            )
+
+        lines: list[str] = [f'<h2 class="dg-year">{html.escape(year)}</h2>', '<ul class="dg-done-list">']
+        for item in year_items:
+            href = raw_url_for_rel_path(item.rel_path)
+            icon = _icon_for(item.name)
+            hl_icon = '<span class="file-icon hl-icon" aria-hidden="true">🟡</span> ' if item.highlighted else ""
+            esc_name = html.escape(item.name)
+            row_class = ' class="dg-hl"' if item.highlighted else ""
+            row_attrs = (
+                "data-dg-sortable='1' "
+                f"data-dg-highlighted='{'1' if item.highlighted else '0'}' "
+                f"data-dg-highlight-last='{(item.highlight_last_epoch or 0):.6f}' "
+                f"data-dg-group-year='{html.escape(item.group_year, quote=True)}' "
+                f"data-dg-sort-mtime='{item.sort_mtime:.6f}' "
+                f"data-dg-name='{html.escape(item.name.lower(), quote=True)}'"
+            )
+            actions = _actions_html(item)
+            lines.append(
+                f'<li{row_class} {row_attrs}><span>{hl_icon}{icon}<a href="{href}" title="{esc_name}">{esc_name}</a></span>{actions}</li>'
+            )
+        lines.append("</ul>")
+        sections.append("\n".join(lines))
+
+    hidden_attr = " hidden" if hidden else ""
+    view_name = "highlight" if highlight_mode else "default"
+    return f'<div class="dg-done-sections" data-dg-highlight-view="{view_name}"{hidden_attr}>' + "\n".join(sections) + "</div>"
 
 
 def collect_site_done_items(base_dir: Path) -> list[SiteDoneItem]:
@@ -150,6 +208,7 @@ def collect_site_done_items(base_dir: Path) -> list[SiteDoneItem]:
         display_mtime = st.st_mtime
         effective_mtime = done_mtime if done_mtime is not None else display_mtime
         group_year = _year_from_epoch(done_mtime) if done_mtime is not None else _year_for_item(rel)
+        highlighted, highlight_last_epoch = _site_highlight_status(base_dir, rel)
         items.append(
             SiteDoneItem(
                 rel_path=rel,
@@ -157,7 +216,8 @@ def collect_site_done_items(base_dir: Path) -> list[SiteDoneItem]:
                 mtime=display_mtime,
                 sort_mtime=effective_mtime,
                 group_year=group_year,
-                highlighted=_is_site_highlighted(base_dir, rel),
+                highlighted=highlighted,
+                highlight_last_epoch=highlight_last_epoch,
             )
         )
 
@@ -166,31 +226,12 @@ def collect_site_done_items(base_dir: Path) -> list[SiteDoneItem]:
 
 
 def build_site_done_html(items: list[SiteDoneItem]) -> str:
-    if not items:
-        list_html = '<ul class="dg-done-list"></ul>'
-    else:
-        sections: list[str] = []
-        for year, year_items in _group_items_by_year(items):
-            lines: list[str] = [f'<h2 class="dg-year">{html.escape(year)}</h2>', '<ul class="dg-done-list">']
-            for item in year_items:
-                href = raw_url_for_rel_path(item.rel_path)
-                icon = _icon_for(item.name)
-                hl_icon = '<span class="file-icon hl-icon" aria-hidden="true">🟡</span> ' if item.highlighted else ""
-                esc_name = html.escape(item.name)
-                row_class = ' class="dg-hl"' if item.highlighted else ""
-                row_attrs = (
-                    "data-dg-sortable='1' "
-                    f"data-dg-highlighted='{'1' if item.highlighted else '0'}' "
-                    f"data-dg-sort-mtime='{item.sort_mtime:.6f}' "
-                    f"data-dg-name='{html.escape(item.name.lower(), quote=True)}'"
-                )
-                actions = _actions_html(item)
-                lines.append(
-                    f'<li{row_class} {row_attrs}><span>{hl_icon}{icon}<a href="{href}" title="{esc_name}">{esc_name}</a></span>{actions}</li>'
-                )
-            lines.append("</ul>")
-            sections.append("\n".join(lines))
-        list_html = "\n".join(sections)
+    list_html = "\n".join(
+        [
+            _render_done_sections(items, highlight_mode=False, hidden=False),
+            _render_done_sections(items, highlight_mode=True, hidden=True),
+        ]
+    )
 
     return (
         '<!DOCTYPE html><html><head><meta charset="utf-8">'

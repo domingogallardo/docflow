@@ -1,6 +1,11 @@
+from datetime import datetime, timezone
 from pathlib import Path
 
 from utils import highlight_store
+
+
+def _epoch(value: str) -> float:
+    return datetime.fromisoformat(value.replace("Z", "+00:00")).astimezone(timezone.utc).timestamp()
 
 
 def test_save_and_load_canonical_highlights(tmp_path: Path):
@@ -97,3 +102,46 @@ def test_missing_ids_are_generated_and_stable(tmp_path: Path):
     loaded = highlight_store.load_highlights_for_path(base, rel)
     loaded_ids = [item["id"] for item in loaded["highlights"]]
     assert loaded_ids == ids
+
+
+def test_latest_highlight_epoch_prefers_most_recent_created_at(tmp_path: Path):
+    base = tmp_path / "base"
+    base.mkdir()
+    rel = "Posts/Posts 2026/doc.html"
+
+    highlight_store.save_highlights_for_path(
+        base,
+        rel,
+        {
+            "updated_at": "2026-02-03T10:06:00Z",
+            "highlights": [
+                {"id": "h1", "text": "Older", "created_at": "2026-02-03T10:00:00Z"},
+                {"id": "h2", "text": "Newer", "created_at": "2026-02-03T10:05:00Z"},
+            ],
+        },
+    )
+
+    highlighted, latest_epoch = highlight_store.highlight_status_for_path(base, rel)
+
+    assert highlighted is True
+    assert latest_epoch == _epoch("2026-02-03T10:05:00Z")
+
+
+def test_latest_highlight_epoch_falls_back_to_updated_at_when_created_at_missing(tmp_path: Path):
+    base = tmp_path / "base"
+    base.mkdir()
+    rel = "Posts/Posts 2026/doc.html"
+
+    highlight_store.save_highlights_for_path(
+        base,
+        rel,
+        {
+            "updated_at": "2026-02-03T10:06:00Z",
+            "highlights": [{"id": "h1", "text": "Only highlight"}],
+        },
+    )
+
+    highlighted, latest_epoch = highlight_store.highlight_status_for_path(base, rel)
+
+    assert highlighted is True
+    assert latest_epoch == _epoch("2026-02-03T10:06:00Z")
