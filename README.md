@@ -31,7 +31,9 @@ Podcast snippets are typically captured in [Snipd](https://www.snipd.com) and th
 - Home page with exact filename search.
 - Browse / Reading / Working / Done views.
 - Browse hides items already in Reading / Working / Done.
-- Highlight-first toggle on list pages.
+- Highlight toggle on list pages, with browser-persistent state until switched back off.
+- With `Highlight: on`, highlighted items move first and are ordered by most recent highlight.
+- In `Done`, `Highlight: on` regroups items by the year of the latest highlight, so re-highlighted older items surface under the current highlight year.
 - Reading ordered by `reading_at` (oldest first).
 - Working ordered by `working_at` (newest first).
 - Done ordered by `done_at` (newest first).
@@ -72,6 +74,7 @@ All state is stored under `BASE_DIR/state/`:
 - `done.json`: per-path `done_at` timestamp and optional transition metadata copied on `to-done`:
   - `reading_started_at` (from `reading_at` when moving from Reading to Done)
   - `working_started_at` (from `working_at` when moving from Working to Done)
+- `highlights/<sha256-prefix>/<sha256>.json`: canonical per-document highlight payloads, including per-highlight `created_at` timestamps and document `updated_at`.
 
 These fields allow post-hoc lead-time calculations for completed items (for example `done_at - working_started_at`).
 

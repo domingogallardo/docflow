@@ -34,6 +34,20 @@ This file stores stable, reusable operational notes for future agent runs.
   - Keep the third row hidden when highlight progress total is `0`.
 - Highlight payload normalization in `utils/highlight_store.py` must keep stable `id` values; when a highlight arrives without `id`, generate one deterministically to support legacy data and navigation state.
 
+### Highlight-First List Behavior
+
+- Shared list-page toggle behavior lives in `utils/build_browse_index.py` (`_site/assets/browse-sort.js`).
+- Browser persistence for the toggle uses localStorage key `docflow.highlight-sort`; keep that key stable unless you intentionally migrate saved UI state.
+- Highlight ordering metadata comes from `utils/highlight_store.py`:
+  - `latest_highlight_epoch(...)` uses the newest per-highlight `created_at`.
+  - Fall back to payload `updated_at` when legacy highlights do not carry `created_at`.
+- List rows expose `data-dg-highlight-last`; with `Highlight: on`, highlighted files are sorted before non-highlighted files and then by most recent highlight descending.
+- `Done` is special: regrouping by latest highlight year is rendered server-side in `utils/build_done_index.py` as an alternate view, because year headers cannot be safely recomputed by the generic client-side sorter alone.
+- Expected `Done` behavior with `Highlight: on`:
+  - Re-highlighted items from older library years surface under the current highlight year.
+  - Items highlighted in an older year stay under that older highlight year.
+  - With `Highlight: off`, `Done` returns to the normal `done_at` grouping/order.
+
 ### Daily Highlights Report
 
 - Canonical generator: `utils/build_daily_highlights_report.py`.
@@ -127,3 +141,9 @@ This file stores stable, reusable operational notes for future agent runs.
 - Fixed consolidated tweet rendering to preserve hard line breaks inside paragraph blocks (for cases like `TL;DR`/`Links`) while avoiding regressions in lists.
 - Added regression tests in `tests/test_build_daily_tweet_consolidated.py` for both paragraph line breaks and clean list markup.
 - Regenerated `Tweets 2026-03-03` consolidated output and validated `TL;DR`/`Links` formatting in HTML.
+
+### 2026-03-17
+
+- Changed list-page `Highlight` ordering so highlighted files sort by latest highlight timestamp instead of only floating to the top.
+- Added persistent browser state for the `Highlight` toggle across Browse/Reading/Working/Done using localStorage key `docflow.highlight-sort`.
+- Updated `Done` highlight mode to regroup items by the year of the latest highlight, so newly re-highlighted older items appear under the current highlight year.
