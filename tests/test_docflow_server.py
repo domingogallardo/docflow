@@ -14,6 +14,7 @@ from urllib.parse import quote
 import pytest
 
 from utils import docflow_server
+from utils.reading_position_store import reading_position_state_path, save_reading_position_for_path
 from utils.site_state import (
     is_done,
     is_reading,
@@ -392,6 +393,13 @@ def test_api_delete_removes_local_markdown_and_state_entries(tmp_path: Path):
     md.write_text("# Doc\n", encoding="utf-8")
 
     rel_path = "Posts/Posts 2026/doc.html"
+    save_reading_position_for_path(
+        base,
+        rel_path,
+        {"updated_at": "2026-03-17T10:00:00Z", "scroll_y": 320, "max_scroll": 1000, "progress": 0.32},
+    )
+    reading_position_path = reading_position_state_path(base, rel_path)
+    assert reading_position_path.exists()
 
     server, port = _start_server(base)
     try:
@@ -407,10 +415,12 @@ def test_api_delete_removes_local_markdown_and_state_entries(tmp_path: Path):
         assert status == 200
         assert payload["ok"] is True
         assert payload["data"]["deleted_md"] is True
+        assert payload["data"]["removed_reading_position"] is True
         assert payload["data"]["redirect"] == "/browse/posts/Posts%202026/"
 
         assert not html.exists()
         assert not md.exists()
+        assert not reading_position_path.exists()
         assert is_done(base, rel_path) is False
         assert is_reading(base, rel_path) is False
         assert is_working(base, rel_path) is False
@@ -1265,6 +1275,72 @@ def test_api_highlights_roundtrip_and_rebuild_markers(tmp_path: Path):
         browse_status, browse_html = _get(port, "/browse/posts/Posts%202026/")
         assert browse_status == 200
         assert "🟡" in browse_html
+    finally:
+        server.shutdown()
+        server.server_close()
+
+
+def test_api_reading_position_roundtrip(tmp_path: Path):
+    base = tmp_path / "base"
+    posts = base / "Posts" / "Posts 2026"
+    posts.mkdir(parents=True)
+    html = posts / "doc.html"
+    html.write_text("<html><body>Raw Doc</body></html>", encoding="utf-8")
+
+    rel_path = "Posts/Posts 2026/doc.html"
+    encoded = quote(rel_path, safe="")
+
+    server, port = _start_server(base)
+    try:
+        status, body = _get(port, f"/api/reading-position?path={encoded}")
+        assert status == 200
+        payload = json.loads(body)
+        assert payload["path"] == rel_path
+        assert payload["scroll_y"] is None
+        assert payload["progress"] is None
+
+        status, payload = _put_json(
+            port,
+            f"/api/reading-position?path={encoded}",
+            {
+                "updated_at": "2026-03-17T10:00:00Z",
+                "scroll_y": 420,
+                "max_scroll": 1200,
+                "progress": 0.35,
+                "viewport_height": 900,
+                "document_height": 2100,
+            },
+        )
+        assert status == 200
+        assert payload["path"] == rel_path
+        assert payload["scroll_y"] == 420
+        assert payload["progress"] == 0.35
+
+        status, body = _get(port, f"/api/reading-position?path={encoded}")
+        assert status == 200
+        payload = json.loads(body)
+        assert payload["scroll_y"] == 420
+        assert payload["progress"] == 0.35
+
+        status, _payload = _put_json(
+            port,
+            f"/api/reading-position?path={encoded}",
+            {
+                "updated_at": "2026-03-17T10:01:00Z",
+                "scroll_y": 0,
+                "max_scroll": 1200,
+                "progress": 0,
+                "viewport_height": 900,
+                "document_height": 2100,
+            },
+        )
+        assert status == 200
+
+        status, body = _get(port, f"/api/reading-position?path={encoded}")
+        assert status == 200
+        payload = json.loads(body)
+        assert payload["scroll_y"] is None
+        assert payload["progress"] is None
     finally:
         server.shutdown()
         server.server_close()

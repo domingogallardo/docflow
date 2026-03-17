@@ -5,6 +5,7 @@ Features:
 - Serves generated site files from BASE_DIR/_site
 - Serves raw files from BASE_DIR via dedicated routes (/posts/raw/..., /pdfs/raw/...)
 - Exposes API actions under /api/* (to-reading, to-working, to-done, to-browse, reopen, delete, rebuild, rebuild-file)
+- Exposes local state helpers for highlights and reading-position resume
 """
 
 from __future__ import annotations
@@ -62,6 +63,11 @@ from utils.site_state import (
     set_working_path,
 )
 from utils.highlight_store import load_highlights_for_path, save_highlights_for_path
+from utils.reading_position_store import (
+    clear_reading_position_for_path,
+    load_reading_position_for_path,
+    save_reading_position_for_path,
+)
 
 DONE_LINKS_FILE_ENV = "DONE_LINKS_FILE"
 DONE_LINKS_BASE_URL_ENV = "DONE_LINKS_BASE_URL"
@@ -428,11 +434,13 @@ class DocflowApp:
         removed_done = clear_done_path(self.base_dir, normalized)
         removed_reading = pop_reading_path(self.base_dir, normalized) is not None
         removed_working = pop_working_path(self.base_dir, normalized) is not None
+        removed_reading_position = clear_reading_position_for_path(self.base_dir, normalized)
 
         if sibling_md_rel:
             clear_done_path(self.base_dir, sibling_md_rel)
             pop_reading_path(self.base_dir, sibling_md_rel)
             pop_working_path(self.base_dir, sibling_md_rel)
+            clear_reading_position_for_path(self.base_dir, sibling_md_rel)
 
         self.rebuild_for_path(
             normalized,
@@ -447,6 +455,7 @@ class DocflowApp:
             "removed_done": removed_done,
             "removed_reading": removed_reading,
             "removed_working": removed_working,
+            "removed_reading_position": removed_reading_position,
             "redirect": _browse_parent_url_for_rel_path(normalized),
         }
 
@@ -521,6 +530,16 @@ class DocflowApp:
             rebuild_done=(stage == "done"),
         )
         return saved
+
+    def api_get_reading_position(self, rel_path: str) -> dict[str, object]:
+        normalized = self._normalize_rel_path_or_400(rel_path)
+        self._require_existing_library_file(normalized)
+        return load_reading_position_for_path(self.base_dir, normalized)
+
+    def api_put_reading_position(self, rel_path: str, payload: dict[str, object]) -> dict[str, object]:
+        normalized = self._normalize_rel_path_or_400(rel_path)
+        self._require_existing_library_file(normalized)
+        return save_reading_position_for_path(self.base_dir, normalized, payload)
 
     def _resolve_markdown_source_target(self, rel_path: str) -> tuple[str, Path]:
         normalized = self._normalize_rel_path_or_400(rel_path)
@@ -1612,13 +1631,28 @@ def make_handler(app: DocflowApp):
                     _send_json(self, 500, {"ok": False, "error": str(exc)})
                 return
 
+            if path == "/api/reading-position":
+                try:
+                    rel_path = _get_query_path(parsed)
+                    payload = app.api_get_reading_position(rel_path)
+                    _send_json(self, 200, payload)
+                except ApiError as exc:
+                    _send_json(self, exc.status, {"ok": False, "error": exc.message})
+                except Exception as exc:
+                    _send_json(self, 500, {"ok": False, "error": str(exc)})
+                return
+
             if path.startswith("/api/"):
                 _send_json(
                     self,
                     405,
                     {
                         "ok": False,
-                        "error": "Use POST for API endpoints (except /api/highlights, /api/export-pdf and /api/export-markdown)",
+                        "error": (
+                            "Use POST for API endpoints "
+                            "(except /api/highlights, /api/reading-position, "
+                            "/api/export-pdf and /api/export-markdown)"
+                        ),
                     },
                 )
                 return
@@ -1667,6 +1701,9 @@ def make_handler(app: DocflowApp):
             if action == "highlights":
                 _send_json(self, 405, {"ok": False, "error": "Use GET/PUT for /api/highlights"})
                 return
+            if action == "reading-position":
+                _send_json(self, 405, {"ok": False, "error": "Use GET/PUT for /api/reading-position"})
+                return
             try:
                 payload = _parse_json_body(self)
                 data = app.handle_api(action, payload)
@@ -1678,14 +1715,17 @@ def make_handler(app: DocflowApp):
 
         def do_PUT(self) -> None:  # type: ignore[override]
             parsed = urlparse(self.path)
-            if parsed.path != "/api/highlights":
+            if parsed.path not in {"/api/highlights", "/api/reading-position"}:
                 _send_json(self, 404, {"ok": False, "error": "Unknown endpoint"})
                 return
 
             try:
                 rel_path = _get_query_path(parsed)
                 payload = _parse_json_body(self)
-                data = app.api_put_highlights(rel_path, payload)
+                if parsed.path == "/api/highlights":
+                    data = app.api_put_highlights(rel_path, payload)
+                else:
+                    data = app.api_put_reading_position(rel_path, payload)
                 _send_json(self, 200, data)
             except ApiError as exc:
                 _send_json(self, exc.status, {"ok": False, "error": exc.message})

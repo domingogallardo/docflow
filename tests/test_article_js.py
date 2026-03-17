@@ -14,10 +14,14 @@ def test_article_js_includes_highlights():
     content = pathlib.Path('utils/static/article.js').read_text(encoding='utf-8')
     assert 'articlejs-highlight-btn' in content
     assert '/api/highlights?path=' in content
+    assert '/api/reading-position?path=' in content
     assert 'nextHighlight: nextHighlight' in content
     assert 'previousHighlight: previousHighlight' in content
     assert 'getHighlightProgress: getHighlightProgress' in content
     assert 'focusHighlightById: focusHighlightById' in content
+    assert 'restoreReadingPosition' in content
+    assert 'installReadingPositionTracking' in content
+    assert "window.addEventListener('pagehide'" in content
     assert "hash.indexOf('hl=') === 0" in content
     assert 'articlejs:highlight-progress' in content
     assert '.articlejs-highlight.articlejs-highlight-active {' not in content

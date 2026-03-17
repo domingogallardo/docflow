@@ -3,6 +3,7 @@
  * - Console API: ArticleJS.active / ArticleJS.ping()
  * - Quote capture helpers with Text Fragments and Markdown
  * - Highlights persisted to local /api/highlights
+ * - Reading position persisted to local /api/reading-position
  * - Highlight navigation helpers (next/previous + progress)
  */
 (function () {
@@ -41,6 +42,22 @@
   }
   function normalizeWhitespace(value) {
     return String(value || '').replace(/\s+/g, ' ').trim();
+  }
+
+  function finiteNumber(value) {
+    if (typeof value === 'number' && isFinite(value)) return value;
+    if (typeof value === 'string' && value.trim()) {
+      var parsed = Number(value);
+      if (isFinite(parsed)) return parsed;
+    }
+    return null;
+  }
+
+  function clampNumber(value, min, max) {
+    if (!isFinite(value)) return min;
+    if (value < min) return min;
+    if (value > max) return max;
+    return value;
   }
 
   function getSelectionText() {
@@ -356,6 +373,12 @@
     var relPath = getLocalRawRelPath();
     if (!relPath) return '';
     return '/api/highlights?path=' + encodeURIComponent(relPath);
+  }
+
+  function getLocalReadingPositionStoreUrl() {
+    var relPath = getLocalRawRelPath();
+    if (!relPath) return '';
+    return '/api/reading-position?path=' + encodeURIComponent(relPath);
   }
 
   function ensureHighlightStyles() {
@@ -685,6 +708,304 @@
   var highlightState = { loaded: false, highlights: [] };
   var highlightsInitPromise = null;
   var highlightNavState = { blocks: [], currentIndex: -1 };
+  var readingPositionState = {
+    installed: false,
+    restorePromise: null,
+    saveTimer: 0,
+    saveInFlight: false,
+    pendingSnapshot: null,
+    lastSavedSignature: ''
+  };
+
+  function getScrollElement() {
+    if (!document) return null;
+    return document.scrollingElement || document.documentElement || document.body || null;
+  }
+
+  function currentScrollY() {
+    var pageOffset = finiteNumber(window && typeof window.pageYOffset !== 'undefined' ? window.pageYOffset : null);
+    if (pageOffset !== null) return pageOffset;
+    var scrollEl = getScrollElement();
+    if (!scrollEl) return 0;
+    return finiteNumber(scrollEl.scrollTop) || 0;
+  }
+
+  function currentViewportHeight() {
+    var innerHeight = finiteNumber(window && typeof window.innerHeight !== 'undefined' ? window.innerHeight : null);
+    if (innerHeight !== null && innerHeight > 0) return innerHeight;
+    var scrollEl = getScrollElement();
+    if (!scrollEl) return 0;
+    return finiteNumber(scrollEl.clientHeight) || 0;
+  }
+
+  function currentDocumentHeight() {
+    var body = document && document.body ? document.body : null;
+    var root = document && document.documentElement ? document.documentElement : null;
+    var scrollEl = getScrollElement();
+    return Math.max(
+      body ? (finiteNumber(body.scrollHeight) || 0) : 0,
+      body ? (finiteNumber(body.offsetHeight) || 0) : 0,
+      root ? (finiteNumber(root.scrollHeight) || 0) : 0,
+      root ? (finiteNumber(root.offsetHeight) || 0) : 0,
+      scrollEl ? (finiteNumber(scrollEl.scrollHeight) || 0) : 0
+    );
+  }
+
+  function currentMaxScroll() {
+    return Math.max(0, currentDocumentHeight() - currentViewportHeight());
+  }
+
+  function collectReadingPositionSnapshot() {
+    var maxScroll = currentMaxScroll();
+    var scrollY = clampNumber(currentScrollY(), 0, maxScroll);
+    var progress = maxScroll > 0 ? (scrollY / maxScroll) : 0;
+    return {
+      version: 1,
+      url: baseUrlWithoutHash(),
+      title: document && document.title ? document.title : '',
+      updated_at: nowIso(),
+      scroll_y: Math.round(scrollY),
+      max_scroll: Math.round(maxScroll),
+      progress: Math.round(progress * 1000000) / 1000000,
+      viewport_height: Math.round(currentViewportHeight()),
+      document_height: Math.round(currentDocumentHeight())
+    };
+  }
+
+  function hasMeaningfulReadingPosition(snapshot) {
+    var scrollY = finiteNumber(snapshot && snapshot.scroll_y);
+    if (scrollY !== null && scrollY > 24) return true;
+    var progress = finiteNumber(snapshot && snapshot.progress);
+    return progress !== null && progress > 0.01;
+  }
+
+  function normalizeReadingPositionSnapshot(payload) {
+    if (!payload || typeof payload !== 'object') return null;
+
+    var scrollY = finiteNumber(payload.scroll_y);
+    if (scrollY !== null && scrollY < 0) scrollY = 0;
+
+    var maxScroll = finiteNumber(payload.max_scroll);
+    if (maxScroll !== null && maxScroll < 0) maxScroll = 0;
+
+    var progress = finiteNumber(payload.progress);
+    if (progress !== null) progress = clampNumber(progress, 0, 1);
+
+    var snapshot = {
+      scroll_y: scrollY,
+      max_scroll: maxScroll,
+      progress: progress,
+      viewport_height: finiteNumber(payload.viewport_height),
+      document_height: finiteNumber(payload.document_height)
+    };
+
+    return hasMeaningfulReadingPosition(snapshot) ? snapshot : null;
+  }
+
+  function readingPositionSignature(snapshot) {
+    if (!snapshot) return '';
+    var scrollY = finiteNumber(snapshot.scroll_y);
+    var maxScroll = finiteNumber(snapshot.max_scroll);
+    var progress = finiteNumber(snapshot.progress);
+    if (scrollY === null) scrollY = 0;
+    if (maxScroll === null) maxScroll = 0;
+    if (progress === null) progress = 0;
+    return [
+      String(Math.round(scrollY)),
+      String(Math.round(maxScroll)),
+      progress.toFixed(4)
+    ].join('|');
+  }
+
+  function readReadingPosition() {
+    if (!window.fetch) return Promise.resolve(null);
+
+    var localUrl = getLocalReadingPositionStoreUrl();
+    if (!localUrl) return Promise.resolve(null);
+    return fetch(localUrl, { method: 'GET', cache: 'no-store' })
+      .then(function(res) {
+        if (res.status === 404) return null;
+        if (!res.ok) throw new Error('load failed');
+        return res.text();
+      })
+      .then(function(text) {
+        if (!text) return null;
+        try { return JSON.parse(text); } catch (_) { return null; }
+      })
+      .catch(function() { return null; });
+  }
+
+  function writeReadingPosition(snapshot, options) {
+    if (!window.fetch) return Promise.resolve(false);
+
+    var localUrl = getLocalReadingPositionStoreUrl();
+    if (!localUrl) return Promise.resolve(false);
+    options = options || {};
+    return fetch(localUrl, {
+      method: 'PUT',
+      cache: 'no-store',
+      keepalive: !!options.keepalive,
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(snapshot || {})
+    }).then(function(res) {
+      if (!res.ok) throw new Error('save failed');
+      return true;
+    }).catch(function() { return false; });
+  }
+
+  function persistReadingPositionSnapshot(snapshot, options) {
+    var signature = readingPositionSignature(snapshot);
+    options = options || {};
+
+    if (!options.force && signature && signature === readingPositionState.lastSavedSignature) {
+      return Promise.resolve(true);
+    }
+
+    if (readingPositionState.saveInFlight) {
+      readingPositionState.pendingSnapshot = snapshot;
+      return Promise.resolve(true);
+    }
+
+    readingPositionState.saveInFlight = true;
+    return writeReadingPosition(snapshot, options)
+      .then(function(ok) {
+        if (ok) readingPositionState.lastSavedSignature = signature;
+        return ok;
+      })
+      .catch(function() { return false; })
+      .then(function(result) {
+        readingPositionState.saveInFlight = false;
+        var pending = readingPositionState.pendingSnapshot;
+        readingPositionState.pendingSnapshot = null;
+        if (pending) return persistReadingPositionSnapshot(pending, options);
+        return result;
+      });
+  }
+
+  function cancelReadingPositionSaveTimer() {
+    if (!readingPositionState.saveTimer) return;
+    window.clearTimeout(readingPositionState.saveTimer);
+    readingPositionState.saveTimer = 0;
+  }
+
+  function scheduleReadingPositionSave(delayMs) {
+    if (!getLocalReadingPositionStoreUrl()) return;
+    cancelReadingPositionSaveTimer();
+    var delay = finiteNumber(delayMs);
+    if (delay === null || delay < 0) delay = 0;
+    readingPositionState.saveTimer = window.setTimeout(function() {
+      readingPositionState.saveTimer = 0;
+      persistReadingPositionSnapshot(collectReadingPositionSnapshot(), {});
+    }, delay);
+  }
+
+  function hasExplicitScrollTarget() {
+    var hash = '';
+    try { hash = String(location.hash || ''); } catch (_) { hash = ''; }
+    return !!hash;
+  }
+
+  function readingPositionTarget(snapshot) {
+    if (!snapshot) return null;
+
+    var maxScroll = currentMaxScroll();
+    var target = null;
+    var savedProgress = finiteNumber(snapshot.progress);
+    var savedScrollY = finiteNumber(snapshot.scroll_y);
+    var savedMaxScroll = finiteNumber(snapshot.max_scroll);
+
+    if (savedProgress !== null && savedProgress > 0) {
+      target = savedProgress * maxScroll;
+    }
+    if (savedScrollY !== null && savedScrollY > 0) {
+      if (savedMaxScroll !== null && Math.abs(savedMaxScroll - maxScroll) <= 96) {
+        target = savedScrollY;
+      } else if (target === null) {
+        target = savedScrollY;
+      }
+    }
+
+    if (target === null) return null;
+    return clampNumber(Math.round(target), 0, maxScroll);
+  }
+
+  function scrollToReadingPosition(target) {
+    if (target === null) return false;
+    try {
+      window.scrollTo({ top: target, left: 0, behavior: 'auto' });
+      return true;
+    } catch (_) {
+      try {
+        window.scrollTo(0, target);
+        return true;
+      } catch (_error) {
+        return false;
+      }
+    }
+  }
+
+  function scheduleReadingPositionRestore(snapshot) {
+    if (!snapshot) return;
+
+    var delays = [0, 120, 360];
+    for (var i = 0; i < delays.length; i++) {
+      (function(delay) {
+        window.setTimeout(function() {
+          scrollToReadingPosition(readingPositionTarget(snapshot));
+        }, delay);
+      })(delays[i]);
+    }
+
+    if (document && document.readyState !== 'complete' && window && window.addEventListener) {
+      window.addEventListener('load', function() {
+        window.setTimeout(function() {
+          scrollToReadingPosition(readingPositionTarget(snapshot));
+        }, 0);
+      }, { once: true, passive: true });
+    }
+  }
+
+  function restoreReadingPosition() {
+    if (readingPositionState.restorePromise) return readingPositionState.restorePromise;
+    if (!getLocalReadingPositionStoreUrl()) return Promise.resolve(false);
+    if (hasExplicitScrollTarget()) return Promise.resolve(false);
+
+    readingPositionState.restorePromise = readReadingPosition()
+      .then(function(payload) {
+        var snapshot = normalizeReadingPositionSnapshot(payload);
+        if (!snapshot) return false;
+        readingPositionState.lastSavedSignature = readingPositionSignature(snapshot);
+        scheduleReadingPositionRestore(snapshot);
+        return true;
+      })
+      .catch(function() { return false; });
+
+    return readingPositionState.restorePromise;
+  }
+
+  function installReadingPositionTracking() {
+    if (readingPositionState.installed) return;
+    if (!getLocalReadingPositionStoreUrl()) return;
+    readingPositionState.installed = true;
+
+    if (window && window.addEventListener) {
+      window.addEventListener('scroll', function() {
+        scheduleReadingPositionSave(700);
+      }, { passive: true });
+      window.addEventListener('pagehide', function() {
+        cancelReadingPositionSaveTimer();
+        persistReadingPositionSnapshot(collectReadingPositionSnapshot(), { keepalive: true });
+      });
+    }
+
+    if (document && document.addEventListener) {
+      document.addEventListener('visibilitychange', function() {
+        if (document.visibilityState !== 'hidden') return;
+        cancelReadingPositionSaveTimer();
+        persistReadingPositionSnapshot(collectReadingPositionSnapshot(), { keepalive: true });
+      });
+    }
+  }
 
   function getHighlightById(id) {
     if (!id) return null;
@@ -1357,9 +1678,13 @@
   function initArticleUi() {
     ensureMobileReadingTypography();
     ensureOverlay();
+    installReadingPositionTracking();
     initHighlights()
       .then(function() {
-        return focusHighlightFromHash({ wrap: false, behavior: 'smooth', block: 'center' });
+        if (highlightIdFromHash()) {
+          return focusHighlightFromHash({ wrap: false, behavior: 'smooth', block: 'center' });
+        }
+        return restoreReadingPosition();
       })
       .catch(function() {});
     if (window && window.addEventListener) {

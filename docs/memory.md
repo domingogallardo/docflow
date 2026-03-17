@@ -33,6 +33,12 @@ This file stores stable, reusable operational notes for future agent runs.
   - Third row: highlight jump controls (`Jump to highlight:` + counter + up/down controls).
   - Keep the third row hidden when highlight progress total is `0`.
 - Highlight payload normalization in `utils/highlight_store.py` must keep stable `id` values; when a highlight arrives without `id`, generate one deterministically to support legacy data and navigation state.
+- Reading-position resume state is stored separately in `BASE_DIR/state/reading_positions/<sha256-prefix>/<sha256>.json`.
+- Canonical read/write helpers for that state live in `utils/reading_position_store.py`.
+- API surface for resume state:
+  - `GET /api/reading-position?path=<rel_path>`
+  - `PUT /api/reading-position?path=<rel_path>`
+- `utils/static/article.js` restores the saved reading position only when the URL has no explicit hash target; highlight hashes must win over scroll resume.
 
 ### Highlight-First List Behavior
 

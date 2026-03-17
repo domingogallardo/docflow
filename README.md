@@ -45,6 +45,7 @@ Podcast snippets are typically captured in [Snipd](https://www.snipd.com) and th
   - `Rebuild`
   - `Delete`
 - Highlight navigation on article pages when highlights exist (`Jump to highlight`, previous/next controls).
+- Article pages remember the last reading position and resume it on reopen unless the URL already targets an explicit hash/deep link.
 
 ### Intranet API
 
@@ -62,6 +63,8 @@ Documented and currently available endpoints:
 - `GET /api/export-markdown?path=<rel_path>`
 - `GET /api/highlights?path=<rel_path>`
 - `PUT /api/highlights?path=<rel_path>`
+- `GET /api/reading-position?path=<rel_path>`
+- `PUT /api/reading-position?path=<rel_path>`
 
 If `DONE_LINKS_FILE` is set, each `POST /api/to-done` transition appends a Markdown link entry to that file.
 
@@ -75,6 +78,7 @@ All state is stored under `BASE_DIR/state/`:
   - `reading_started_at` (from `reading_at` when moving from Reading to Done)
   - `working_started_at` (from `working_at` when moving from Working to Done)
 - `highlights/<sha256-prefix>/<sha256>.json`: canonical per-document highlight payloads, including per-highlight `created_at` timestamps and document `updated_at`.
+- `reading_positions/<sha256-prefix>/<sha256>.json`: canonical per-document reading-position payloads (`scroll_y`, `max_scroll`, `progress`, viewport/document height metadata).
 
 These fields allow post-hoc lead-time calculations for completed items (for example `done_at - working_started_at`).
 
