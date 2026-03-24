@@ -21,6 +21,8 @@ from typing import Iterable
 import config as cfg
 import markdown
 import utils as U
+from utils.highlight_store import load_highlights_for_path, save_highlights_for_path
+from utils.site_paths import rel_path_from_abs
 try:
     from utils.tweet_to_markdown import strip_tweet_stats as _strip_tweet_stats
 except Exception:  # pragma: no cover - defensive fallback
@@ -709,13 +711,73 @@ def _path_key(path: Path) -> str:
     return str(path.resolve())
 
 
-def _delete_daily_source_html_only(
+def _state_base_dir_for_tweets_dir(tweets_dir: Path) -> Path | None:
+    resolved = tweets_dir.resolve()
+    if resolved.parent.name == "Tweets":
+        return resolved.parent.parent
+
+    try:
+        configured = Path(cfg.BASE_DIR).expanduser().resolve()
+    except Exception:
+        return None
+
+    try:
+        resolved.relative_to(configured)
+    except ValueError:
+        return None
+    return configured
+
+
+def _safe_rel_path(base_dir: Path | None, path: Path) -> str | None:
+    if base_dir is None:
+        return None
+    try:
+        return rel_path_from_abs(base_dir, path)
+    except Exception:
+        return None
+
+
+def _highlight_signature(item: dict[str, object]) -> tuple[str, str, str]:
+    return (
+        str(item.get("text") or "").strip(),
+        str(item.get("prefix") or ""),
+        str(item.get("suffix") or ""),
+    )
+
+
+def _merge_highlight_lists(*highlight_lists: list[dict[str, object]]) -> list[dict[str, object]]:
+    merged: list[dict[str, object]] = []
+    seen_signatures: set[tuple[str, str, str]] = set()
+    used_ids: set[str] = set()
+
+    for items in highlight_lists:
+        for item in items:
+            if not isinstance(item, dict):
+                continue
+            signature = _highlight_signature(item)
+            if not signature[0] or signature in seen_signatures:
+                continue
+
+            copied = dict(item)
+            highlight_id = str(copied.get("id") or "").strip()
+            if not highlight_id or highlight_id in used_ids:
+                copied["id"] = ""
+            else:
+                used_ids.add(highlight_id)
+
+            merged.append(copied)
+            seen_signatures.add(signature)
+
+    return merged
+
+
+def _source_tweet_html_paths(
     source_markdown: Iterable[Path],
     *,
     keep_paths: Iterable[Path] = (),
-) -> int:
+) -> list[Path]:
     keep = {_path_key(path) for path in keep_paths}
-    deleted_html = 0
+    html_paths: list[Path] = []
 
     for md_path in source_markdown:
         if _path_key(md_path) in keep:
@@ -726,6 +788,86 @@ def _delete_daily_source_html_only(
             continue
         if _path_key(html_path) in keep:
             continue
+        html_paths.append(html_path)
+
+    return html_paths
+
+
+def _port_source_highlights_to_consolidated(
+    tweets_dir: Path,
+    source_markdown: Iterable[Path],
+    *,
+    destination_html: Path | None,
+    keep_paths: Iterable[Path] = (),
+) -> tuple[int, int]:
+    if destination_html is None:
+        return 0, 0
+
+    base_dir = _state_base_dir_for_tweets_dir(tweets_dir)
+    destination_rel = _safe_rel_path(base_dir, destination_html)
+    if destination_rel is None:
+        return 0, 0
+
+    source_html_paths = _source_tweet_html_paths(source_markdown, keep_paths=keep_paths)
+    if not source_html_paths:
+        return 0, 0
+
+    source_payloads: list[dict[str, object]] = []
+    source_rel_paths: list[str] = []
+    moved_total = 0
+
+    for html_path in source_html_paths:
+        rel_path = _safe_rel_path(base_dir, html_path)
+        if rel_path is None:
+            continue
+        payload = load_highlights_for_path(base_dir, rel_path)
+        highlights = payload.get("highlights")
+        if not isinstance(highlights, list) or not highlights:
+            continue
+        source_payloads.append(payload)
+        source_rel_paths.append(rel_path)
+        moved_total += len(highlights)
+
+    if not source_payloads:
+        return 0, 0
+
+    destination_payload = load_highlights_for_path(base_dir, destination_rel)
+    destination_highlights = destination_payload.get("highlights")
+    if not isinstance(destination_highlights, list):
+        destination_highlights = []
+
+    merged_highlights = _merge_highlight_lists(
+        destination_highlights,
+        *[
+            payload.get("highlights")
+            for payload in source_payloads
+            if isinstance(payload.get("highlights"), list)
+        ],
+    )
+    save_highlights_for_path(
+        base_dir,
+        destination_rel,
+        {
+            "title": str(destination_payload.get("title") or ""),
+            "url": str(destination_payload.get("url") or ""),
+            "highlights": merged_highlights,
+        },
+    )
+
+    for rel_path in source_rel_paths:
+        save_highlights_for_path(base_dir, rel_path, {"highlights": []})
+
+    return len(source_rel_paths), moved_total
+
+
+def _delete_daily_source_html_only(
+    source_markdown: Iterable[Path],
+    *,
+    keep_paths: Iterable[Path] = (),
+) -> int:
+    deleted_html = 0
+
+    for html_path in _source_tweet_html_paths(source_markdown, keep_paths=keep_paths):
         if html_path.is_file():
             html_path.unlink()
             deleted_html += 1
@@ -734,11 +876,20 @@ def _delete_daily_source_html_only(
 
 
 def _cleanup_after_daily_consolidation(
+    tweets_dir: Path,
     source_markdown: Iterable[Path],
     *,
     keep_paths: Iterable[Path],
-) -> int:
-    return _delete_daily_source_html_only(source_markdown, keep_paths=keep_paths)
+    destination_html: Path | None,
+) -> tuple[int, int, int]:
+    migrated_docs, migrated_highlights = _port_source_highlights_to_consolidated(
+        tweets_dir,
+        source_markdown,
+        destination_html=destination_html,
+        keep_paths=keep_paths,
+    )
+    deleted_html = _delete_daily_source_html_only(source_markdown, keep_paths=keep_paths)
+    return deleted_html, migrated_docs, migrated_highlights
 
 
 def _render_markdown(day: str, entries: Iterable[TweetEntry]) -> str:
@@ -824,11 +975,22 @@ def _run_cleanup_for_existing_daily_consolidated(
 
     source_markdown = _collect_daily_source_markdown(tweets_dir, day)
     keep_paths = [path for pair in pairs for path in pair]
-    deleted_html = _cleanup_after_daily_consolidation(source_markdown, keep_paths=keep_paths)
+    destination_html = pairs[0][1]
+    deleted_html, migrated_docs, migrated_highlights = _cleanup_after_daily_consolidation(
+        tweets_dir,
+        source_markdown,
+        keep_paths=keep_paths,
+        destination_html=destination_html,
+    )
     print(
         f"🧹 Cleanup completed for {day}: "
         f"removed {deleted_html} HTML (source Markdown kept)"
     )
+    if migrated_docs:
+        print(
+            f"🟡 Migrated {migrated_highlights} highlight(s) from "
+            f"{migrated_docs} source tweet HTML file(s) to {destination_html.name}"
+        )
     return 0
 
 
@@ -862,15 +1024,22 @@ def _build_daily_consolidated_from_markdown(
     _set_mtime(md_path, consolidated_mtime)
     _set_mtime(html_path, consolidated_mtime)
 
-    deleted_html = _cleanup_after_daily_consolidation(
+    deleted_html, migrated_docs, migrated_highlights = _cleanup_after_daily_consolidation(
+        tweets_dir,
         source_markdown,
         keep_paths=(md_path, html_path),
+        destination_html=html_path,
     )
 
     print(f"✅ Consolidated Markdown generated: {md_path}")
     print(f"✅ Consolidated HTML generated: {html_path}")
     print(f"🧾 Entries included: {len(entries)}")
     print(f"🧹 Source tweet cleanup: removed {deleted_html} HTML (source Markdown kept)")
+    if migrated_docs:
+        print(
+            f"🟡 Migrated {migrated_highlights} highlight(s) from "
+            f"{migrated_docs} source tweet HTML file(s) to {html_path.name}"
+        )
     return 0
 
 

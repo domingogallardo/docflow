@@ -6,6 +6,7 @@ from datetime import datetime, timedelta
 from pathlib import Path
 
 from utils import build_daily_tweet_consolidated as mod
+from utils import highlight_store
 
 
 def _set_mtime_for_day(path: Path, day: str, *, hour: int) -> float:
@@ -15,7 +16,14 @@ def _set_mtime_for_day(path: Path, day: str, *, hour: int) -> float:
     return ts
 
 
-def _write_tweet_pair(tweets_dir: Path, stem: str, day: str, *, hour: int) -> tuple[Path, Path]:
+def _write_tweet_pair(
+    tweets_dir: Path,
+    stem: str,
+    day: str,
+    *,
+    hour: int,
+    body: str = "Tweet body.",
+) -> tuple[Path, Path]:
     md_path = tweets_dir / f"{stem}.md"
     html_path = tweets_dir / f"{stem}.html"
     md_path.write_text(
@@ -24,7 +32,7 @@ def _write_tweet_pair(tweets_dir: Path, stem: str, day: str, *, hour: int) -> tu
         f"tweet_url: https://x.com/{stem.replace(' ', '_')}\n"
         "---\n\n"
         f"# {stem}\n\n"
-        "Tweet body.\n",
+        f"{body}\n",
         encoding="utf-8",
     )
     html_path.write_text("<html><body>tweet html</body></html>", encoding="utf-8")
@@ -120,6 +128,63 @@ def test_main_keeps_source_markdown_and_removes_source_html_after_consolidation(
     assert not html2.exists()
 
 
+def test_main_ports_source_tweet_highlights_to_consolidated_html(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    day = "2026-02-13"
+    base_dir = tmp_path
+    tweets_dir = base_dir / "Tweets" / "Tweets 2026"
+    tweets_dir.mkdir(parents=True)
+
+    _write_tweet_pair(tweets_dir, "Tweet - user-1", day, hour=10, body="First highlighted body.")
+    _write_tweet_pair(tweets_dir, "Tweet - user-2", day, hour=11, body="Second highlighted body.")
+
+    highlight_store.save_highlights_for_path(
+        base_dir,
+        "Tweets/Tweets 2026/Tweet - user-1.html",
+        {"highlights": [{"id": "h1", "text": "First highlighted body."}]},
+    )
+    highlight_store.save_highlights_for_path(
+        base_dir,
+        "Tweets/Tweets 2026/Tweet - user-2.html",
+        {"highlights": [{"id": "h1", "text": "Second highlighted body."}]},
+    )
+
+    args = argparse.Namespace(
+        day=day,
+        year=2026,
+        tweets_dir=tweets_dir,
+        output_base=None,
+        cleanup_if_consolidated=False,
+    )
+    monkeypatch.setattr(mod, "parse_args", lambda: args)
+    monkeypatch.setattr(mod.cfg, "BASE_DIR", base_dir)
+
+    exit_code = mod.main()
+    assert exit_code == 0
+
+    consolidated_payload = highlight_store.load_highlights_for_path(
+        base_dir,
+        f"Tweets/Tweets 2026/Tweets {day}.html",
+    )
+    highlights = consolidated_payload["highlights"]
+    texts = {item["text"] for item in highlights}
+    ids = [item["id"] for item in highlights]
+
+    assert texts == {"First highlighted body.", "Second highlighted body."}
+    assert len(ids) == 2
+    assert len(set(ids)) == 2
+    assert highlight_store.load_highlights_for_path(
+        base_dir,
+        "Tweets/Tweets 2026/Tweet - user-1.html",
+    )["highlights"] == []
+    assert highlight_store.load_highlights_for_path(
+        base_dir,
+        "Tweets/Tweets 2026/Tweet - user-2.html",
+    )["highlights"] == []
+
+
 def test_main_keeps_output_files_when_output_base_matches_input_stem(tmp_path: Path, monkeypatch) -> None:
     day = "2026-02-13"
     tweets_dir = tmp_path / "Tweets 2026"
@@ -176,6 +241,59 @@ def test_cleanup_only_if_consolidated_keeps_md_and_removes_html_without_rebuild(
     assert consolidated_html.is_file()
     assert src_md.is_file()
     assert not src_html.exists()
+
+
+def test_cleanup_only_if_consolidated_ports_and_clears_source_highlights(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    day = "2026-02-13"
+    base_dir = tmp_path
+    tweets_dir = base_dir / "Tweets" / "Tweets 2026"
+    tweets_dir.mkdir(parents=True)
+
+    src_md, src_html = _write_tweet_pair(
+        tweets_dir,
+        "Tweet - keep-cleaning",
+        day,
+        hour=10,
+        body="Cleanup highlighted body.",
+    )
+    consolidated_md = tweets_dir / f"Tweets {day}.md"
+    consolidated_html = tweets_dir / f"Tweets {day}.html"
+    consolidated_md.write_text("already built", encoding="utf-8")
+    consolidated_html.write_text("<html><body>Cleanup highlighted body.</body></html>", encoding="utf-8")
+
+    highlight_store.save_highlights_for_path(
+        base_dir,
+        "Tweets/Tweets 2026/Tweet - keep-cleaning.html",
+        {"highlights": [{"id": "h1", "text": "Cleanup highlighted body."}]},
+    )
+
+    args = argparse.Namespace(
+        day=day,
+        year=2026,
+        tweets_dir=tweets_dir,
+        output_base=None,
+        cleanup_if_consolidated=True,
+    )
+    monkeypatch.setattr(mod, "parse_args", lambda: args)
+    monkeypatch.setattr(mod.cfg, "BASE_DIR", base_dir)
+
+    exit_code = mod.main()
+    assert exit_code == 0
+
+    assert src_md.is_file()
+    assert not src_html.exists()
+    consolidated_payload = highlight_store.load_highlights_for_path(
+        base_dir,
+        f"Tweets/Tweets 2026/Tweets {day}.html",
+    )
+    assert [item["text"] for item in consolidated_payload["highlights"]] == ["Cleanup highlighted body."]
+    assert highlight_store.load_highlights_for_path(
+        base_dir,
+        "Tweets/Tweets 2026/Tweet - keep-cleaning.html",
+    )["highlights"] == []
 
 
 def test_cleanup_only_if_consolidated_keeps_sources_when_no_consolidated(tmp_path: Path, monkeypatch) -> None:
