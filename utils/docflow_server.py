@@ -801,15 +801,38 @@ def _send_file(handler: BaseHTTPRequestHandler, path: Path) -> None:
     handler.wfile.write(data)
 
 
-def _content_disposition_filename_parts(filename: str, *, default_filename: str) -> tuple[str, str]:
+def _normalized_download_filename(filename: str, *, default_filename: str) -> str:
     cleaned = (
-        filename.replace('"', "")
-        .replace("\\", "")
+        str(filename or "")
+        .replace("\x00", "")
+        .replace('"', "")
         .replace("\r", "")
         .replace("\n", "")
         .replace(";", "_")
     )
-    dash_normalized = cleaned.translate(
+    cleaned = cleaned.replace("\\", "/").rsplit("/", 1)[-1]
+    cleaned = cleaned.strip().strip(".")
+    if not cleaned:
+        return default_filename
+
+    default_path = Path(default_filename)
+    default_suffix = default_path.suffix
+    candidate = Path(cleaned)
+    if default_suffix:
+        stem = candidate.stem if candidate.suffix else candidate.name
+        stem = stem.strip().strip(".")
+        if not stem:
+            stem = default_path.stem
+        cleaned = f"{stem}{default_suffix}"
+    return cleaned
+
+
+def _content_disposition_filename_parts(filename: str, *, default_filename: str) -> tuple[str, str]:
+    normalized_filename = _normalized_download_filename(
+        filename,
+        default_filename=default_filename,
+    )
+    dash_normalized = normalized_filename.translate(
         {
             ord("\u2010"): "-",
             ord("\u2011"): "-",
@@ -819,15 +842,20 @@ def _content_disposition_filename_parts(filename: str, *, default_filename: str)
             ord("\u2212"): "-",
         }
     )
-    normalized = unicodedata.normalize("NFKD", dash_normalized)
-    fallback = normalized.encode("ascii", "ignore").decode("ascii")
-    fallback = fallback.strip().strip(".")
-    if not fallback:
-        fallback = default_filename
-    default_suffix = Path(default_filename).suffix
-    if default_suffix and not fallback.lower().endswith(default_suffix.lower()):
-        fallback += default_suffix
-    utf8_filename = quote(cleaned, safe="")
+    normalized_path = Path(normalized_filename)
+    normalized_suffix = normalized_path.suffix or Path(default_filename).suffix
+    normalized_stem = (
+        dash_normalized[:-len(normalized_suffix)]
+        if normalized_suffix
+        else dash_normalized
+    )
+    fallback_stem = unicodedata.normalize("NFKD", normalized_stem)
+    fallback_stem = fallback_stem.encode("ascii", "ignore").decode("ascii")
+    fallback_stem = fallback_stem.strip().strip(".")
+    if not fallback_stem:
+        fallback_stem = Path(default_filename).stem
+    fallback = f"{fallback_stem}{normalized_suffix}"
+    utf8_filename = quote(normalized_filename, safe="")
     return fallback, utf8_filename
 
 

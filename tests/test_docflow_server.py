@@ -603,7 +603,7 @@ def test_api_export_markdown_content_disposition_supports_unicode_filename(tmp_p
     (posts / "doc.md").write_text("# Doc\n", encoding="utf-8")
 
     def _fake_export(_self: docflow_server.DocflowApp, _rel_path: str) -> tuple[bytes, str]:
-        return b"# Doc\n", "ARC‑AGI evaluación.md"
+        return b"# Doc\n", "nested/ARC‑AGI evaluación.html"
 
     monkeypatch.setattr(docflow_server.DocflowApp, "api_export_markdown", _fake_export)
 
@@ -618,6 +618,35 @@ def test_api_export_markdown_content_disposition_supports_unicode_filename(tmp_p
         content_disposition = headers.get("content-disposition") or ""
         assert 'attachment; filename="ARC-AGI evaluacion.md"' in content_disposition
         assert "filename*=UTF-8''ARC%E2%80%91AGI%20evaluaci%C3%B3n.md" in content_disposition
+        assert body == b"# Doc\n"
+    finally:
+        server.shutdown()
+        server.server_close()
+
+
+def test_api_export_markdown_content_disposition_forces_md_extension(tmp_path: Path, monkeypatch):
+    base = tmp_path / "base"
+    posts = base / "Posts" / "Posts 2026"
+    posts.mkdir(parents=True)
+    (posts / "doc.html").write_text("<html><body>Raw Doc</body></html>", encoding="utf-8")
+    (posts / "doc.md").write_text("# Doc\n", encoding="utf-8")
+
+    def _fake_export(_self: docflow_server.DocflowApp, _rel_path: str) -> tuple[bytes, str]:
+        return b"# Doc\n", "doc"
+
+    monkeypatch.setattr(docflow_server.DocflowApp, "api_export_markdown", _fake_export)
+
+    server, port = _start_server(base)
+    try:
+        status, body, headers = _get_bytes_with_headers(
+            port,
+            "/api/export-markdown?path=Posts%2FPosts%202026%2Fdoc.html",
+        )
+        assert status == 200
+        assert headers.get("content-type") == "text/markdown; charset=utf-8"
+        content_disposition = headers.get("content-disposition") or ""
+        assert 'attachment; filename="doc.md"' in content_disposition
+        assert "filename*=UTF-8''doc.md" in content_disposition
         assert body == b"# Doc\n"
     finally:
         server.shutdown()

@@ -66,6 +66,8 @@ Documented and currently available endpoints:
 - `GET /api/reading-position?path=<rel_path>`
 - `PUT /api/reading-position?path=<rel_path>`
 
+`GET /api/export-markdown` returns the Markdown as an HTTP attachment with an explicit `.md` filename in both `filename` and `filename*`.
+
 If `DONE_LINKS_FILE` is set, each `POST /api/to-done` transition appends a Markdown link entry to that file.
 
 ### Local state files
