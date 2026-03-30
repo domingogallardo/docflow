@@ -7,7 +7,7 @@
  * - Highlight navigation helpers (next/previous + progress)
  */
 (function () {
-  var version = '1.2.0';
+  var version = '1.2.1';
 
   // -- Minimal helpers: longer head/tail slices to scope text fragments better --
   function baseUrlWithoutHash() {
@@ -81,6 +81,48 @@
     } catch (_) {
       return String(href);
     }
+  }
+
+  function closestImageZoomLink(target) {
+    if (!target) return null;
+    if (target.nodeType === 3) target = target.parentElement;
+    if (!target || !target.closest) return null;
+    return target.closest('a.image-zoom');
+  }
+
+  function clickedZoomImage(target, link) {
+    if (!link || !target) return null;
+    if (target.nodeType === 3) target = target.parentElement;
+    if (!target || !target.closest) return null;
+    var img = target.closest('img');
+    if (!img || !link.contains(img)) return null;
+    return img;
+  }
+
+  function patchLegacyMultiImageZoom() {
+    if (!document || !document.addEventListener) return;
+    document.addEventListener('click', function(event) {
+      var link = closestImageZoomLink(event.target);
+      if (!link || !link.querySelectorAll) return;
+      var images = link.querySelectorAll('img');
+      if (!images || images.length < 2) return;
+      var img = clickedZoomImage(event.target, link);
+      if (!img) return;
+      var clickedSrc = img.currentSrc || img.getAttribute('src') || '';
+      if (!clickedSrc) return;
+      var originalHref = link.getAttribute('href');
+      if (originalHref === clickedSrc) return;
+      link.setAttribute('href', clickedSrc);
+      window.setTimeout(function() {
+        if (originalHref === null) {
+          link.removeAttribute('href');
+          return;
+        }
+        if (link.getAttribute('href') === clickedSrc) {
+          link.setAttribute('href', originalHref);
+        }
+      }, 0);
+    }, true);
   }
 
   function markdownFromChildren(node) {
@@ -1676,6 +1718,7 @@
   }
   function initArticleUi() {
     ensureMobileReadingTypography();
+    patchLegacyMultiImageZoom();
     ensureOverlay();
     installReadingPositionTracking();
     initHighlights()

@@ -34,3 +34,6 @@ def test_article_js_includes_highlights():
     assert 'padding: 0 2px;' not in content
     assert '/data/highlights/' not in content
     assert 'articlejs-reading-type-style' in content
+    assert "closest('a.image-zoom')" in content
+    assert "querySelectorAll('img')" in content
+    assert 'img.currentSrc' in content
