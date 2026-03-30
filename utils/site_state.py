@@ -1,4 +1,4 @@
-"""Persistent local state for done, reading, and working entries."""
+"""Persistent local state for done and reading entries."""
 
 from __future__ import annotations
 
@@ -9,12 +9,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from utils.site_paths import (
-    done_state_path,
-    normalize_rel_path,
-    reading_state_path,
-    working_state_path,
-)
+from utils.site_paths import done_state_path, normalize_rel_path, reading_state_path
 
 STATE_VERSION = 1
 
@@ -77,21 +72,8 @@ def save_done_state(base_dir: Path, state: dict[str, Any]) -> None:
     _write_state(done_state_path(base_dir), state)
 
 
-def load_working_state(base_dir: Path) -> dict[str, Any]:
-    return _read_state(working_state_path(base_dir))
-
-
-def save_working_state(base_dir: Path, state: dict[str, Any]) -> None:
-    _write_state(working_state_path(base_dir), state)
-
-
 def list_done(base_dir: Path) -> set[str]:
     state = load_done_state(base_dir)
-    return set(state.get("items", {}).keys())
-
-
-def list_working(base_dir: Path) -> set[str]:
-    state = load_working_state(base_dir)
     return set(state.get("items", {}).keys())
 
 
@@ -113,7 +95,6 @@ def set_done_path(
     rel_path: str,
     *,
     reading_started_at: str | None = None,
-    working_started_at: str | None = None,
 ) -> bool:
     key = normalize_rel_path(rel_path)
     state = load_done_state(base_dir)
@@ -133,10 +114,6 @@ def set_done_path(
 
     if isinstance(reading_started_at, str) and reading_started_at and "reading_started_at" not in entry:
         entry["reading_started_at"] = reading_started_at
-        changed = True
-
-    if isinstance(working_started_at, str) and working_started_at and "working_started_at" not in entry:
-        entry["working_started_at"] = working_started_at
         changed = True
 
     if changed:
@@ -185,29 +162,3 @@ def pop_reading_path(base_dir: Path, rel_path: str) -> dict[str, Any] | None:
 def is_reading(base_dir: Path, rel_path: str) -> bool:
     key = normalize_rel_path(rel_path)
     return key in list_reading(base_dir)
-
-
-def set_working_path(base_dir: Path, rel_path: str) -> bool:
-    key = normalize_rel_path(rel_path)
-    state = load_working_state(base_dir)
-    items: dict[str, dict[str, Any]] = state["items"]
-    already = key in items
-    if not already:
-        items[key] = {"working_at": _utc_now_iso()}
-        save_working_state(base_dir, state)
-    return not already
-
-
-def pop_working_path(base_dir: Path, rel_path: str) -> dict[str, Any] | None:
-    key = normalize_rel_path(rel_path)
-    state = load_working_state(base_dir)
-    items: dict[str, dict[str, Any]] = state["items"]
-    value = items.pop(key, None)
-    if value is not None:
-        save_working_state(base_dir, state)
-    return value
-
-
-def is_working(base_dir: Path, rel_path: str) -> bool:
-    key = normalize_rel_path(rel_path)
-    return key in list_working(base_dir)

@@ -28,7 +28,6 @@ def test_write_site_done_index_uses_done_state(tmp_path: Path):
     assert out == base / "_site" / "done" / "index.html"
     assert "/posts/raw/Posts%202026/doc.html" in content
     assert '<a href="/reading/">Reading</a>' in content
-    assert '<a href="/working/">Working</a>' in content
     assert "<h1>Done</h1>" in content
     assert "🟡 highlight" in content
     assert "data-dg-sort-toggle" in content

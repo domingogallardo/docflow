@@ -29,7 +29,6 @@ def test_done_entry_keeps_transition_start_timestamps(tmp_path: Path, monkeypatc
         base,
         rel,
         reading_started_at="2026-02-16T21:14:43Z",
-        working_started_at="2026-02-18T08:16:36Z",
     )
     assert changed is True
 
@@ -37,20 +36,17 @@ def test_done_entry_keeps_transition_start_timestamps(tmp_path: Path, monkeypatc
     entry = state["items"][rel]
     assert entry["done_at"] == "2026-02-25T09:00:00Z"
     assert entry["reading_started_at"] == "2026-02-16T21:14:43Z"
-    assert entry["working_started_at"] == "2026-02-18T08:16:36Z"
 
     changed_again = site_state.set_done_path(
         base,
         rel,
         reading_started_at="2026-01-01T00:00:00Z",
-        working_started_at="2026-01-01T00:00:00Z",
     )
     assert changed_again is False
 
     state_after = site_state.load_done_state(base)
     entry_after = state_after["items"][rel]
     assert entry_after["reading_started_at"] == "2026-02-16T21:14:43Z"
-    assert entry_after["working_started_at"] == "2026-02-18T08:16:36Z"
 
 
 def test_reading_roundtrip(tmp_path: Path):
@@ -74,20 +70,3 @@ def test_reading_roundtrip(tmp_path: Path):
     removed = site_state.pop_reading_path(base, rel)
     assert removed is not None
     assert site_state.is_reading(base, rel) is False
-
-
-def test_working_roundtrip(tmp_path: Path):
-    base = tmp_path / "base"
-    base.mkdir()
-    rel = "Posts/Posts 2026/doc.html"
-
-    changed = site_state.set_working_path(base, rel)
-    assert changed is True
-    assert site_state.is_working(base, rel) is True
-
-    changed_again = site_state.set_working_path(base, rel)
-    assert changed_again is False
-
-    removed = site_state.pop_working_path(base, rel)
-    assert removed is not None
-    assert site_state.is_working(base, rel) is False

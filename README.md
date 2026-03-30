@@ -29,17 +29,16 @@ Podcast snippets are typically captured in [Snipd](https://www.snipd.com) and th
 `utils/docflow_server.py` currently offers:
 
 - Home page with exact filename search.
-- Browse / Reading / Working / Done views.
-- Browse hides items already in Reading / Working / Done.
+- Browse / Reading / Done views.
+- Browse hides items already in Reading / Done.
 - Highlight toggle on list pages, with browser-persistent state until switched back off.
 - With `Highlight: on`, highlighted items move first and are ordered by most recent highlight.
 - In `Done`, `Highlight: on` regroups items by the year of the latest highlight, so re-highlighted older items surface under the current highlight year.
 - Reading ordered by `reading_at` (oldest first).
-- Working ordered by `working_at` (newest first).
 - Done ordered by `done_at` (newest first).
-- Stage transitions from the UI (`Move to Reading`, `Move to Working`, `Move to Done`, `Back to Browse`, `Reopen to Reading`).
+- Stage transitions from the UI (`Move to Reading`, `Move to Done`, `Back to Browse`, `Reopen to Reading`).
 - Per-article actions in the overlay:
-  - Context link (`Inside Browse`, `Inside Reading`, `Inside Working`, `Inside Done`)
+  - Context link (`Inside Browse`, `Inside Reading`, `Inside Done`)
   - `PDF` export
   - `MD` export
   - `Rebuild`
@@ -52,7 +51,6 @@ Podcast snippets are typically captured in [Snipd](https://www.snipd.com) and th
 Documented and currently available endpoints:
 
 - `POST /api/to-reading`
-- `POST /api/to-working`
 - `POST /api/to-done`
 - `POST /api/to-browse`
 - `POST /api/reopen`
@@ -75,14 +73,10 @@ If `DONE_LINKS_FILE` is set, each `POST /api/to-done` transition appends a Markd
 All state is stored under `BASE_DIR/state/`:
 
 - `reading.json`: per-path `reading_at` timestamp.
-- `working.json`: per-path `working_at` timestamp.
 - `done.json`: per-path `done_at` timestamp and optional transition metadata copied on `to-done`:
   - `reading_started_at` (from `reading_at` when moving from Reading to Done)
-  - `working_started_at` (from `working_at` when moving from Working to Done)
 - `highlights/<sha256-prefix>/<sha256>.json`: canonical per-document highlight payloads, including per-highlight `created_at` timestamps and document `updated_at`.
 - `reading_positions/<sha256-prefix>/<sha256>.json`: canonical per-document reading-position payloads (`scroll_y`, `max_scroll`, `progress`, viewport/document height metadata).
-
-These fields allow post-hoc lead-time calculations for completed items (for example `done_at - working_started_at`).
 
 ### Background automations currently in use
 
@@ -190,7 +184,6 @@ python process_documents.py all --year 2026
 ```bash
 python utils/build_browse_index.py --base-dir "$DOCFLOW_BASE_DIR"
 python utils/build_reading_index.py --base-dir "$DOCFLOW_BASE_DIR"
-python utils/build_working_index.py --base-dir "$DOCFLOW_BASE_DIR"
 python utils/build_done_index.py --base-dir "$DOCFLOW_BASE_DIR"
 ```
 
@@ -252,7 +245,7 @@ Behavior:
 
 - Loads `~/.docflow_env` if present.
 - Runs `process_documents.py` with your arguments (`all` for full ingestion).
-- Rebuilds intranet browse/reading/working/done pages when processing succeeds.
+- Rebuilds intranet browse/reading/done pages when processing succeeds.
 
 Optional override:
 
@@ -270,7 +263,7 @@ Behavior:
 
 - Loads `~/.docflow_env` if present.
 - Runs `bin/build_tweet_consolidated.sh --yesterday`.
-- Rebuilds intranet browse/reading/working/done pages when consolidation succeeds.
+- Rebuilds intranet browse/reading/done pages when consolidation succeeds.
 
 Tweet queue from likes feed:
 

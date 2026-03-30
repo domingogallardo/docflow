@@ -18,10 +18,8 @@ from utils.reading_position_store import reading_position_state_path, save_readi
 from utils.site_state import (
     is_done,
     is_reading,
-    is_working,
     load_done_state,
     load_reading_state,
-    load_working_state,
 )
 
 
@@ -107,11 +105,6 @@ def test_api_to_done_moves_to_done_listing(tmp_path: Path):
         assert status == 200
         assert payload["ok"] is True
         assert is_done(base, "Posts/Posts 2026/doc.html") is True
-        assert is_working(base, "Posts/Posts 2026/doc.html") is False
-
-        working_status, working_html = _get(port, "/working/")
-        assert working_status == 200
-        assert "doc.html" not in working_html
 
         done_status, done_html = _get(port, "/done/")
         assert done_status == 200
@@ -135,22 +128,12 @@ def test_api_stage_transitions_roundtrip(tmp_path: Path):
         assert payload["ok"] is True
         assert payload["data"]["stage"] == "reading"
         assert is_reading(base, rel) is True
-        assert is_working(base, rel) is False
-        assert is_done(base, rel) is False
-
-        status, payload = _post_json(port, "/api/to-working", {"path": rel})
-        assert status == 200
-        assert payload["ok"] is True
-        assert payload["data"]["stage"] == "working"
-        assert is_reading(base, rel) is False
-        assert is_working(base, rel) is True
         assert is_done(base, rel) is False
 
         status, payload = _post_json(port, "/api/to-done", {"path": rel})
         assert status == 200
         assert payload["ok"] is True
         assert payload["data"]["stage"] == "done"
-        assert is_working(base, rel) is False
         assert is_done(base, rel) is True
 
         status, payload = _post_json(port, "/api/reopen", {"path": rel})
@@ -159,7 +142,6 @@ def test_api_stage_transitions_roundtrip(tmp_path: Path):
         assert payload["data"]["stage"] == "reading"
         assert payload["data"]["transition"] == "reopen"
         assert is_reading(base, rel) is True
-        assert is_working(base, rel) is False
         assert is_done(base, rel) is False
 
         status, payload = _post_json(port, "/api/to-browse", {"path": rel})
@@ -167,42 +149,7 @@ def test_api_stage_transitions_roundtrip(tmp_path: Path):
         assert payload["ok"] is True
         assert payload["data"]["stage"] == "browse"
         assert is_reading(base, rel) is False
-        assert is_working(base, rel) is False
         assert is_done(base, rel) is False
-    finally:
-        server.shutdown()
-        server.server_close()
-
-
-def test_api_to_done_keeps_working_start_time_in_done_state(tmp_path: Path):
-    base = tmp_path / "base"
-    posts = base / "Posts" / "Posts 2026"
-    posts.mkdir(parents=True)
-    rel = "Posts/Posts 2026/doc.html"
-    (posts / "doc.html").write_text("<html><body>Doc</body></html>", encoding="utf-8")
-
-    server, port = _start_server(base)
-    try:
-        status, payload = _post_json(port, "/api/to-reading", {"path": rel})
-        assert status == 200
-        assert payload["ok"] is True
-
-        status, payload = _post_json(port, "/api/to-working", {"path": rel})
-        assert status == 200
-        assert payload["ok"] is True
-
-        working_state = load_working_state(base)
-        working_started_at = working_state["items"][rel]["working_at"]
-        assert isinstance(working_started_at, str)
-
-        status, payload = _post_json(port, "/api/to-done", {"path": rel})
-        assert status == 200
-        assert payload["ok"] is True
-
-        done_state = load_done_state(base)
-        done_entry = done_state["items"][rel]
-        assert done_entry["working_started_at"] == working_started_at
-        assert is_working(base, rel) is False
     finally:
         server.shutdown()
         server.server_close()
@@ -339,50 +286,6 @@ def test_api_to_reading_roundtrip(tmp_path: Path):
         server.shutdown()
         server.server_close()
 
-
-def test_api_to_working_is_restricted_to_reading_stage(tmp_path: Path):
-    base = tmp_path / "base"
-    posts = base / "Posts" / "Posts 2026"
-    posts.mkdir(parents=True)
-    rel = "Posts/Posts 2026/doc.html"
-    (posts / "doc.html").write_text("<html><body>Doc</body></html>", encoding="utf-8")
-
-    server, port = _start_server(base)
-    try:
-        status, payload = _post_json(port, "/api/to-working", {"path": rel})
-        assert status == 409
-        assert payload["ok"] is False
-        assert "only allowed from reading stage" in payload["error"]
-
-        status, payload = _post_json(port, "/api/to-reading", {"path": rel})
-        assert status == 200
-        assert payload["ok"] is True
-
-        status, payload = _post_json(port, "/api/to-working", {"path": rel})
-        assert status == 200
-        assert payload["ok"] is True
-
-        status, payload = _post_json(port, "/api/to-done", {"path": rel})
-        assert status == 200
-        assert payload["ok"] is True
-
-        status, payload = _post_json(port, "/api/to-working", {"path": rel})
-        assert status == 409
-        assert payload["ok"] is False
-        assert "only allowed from reading stage" in payload["error"]
-
-        status, payload = _post_json(port, "/api/reopen", {"path": rel})
-        assert status == 200
-        assert payload["ok"] is True
-
-        status, payload = _post_json(port, "/api/to-working", {"path": rel})
-        assert status == 200
-        assert payload["ok"] is True
-    finally:
-        server.shutdown()
-        server.server_close()
-
-
 def test_api_delete_removes_local_markdown_and_state_entries(tmp_path: Path):
     base = tmp_path / "base"
     posts = base / "Posts" / "Posts 2026"
@@ -407,10 +310,6 @@ def test_api_delete_removes_local_markdown_and_state_entries(tmp_path: Path):
         assert status == 200
         assert payload["ok"] is True
 
-        status, payload = _post_json(port, "/api/to-working", {"path": rel_path})
-        assert status == 200
-        assert payload["ok"] is True
-
         status, payload = _post_json(port, "/api/delete", {"path": rel_path})
         assert status == 200
         assert payload["ok"] is True
@@ -423,11 +322,6 @@ def test_api_delete_removes_local_markdown_and_state_entries(tmp_path: Path):
         assert not reading_position_path.exists()
         assert is_done(base, rel_path) is False
         assert is_reading(base, rel_path) is False
-        assert is_working(base, rel_path) is False
-
-        working_status, working_html = _get(port, "/working/")
-        assert working_status == 200
-        assert "doc.html" not in working_html
 
         done_status, done_html = _get(port, "/done/")
         assert done_status == 200
@@ -451,7 +345,7 @@ def test_raw_route_serves_library_file(tmp_path: Path):
         assert status == 200
         assert "Raw Doc" in body
         assert "dg-overlay" in body
-        assert '/working/article.js' in body
+        assert '/assets/article.js' in body
         assert 'name="viewport"' in body
         assert "data-stage" in body
         assert 'data-browse-url="/browse/posts/Posts%202026/"' in body
@@ -501,7 +395,6 @@ def test_raw_route_overlay_marks_reading_stage(tmp_path: Path):
         assert status == 200
         assert 'data-stage="reading"' in body
         assert "/api/export-pdf?path=" in body
-        assert "to-working" in body
         assert "to-done" in body
     finally:
         server.shutdown()
@@ -1221,6 +1114,21 @@ def test_read_route_is_removed(tmp_path: Path):
         server.server_close()
 
 
+def test_working_route_is_removed(tmp_path: Path):
+    base = tmp_path / "base"
+    (base / "Posts" / "Posts 2026").mkdir(parents=True)
+
+    server, port = _start_server(base)
+    try:
+        status, _ = _get(port, "/working/")
+        assert status == 404
+        status, _ = _get(port, "/working")
+        assert status == 404
+    finally:
+        server.shutdown()
+        server.server_close()
+
+
 def test_api_rebuild_file_recreates_html_from_markdown(tmp_path: Path):
     base = tmp_path / "base"
     posts = base / "Posts" / "Posts 2026"
@@ -1438,7 +1346,7 @@ def test_to_done_does_not_rewrite_unrelated_browse_branch(tmp_path: Path):
         server.server_close()
 
 
-def test_api_to_working_rebuilds_only_reading_and_working(tmp_path: Path, monkeypatch):
+def test_api_to_done_from_reading_rebuilds_only_reading_and_done(tmp_path: Path, monkeypatch):
     base = tmp_path / "base"
     posts = base / "Posts" / "Posts 2026"
     posts.mkdir(parents=True)
@@ -1456,30 +1364,26 @@ def test_api_to_working_rebuilds_only_reading_and_working(tmp_path: Path, monkey
     def _reading(*_args, **_kwargs):
         calls.append("reading")
 
-    def _working(*_args, **_kwargs):
-        calls.append("working")
-
     def _done(*_args, **_kwargs):
         calls.append("done")
 
     monkeypatch.setattr(docflow_server.build_browse_index, "rebuild_browse_for_path", _browse)
     monkeypatch.setattr(docflow_server.build_reading_index, "write_site_reading_index", _reading)
-    monkeypatch.setattr(docflow_server.build_working_index, "write_site_working_index", _working)
     monkeypatch.setattr(docflow_server.build_done_index, "write_site_done_index", _done)
 
-    result = app.api_to_working(rel)
-    assert result["stage"] == "working"
+    result = app.api_to_done(rel)
+    assert result["stage"] == "done"
     assert result["changed"] is True
-    assert calls == ["reading", "working"]
+    assert calls == ["reading", "done"]
 
 
-def test_api_to_done_from_working_rebuilds_only_working_and_done(tmp_path: Path, monkeypatch):
+def test_api_to_reading_from_done_rebuilds_only_done_and_reading(tmp_path: Path, monkeypatch):
     base = tmp_path / "base"
     posts = base / "Posts" / "Posts 2026"
     posts.mkdir(parents=True)
     rel = "Posts/Posts 2026/doc.html"
     (posts / "doc.html").write_text("<html><body>Doc</body></html>", encoding="utf-8")
-    docflow_server.set_working_path(base, rel)
+    docflow_server.set_done_path(base, rel)
 
     app = docflow_server.DocflowApp(base)
     calls: list[str] = []
@@ -1491,18 +1395,14 @@ def test_api_to_done_from_working_rebuilds_only_working_and_done(tmp_path: Path,
     def _reading(*_args, **_kwargs):
         calls.append("reading")
 
-    def _working(*_args, **_kwargs):
-        calls.append("working")
-
     def _done(*_args, **_kwargs):
         calls.append("done")
 
     monkeypatch.setattr(docflow_server.build_browse_index, "rebuild_browse_for_path", _browse)
     monkeypatch.setattr(docflow_server.build_reading_index, "write_site_reading_index", _reading)
-    monkeypatch.setattr(docflow_server.build_working_index, "write_site_working_index", _working)
     monkeypatch.setattr(docflow_server.build_done_index, "write_site_done_index", _done)
 
-    result = app.api_to_done(rel)
-    assert result["stage"] == "done"
+    result = app.api_to_reading(rel)
+    assert result["stage"] == "reading"
     assert result["changed"] is True
-    assert calls == ["working", "done"]
+    assert calls == ["reading", "done"]

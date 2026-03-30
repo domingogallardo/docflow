@@ -34,7 +34,7 @@ from utils.site_paths import (
     site_root,
 )
 from utils.highlight_store import highlight_status_for_path
-from utils.site_state import load_done_state, load_reading_state, load_working_state
+from utils.site_state import load_done_state, load_reading_state
 
 CATEGORY_KEYS = ("posts", "tweets", "podcasts", "pdfs", "images")
 CATEGORY_LABELS = {
@@ -57,7 +57,6 @@ class BrowseItem:
     name: str
     mtime: float
     reading: bool
-    working: bool
     highlighted: bool
     highlight_last_epoch: float | None = None
     sort_mtime: float | None = None
@@ -238,7 +237,7 @@ def _render_directory_page(
     pre_list_html: str = "",
 ) -> str:
     rows: list[str] = [_base_head(title)]
-    rows.append("<div class='dg-nav'><a href='/'>Home</a> · <a href='/browse/'>Browse</a> · <a href='/reading/'>Reading</a> · <a href='/working/'>Working</a> · <a href='/done/'>Done</a></div>")
+    rows.append("<div class='dg-nav'><a href='/'>Home</a> · <a href='/browse/'>Browse</a> · <a href='/reading/'>Reading</a> · <a href='/done/'>Done</a></div>")
     rows.append(f"<h2>Index of {html.escape(display_path)}</h2>")
     if controls_html is None:
         controls_html = (
@@ -356,7 +355,6 @@ def _dir_has_visible_entries(
     *,
     base_dir: Path,
     reading_items: dict[str, dict],
-    working_items: dict[str, dict],
     done_items: dict[str, dict],
 ) -> bool:
     key = str(path.resolve())
@@ -380,7 +378,6 @@ def _dir_has_visible_entries(
                             cache,
                             base_dir=base_dir,
                             reading_items=reading_items,
-                            working_items=working_items,
                             done_items=done_items,
                         ):
                             cache[key] = True
@@ -391,7 +388,7 @@ def _dir_has_visible_entries(
                                 rel = rel_path_from_abs(base_dir, Path(entry.path))
                             except Exception:
                                 continue
-                            if rel in reading_items or rel in working_items or rel in done_items:
+                            if rel in reading_items or rel in done_items:
                                 continue
                             cache[key] = True
                             return True
@@ -411,7 +408,6 @@ def _count_visible_files(
     *,
     base_dir: Path,
     reading_items: dict[str, dict],
-    working_items: dict[str, dict],
     done_items: dict[str, dict],
 ) -> int:
     key = str(path.resolve())
@@ -435,7 +431,6 @@ def _count_visible_files(
                             cache,
                             base_dir=base_dir,
                             reading_items=reading_items,
-                            working_items=working_items,
                             done_items=done_items,
                         )
                     else:
@@ -444,7 +439,7 @@ def _count_visible_files(
                                 rel = rel_path_from_abs(base_dir, Path(entry.path))
                             except Exception:
                                 continue
-                            if rel in reading_items or rel in working_items or rel in done_items:
+                            if rel in reading_items or rel in done_items:
                                 continue
                             total += 1
                 except OSError:
@@ -464,7 +459,6 @@ def _annotate_root_year_counts(
     entries: list[BrowseEntry],
     base_dir: Path,
     reading_items: dict[str, dict],
-    working_items: dict[str, dict],
     done_items: dict[str, dict],
 ) -> list[BrowseEntry]:
     if rel_dir != Path(".") or category not in YEAR_COUNT_CATEGORIES:
@@ -480,7 +474,6 @@ def _annotate_root_year_counts(
                 count_cache,
                 base_dir=base_dir,
                 reading_items=reading_items,
-                working_items=working_items,
                 done_items=done_items,
             )
             annotated.append(replace(entry, item_count=item_count))
@@ -535,7 +528,6 @@ def _scan_directory(
     base_dir: Path,
     abs_dir: Path,
     reading_items: dict[str, dict],
-    working_items: dict[str, dict],
     done_items: dict[str, dict],
     visibility_cache: dict[str, bool],
 ) -> tuple[list[BrowseEntry], list[str], int]:
@@ -565,7 +557,6 @@ def _scan_directory(
                             visibility_cache,
                             base_dir=base_dir,
                             reading_items=reading_items,
-                            working_items=working_items,
                             done_items=done_items,
                         ):
                             continue
@@ -590,7 +581,7 @@ def _scan_directory(
 
                 abs_path = Path(fs_entry.path)
                 rel = rel_path_from_abs(base_dir, abs_path)
-                if rel in reading_items or rel in working_items or rel in done_items:
+                if rel in reading_items or rel in done_items:
                     continue
 
                 file_count += 1
@@ -626,7 +617,6 @@ def _write_category_directory_page(
     category_root: Path,
     rel_dir: Path,
     reading_items: dict[str, dict],
-    working_items: dict[str, dict],
     done_items: dict[str, dict],
     visibility_cache: dict[str, bool],
 ) -> tuple[list[str], int]:
@@ -641,7 +631,6 @@ def _write_category_directory_page(
         base_dir=base_dir,
         abs_dir=abs_dir,
         reading_items=reading_items,
-        working_items=working_items,
         done_items=done_items,
         visibility_cache=visibility_cache,
     )
@@ -654,7 +643,6 @@ def _write_category_directory_page(
         entries=entries,
         base_dir=base_dir,
         reading_items=reading_items,
-        working_items=working_items,
         done_items=done_items,
     )
     display_path = _display_path_for_category_dir(category, rel_dir)
@@ -701,7 +689,6 @@ def _write_category_tree(
     category: str,
     category_root: Path,
     reading_items: dict[str, dict],
-    working_items: dict[str, dict],
     done_items: dict[str, dict],
 ) -> int:
     visibility_cache: dict[str, bool] = {}
@@ -713,7 +700,6 @@ def _write_category_tree(
             category_root=category_root,
             rel_dir=rel_dir,
             reading_items=reading_items,
-            working_items=working_items,
             done_items=done_items,
             visibility_cache=visibility_cache,
         )
@@ -765,7 +751,7 @@ def _write_browse_home(base_dir: Path, category_roots: dict[str, Path], counts: 
     )
     html_doc = html_doc.replace(
         "</ul><hr></body></html>",
-        "</ul><p><button class='dg-rebuild' data-api-action='rebuild'>Rebuild browse + reading + working + done</button></p><hr></body></html>",
+        "</ul><p><button class='dg-rebuild' data-api-action='rebuild'>Rebuild browse + reading + done</button></p><hr></body></html>",
     )
     (out_dir / "index.html").write_text(html_doc, encoding="utf-8")
 
@@ -793,10 +779,10 @@ def write_site_home(base_dir: Path, category_roots: dict[str, Path] | None = Non
         ".dg-actions button{padding:2px 6px;border:1px solid #ccc;border-radius:6px;background:#f7f7f7;color:#333;font:12px -apple-system,system-ui,Segoe UI,Roboto,Helvetica,Arial;cursor:pointer}"
         "</style><script src='/assets/actions.js' defer></script></head><body>"
         "<h1>Docflow Intranet</h1>"
-        "<p><a href='/browse/'>Browse</a> · <a href='/reading/'>Reading</a> · <a href='/working/'>Working</a> · <a href='/done/'>Done</a></p>"
+        "<p><a href='/browse/'>Browse</a> · <a href='/reading/'>Reading</a> · <a href='/done/'>Done</a></p>"
         f"{search_controls}"
         f"{search_result}"
-        "<p><button data-api-action='rebuild'>Rebuild browse + reading + working + done</button></p>"
+        "<p><button data-api-action='rebuild'>Rebuild browse + reading + done</button></p>"
         f"{search_js}"
         "</body></html>"
     )
@@ -955,7 +941,7 @@ def ensure_assets(base_dir: Path) -> None:
       return;
     }
 
-    const lists = Array.from(document.querySelectorAll('ul.dg-index, ul.dg-done-list, ul.dg-reading-list, ul.dg-working-list'));
+    const lists = Array.from(document.querySelectorAll('ul.dg-index, ul.dg-done-list, ul.dg-reading-list'));
     if (!toggle || lists.length === 0) return;
 
     const groups = lists.map((list) => {
@@ -1005,7 +991,7 @@ def ensure_assets(base_dir: Path) -> None:
 """.strip()
 
     css = """
-/* Base styles for working pages and shared elements */
+/* Base styles for shared intranet pages */
 body { margin:14px 18px; font:14px -apple-system,system-ui,Segoe UI,Roboto,Helvetica,Arial; color:#222; }
 header h1 { margin:6px 0 10px; font-weight:600; }
 header nav a { color:#0a7; text-decoration:none; }
@@ -1021,6 +1007,8 @@ main { max-width: 1100px; }
     (assets_dir / "actions.js").write_text(js + "\n", encoding="utf-8")
     (assets_dir / "browse-sort.js").write_text(browse_sort_js + "\n", encoding="utf-8")
     (assets_dir / "site.css").write_text(css + "\n", encoding="utf-8")
+    article_js_source = Path(__file__).resolve().parent / "static" / "article.js"
+    (assets_dir / "article.js").write_text(article_js_source.read_text(encoding="utf-8"), encoding="utf-8")
 
 
 def collect_category_items(base_dir: Path, category: str) -> list[BrowseItem]:
@@ -1036,9 +1024,6 @@ def collect_category_items(base_dir: Path, category: str) -> list[BrowseItem]:
     reading_state = load_reading_state(base_dir)
     reading_state_items = reading_state.get("items", {})
     reading_items = reading_state_items if isinstance(reading_state_items, dict) else {}
-    working_state = load_working_state(base_dir)
-    working_state_items = working_state.get("items", {})
-    working_items = working_state_items if isinstance(working_state_items, dict) else {}
 
     items: list[BrowseItem] = []
     for path in root.rglob("*"):
@@ -1053,7 +1038,6 @@ def collect_category_items(base_dir: Path, category: str) -> list[BrowseItem]:
         rel = rel_path_from_abs(base_dir, path)
         reading_entry = reading_items.get(rel)
         is_reading = rel in reading_items
-        is_working = rel in working_items
         st = path.stat()
         done_entry = done_items.get(rel)
         done_at_mtime = None
@@ -1062,9 +1046,6 @@ def collect_category_items(base_dir: Path, category: str) -> list[BrowseItem]:
         is_done = rel in done_items
         if is_done:
             is_reading = False
-            is_working = False
-        if is_working:
-            is_reading = False
 
         reading_at_mtime = None
         if isinstance(reading_entry, dict):
@@ -1072,9 +1053,6 @@ def collect_category_items(base_dir: Path, category: str) -> list[BrowseItem]:
         display_mtime = st.st_mtime
         if is_reading and reading_at_mtime is not None:
             effective_mtime = reading_at_mtime
-        elif is_working and isinstance(working_items.get(rel), dict):
-            working_at_mtime = _iso_to_epoch(working_items.get(rel, {}).get("working_at"))
-            effective_mtime = working_at_mtime if working_at_mtime is not None else display_mtime
         elif is_done and done_at_mtime is not None:
             effective_mtime = done_at_mtime
         else:
@@ -1088,7 +1066,6 @@ def collect_category_items(base_dir: Path, category: str) -> list[BrowseItem]:
                 mtime=display_mtime,
                 sort_mtime=effective_mtime,
                 reading=is_reading,
-                working=is_working,
                 highlighted=highlighted,
                 highlight_last_epoch=highlight_last_epoch,
             )
@@ -1096,7 +1073,7 @@ def collect_category_items(base_dir: Path, category: str) -> list[BrowseItem]:
 
     items.sort(
         key=lambda item: (
-            0 if item.reading else 1 if item.working else 2,
+            0 if item.reading else 1,
             -(item.sort_mtime if item.sort_mtime is not None else item.mtime),
             item.name.lower(),
         )
@@ -1135,9 +1112,6 @@ def rebuild_browse_for_path(base_dir: Path, rel_path: str) -> dict[str, object]:
         counts = build_browse_site(base_dir)
         return {"mode": "full", "reason": "unsupported_root", "counts": counts}
 
-    working_state = load_working_state(base_dir)
-    working_state_items = working_state.get("items", {})
-    working_items = working_state_items if isinstance(working_state_items, dict) else {}
     reading_state = load_reading_state(base_dir)
     reading_state_items = reading_state.get("items", {})
     reading_items = reading_state_items if isinstance(reading_state_items, dict) else {}
@@ -1167,7 +1141,6 @@ def rebuild_browse_for_path(base_dir: Path, rel_path: str) -> dict[str, object]:
             category_root=category_root,
             rel_dir=target_rel_dir,
             reading_items=reading_items,
-            working_items=working_items,
             done_items=done_items,
             visibility_cache=visibility_cache,
         )
@@ -1184,9 +1157,6 @@ def build_browse_site(base_dir: Path) -> dict[str, int]:
     ensure_assets(base_dir)
     _cleanup_obsolete_incoming_dir(base_dir)
 
-    working_state = load_working_state(base_dir)
-    working_state_items = working_state.get("items", {})
-    working_items = working_state_items if isinstance(working_state_items, dict) else {}
     reading_state = load_reading_state(base_dir)
     reading_state_items = reading_state.get("items", {})
     reading_items = reading_state_items if isinstance(reading_state_items, dict) else {}
@@ -1202,7 +1172,6 @@ def build_browse_site(base_dir: Path) -> dict[str, int]:
             category=category,
             category_root=roots[category],
             reading_items=reading_items,
-            working_items=working_items,
             done_items=done_items,
         )
 

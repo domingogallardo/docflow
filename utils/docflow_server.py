@@ -4,7 +4,7 @@
 Features:
 - Serves generated site files from BASE_DIR/_site
 - Serves raw files from BASE_DIR via dedicated routes (/posts/raw/..., /pdfs/raw/...)
-- Exposes API actions under /api/* (to-reading, to-working, to-done, to-browse, reopen, delete, rebuild, rebuild-file)
+- Exposes API actions under /api/* (to-reading, to-done, to-browse, reopen, delete, rebuild, rebuild-file)
 - Exposes local state helpers for highlights and reading-position resume
 """
 
@@ -38,7 +38,6 @@ from utils import (
     build_browse_index,
     build_done_index,
     build_reading_index,
-    build_working_index,
     markdown_to_html,
 )
 from utils.site_paths import (
@@ -55,12 +54,9 @@ from utils.site_state import (
     clear_done_path,
     is_done,
     is_reading,
-    is_working,
     pop_reading_path,
-    pop_working_path,
     set_reading_path,
     set_done_path,
-    set_working_path,
 )
 from utils.highlight_store import load_highlights_for_path, save_highlights_for_path
 from utils.reading_position_store import (
@@ -254,7 +250,6 @@ def _append_done_link_entry(rel_path: str) -> None:
 class DocflowApp:
     _PATH_ACTION_METHODS = {
         "to-reading": "api_to_reading",
-        "to-working": "api_to_working",
         "to-done": "api_to_done",
         "to-browse": "api_to_browse",
         "reopen": "api_reopen",
@@ -272,7 +267,6 @@ class DocflowApp:
     def rebuild(self) -> None:
         build_browse_index.build_browse_site(self.base_dir)
         build_reading_index.write_site_reading_index(self.base_dir)
-        build_working_index.write_site_working_index(self.base_dir)
         build_done_index.write_site_done_index(self.base_dir)
 
     def rebuild_for_path(
@@ -281,15 +275,12 @@ class DocflowApp:
         *,
         rebuild_browse: bool = True,
         rebuild_reading: bool = True,
-        rebuild_working: bool = True,
         rebuild_done: bool = True,
     ) -> None:
         if rebuild_browse:
             build_browse_index.rebuild_browse_for_path(self.base_dir, rel_path)
         if rebuild_reading:
             build_reading_index.write_site_reading_index(self.base_dir)
-        if rebuild_working:
-            build_working_index.write_site_working_index(self.base_dir)
         if rebuild_done:
             build_done_index.write_site_done_index(self.base_dir)
 
@@ -299,7 +290,6 @@ class DocflowApp:
             rel_path,
             rebuild_browse="browse" in impacted_stages,
             rebuild_reading="reading" in impacted_stages,
-            rebuild_working="working" in impacted_stages,
             rebuild_done="done" in impacted_stages,
         )
 
@@ -326,8 +316,6 @@ class DocflowApp:
         normalized = normalize_rel_path(rel_path)
         if is_done(self.base_dir, normalized):
             return "done"
-        if is_working(self.base_dir, normalized):
-            return "working"
         if is_reading(self.base_dir, normalized):
             return "reading"
         return "browse"
@@ -337,49 +325,27 @@ class DocflowApp:
         self._require_existing_library_file(normalized)
         before_stage = self.path_stage(normalized)
         changed = set_reading_path(self.base_dir, normalized)
-        changed = (pop_working_path(self.base_dir, normalized) is not None) or changed
         changed = clear_done_path(self.base_dir, normalized) or changed
         if changed:
             self.rebuild_for_stage_transition(normalized, before_stage, "reading")
         return {"changed": changed, "path": normalized, "stage": "reading"}
-
-    def api_to_working(self, rel_path: str) -> dict[str, object]:
-        normalized = self._normalize_rel_path_or_400(rel_path)
-        self._require_existing_library_file(normalized)
-        before_stage = self.path_stage(normalized)
-        if before_stage != "reading":
-            raise ApiError(409, f"Move to Working is only allowed from reading stage: {normalized}")
-        changed = set_working_path(self.base_dir, normalized)
-        changed = (pop_reading_path(self.base_dir, normalized) is not None) or changed
-        changed = clear_done_path(self.base_dir, normalized) or changed
-        if changed:
-            self.rebuild_for_stage_transition(normalized, before_stage, "working")
-        return {"changed": changed, "path": normalized, "stage": "working"}
 
     def api_to_done(self, rel_path: str) -> dict[str, object]:
         normalized = self._normalize_rel_path_or_400(rel_path)
         self._require_existing_library_file(normalized)
         before_stage = self.path_stage(normalized)
         reading_entry = pop_reading_path(self.base_dir, normalized)
-        working_entry = pop_working_path(self.base_dir, normalized)
         reading_started_at = (
             reading_entry.get("reading_at")
             if isinstance(reading_entry, dict) and isinstance(reading_entry.get("reading_at"), str)
-            else None
-        )
-        working_started_at = (
-            working_entry.get("working_at")
-            if isinstance(working_entry, dict) and isinstance(working_entry.get("working_at"), str)
             else None
         )
         changed = set_done_path(
             self.base_dir,
             normalized,
             reading_started_at=reading_started_at,
-            working_started_at=working_started_at,
         )
         changed = (reading_entry is not None) or changed
-        changed = (working_entry is not None) or changed
         if changed:
             self.rebuild_for_stage_transition(normalized, before_stage, "done")
             try:
@@ -393,7 +359,6 @@ class DocflowApp:
         self._require_existing_library_file(normalized)
         before_stage = self.path_stage(normalized)
         changed = (pop_reading_path(self.base_dir, normalized) is not None)
-        changed = (pop_working_path(self.base_dir, normalized) is not None) or changed
         changed = clear_done_path(self.base_dir, normalized) or changed
         if changed:
             self.rebuild_for_stage_transition(normalized, before_stage, "browse")
@@ -433,20 +398,17 @@ class DocflowApp:
 
         removed_done = clear_done_path(self.base_dir, normalized)
         removed_reading = pop_reading_path(self.base_dir, normalized) is not None
-        removed_working = pop_working_path(self.base_dir, normalized) is not None
         removed_reading_position = clear_reading_position_for_path(self.base_dir, normalized)
 
         if sibling_md_rel:
             clear_done_path(self.base_dir, sibling_md_rel)
             pop_reading_path(self.base_dir, sibling_md_rel)
-            pop_working_path(self.base_dir, sibling_md_rel)
             clear_reading_position_for_path(self.base_dir, sibling_md_rel)
 
         self.rebuild_for_path(
             normalized,
             rebuild_browse=True,
             rebuild_reading=(before_stage == "reading") or removed_reading,
-            rebuild_working=(before_stage == "working") or removed_working,
             rebuild_done=(before_stage == "done") or removed_done,
         )
         return {
@@ -454,7 +416,6 @@ class DocflowApp:
             "deleted_md": deleted_md,
             "removed_done": removed_done,
             "removed_reading": removed_reading,
-            "removed_working": removed_working,
             "removed_reading_position": removed_reading_position,
             "redirect": _browse_parent_url_for_rel_path(normalized),
         }
@@ -503,7 +464,6 @@ class DocflowApp:
             html_rel,
             rebuild_browse=(stage == "browse"),
             rebuild_reading=(stage == "reading"),
-            rebuild_working=(stage == "working"),
             rebuild_done=(stage == "done"),
         )
         return {"rebuilt": True, "path": html_rel, "markdown": md_rel}
@@ -526,7 +486,6 @@ class DocflowApp:
             normalized,
             rebuild_browse=(stage == "browse"),
             rebuild_reading=(stage == "reading"),
-            rebuild_working=(stage == "working"),
             rebuild_done=(stage == "done"),
         )
         return saved
@@ -1218,7 +1177,6 @@ OVERLAY_JS = """
           return;
         }
         if (action === 'to-reading' || action === 'reopen') stage = 'reading';
-        if (action === 'to-working') stage = 'working';
         if (action === 'to-done') stage = 'done';
         if (action === 'to-browse') stage = 'browse';
         if (action === 'delete') {
@@ -1243,14 +1201,12 @@ OVERLAY_JS = """
 
   function currentIndexUrl() {
     if (stage === 'reading') return '/reading/';
-    if (stage === 'working') return '/working/';
     if (stage === 'done') return '/done/';
     return browseIndexUrl;
   }
 
   function currentInsideLabel() {
     if (stage === 'reading') return 'Inside Reading';
-    if (stage === 'working') return 'Inside Working';
     if (stage === 'done') return 'Inside Done';
     return 'Inside Browse';
   }
@@ -1422,13 +1378,6 @@ OVERLAY_JS = """
     if (stage === 'reading') {
       return [
         ['Back to Browse', 'to-browse'],
-        ['Move to Working', 'to-working'],
-        ['Move to Done', 'to-done']
-      ];
-    }
-    if (stage === 'working') {
-      return [
-        ['Back to Reading', 'to-reading'],
         ['Move to Done', 'to-done']
       ];
     }
@@ -1549,8 +1498,8 @@ def _inject_html_overlay(*, html_text: str, rel_path: str, stage: str, has_markd
     browse_url_attr = html.escape(_browse_parent_url_for_rel_path(rel_path), quote=True)
     has_markdown_attr = "true" if has_markdown_download else "false"
     article_js = ""
-    if "/working/article.js" not in html_text:
-        article_js = f"<script defer src=\"/working/article.js\" data-docflow-path=\"{path_attr}\"></script>"
+    if "/assets/article.js" not in html_text:
+        article_js = f"<script defer src=\"/assets/article.js\" data-docflow-path=\"{path_attr}\"></script>"
     tags = (
         article_js
         + f"<style>{OVERLAY_CSS}</style>"
@@ -1702,7 +1651,7 @@ def make_handler(app: DocflowApp):
                 _send_json(self, 404, {"ok": False, "error": "Raw file not found"})
                 return
 
-            if path in ("/browse", "/reading", "/working", "/done"):
+            if path in ("/browse", "/reading", "/done"):
                 self.send_response(302)
                 self.send_header("Location", path + "/")
                 self.end_headers()
@@ -1776,7 +1725,7 @@ def parse_args() -> argparse.Namespace:
         "--rebuild-on-start",
         dest="rebuild_on_start",
         action="store_true",
-        help="Rebuild browse/reading/working/done static pages before serving.",
+        help="Rebuild browse/reading/done static pages before serving.",
     )
     parser.add_argument("--no-rebuild-on-start", dest="rebuild_on_start", action="store_false", help=argparse.SUPPRESS)
     return parser.parse_args()

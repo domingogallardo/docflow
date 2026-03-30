@@ -1,4 +1,4 @@
-/* Minimal base JS for /working/ pages
+/* Minimal base JS for raw article pages
  * - Discreet overlay actions (copy quote + highlight)
  * - Console API: ArticleJS.active / ArticleJS.ping()
  * - Quote capture helpers with Text Fragments and Markdown
@@ -16,17 +16,16 @@
   function currentPathname() {
     try { return String(location.pathname || ''); } catch (_) { return ''; }
   }
-  function isWorkingIndexLikePage() {
+  function isIntranetIndexLikePage() {
     var path = currentPathname();
     if (!path) return false;
-    if (path === '/working' || path === '/working/') return true;
-    if (path === '/working/tweets' || path === '/working/tweets/') return true;
-    if (path.endsWith('/working.html') || path.endsWith('/working/index.html')) return true;
-    if (/^\/working\/tweets\/\d{4}\.html$/.test(path)) return true;
+    if (path === '/browse' || path === '/browse/') return true;
+    if (path === '/reading' || path === '/reading/') return true;
+    if (path === '/done' || path === '/done/') return true;
     return false;
   }
   function ensureMobileReadingTypography() {
-    if (isWorkingIndexLikePage()) return;
+    if (isIntranetIndexLikePage()) return;
     if (!document) return;
     var id = 'articlejs-reading-type-style';
     if (document.getElementById(id)) return;
@@ -334,7 +333,7 @@
 
   function getLocalRawRelPath() {
     try {
-      var taggedScript = document.querySelector('script[src$="/working/article.js"][data-docflow-path]');
+      var taggedScript = document.querySelector('script[src$="/assets/article.js"][data-docflow-path]');
       if (taggedScript) {
         var taggedPath = taggedScript.getAttribute('data-docflow-path') || '';
         if (taggedPath) return taggedPath;

@@ -32,7 +32,6 @@ def test_write_site_reading_index_uses_reading_state(tmp_path: Path):
     assert "/posts/raw/Posts%202026/doc.html" in content
     assert '<a href="/browse/">Browse</a>' in content
     assert '<a href="/reading/">Reading</a>' in content
-    assert '<a href="/working/">Working</a>' in content
     assert '<a href="/done/">Done</a>' in content
     assert "<title>Reading (1)</title>" in content
     assert "<h1>Reading (1)</h1>" in content
@@ -47,7 +46,6 @@ def test_write_site_reading_index_uses_reading_state(tmp_path: Path):
     assert "<script src=\"/assets/browse-sort.js\" defer></script>" in content
     assert "🟡" in content
     assert "Posts/Posts 2026/doc.html" not in content
-
 
 def test_site_reading_orders_by_reading_time(tmp_path: Path, monkeypatch):
     base = tmp_path / "base"
@@ -100,7 +98,6 @@ def test_reading_index_shows_state_actions_for_pdfs(tmp_path: Path):
     content = out.read_text(encoding="utf-8")
 
     assert "/pdfs/raw/Pdfs%202026/paper.pdf" in content
-    assert 'data-api-action="to-working"' in content
     assert 'data-api-action="to-done"' in content
     assert 'data-api-action="to-browse"' in content
     assert 'data-docflow-path="Pdfs/Pdfs 2026/paper.pdf"' in content

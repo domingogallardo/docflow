@@ -1,12 +1,16 @@
-def test_build_working_index_includes_article_js():
-    import importlib.util, pathlib
-    path = pathlib.Path('utils/build_working_index.py')
-    spec = importlib.util.spec_from_file_location('build_working_index', path)
-    mod = importlib.util.module_from_spec(spec)
-    assert spec and spec.loader
-    spec.loader.exec_module(mod)  # type: ignore
-    html = mod.build_site_working_html([])
-    assert '<script src="/working/article.js" defer></script>' in html
+def test_browse_assets_include_article_js(tmp_path):
+    from pathlib import Path
+
+    from utils import build_browse_index
+
+    base = tmp_path / "base"
+    base.mkdir()
+
+    build_browse_index.ensure_assets(base)
+
+    article_js = base / "_site" / "assets" / "article.js"
+    assert article_js.exists()
+    assert "articlejs-reading-type-style" in article_js.read_text(encoding="utf-8")
 
 
 def test_article_js_includes_highlights():

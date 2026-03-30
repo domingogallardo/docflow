@@ -4,7 +4,7 @@ set -euo pipefail
 # Unified wrapper for pipeline execution.
 # - Loads ~/.docflow_env if it exists
 # - Runs process_documents.py
-# - Rebuilds local intranet browse/reading/working/done outputs
+# - Rebuilds local intranet browse/reading/done outputs
 
 ENV_FILE="${HOME}/.docflow_env"
 if [ -f "${ENV_FILE}" ]; then
@@ -60,7 +60,6 @@ echo "[$(date -Iseconds)] Docflow: finished exit=${status}"
 
 intranet_browse_status=0
 intranet_reading_status=0
-intranet_working_status=0
 intranet_done_status=0
 intranet_status=0
 if [ "${status}" -eq 0 ]; then
@@ -78,18 +77,12 @@ if [ "${status}" -eq 0 ]; then
     echo "[$(date -Iseconds)] Docflow: intranet reading build exit=${intranet_reading_status}"
 
     set +e
-    "${PYTHON_BIN}" utils/build_working_index.py --base-dir "${INTRANET_BASE_DIR}"
-    intranet_working_status=$?
-    set -e
-    echo "[$(date -Iseconds)] Docflow: intranet working build exit=${intranet_working_status}"
-
-    set +e
     "${PYTHON_BIN}" utils/build_done_index.py --base-dir "${INTRANET_BASE_DIR}"
     intranet_done_status=$?
     set -e
     echo "[$(date -Iseconds)] Docflow: intranet done build exit=${intranet_done_status}"
 
-    if [ "${intranet_browse_status}" -ne 0 ] || [ "${intranet_reading_status}" -ne 0 ] || [ "${intranet_working_status}" -ne 0 ] || [ "${intranet_done_status}" -ne 0 ]; then
+    if [ "${intranet_browse_status}" -ne 0 ] || [ "${intranet_reading_status}" -ne 0 ] || [ "${intranet_done_status}" -ne 0 ]; then
       intranet_status=1
     fi
   else

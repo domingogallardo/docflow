@@ -43,8 +43,6 @@ def test_resolve_base_dir_prefers_env(monkeypatch, tmp_path: Path):
     monkeypatch.setenv(site_paths.BASE_DIR_ENV, str(tmp_path))
     assert site_paths.resolve_base_dir() == tmp_path
 
-
-def test_state_paths_include_working_file(tmp_path: Path):
+def test_state_paths_cover_done_and_reading(tmp_path: Path):
     assert site_paths.done_state_path(tmp_path).name == "done.json"
     assert site_paths.reading_state_path(tmp_path).name == "reading.json"
-    assert site_paths.working_state_path(tmp_path).name == "working.json"

@@ -66,10 +66,6 @@ def done_state_path(base_dir: Path) -> Path:
     return state_root(base_dir) / "done.json"
 
 
-def working_state_path(base_dir: Path) -> Path:
-    return state_root(base_dir) / "working.json"
-
-
 def reading_state_path(base_dir: Path) -> Path:
     return state_root(base_dir) / "reading.json"
 

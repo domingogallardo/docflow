@@ -79,7 +79,7 @@ def test_build_browse_site_generates_indexes_and_actions(tmp_path: Path):
     assert "back_forward" in browse_sort_content
     assert "const sortableFiles = sortable.filter" in browse_sort_content
     assert "!href.endsWith('/')" in browse_sort_content
-    assert "ul.dg-index, ul.dg-done-list, ul.dg-reading-list, ul.dg-working-list" in browse_sort_content
+    assert "ul.dg-index, ul.dg-done-list, ul.dg-reading-list" in browse_sort_content
     assert "data-dg-sort-direction" in browse_sort_content
     assert "defaultSortDirection" in browse_sort_content
     assert 'data-dg-highlight-view="default"' in browse_sort_content
@@ -181,30 +181,26 @@ def test_browse_hides_reading_items_without_touching_mtime(tmp_path: Path):
     assert "<span class='dg-date'> — " not in html
 
 
-def test_browse_hides_reading_working_and_done_items(tmp_path: Path, monkeypatch):
+def test_browse_hides_recently_staged_items(tmp_path: Path, monkeypatch):
     base = tmp_path / "base"
     posts = base / "Posts" / "Posts 2026"
     posts.mkdir(parents=True)
 
     reading_doc = posts / "reading.html"
-    working_doc = posts / "working.html"
     done_doc = posts / "done.html"
     rest_doc = posts / "rest.html"
     reading_doc.write_text("<html><body>Reading</body></html>", encoding="utf-8")
-    working_doc.write_text("<html><body>Working</body></html>", encoding="utf-8")
     done_doc.write_text("<html><body>Done</body></html>", encoding="utf-8")
     rest_doc.write_text("<html><body>Rest</body></html>", encoding="utf-8")
 
     os.utime(reading_doc, (1_700_000_050, 1_700_000_050))
-    os.utime(working_doc, (1_700_000_000, 1_700_000_000))
     os.utime(done_doc, (1_700_000_100, 1_700_000_100))
     # Keep a very recent mtime so rest beats done once done has no stage priority.
     os.utime(rest_doc, (1_900_000_200, 1_900_000_200))
 
-    times = iter(["2026-02-01T10:00:00Z", "2026-02-01T10:00:01Z", "2026-02-01T10:00:05Z"])
+    times = iter(["2026-02-01T10:00:00Z", "2026-02-01T10:00:05Z"])
     monkeypatch.setattr(site_state, "_utc_now_iso", lambda: next(times))
     site_state.set_reading_path(base, "Posts/Posts 2026/reading.html")
-    site_state.set_working_path(base, "Posts/Posts 2026/working.html")
     site_state.set_done_path(base, "Posts/Posts 2026/done.html")
 
     build_browse_index.build_browse_site(base)
@@ -212,7 +208,6 @@ def test_browse_hides_reading_working_and_done_items(tmp_path: Path, monkeypatch
     html = year_page.read_text(encoding="utf-8")
 
     assert "reading.html" not in html
-    assert "working.html" not in html
     assert "done.html" not in html
     assert "rest.html" in html
 

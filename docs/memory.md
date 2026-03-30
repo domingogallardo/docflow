@@ -4,19 +4,16 @@ This file stores stable, reusable operational notes for future agent runs.
 
 ## Notes
 
-### Reading/Working Are State-Driven
+### Reading/Done Are State-Driven
 
-- `Reading` and `Working` are managed through state, not by moving files into stage directories.
+- `Reading` is managed through state, not by moving files into stage directories.
 - Canonical source of truth for Reading: `BASE_DIR/state/reading.json`.
-- Canonical source of truth: `BASE_DIR/state/working.json`.
 - To move an item to Reading, set state with `set_reading_path` (or API `POST /api/to-reading`) using normalized relative paths (for example `Posts/Posts 2026/file.html`).
-- To move an item to Working, set state with `set_working_path` (or API `POST /api/to-working`) from Reading.
-- To move an item to Done, use `set_done_path` (or API `POST /api/to-done`) from Browse, Reading, or Working.
-- On `POST /api/to-done`, `reading_at` and `working_at` (when present) are copied into `done.json` as `reading_started_at` and `working_started_at` so lead time can be computed after completion.
-- After Working-related stage changes, regenerate intranet indexes:
+- To move an item to Done, use `set_done_path` (or API `POST /api/to-done`) from Browse or Reading.
+- On `POST /api/to-done`, `reading_at` is copied into `done.json` as `reading_started_at`.
+- After Reading-related stage changes, regenerate intranet indexes:
   - `python utils/build_browse_index.py --base-dir "/path/to/BASE_DIR"`
   - `python utils/build_reading_index.py --base-dir "/path/to/BASE_DIR"`
-  - `python utils/build_working_index.py --base-dir "/path/to/BASE_DIR"`
 - Regenerate Done index only if Done state changed:
   - `python utils/build_done_index.py --base-dir "/path/to/BASE_DIR"`
 
@@ -28,8 +25,8 @@ This file stores stable, reusable operational notes for future agent runs.
   - `ArticleJS.getHighlightProgress()`
   - `articlejs:highlight-progress` (document event)
 - Overlay integration lives in `utils/docflow_server.py` and is intentionally split in three rows:
-  - First row: status context link (`Inside Browse|Reading|Working|Done`) plus `PDF` export on the fly.
-  - Second row: stage actions (`to-reading`, `to-working`, `to-done`, etc.).
+  - First row: status context link (`Inside Browse|Reading|Done`) plus `PDF` export on the fly.
+  - Second row: stage actions (`to-reading`, `to-done`, `to-browse`, `reopen`, etc.).
   - Third row: highlight jump controls (`Jump to highlight:` + counter + up/down controls).
   - Keep the third row hidden when highlight progress total is `0`.
 - Highlight payload normalization in `utils/highlight_store.py` must keep stable `id` values; when a highlight arrives without `id`, generate one deterministically to support legacy data and navigation state.
@@ -151,5 +148,5 @@ This file stores stable, reusable operational notes for future agent runs.
 ### 2026-03-17
 
 - Changed list-page `Highlight` ordering so highlighted files sort by latest highlight timestamp instead of only floating to the top.
-- Added persistent browser state for the `Highlight` toggle across Browse/Reading/Working/Done using localStorage key `docflow.highlight-sort`.
+- Added persistent browser state for the `Highlight` toggle across Browse/Reading/Done using localStorage key `docflow.highlight-sort`.
 - Updated `Done` highlight mode to regroup items by the year of the latest highlight, so newly re-highlighted older items appear under the current highlight year.

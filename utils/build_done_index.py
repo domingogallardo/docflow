@@ -240,7 +240,7 @@ def build_site_done_html(items: list[SiteDoneItem]) -> str:
         '<script src="/assets/actions.js" defer></script>'
         '<script src="/assets/browse-sort.js" defer></script>'
         "<title>Done</title></head><body>"
-        '<div class="dg-nav"><a href="/">Home</a> · <a href="/browse/">Browse</a> · <a href="/reading/">Reading</a> · <a href="/working/">Working</a> · <a href="/done/">Done</a></div>'
+        '<div class="dg-nav"><a href="/">Home</a> · <a href="/browse/">Browse</a> · <a href="/reading/">Reading</a> · <a href="/done/">Done</a></div>'
         '<h1>Done</h1>'
         '<div class="dg-legendbar"><div class="dg-legend">🟡 highlight</div><button type="button" class="dg-sort-toggle" data-dg-sort-toggle aria-pressed="false">Highlight: off</button></div><hr>'
         + list_html

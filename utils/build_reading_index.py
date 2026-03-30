@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import html
+import shutil
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
@@ -72,7 +73,6 @@ def _actions_html(item: SiteReadingItem) -> str:
     return (
         "<span class='dg-actions'>"
         f"<button data-api-action=\"to-browse\" data-docflow-path=\"{path_attr}\">Back to Browse</button>"
-        f"<button data-api-action=\"to-working\" data-docflow-path=\"{path_attr}\">Move to Working</button>"
         f"<button data-api-action=\"to-done\" data-docflow-path=\"{path_attr}\">Move to Done</button>"
         "</span>"
     )
@@ -168,7 +168,7 @@ def build_site_reading_html(items: list[SiteReadingItem]) -> str:
         '<script src="/assets/actions.js" defer></script>'
         '<script src="/assets/browse-sort.js" defer></script>'
         f"<title>{title}</title></head><body>"
-        '<div class="dg-nav"><a href="/">Home</a> · <a href="/browse/">Browse</a> · <a href="/reading/">Reading</a> · <a href="/working/">Working</a> · <a href="/done/">Done</a></div>'
+        '<div class="dg-nav"><a href="/">Home</a> · <a href="/browse/">Browse</a> · <a href="/reading/">Reading</a> · <a href="/done/">Done</a></div>'
         f"<h1>{title}</h1>"
         '<div class="dg-legendbar"><div class="dg-legend">🟡 highlight</div><button type="button" class="dg-sort-toggle" data-dg-sort-toggle data-dg-sort-direction="asc" aria-pressed="false">Highlight: off</button></div><hr>'
         + list_html
@@ -179,6 +179,11 @@ def build_site_reading_html(items: list[SiteReadingItem]) -> str:
 def write_site_reading_index(base_dir: Path, output_dir: Path | None = None) -> Path:
     out_dir = output_dir or (site_root(base_dir) / "reading")
     out_dir.mkdir(parents=True, exist_ok=True)
+
+    if output_dir is None:
+        retired_stage_dir = site_root(base_dir) / "working"
+        if retired_stage_dir.exists():
+            shutil.rmtree(retired_stage_dir)
 
     items = collect_site_reading_items(base_dir)
     html_doc = build_site_reading_html(items)
