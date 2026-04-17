@@ -55,6 +55,7 @@ This file stores stable, reusable operational notes for future agent runs.
 
 - Canonical generator: `utils/build_daily_highlights_report.py`.
 - Build one file per day using `--day YYYY-MM-DD` and `--output /path/report.md`.
+- When a target day has zero highlights, skip note generation and remove any stale output file for that day.
 - For legacy highlight payloads, always read via `load_highlights_for_path(...)` before rendering so missing ids are normalized.
 - Output structure:
   - One header per source file: `### [<file stem>](<intranet raw url>)`.

@@ -461,12 +461,18 @@ def main() -> int:
 
     highlights_by_path = _collect_daily_highlights(base_dir, target_day)
     rendered_by_path = _build_rendered_highlights(base_dir, highlights_by_path, args.intranet_base_url)
-    content = _render_markdown(target_day, rendered_by_path)
+    total = sum(len(items) for items in rendered_by_path.values())
+    if total == 0:
+        if output_path.is_file():
+            output_path.unlink()
+            print(f"No highlights found for {target_day.isoformat()}; removed existing report {output_path}")
+        else:
+            print(f"No highlights found for {target_day.isoformat()}; skipped report generation")
+        return 0
 
+    content = _render_markdown(target_day, rendered_by_path)
     output_path.parent.mkdir(parents=True, exist_ok=True)
     output_path.write_text(content, encoding="utf-8")
-
-    total = sum(len(items) for items in rendered_by_path.values())
     print(f"Wrote report with {total} highlight(s) to {output_path}")
     return 0
 

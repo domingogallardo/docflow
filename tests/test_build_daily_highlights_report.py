@@ -138,7 +138,7 @@ def test_main_uses_payload_title_when_heading_is_missing(tmp_path: Path, monkeyp
     assert "> Tweet body excerpt here. [link](<http://localhost:8080/tweets/raw/Tweets%202026/tweet-1.html#hl=h1>)" in content
 
 
-def test_main_writes_empty_report_when_no_highlights_for_day(tmp_path: Path, monkeypatch) -> None:
+def test_main_skips_report_when_no_highlights_for_day(tmp_path: Path, monkeypatch, capsys) -> None:
     base = tmp_path / "base"
     posts = base / "Posts" / "Posts 2026"
     posts.mkdir(parents=True)
@@ -162,6 +162,7 @@ def test_main_writes_empty_report_when_no_highlights_for_day(tmp_path: Path, mon
     )
 
     out_path = tmp_path / "daily.md"
+    out_path.write_text("stale report", encoding="utf-8")
     args = argparse.Namespace(
         day="2026-02-13",
         output=out_path,
@@ -172,7 +173,6 @@ def test_main_writes_empty_report_when_no_highlights_for_day(tmp_path: Path, mon
 
     exit_code = mod.main()
     assert exit_code == 0
-
-    content = out_path.read_text(encoding="utf-8")
-    assert "Total highlights: **0**" in content
-    assert "_No highlights found for this day._" in content
+    captured = capsys.readouterr()
+    assert "No highlights found for 2026-02-13" in captured.out
+    assert not out_path.exists()

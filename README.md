@@ -298,6 +298,8 @@ Daily highlights report helper:
 python utils/build_daily_highlights_report.py --day 2026-02-13 --output "/tmp/highlights-2026-02-13.md"
 ```
 
+If a day has no highlights, the helper exits successfully without writing the note.
+
 Daily highlights report runner:
 
 ```bash
