@@ -62,6 +62,9 @@ STAT_NUMBER_RE = re.compile(r"^\d[\d.,]*(?:\s?[kmbKMB])?$")
 TIME_RE = re.compile(r"\b\d{1,2}:\d{2}\b")
 METRIC_TOKEN_RE = re.compile(r"[0-9]+(?:[.,][0-9]+)?[kmb]?|[a-záéíóúñü]+", re.IGNORECASE)
 METRIC_NUMBER_TOKEN_RE = re.compile(r"^\d+(?:[.,]\d+)?[kmb]?$", re.IGNORECASE)
+HANDLE_ONLY_RE = re.compile(r"^@[A-Za-z0-9_]+$")
+LEADING_POSSESSIVE_RE = re.compile(r"^[\'’]")
+SENTENCE_END_RE = re.compile(r"[.!?…:;](?:[\"')\]”’]+)?$")
 QUOTE_MARKERS = {"quote"}
 QUOTE_MARKERS_JS = ", ".join(f'"{m}"' for m in sorted(QUOTE_MARKERS))
 SHOW_MORE_LABELS = (
@@ -233,6 +236,42 @@ def rebuild_urls_from_lines(text: str) -> str:
             out.append(original_line)
 
     return "\n".join(out)
+
+
+def normalize_inline_mention_breaks(text: str) -> str:
+    """Collapse line breaks introduced around inline @mentions and possessives."""
+    lines = text.splitlines()
+    normalized: List[str] = []
+
+    for idx, original_line in enumerate(lines):
+        stripped = original_line.strip()
+        next_line = lines[idx + 1].strip() if idx + 1 < len(lines) else ""
+        if not stripped:
+            normalized.append("")
+            continue
+        if (
+            normalized
+            and HANDLE_ONLY_RE.match(normalized[-1])
+            and LEADING_POSSESSIVE_RE.match(stripped)
+        ):
+            normalized[-1] = normalized[-1] + stripped
+            continue
+        if normalized and LEADING_POSSESSIVE_RE.match(stripped):
+            normalized[-1] = normalized[-1] + stripped
+            continue
+        if (
+            normalized
+            and HANDLE_ONLY_RE.match(stripped)
+            and next_line
+            and LEADING_POSSESSIVE_RE.match(next_line)
+            and normalized[-1]
+            and not SENTENCE_END_RE.search(normalized[-1].rstrip())
+        ):
+            normalized[-1] = normalized[-1].rstrip() + " " + stripped
+            continue
+        normalized.append(stripped)
+
+    return "\n".join(normalized)
 
 
 def _safe_filename(name: str) -> str:
@@ -1114,7 +1153,9 @@ def _extract_tweet_parts(
         page=page,
         anchor_handle=anchor_handle,
     )
-    body_text = strip_tweet_stats(rebuild_urls_from_lines(raw_text).strip())
+    body_text = strip_tweet_stats(
+        normalize_inline_mention_breaks(rebuild_urls_from_lines(raw_text).strip())
+    )
 
     has_quote_marker = _has_quote_marker(body_text)
     body_text = _insert_quote_separator(

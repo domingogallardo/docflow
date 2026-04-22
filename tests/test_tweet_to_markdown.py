@@ -2,6 +2,7 @@
 """Tests para utilidades de tweet_to_markdown."""
 from utils.tweet_to_markdown import (
     rebuild_urls_from_lines,
+    normalize_inline_mention_breaks,
     strip_tweet_stats,
     _media_markdown_lines,
     _insert_quote_separator,
@@ -73,6 +74,48 @@ def test_rebuild_urls_stops_on_ellipsis_with_trailing_text():
     assert "https://example.com/path/segmento" in result
     assert "… y sigue el texto." not in result
     assert any("y sigue el texto." in line for line in lines)
+
+
+def test_normalize_inline_mention_breaks_rejoins_split_mentions():
+    raw = "\n".join(
+        [
+            "Intro paragraph.",
+            "",
+            "@Alibaba_Qwen",
+            "'s Qwen3.5 and",
+            "@GoogleDeepMind",
+            "’s Gemma 4 are leading the pack.",
+        ]
+    )
+    result = normalize_inline_mention_breaks(raw)
+    assert result == (
+        "Intro paragraph.\n\n"
+        "@Alibaba_Qwen's Qwen3.5 and @GoogleDeepMind’s Gemma 4 are leading the pack."
+    )
+
+
+def test_normalize_inline_mention_breaks_keeps_new_mention_line_after_sentence_end():
+    raw = "\n".join(
+        [
+            "Sentence complete.",
+            "@alice",
+            "shared a useful reference.",
+        ]
+    )
+    result = normalize_inline_mention_breaks(raw)
+    assert result == raw
+
+
+def test_normalize_inline_mention_breaks_keeps_author_name_and_handle_separate():
+    raw = "\n".join(
+        [
+            "Artificial Analysis",
+            "@ArtificialAnlys",
+            "Sub-32B models now offer GPT-5 level intelligence.",
+        ]
+    )
+    result = normalize_inline_mention_breaks(raw)
+    assert result == raw
 
 
 def test_strip_tweet_stats_removes_metrics_lines():
