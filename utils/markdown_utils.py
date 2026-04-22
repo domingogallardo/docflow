@@ -7,6 +7,7 @@ _FRONT_MATTER_KEYS = {
     "tweet_url": "docflow-tweet-url",
     "tweet_author": "docflow-tweet-author",
     "tweet_author_name": "docflow-tweet-author-name",
+    "tweet_capture_source": "docflow-tweet-capture-source",
 }
 
 

@@ -31,6 +31,23 @@ def mock_likes(monkeypatch, urls, stop_found=True):
     monkeypatch.setattr("pipeline_manager.fetch_like_items_with_state", fake_fetch)
 
 
+def mock_posts(monkeypatch, urls, stop_found=True):
+    items = [
+        LikeTweet(
+            url=url,
+            author_handle="@self",
+            time_text="1h",
+            time_datetime="2026-01-10T12:00:00.000Z",
+        )
+        for url in urls
+    ]
+
+    def fake_fetch(*args, **kwargs):
+        return list(items), stop_found, len(items)
+
+    monkeypatch.setattr("pipeline_manager.fetch_post_items_with_state", fake_fetch)
+
+
 def test_process_tweet_urls_creates_files_from_likes(tmp_path, monkeypatch):
     processor, incoming = prepare_processor(tmp_path)
     mock_likes(
@@ -277,3 +294,27 @@ def test_process_tweet_urls_processes_all_when_no_stop(tmp_path, monkeypatch):
         created = processor.process_tweet_urls()
 
     assert len(created) == 5
+
+
+def test_process_tweet_urls_creates_files_from_posts_with_separate_state(tmp_path, monkeypatch):
+    processor, incoming = prepare_processor(tmp_path)
+    url = "https://x.com/self/status/10"
+
+    monkeypatch.setattr("pipeline_manager.cfg.TWEET_POSTS_URL", "https://x.com/self")
+    mock_likes(monkeypatch, [])
+    mock_posts(monkeypatch, [url])
+
+    with patch(
+        "pipeline_manager.fetch_tweet_thread_markdown",
+        return_value=(
+            "---\nsource: tweet\ntweet_capture_source: posted\n---\n\n# T\n\n[View on X](https://x.com/10)\n",
+            "Tweet posted - self-10.md",
+        ),
+    ) as mocked:
+        created = processor.process_tweet_urls()
+
+    assert len(created) == 1
+    assert (incoming / "Tweet posted - self-10.md").exists()
+    assert processor.tweets_posted_processed.read_text(encoding="utf-8") == url + "\n"
+    assert not processor.tweets_processed.exists()
+    assert mocked.call_args.kwargs["capture_source"] == "posted"

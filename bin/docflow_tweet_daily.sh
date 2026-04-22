@@ -3,7 +3,7 @@ set -euo pipefail
 
 # Daily tweet consolidation wrapper for automated/manual execution.
 # - Loads ~/.docflow_env if it exists
-# - Runs bin/build_tweet_consolidated.sh --yesterday
+# - Runs bin/build_tweet_consolidated.sh --yesterday --capture-source all
 # - Rebuilds local intranet browse/reading/done outputs
 
 ENV_FILE="${HOME}/.docflow_env"
@@ -28,7 +28,7 @@ INTRANET_BASE_DIR="${INTRANET_BASE_DIR:-${DEFAULT_INTRASITE_BASE_DIR}}"
 consolidate_status=0
 if [ -x "${TWEET_CONSOLIDATE_SCRIPT}" ]; then
   set +e
-  "${TWEET_CONSOLIDATE_SCRIPT}" --yesterday
+  "${TWEET_CONSOLIDATE_SCRIPT}" --yesterday --capture-source all
   consolidate_status=$?
   set -e
   echo "[$(date -Iseconds)] Docflow tweet daily: consolidated exit=${consolidate_status}"

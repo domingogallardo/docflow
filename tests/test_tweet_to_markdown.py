@@ -21,6 +21,7 @@ from utils.tweet_to_markdown import (
     _select_thread_indices,
     _extract_thread_ids_from_payload,
     _build_single_tweet_markdown,
+    _build_filename,
     TweetParts,
 )
 
@@ -508,11 +509,11 @@ def test_expand_show_more_ignores_non_button_text_nodes():
     assert waits == []
 
 
-def test_resolve_thread_context_prefers_like_metadata():
+def test_resolve_thread_context_prefers_context_metadata():
     result = _resolve_thread_context(
-        like_author_handle="@like",
-        like_time_text="2h",
-        like_time_datetime="2026-01-10T12:00:00.000Z",
+        context_author_handle="@like",
+        context_time_text="2h",
+        context_time_datetime="2026-01-10T12:00:00.000Z",
         target_author_handle="@target",
         target_time_text="1h",
         target_time_datetime="2026-01-10T13:00:00.000Z",
@@ -522,14 +523,44 @@ def test_resolve_thread_context_prefers_like_metadata():
 
 def test_resolve_thread_context_falls_back_to_target():
     result = _resolve_thread_context(
-        like_author_handle=None,
-        like_time_text=None,
-        like_time_datetime=None,
+        context_author_handle=None,
+        context_time_text=None,
+        context_time_datetime=None,
         target_author_handle="@target",
         target_time_text="1h",
         target_time_datetime="2026-01-10T13:00:00.000Z",
     )
     assert result == ("@target", "1h", "2026-01-10T13:00:00.000Z")
+
+
+def test_build_single_tweet_markdown_marks_capture_source():
+    parts = TweetParts(
+        author_name="Author",
+        author_handle="@author",
+        body_text="Tweet body.",
+        avatar_url=None,
+        trailing_media_lines=[],
+        media_present=False,
+        external_link=None,
+    )
+
+    md = _build_single_tweet_markdown(
+        parts,
+        "https://x.com/author/status/123",
+        capture_source="posted",
+    )
+
+    assert "tweet_capture_source: posted" in md
+
+
+def test_build_filename_uses_posted_prefix_for_posted_source():
+    filename = _build_filename(
+        "https://x.com/author/status/123",
+        "@author",
+        capture_source="posted",
+    )
+
+    assert filename == "Tweet posted - author-123.md"
 
 
 def test_read_article_text_retries_on_timeout(monkeypatch):

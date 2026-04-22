@@ -88,6 +88,7 @@ SHOW_MORE_LABELS_NORMALIZED = {
     "leer más",
     "leer mas",
 }
+VALID_CAPTURE_SOURCES = {"liked", "posted"}
 METRIC_WORD_TOKENS = {
     "am",
     "pm",
@@ -291,10 +292,22 @@ def _build_title(author_name: str | None, author_handle: str | None, *, kind: st
     return base
 
 
-def _build_filename(url: str, author_handle: str | None) -> str:
+def _normalize_capture_source(capture_source: str | None) -> str:
+    normalized = (capture_source or "liked").strip().lower()
+    if normalized not in VALID_CAPTURE_SOURCES:
+        raise ValueError(
+            f"Unsupported capture_source '{capture_source}'. "
+            f"Use one of: {', '.join(sorted(VALID_CAPTURE_SOURCES))}."
+        )
+    return normalized
+
+
+def _build_filename(url: str, author_handle: str | None, *, capture_source: str = "liked") -> str:
     tweet_id = Path(urlparse(url).path).name or "tweet"
     handle = (author_handle or "tweet").lstrip("@") or "tweet"
-    base = f"Tweet - {handle}-{tweet_id}"
+    source = _normalize_capture_source(capture_source)
+    prefix = "Tweet posted" if source == "posted" else "Tweet"
+    base = f"{prefix} - {handle}-{tweet_id}"
     return f"{_safe_filename(base)}.md"
 
 
@@ -542,17 +555,17 @@ def _extract_time_details(article) -> tuple[str | None, str | None]:
 
 
 def _resolve_thread_context(
-    like_author_handle: str | None,
-    like_time_text: str | None,
-    like_time_datetime: str | None,
+    context_author_handle: str | None,
+    context_time_text: str | None,
+    context_time_datetime: str | None,
     target_author_handle: str | None,
     target_time_text: str | None,
     target_time_datetime: str | None,
 ) -> tuple[str | None, str | None, str | None]:
     return (
-        like_author_handle or target_author_handle,
-        like_time_text or target_time_text,
-        like_time_datetime or target_time_datetime,
+        context_author_handle or target_author_handle,
+        context_time_text or target_time_text,
+        context_time_datetime or target_time_datetime,
     )
 
 
@@ -1206,12 +1219,19 @@ def _should_append_external_link(body_text: str, external_link: str | None) -> b
     return normalized not in body_text.lower()
 
 
-def _build_single_tweet_markdown(parts: TweetParts, tweet_url: str) -> str:
+def _build_single_tweet_markdown(
+    parts: TweetParts,
+    tweet_url: str,
+    *,
+    capture_source: str = "liked",
+) -> str:
+    source = _normalize_capture_source(capture_source)
     title = _build_title(parts.author_name, parts.author_handle)
     front_matter = [
         "---",
         "source: tweet",
         f"tweet_url: {tweet_url}",
+        f"tweet_capture_source: {source}",
     ]
     if parts.author_handle:
         front_matter.append(f'tweet_author: "{parts.author_handle}"')
@@ -1242,9 +1262,10 @@ def fetch_tweet_thread_markdown(
     *,
     headless: bool = True,
     storage_state: Path | None = None,
-    like_author_handle: str | None = None,
-    like_time_text: str | None = None,
-    like_time_datetime: str | None = None,
+    context_author_handle: str | None = None,
+    context_time_text: str | None = None,
+    context_time_datetime: str | None = None,
+    capture_source: str = "liked",
 ) -> tuple[str, str]:
     """Return (markdown, filename) for a tweet, expanding threads when possible."""
     if sync_playwright is None:
@@ -1252,6 +1273,7 @@ def fetch_tweet_thread_markdown(
             "playwright is not installed. Run 'pip install playwright' and "
             "'playwright install chromium' to use this tool."
         )
+    normalized_capture_source = _normalize_capture_source(capture_source)
     with sync_playwright() as playwright:
         browser = playwright.chromium.launch(headless=headless)
         state_path = _resolve_storage_state(storage_state)
@@ -1279,18 +1301,26 @@ def fetch_tweet_thread_markdown(
         target_parts = _extract_tweet_parts(article, url, page=page, quoted_status_id=quoted_status["id"])
         target_time_text, target_time_datetime = _extract_time_details(article)
         effective_author_handle, effective_time_text, effective_time_datetime = _resolve_thread_context(
-            like_author_handle,
-            like_time_text,
-            like_time_datetime,
+            context_author_handle,
+            context_time_text,
+            context_time_datetime,
             target_parts.author_handle,
             target_time_text,
             target_time_datetime,
         )
-        filename = _build_filename(url, target_parts.author_handle)
+        filename = _build_filename(
+            url,
+            target_parts.author_handle,
+            capture_source=normalized_capture_source,
+        )
 
         if not effective_author_handle or not (effective_time_text or effective_time_datetime):
             browser.close()
-            return _build_single_tweet_markdown(target_parts, url), filename
+            return _build_single_tweet_markdown(
+                target_parts,
+                url,
+                capture_source=normalized_capture_source,
+            ), filename
 
         thread_payload = tweet_detail.get("payload")
         if thread_payload is None:
@@ -1320,7 +1350,11 @@ def fetch_tweet_thread_markdown(
                 total = articles.count()
             if total <= 1 and (not thread_ids or len(thread_ids) <= 1):
                 browser.close()
-                return _build_single_tweet_markdown(target_parts, url), filename
+                return _build_single_tweet_markdown(
+                    target_parts,
+                    url,
+                    capture_source=normalized_capture_source,
+                ), filename
 
         target_id = _status_id_from_url(url)
         target_idx = None
@@ -1384,7 +1418,11 @@ def fetch_tweet_thread_markdown(
 
         if len(thread_parts) <= 1:
             browser.close()
-            return _build_single_tweet_markdown(target_parts, url), filename
+            return _build_single_tweet_markdown(
+                target_parts,
+                url,
+                capture_source=normalized_capture_source,
+            ), filename
 
         print(f"🧵 Thread downloaded ({len(thread_parts)} tweets).")
         author_handle = effective_author_handle
@@ -1394,6 +1432,7 @@ def fetch_tweet_thread_markdown(
             "---",
             "source: tweet",
             f"tweet_url: {url}",
+            f"tweet_capture_source: {normalized_capture_source}",
             "tweet_thread: true",
             f"tweet_thread_count: {count}",
         ]
@@ -1439,6 +1478,12 @@ def parse_args() -> argparse.Namespace:
         "--filename",
         help="Filename to use (overrides the auto-generated one).",
     )
+    parser.add_argument(
+        "--capture-source",
+        choices=sorted(VALID_CAPTURE_SOURCES),
+        default="liked",
+        help="Mark the downloaded Markdown as liked or posted (default: liked).",
+    )
     headless_group = parser.add_mutually_exclusive_group()
     headless_group.add_argument(
         "--headless",
@@ -1467,6 +1512,7 @@ def main() -> None:
             args.url,
             headless=args.headless,
             storage_state=storage_state,
+            capture_source=args.capture_source,
         )
     except PlaywrightTimeoutError as exc:
         raise SystemExit(f"❌ Timeout loading the tweet: {exc}") from exc

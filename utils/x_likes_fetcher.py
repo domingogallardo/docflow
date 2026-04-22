@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Utilities to collect X likes using Playwright."""
+"""Utilities to collect X timeline tweets using Playwright."""
 from __future__ import annotations
 
 from contextlib import suppress
@@ -18,6 +18,7 @@ LOGIN_WALL_HINTS = (
     "/i/flow/signup",
     "/account/access",
 )
+PINNED_BADGES = {"pinned", "fijado"}
 STEALTH_SNIPPET = """
 Object.defineProperty(navigator, 'webdriver', {get: () => undefined});
 window.chrome = window.chrome || { runtime: {} };
@@ -31,7 +32,7 @@ window.navigator.permissions.query = (parameters) => (
 
 
 @dataclass(frozen=True)
-class LikeTweet:
+class TimelineTweet:
     url: str
     author_handle: str | None = None
     author_name: str | None = None
@@ -39,11 +40,28 @@ class LikeTweet:
     time_datetime: str | None = None
 
 
+LikeTweet = TimelineTweet
+
+
 def _log(message: str) -> None:
     print(message)
 
 
-def _wait_for_likes_articles(page, *, likes_url: str, retries: int = 1) -> bool:
+def _normalize_handle(handle: str | None) -> str | None:
+    if not handle:
+        return None
+    cleaned = handle.strip().strip("/")
+    if not cleaned:
+        return None
+    if cleaned.startswith("@"):
+        cleaned = cleaned[1:]
+    cleaned = cleaned.strip()
+    if not cleaned:
+        return None
+    return f"@{cleaned.lower()}"
+
+
+def _wait_for_timeline_articles(page, *, timeline_url: str, retries: int = 1) -> bool:
     for attempt in range(retries + 1):
         try:
             page.wait_for_selector("article", timeout=15000)
@@ -54,9 +72,9 @@ def _wait_for_likes_articles(page, *, likes_url: str, retries: int = 1) -> bool:
                 _log("   ⚠️  Login wall detected; the session may be expired.")
                 return False
             if attempt < retries:
-                _log("   🔁 No articles yet; retrying likes page load...")
+                _log("   🔁 No articles yet; retrying timeline page load...")
                 with suppress(Exception):
-                    page.goto(likes_url, wait_until="domcontentloaded", timeout=60000)
+                    page.goto(timeline_url, wait_until="domcontentloaded", timeout=60000)
                 continue
             _log("   ⚠️  No articles detected; the session may not be active.")
             return False
@@ -95,6 +113,32 @@ def _normalize_stop_url(url: str | None) -> str | None:
         return None
     return _canonical_status_url(url.strip())
 
+
+def _handle_from_status_url(url: str | None) -> str | None:
+    canonical = _canonical_status_url(url)
+    if not canonical:
+        return None
+    parsed = urlparse(canonical)
+    segments = [seg for seg in parsed.path.split("/") if seg]
+    if len(segments) >= 4 and segments[0] == "i" and segments[1] == "web":
+        return None
+    if len(segments) < 3:
+        return None
+    return _normalize_handle(segments[0])
+
+
+def _expected_handle_from_timeline_url(timeline_url: str | None) -> str | None:
+    if not timeline_url:
+        return None
+    parsed = urlparse(_absolute_url(timeline_url))
+    segments = [seg for seg in parsed.path.split("/") if seg]
+    if not segments:
+        return None
+    if segments[0] == "i":
+        return None
+    return _normalize_handle(segments[0])
+
+
 def _should_continue(collected: Sequence[object], max_tweets: int, stop_found: bool) -> bool:
     """Scroll continuation condition: stop on limit or stop_url."""
     return len(collected) < max_tweets and not stop_found
@@ -117,7 +161,7 @@ def _extract_tweet_urls(page, seen: Set[str]) -> List[str]:
     return urls
 
 
-def _extract_like_metadata(article) -> tuple[str | None, str | None, str | None, str | None]:
+def _extract_tweet_metadata(article) -> tuple[str | None, str | None, str | None, str | None]:
     author_name = None
     author_handle = None
     for span in article.query_selector_all("span"):
@@ -144,10 +188,47 @@ def _extract_like_metadata(article) -> tuple[str | None, str | None, str | None,
     return author_name, author_handle, time_text, time_datetime
 
 
-def _extract_like_items(page, seen: Set[str]) -> List[LikeTweet]:
-    items: List[LikeTweet] = []
+def _is_pinned_article(article) -> bool:
+    for span in article.query_selector_all("span"):
+        try:
+            text = (span.inner_text() or "").strip().lower()
+        except Exception:
+            continue
+        if text in PINNED_BADGES:
+            return True
+    return False
+
+
+def _matches_expected_author(
+    canonical_url: str,
+    author_handle: str | None,
+    expected_author_handle: str | None,
+) -> bool:
+    expected = _normalize_handle(expected_author_handle)
+    if not expected:
+        return True
+    url_handle = _handle_from_status_url(canonical_url)
+    article_handle = _normalize_handle(author_handle)
+    if url_handle == expected:
+        return True
+    if article_handle == expected:
+        return True
+    return False
+
+
+def _extract_timeline_items(
+    page,
+    seen: Set[str],
+    *,
+    expected_author_handle: str | None = None,
+    exclude_pinned: bool = False,
+) -> List[TimelineTweet]:
+    items: List[TimelineTweet] = []
     articles = page.locator("article")
     for article in articles.element_handles():
+        if exclude_pinned and _is_pinned_article(article):
+            continue
+
         link = article.query_selector("a:has(time)")
         href = link.get_attribute("href") if link else None
         canonical = _canonical_status_url(href)
@@ -160,12 +241,15 @@ def _extract_like_items(page, seen: Set[str]) -> List[LikeTweet]:
                     break
         if not canonical:
             continue
+
+        author_name, author_handle, time_text, time_datetime = _extract_tweet_metadata(article)
+        if not _matches_expected_author(canonical, author_handle, expected_author_handle):
+            continue
         if canonical in seen:
             continue
         seen.add(canonical)
-        author_name, author_handle, time_text, time_datetime = _extract_like_metadata(article)
         items.append(
-            LikeTweet(
+            TimelineTweet(
                 url=canonical,
                 author_handle=author_handle,
                 author_name=author_name,
@@ -176,19 +260,23 @@ def _extract_like_items(page, seen: Set[str]) -> List[LikeTweet]:
     return items
 
 
-def collect_like_items_from_page(
+def collect_timeline_items_from_page(
     page,
-    likes_url: str,
+    timeline_url: str,
+    *,
     max_tweets: int = DEFAULT_MAX_TWEETS,
     stop_at_url: str | None = None,
-) -> Tuple[bool, int, List[LikeTweet], bool, str | None]:
-    """Load likes and return the liked tweets with metadata."""
-    _log(f"▶️  Trying to load {likes_url}…")
-    page.goto(likes_url, wait_until="domcontentloaded", timeout=60000)
-    if not _wait_for_likes_articles(page, likes_url=likes_url):
+    expected_author_handle: str | None = None,
+    exclude_pinned: bool = False,
+    timeline_label: str = "Timeline",
+) -> Tuple[bool, int, List[TimelineTweet], bool, str | None]:
+    """Load a timeline and return tweets with metadata."""
+    _log(f"▶️  Trying to load {timeline_url}…")
+    page.goto(timeline_url, wait_until="domcontentloaded", timeout=60000)
+    if not _wait_for_timeline_articles(page, timeline_url=timeline_url):
         return False, 0, [], False, _normalize_stop_url(stop_at_url)
 
-    collected: List[LikeTweet] = []
+    collected: List[TimelineTweet] = []
     seen: Set[str] = set()
     max_scrolls = 20
     idle_scrolls = 0
@@ -197,7 +285,12 @@ def collect_like_items_from_page(
     articles = page.locator("article")
 
     while _should_continue(collected, max_tweets, stop_found):
-        for item in _extract_like_items(page, seen):
+        for item in _extract_timeline_items(
+            page,
+            seen,
+            expected_author_handle=expected_author_handle,
+            exclude_pinned=exclude_pinned,
+        ):
             collected.append(item)
             if stop_absolute and item.url == stop_absolute:
                 stop_found = True
@@ -220,7 +313,7 @@ def collect_like_items_from_page(
 
     total_articles = articles.count()
     summary = (
-        f"   ✅ Likes loaded successfully. Visible articles: {total_articles}. "
+        f"   ✅ {timeline_label} loaded successfully. Visible articles: {total_articles}. "
         f"URLs collected: {len(collected)} (limit: {max_tweets})"
     )
     if stop_absolute:
@@ -235,15 +328,18 @@ def collect_like_items_from_page(
     return True, total_articles, collected, stop_found, stop_absolute
 
 
-def fetch_like_items_with_state(
+def fetch_timeline_items_with_state(
     state_path: Path,
     *,
-    likes_url: str = DEFAULT_LIKES_URL,
+    timeline_url: str,
     max_tweets: int = DEFAULT_MAX_TWEETS,
     stop_at_url: str | None = None,
     headless: bool = True,
-) -> Tuple[List[LikeTweet], bool, int]:
-    """Load likes and return items with metadata (author + relative time)."""
+    expected_author_handle: str | None = None,
+    exclude_pinned: bool = False,
+    timeline_label: str = "Timeline",
+) -> Tuple[List[TimelineTweet], bool, int]:
+    """Load a timeline and return tweets with metadata (author + relative time)."""
     path = state_path.expanduser()
     if not path.exists():
         raise FileNotFoundError(
@@ -260,14 +356,17 @@ def fetch_like_items_with_state(
         context.add_init_script(STEALTH_SNIPPET)
         page = context.new_page()
         try:
-            success, total, items, stop_found, stop_absolute = collect_like_items_from_page(
+            success, total, items, stop_found, stop_absolute = collect_timeline_items_from_page(
                 page,
-                likes_url=likes_url,
+                timeline_url,
                 max_tweets=max_tweets,
                 stop_at_url=stop_at_url,
+                expected_author_handle=expected_author_handle,
+                exclude_pinned=exclude_pinned,
+                timeline_label=timeline_label,
             )
             if not success:
-                raise RuntimeError("Could not retrieve articles on the likes page.")
+                raise RuntimeError("Could not retrieve articles on the timeline page.")
             if stop_found and stop_absolute:
                 for idx, item in enumerate(items):
                     if item.url == stop_absolute:
@@ -277,3 +376,50 @@ def fetch_like_items_with_state(
         finally:
             context.close()
             browser.close()
+
+
+def fetch_like_items_with_state(
+    state_path: Path,
+    *,
+    likes_url: str = DEFAULT_LIKES_URL,
+    max_tweets: int = DEFAULT_MAX_TWEETS,
+    stop_at_url: str | None = None,
+    headless: bool = True,
+) -> Tuple[List[LikeTweet], bool, int]:
+    """Load likes and return items with metadata (author + relative time)."""
+    return fetch_timeline_items_with_state(
+        state_path,
+        timeline_url=likes_url,
+        max_tweets=max_tweets,
+        stop_at_url=stop_at_url,
+        headless=headless,
+        timeline_label="Likes",
+    )
+
+
+def fetch_post_items_with_state(
+    state_path: Path,
+    *,
+    posts_url: str,
+    max_tweets: int = DEFAULT_MAX_TWEETS,
+    stop_at_url: str | None = None,
+    headless: bool = True,
+    expected_author_handle: str | None = None,
+) -> Tuple[List[TimelineTweet], bool, int]:
+    """Load a user timeline and return only that author's published tweets."""
+    expected = _normalize_handle(expected_author_handle) or _expected_handle_from_timeline_url(posts_url)
+    if not expected:
+        raise RuntimeError(
+            "Could not determine the author handle for TWEET_POSTS_URL. "
+            "Use a profile URL like https://x.com/<user>."
+        )
+    return fetch_timeline_items_with_state(
+        state_path,
+        timeline_url=posts_url,
+        max_tweets=max_tweets,
+        stop_at_url=stop_at_url,
+        headless=headless,
+        expected_author_handle=expected,
+        exclude_pinned=True,
+        timeline_label="Posts",
+    )

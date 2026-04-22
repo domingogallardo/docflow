@@ -30,7 +30,7 @@ except Exception:  # pragma: no cover - defensive fallback
         return text
 
 
-TITLE_PREFIX_RE = re.compile(r"^Tweet\s*-\s*", re.IGNORECASE)
+TITLE_PREFIX_RE = re.compile(r"^Tweet(?:\s+posted)?\s*-\s*", re.IGNORECASE)
 GENERIC_H1_RE = re.compile(r"^#\s*(tweet|thread)\b", re.IGNORECASE)
 X_URL_RE = re.compile(r"https?://x\.com/[^\s)]+")
 VIEW_QUOTED_RE = re.compile(r"^\[view quoted tweet\]\(", re.IGNORECASE)
@@ -42,7 +42,14 @@ PARAGRAPH_BLOCK_TAG_RE = re.compile(
 DASH_LIST_LINE_RE = re.compile(r"^-\s*(.*)$")
 METRIC_NUMBER_RE = re.compile(r"^\d[\d.,]*(?:\s?[kmbKMB])?$")
 METRIC_TIME_RE = re.compile(r"\b\d{1,2}:\d{2}\b")
-_CONSOLIDATED_PREFIXES = ("Tweets ", "Consolidado Tweets ", "Consolidados Tweets ")
+DEFAULT_CAPTURE_SOURCE = "liked"
+CAPTURE_SOURCE_CHOICES = ("liked", "posted")
+_CONSOLIDATED_PREFIXES = (
+    "Tweets ",
+    "Consolidado Tweets ",
+    "Consolidados Tweets ",
+    "Tweets posted ",
+)
 DEFAULT_TWEET_DAY_ROLLOVER_HOUR = 3
 TWEET_DAY_ROLLOVER_ENV = "DOCFLOW_TWEET_DAY_ROLLOVER_HOUR"
 METRIC_TOKEN_RE = re.compile(r"[0-9]+(?:[.,][0-9]+)?[kmb]?|[a-záéíóúñü]+", re.IGNORECASE)
@@ -139,6 +146,12 @@ def parse_args() -> argparse.Namespace:
         ),
     )
     parser.add_argument(
+        "--capture-source",
+        choices=CAPTURE_SOURCE_CHOICES,
+        default=DEFAULT_CAPTURE_SOURCE,
+        help="Filter source tweets by capture source (liked or posted).",
+    )
+    parser.add_argument(
         "--cleanup-if-consolidated",
         action="store_true",
         help=(
@@ -154,6 +167,16 @@ def _parse_day(day: str) -> datetime:
         return datetime.strptime(day, "%Y-%m-%d")
     except ValueError as exc:
         raise SystemExit(f"❌ Invalid --day value '{day}'. Use YYYY-MM-DD.") from exc
+
+
+def _normalize_capture_source(capture_source: str | None) -> str:
+    normalized = (capture_source or DEFAULT_CAPTURE_SOURCE).strip().lower()
+    if normalized not in CAPTURE_SOURCE_CHOICES:
+        raise SystemExit(
+            f"❌ Invalid capture source '{capture_source}'. "
+            f"Use one of: {', '.join(CAPTURE_SOURCE_CHOICES)}."
+        )
+    return normalized
 
 
 def _tweets_dir(base_dir: Path, year: int, override: Path | None) -> Path:
@@ -181,12 +204,33 @@ def _tweet_operational_day_from_mtime(mtime: float, *, rollover_hour: int | None
     return dt.strftime("%Y-%m-%d")
 
 
-def _collect_daily_source_markdown(tweets_dir: Path, day: str) -> list[Path]:
+def _tweet_capture_source(meta: dict[str, str]) -> str:
+    source = meta.get("tweet_capture_source", "").strip().lower()
+    if source == "posted":
+        return "posted"
+    return "liked"
+
+
+def _matches_capture_source(meta: dict[str, str], capture_source: str) -> bool:
+    normalized = _normalize_capture_source(capture_source)
+    return _tweet_capture_source(meta) == normalized
+
+
+def _collect_daily_source_markdown(
+    tweets_dir: Path,
+    day: str,
+    *,
+    capture_source: str = DEFAULT_CAPTURE_SOURCE,
+) -> list[Path]:
     selected: list[Path] = []
+    normalized_source = _normalize_capture_source(capture_source)
     for path in tweets_dir.glob("*.md"):
         if not path.is_file():
             continue
         if path.name.startswith(_CONSOLIDATED_PREFIXES):
+            continue
+        meta, _ = U.split_front_matter(path.read_text(encoding="utf-8", errors="ignore"))
+        if not _matches_capture_source(meta, normalized_source):
             continue
         local_day = _tweet_operational_day_from_mtime(path.stat().st_mtime)
         if local_day == day:
@@ -194,17 +238,31 @@ def _collect_daily_source_markdown(tweets_dir: Path, day: str) -> list[Path]:
     return selected
 
 
-def _consolidated_base_candidates(day: str, output_base: str | None) -> list[str]:
+def _default_output_base(day: str, capture_source: str) -> str:
+    normalized = _normalize_capture_source(capture_source)
+    if normalized == "posted":
+        return f"Tweets posted {day}"
+    return f"Tweets {day}"
+
+
+def _consolidated_base_candidates(
+    day: str,
+    output_base: str | None,
+    capture_source: str,
+) -> list[str]:
     candidates: list[str] = []
     if output_base:
         candidates.append(output_base)
-    for base_name in (
-        f"Tweets {day}",
-        f"Consolidado Tweets {day}",
-        f"Consolidados Tweets {day}",
-    ):
+    for base_name in (_default_output_base(day, capture_source),):
         if base_name not in candidates:
             candidates.append(base_name)
+    if _normalize_capture_source(capture_source) == "liked":
+        for base_name in (
+            f"Consolidado Tweets {day}",
+            f"Consolidados Tweets {day}",
+        ):
+            if base_name not in candidates:
+                candidates.append(base_name)
     return candidates
 
 
@@ -212,9 +270,10 @@ def _find_existing_daily_consolidated_outputs(
     tweets_dir: Path,
     day: str,
     output_base: str | None,
+    capture_source: str,
 ) -> list[tuple[Path, Path]]:
     pairs: list[tuple[Path, Path]] = []
-    for base_name in _consolidated_base_candidates(day, output_base):
+    for base_name in _consolidated_base_candidates(day, output_base, capture_source):
         md_path = tweets_dir / f"{base_name}.md"
         html_path = tweets_dir / f"{base_name}.html"
         if md_path.is_file() and html_path.is_file():
@@ -892,12 +951,19 @@ def _cleanup_after_daily_consolidation(
     return deleted_html, migrated_docs, migrated_highlights
 
 
-def _render_markdown(day: str, entries: Iterable[TweetEntry]) -> str:
+def _heading_for_capture_source(capture_source: str) -> str:
+    normalized = _normalize_capture_source(capture_source)
+    if normalized == "posted":
+        return "Consolidado diario de tweets publicados"
+    return "Consolidado diario de tweets"
+
+
+def _render_markdown(day: str, entries: Iterable[TweetEntry], *, capture_source: str) -> str:
     entry_list = list(entries)
     thread_total = sum(1 for entry in entry_list if entry.kind.startswith("Thread"))
 
     lines: list[str] = [
-        f"# Consolidado diario de tweets ({day})",
+        f"# {_heading_for_capture_source(capture_source)} ({day})",
         "",
         f"- Total de ficheros: **{len(entry_list)}**",
         f"- Hilos detectados: **{thread_total}**",
@@ -967,13 +1033,23 @@ def _run_cleanup_for_existing_daily_consolidated(
     tweets_dir: Path,
     day: str,
     output_base: str | None,
+    capture_source: str,
 ) -> int:
-    pairs = _find_existing_daily_consolidated_outputs(tweets_dir, day, output_base)
+    pairs = _find_existing_daily_consolidated_outputs(
+        tweets_dir,
+        day,
+        output_base,
+        capture_source,
+    )
     if not pairs:
         print(f"🧾 No consolidated files found for {day}; cleanup skipped")
         return 0
 
-    source_markdown = _collect_daily_source_markdown(tweets_dir, day)
+    source_markdown = _collect_daily_source_markdown(
+        tweets_dir,
+        day,
+        capture_source=capture_source,
+    )
     keep_paths = [path for pair in pairs for path in pair]
     destination_html = pairs[0][1]
     deleted_html, migrated_docs, migrated_highlights = _cleanup_after_daily_consolidation(
@@ -998,10 +1074,18 @@ def _build_daily_consolidated_from_markdown(
     tweets_dir: Path,
     day: str,
     output_base: str | None,
+    capture_source: str,
 ) -> int:
-    source_markdown = _collect_daily_source_markdown(tweets_dir, day)
+    source_markdown = _collect_daily_source_markdown(
+        tweets_dir,
+        day,
+        capture_source=capture_source,
+    )
     if not source_markdown:
-        print(f"🐦 No tweet Markdown files found for {day} in {tweets_dir}")
+        print(
+            f"🐦 No {_normalize_capture_source(capture_source)} tweet Markdown files "
+            f"found for {day} in {tweets_dir}"
+        )
         return 0
 
     entries = [_build_entry(path) for path in source_markdown]
@@ -1009,11 +1093,11 @@ def _build_daily_consolidated_from_markdown(
     latest_tweet_mtime = max(entry.mtime for entry in entries)
     consolidated_mtime = latest_tweet_mtime + 60
 
-    output_name = output_base or f"Tweets {day}"
+    output_name = output_base or _default_output_base(day, capture_source)
     md_path = tweets_dir / f"{output_name}.md"
     html_path = tweets_dir / f"{output_name}.html"
 
-    markdown_text = _render_markdown(day, entries)
+    markdown_text = _render_markdown(day, entries, capture_source=capture_source)
     md_path.write_text(markdown_text, encoding="utf-8")
 
     html_text = _render_full_html(markdown_text, md_path.stem)
@@ -1047,6 +1131,7 @@ def main() -> int:
     args = parse_args()
     day_dt = _parse_day(args.day)
     year = args.year or day_dt.year
+    capture_source = _normalize_capture_source(getattr(args, "capture_source", DEFAULT_CAPTURE_SOURCE))
 
     tweets_dir = _tweets_dir(cfg.BASE_DIR, year, args.tweets_dir)
     if not tweets_dir.is_dir():
@@ -1057,12 +1142,14 @@ def main() -> int:
             tweets_dir,
             args.day,
             args.output_base,
+            capture_source,
         )
 
     return _build_daily_consolidated_from_markdown(
         tweets_dir,
         args.day,
         args.output_base,
+        capture_source,
     )
 
 

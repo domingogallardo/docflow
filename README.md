@@ -167,11 +167,14 @@ export DOCFLOW_BASE_DIR="/path/to/BASE_DIR"
 export TWEET_LIKES_STATE="$HOME/.secrets/docflow/x_state.json"
 export TWEET_LIKES_URL=https://x.com/<user>/likes
 export TWEET_LIKES_MAX=50
+export TWEET_POSTS_URL=https://x.com/<user>
+export TWEET_POSTS_MAX=50
 export HIGHLIGHTS_DAILY_DIR="/path/to/Obsidian/Subrayados"
 export DONE_LINKS_FILE="/path/to/Obsidian/Leidos.md"
 ```
 
 Keep `TWEET_LIKES_STATE` outside the repo so cleanup operations do not delete it.
+If `TWEET_POSTS_URL` is set, the tweet pipeline also downloads your published tweets and tags them separately from likes.
 
 2. Run the processing pipeline:
 
@@ -262,10 +265,10 @@ bash bin/docflow_tweet_daily.sh
 Behavior:
 
 - Loads `~/.docflow_env` if present.
-- Runs `bin/build_tweet_consolidated.sh --yesterday`.
+- Runs `bin/build_tweet_consolidated.sh --yesterday --capture-source all`.
 - Rebuilds intranet browse/reading/done pages when consolidation succeeds.
 
-Tweet queue from likes feed:
+Tweet queue from likes feed (and optionally your published tweets if `TWEET_POSTS_URL` is configured):
 
 ```bash
 python process_documents.py tweets
@@ -281,10 +284,18 @@ Daily consolidated tweets helper:
 
 ```bash
 bash bin/build_tweet_consolidated.sh
+bash bin/build_tweet_consolidated.sh --capture-source posted
+bash bin/build_tweet_consolidated.sh --capture-source all
 bash bin/build_tweet_consolidated.sh --day 2026-02-13
+bash bin/build_tweet_consolidated.sh --day 2026-02-13 --capture-source posted
 bash bin/build_tweet_consolidated.sh --all-days
+bash bin/build_tweet_consolidated.sh --all-days --capture-source all
 bash bin/build_tweet_consolidated.sh --all-days --cleanup-existing
 ```
+
+By default, `bin/build_tweet_consolidated.sh` builds liked-tweet consolidations (`Tweets YYYY-MM-DD`).
+Use `--capture-source posted` to build published-tweet consolidations (`Tweets posted YYYY-MM-DD`),
+or `--capture-source all` to process both families in one run.
 
 By default, daily grouping for tweet source files uses a local rollover hour at `03:00`
 to include just-after-midnight downloads in the previous day. Override with

@@ -23,6 +23,7 @@ def _write_tweet_pair(
     *,
     hour: int,
     body: str = "Tweet body.",
+    capture_source: str = "liked",
 ) -> tuple[Path, Path]:
     md_path = tweets_dir / f"{stem}.md"
     html_path = tweets_dir / f"{stem}.html"
@@ -30,6 +31,7 @@ def _write_tweet_pair(
         "---\n"
         "source: tweet\n"
         f"tweet_url: https://x.com/{stem.replace(' ', '_')}\n"
+        f"tweet_capture_source: {capture_source}\n"
         "---\n\n"
         f"# {stem}\n\n"
         f"{body}\n",
@@ -82,6 +84,7 @@ def test_main_includes_early_next_day_files_in_previous_day_consolidation(
         year=2026,
         tweets_dir=tweets_dir,
         output_base=None,
+        capture_source="liked",
         cleanup_if_consolidated=False,
     )
     monkeypatch.setattr(mod, "parse_args", lambda: args)
@@ -109,6 +112,7 @@ def test_main_keeps_source_markdown_and_removes_source_html_after_consolidation(
         year=2026,
         tweets_dir=tweets_dir,
         output_base=None,
+        capture_source="liked",
         cleanup_if_consolidated=False,
     )
     monkeypatch.setattr(mod, "parse_args", lambda: args)
@@ -156,6 +160,7 @@ def test_main_ports_source_tweet_highlights_to_consolidated_html(
         year=2026,
         tweets_dir=tweets_dir,
         output_base=None,
+        capture_source="liked",
         cleanup_if_consolidated=False,
     )
     monkeypatch.setattr(mod, "parse_args", lambda: args)
@@ -197,6 +202,7 @@ def test_main_keeps_output_files_when_output_base_matches_input_stem(tmp_path: P
         year=2026,
         tweets_dir=tweets_dir,
         output_base="daily",
+        capture_source="liked",
         cleanup_if_consolidated=False,
     )
     monkeypatch.setattr(mod, "parse_args", lambda: args)
@@ -230,6 +236,7 @@ def test_cleanup_only_if_consolidated_keeps_md_and_removes_html_without_rebuild(
         year=2026,
         tweets_dir=tweets_dir,
         output_base=None,
+        capture_source="liked",
         cleanup_if_consolidated=True,
     )
     monkeypatch.setattr(mod, "parse_args", lambda: args)
@@ -275,6 +282,7 @@ def test_cleanup_only_if_consolidated_ports_and_clears_source_highlights(
         year=2026,
         tweets_dir=tweets_dir,
         output_base=None,
+        capture_source="liked",
         cleanup_if_consolidated=True,
     )
     monkeypatch.setattr(mod, "parse_args", lambda: args)
@@ -308,6 +316,7 @@ def test_cleanup_only_if_consolidated_keeps_sources_when_no_consolidated(tmp_pat
         year=2026,
         tweets_dir=tweets_dir,
         output_base=None,
+        capture_source="liked",
         cleanup_if_consolidated=True,
     )
     monkeypatch.setattr(mod, "parse_args", lambda: args)
@@ -317,6 +326,74 @@ def test_cleanup_only_if_consolidated_keeps_sources_when_no_consolidated(tmp_pat
 
     assert src_md.is_file()
     assert src_html.is_file()
+
+
+def test_collect_daily_source_markdown_filters_posted_only(tmp_path: Path) -> None:
+    day = "2026-02-13"
+    tweets_dir = tmp_path / "Tweets 2026"
+    tweets_dir.mkdir(parents=True)
+
+    liked_md, _ = _write_tweet_pair(tweets_dir, "Tweet - liked", day, hour=10, capture_source="liked")
+    posted_md, _ = _write_tweet_pair(
+        tweets_dir,
+        "Tweet posted - posted",
+        day,
+        hour=11,
+        capture_source="posted",
+    )
+
+    selected = mod._collect_daily_source_markdown(tweets_dir, day, capture_source="posted")
+
+    assert selected == [posted_md]
+    assert liked_md not in selected
+
+
+def test_main_builds_posted_consolidated_without_touching_liked_sources(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    day = "2026-02-13"
+    tweets_dir = tmp_path / "Tweets 2026"
+    tweets_dir.mkdir(parents=True)
+
+    liked_md, liked_html = _write_tweet_pair(
+        tweets_dir,
+        "Tweet - liked-source",
+        day,
+        hour=10,
+        capture_source="liked",
+    )
+    posted_md, posted_html = _write_tweet_pair(
+        tweets_dir,
+        "Tweet posted - posted-source",
+        day,
+        hour=11,
+        capture_source="posted",
+    )
+
+    args = argparse.Namespace(
+        day=day,
+        year=2026,
+        tweets_dir=tweets_dir,
+        output_base=None,
+        capture_source="posted",
+        cleanup_if_consolidated=False,
+    )
+    monkeypatch.setattr(mod, "parse_args", lambda: args)
+
+    exit_code = mod.main()
+    assert exit_code == 0
+
+    consolidated_md = tweets_dir / f"Tweets posted {day}.md"
+    consolidated_html = tweets_dir / f"Tweets posted {day}.html"
+    assert consolidated_md.is_file()
+    assert consolidated_html.is_file()
+    assert "Total de ficheros: **1**" in consolidated_md.read_text(encoding="utf-8")
+
+    assert liked_md.is_file()
+    assert posted_md.is_file()
+    assert liked_html.is_file()
+    assert not posted_html.exists()
 
 
 def test_clean_body_keeps_compact_line_with_real_content() -> None:

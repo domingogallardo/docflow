@@ -25,7 +25,7 @@ PIPELINE_STEPS = (
 TARGET_HANDLERS = {name: method for name, method in PIPELINE_STEPS}
 PIPELINE_TARGETS = tuple(name for name, _ in PIPELINE_STEPS)
 from utils.tweet_to_markdown import fetch_tweet_thread_markdown
-from utils.x_likes_fetcher import LikeTweet, fetch_like_items_with_state
+from utils.x_likes_fetcher import LikeTweet, fetch_like_items_with_state, fetch_post_items_with_state
 
 
 class DocumentProcessor:
@@ -43,6 +43,8 @@ class DocumentProcessor:
         self.processed_history = self.incoming / "processed_history.txt"
         self.tweets_processed = self.incoming / "tweets_processed.txt"
         self.tweets_failed = self.incoming / "tweets_failed.txt"
+        self.tweets_posted_processed = self.incoming / "tweets_posted_processed.txt"
+        self.tweets_posted_failed = self.incoming / "tweets_posted_failed.txt"
 
         self.pdf_processor = PDFProcessor(self.incoming, self.pdfs_dest)
         self.instapaper_processor = InstapaperProcessor(self.incoming, self.posts_dest)
@@ -63,88 +65,127 @@ class DocumentProcessor:
         return paths
 
     def process_tweet_urls(self) -> List[Path]:
-        """Fetch recent likes from X and generate Markdown in Incoming/."""
-        failed_urls = self._load_failed_urls()
-        processed_urls = self._load_processed_urls()
+        """Fetch recent likes/posts from X and generate Markdown in Incoming/."""
+        generated = self._process_tweet_source(
+            capture_source="liked",
+            timeline_label="your likes",
+            processed_path=self.tweets_processed,
+            failed_path=self.tweets_failed,
+            max_setting_name="TWEET_LIKES_MAX",
+            fetch_items=self._fetch_like_items,
+        )
+        if cfg.TWEET_POSTS_URL:
+            generated = self._merge_paths(
+                generated,
+                self._process_tweet_source(
+                    capture_source="posted",
+                    timeline_label="your posted tweets",
+                    processed_path=self.tweets_posted_processed,
+                    failed_path=self.tweets_posted_failed,
+                    max_setting_name="TWEET_POSTS_MAX",
+                    fetch_items=self._fetch_post_items,
+                ),
+            )
+        return generated
+
+    def _process_tweet_source(
+        self,
+        *,
+        capture_source: str,
+        timeline_label: str,
+        processed_path: Path,
+        failed_path: Path,
+        max_setting_name: str,
+        fetch_items: Callable[..., Tuple[List[LikeTweet], bool, int]],
+    ) -> List[Path]:
+        failed_urls = self._load_failed_urls(failed_path=failed_path)
+        processed_urls = self._load_processed_urls(processed_path=processed_path)
         processed_set = set(processed_urls)
         pending_failed = {url: None for url in failed_urls if url not in processed_set}
-        likes_error = False
+        fetch_error = False
         stop_found = False
         total_articles = 0
-        last_processed = self._last_processed_tweet_url()
+        last_processed = self._last_processed_tweet_url(processed_path=processed_path)
 
         try:
-            likes, stop_found, total_articles = self._fetch_like_items(last_processed=last_processed)
+            items, stop_found, total_articles = fetch_items(last_processed=last_processed)
         except Exception as exc:
-            print(f"🐦 Could not read X likes: {exc}")
-            likes = []
-            likes_error = True
+            print(f"🐦 Could not read X {timeline_label}: {exc}")
+            items = []
+            fetch_error = True
 
-        if likes and last_processed and not stop_found:
-            anchor_url = self._first_processed_like_url(likes, processed_set)
+        if items and last_processed and not stop_found:
+            anchor_url = self._first_processed_like_url(items, processed_set)
             if anchor_url:
-                processed_urls = self._promote_processed_url(processed_urls, anchor_url)
+                processed_urls = self._promote_processed_url(
+                    processed_urls,
+                    anchor_url,
+                    processed_path=processed_path,
+                )
                 processed_set = set(processed_urls)
             else:
                 print(
-                    "⚠️  Last processed URL not found in likes; "
-                    f"check the TWEET_LIKES_MAX limit (visible articles: {total_articles})."
+                    "⚠️  Last processed URL not found in "
+                    f"{timeline_label}; check the {max_setting_name} limit "
+                    f"(visible articles: {total_articles})."
                 )
 
-        if not likes and not pending_failed:
-            self._write_failed_urls(list(pending_failed.keys()))
-            if not likes_error:
-                print("🐦 No new tweets in your likes")
+        if not items and not pending_failed:
+            self._write_failed_urls(list(pending_failed.keys()), failed_path=failed_path)
+            if not fetch_error:
+                print(f"🐦 No new tweets found in {timeline_label}")
             return []
 
-        fresh_likes = [like for like in likes if like.url not in processed_set]
-        fresh_url_set = {like.url for like in fresh_likes}
+        fresh_items = [item for item in items if item.url not in processed_set]
+        fresh_url_set = {item.url for item in fresh_items}
         retry_urls = [url for url in pending_failed if url not in fresh_url_set]
 
-        if not fresh_likes and not retry_urls:
-            self._write_failed_urls(list(pending_failed.keys()))
-            print("🐦 No new likes pending (everything is already processed).")
+        if not fresh_items and not retry_urls:
+            self._write_failed_urls(list(pending_failed.keys()), failed_path=failed_path)
+            print(f"🐦 No new {capture_source} tweets pending (everything is already processed).")
             return []
 
         if retry_urls:
-            print(f"🐦 Retrying {len(retry_urls)} failed tweet(s).")
+            print(f"🐦 Retrying {len(retry_urls)} failed {capture_source} tweet(s).")
 
         generated: List[Path] = []
         written_fresh_urls: List[str] = []
         written_retry_urls: List[str] = []
-        queue: List[LikeTweet] = list(fresh_likes) + [LikeTweet(url=url) for url in retry_urls]
+        queue: List[LikeTweet] = list(fresh_items) + [LikeTweet(url=url) for url in retry_urls]
 
-        for like in queue:
+        for item in queue:
             try:
                 markdown, filename = fetch_tweet_thread_markdown(
-                    like.url,
+                    item.url,
                     # Use storage_state to avoid X's login wall.
                     storage_state=cfg.TWEET_LIKES_STATE,
-                    like_author_handle=like.author_handle,
-                    like_time_text=like.time_text,
-                    like_time_datetime=like.time_datetime,
+                    context_author_handle=item.author_handle,
+                    context_time_text=item.time_text,
+                    context_time_datetime=item.time_datetime,
+                    capture_source=capture_source,
                 )
             except Exception as exc:
-                print(f"❌ Error processing {like.url}: {exc}")
-                pending_failed.setdefault(like.url, None)
+                print(f"❌ Error processing {item.url}: {exc}")
+                pending_failed.setdefault(item.url, None)
                 continue
 
             destination = self._unique_destination(self.incoming / filename)
             destination.write_text(markdown, encoding="utf-8")
             generated.append(destination)
-            if like.url in fresh_url_set:
-                written_fresh_urls.append(like.url)
+            if item.url in fresh_url_set:
+                written_fresh_urls.append(item.url)
             else:
-                written_retry_urls.append(like.url)
-            pending_failed.pop(like.url, None)
+                written_retry_urls.append(item.url)
+            pending_failed.pop(item.url, None)
             print(f"🐦 Tweet saved as {destination.name}")
 
         if written_fresh_urls or written_retry_urls:
             self._record_processed_urls(
                 fresh_urls=written_fresh_urls,
                 retry_urls=written_retry_urls,
+                processed_path=processed_path,
             )
-        self._write_failed_urls(list(pending_failed.keys()))
+        self._write_failed_urls(list(pending_failed.keys()), failed_path=failed_path)
 
         return generated
 
@@ -168,28 +209,45 @@ class DocumentProcessor:
         )
         return items, stop_found, total_articles
 
-    def _last_processed_tweet_url(self) -> Optional[str]:
-        lines = self._load_processed_urls()
+    def _fetch_post_items(
+        self,
+        *,
+        last_processed: str | None,
+    ) -> Tuple[List[LikeTweet], bool, int]:
+        if not cfg.TWEET_LIKES_STATE:
+            raise RuntimeError("Configure TWEET_LIKES_STATE with the storage_state exported from X.")
+        if not cfg.TWEET_POSTS_URL:
+            return [], False, 0
+        items, stop_found, total_articles = fetch_post_items_with_state(
+            cfg.TWEET_LIKES_STATE,
+            posts_url=cfg.TWEET_POSTS_URL,
+            max_tweets=cfg.TWEET_POSTS_MAX,
+            stop_at_url=last_processed,
+            headless=True,
+        )
+        return items, stop_found, total_articles
+
+    def _last_processed_tweet_url(self, *, processed_path: Path | None = None) -> Optional[str]:
+        lines = self._load_processed_urls(processed_path=processed_path)
         if not lines:
             return None
         return lines[0]
 
-    def _load_processed_urls(self) -> List[str]:
-        path = self.tweets_processed
+    @staticmethod
+    def _load_url_file(path: Path) -> List[str]:
         if not path.exists():
             return []
         lines = [line.strip() for line in path.read_text(encoding="utf-8").splitlines()]
         return [line for line in lines if line]
 
-    def _load_failed_urls(self) -> List[str]:
-        path = self.tweets_failed
-        if not path.exists():
-            return []
-        lines = [line.strip() for line in path.read_text(encoding="utf-8").splitlines()]
-        return [line for line in lines if line]
+    def _load_processed_urls(self, *, processed_path: Path | None = None) -> List[str]:
+        return self._load_url_file(processed_path or self.tweets_processed)
 
-    def _write_failed_urls(self, urls: List[str]) -> None:
-        path = self.tweets_failed
+    def _load_failed_urls(self, *, failed_path: Path | None = None) -> List[str]:
+        return self._load_url_file(failed_path or self.tweets_failed)
+
+    @staticmethod
+    def _write_url_file(path: Path, urls: List[str]) -> None:
         if not urls:
             if path.exists():
                 path.unlink()
@@ -197,14 +255,11 @@ class DocumentProcessor:
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text("\n".join(urls) + "\n", encoding="utf-8")
 
-    def _write_processed_urls(self, urls: List[str]) -> None:
-        path = self.tweets_processed
-        if not urls:
-            if path.exists():
-                path.unlink()
-            return
-        path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text("\n".join(urls) + "\n", encoding="utf-8")
+    def _write_failed_urls(self, urls: List[str], *, failed_path: Path | None = None) -> None:
+        self._write_url_file(failed_path or self.tweets_failed, urls)
+
+    def _write_processed_urls(self, urls: List[str], *, processed_path: Path | None = None) -> None:
+        self._write_url_file(processed_path or self.tweets_processed, urls)
 
     @staticmethod
     def _dedupe_urls(urls: Sequence[str]) -> List[str]:
@@ -217,20 +272,32 @@ class DocumentProcessor:
             ordered.append(url)
         return ordered
 
-    def _record_processed_urls(self, *, fresh_urls: List[str], retry_urls: List[str]) -> None:
+    def _record_processed_urls(
+        self,
+        *,
+        fresh_urls: List[str],
+        retry_urls: List[str],
+        processed_path: Path | None = None,
+    ) -> None:
         fresh = self._dedupe_urls(fresh_urls)
         retries = self._dedupe_urls(retry_urls)
         if not fresh and not retries:
             return
 
-        existing = self._load_processed_urls()
+        existing = self._load_processed_urls(processed_path=processed_path)
         fresh_set = set(fresh)
         retry_set = set(retries)
         middle = [url for url in existing if url not in fresh_set and url not in retry_set]
         ordered = [*fresh, *middle, *retries]
-        self._write_processed_urls(ordered)
+        self._write_processed_urls(ordered, processed_path=processed_path)
 
-    def _promote_processed_url(self, processed_urls: Sequence[str], anchor_url: str) -> List[str]:
+    def _promote_processed_url(
+        self,
+        processed_urls: Sequence[str],
+        anchor_url: str,
+        *,
+        processed_path: Path | None = None,
+    ) -> List[str]:
         if not processed_urls:
             return []
         if processed_urls[0] == anchor_url:
@@ -239,7 +306,7 @@ class DocumentProcessor:
             return list(processed_urls)
 
         reordered = [anchor_url, *[url for url in processed_urls if url != anchor_url]]
-        self._write_processed_urls(reordered)
+        self._write_processed_urls(reordered, processed_path=processed_path)
         return reordered
 
     @staticmethod
