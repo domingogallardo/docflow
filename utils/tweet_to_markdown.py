@@ -88,6 +88,21 @@ SHOW_MORE_LABELS_NORMALIZED = {
     "leer más",
     "leer mas",
 }
+TRANSLATION_PROMPT_LABELS_NORMALIZED = {
+    "show translation",
+    "see translation",
+    "mostrar traducción",
+    "mostrar traduccion",
+    "ver traducción",
+    "ver traduccion",
+}
+TRANSLATION_PROMPT_INLINE_RE = re.compile(
+    "|".join(
+        re.escape(label)
+        for label in sorted(TRANSLATION_PROMPT_LABELS_NORMALIZED, key=len, reverse=True)
+    ),
+    re.IGNORECASE,
+)
 VALID_CAPTURE_SOURCES = {"liked", "posted"}
 PLATFORM_PROMO_STRONG_PHRASES = (
     "access your post analytics",
@@ -302,6 +317,41 @@ def normalize_inline_mention_breaks(text: str) -> str:
         normalized.append(stripped)
 
     return "\n".join(normalized)
+
+
+def strip_platform_inline_prompts(text: str) -> str:
+    """Remove standalone platform UI prompts embedded in tweet text."""
+    def is_prompt_line(line: str) -> bool:
+        probe = re.sub(r"(?i)<br\s*/?>", "", line).strip()
+        probe = re.sub(r"(?i)^<p>\s*", "", probe)
+        probe = re.sub(r"(?i)\s*</p>$", "", probe)
+        return _normalize_platform_text(probe) in TRANSLATION_PROMPT_LABELS_NORMALIZED
+
+    def strip_glued_prompt(line: str) -> str:
+        def repl(match: re.Match[str]) -> str:
+            start, end = match.span()
+            previous = line[start - 1] if start > 0 else ""
+            following = line[end] if end < len(line) else ""
+            previous_dense = bool(previous and not previous.isspace() and previous not in '<>/"\'([{')
+            following_dense = bool(following and not following.isspace() and following not in '<>/"\')]},.;:!?')
+            if previous_dense and following_dense:
+                return "\n"
+            if previous_dense or following_dense:
+                return " "
+            return match.group(0)
+
+        return TRANSLATION_PROMPT_INLINE_RE.sub(repl, line)
+
+    filtered: List[str] = []
+    for line in text.splitlines():
+        if is_prompt_line(line):
+            continue
+        cleaned = strip_glued_prompt(line)
+        for cleaned_line in cleaned.splitlines():
+            if is_prompt_line(cleaned_line):
+                continue
+            filtered.append(cleaned_line.strip())
+    return "\n".join(_collapse_blank_lines(filtered))
 
 
 def _safe_filename(name: str) -> str:
@@ -1316,7 +1366,9 @@ def _extract_tweet_parts(
         anchor_handle=anchor_handle,
     )
     body_text = strip_tweet_stats(
-        normalize_inline_mention_breaks(rebuild_urls_from_lines(raw_text).strip())
+        strip_platform_inline_prompts(
+            normalize_inline_mention_breaks(rebuild_urls_from_lines(raw_text).strip())
+        )
     )
 
     has_quote_marker = _has_quote_marker(body_text)

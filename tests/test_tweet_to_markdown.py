@@ -3,6 +3,7 @@
 from utils.tweet_to_markdown import (
     rebuild_urls_from_lines,
     normalize_inline_mention_breaks,
+    strip_platform_inline_prompts,
     strip_tweet_stats,
     _media_markdown_lines,
     _insert_quote_separator,
@@ -117,6 +118,38 @@ def test_normalize_inline_mention_breaks_keeps_author_name_and_handle_separate()
     )
     result = normalize_inline_mention_breaks(raw)
     assert result == raw
+
+
+def test_strip_platform_inline_prompts_removes_show_translation_line():
+    raw = "\n".join(
+        [
+            "Autor",
+            "@handle",
+            "Show translation",
+            "Contenido válido.",
+        ]
+    )
+    result = strip_platform_inline_prompts(raw)
+    assert result == "Autor\n@handle\nContenido válido."
+
+
+def test_strip_platform_inline_prompts_removes_translation_variants():
+    raw = "\n".join(
+        [
+            "Autor",
+            "Mostrar traducción",
+            "Contenido válido.",
+            "See translation",
+        ]
+    )
+    result = strip_platform_inline_prompts(raw)
+    assert result == "Autor\nContenido válido."
+
+
+def test_strip_platform_inline_prompts_removes_glued_translation_prompt():
+    raw = "Antonio Ortiz@antonelloShow translationPues ya es oficial."
+    result = strip_platform_inline_prompts(raw)
+    assert result == "Antonio Ortiz@antonello\nPues ya es oficial."
 
 
 def test_strip_tweet_stats_removes_metrics_lines():
