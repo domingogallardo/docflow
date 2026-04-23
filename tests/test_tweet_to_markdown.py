@@ -6,6 +6,7 @@ from utils.tweet_to_markdown import (
     strip_platform_inline_prompts,
     strip_tweet_stats,
     _media_markdown_lines,
+    _emoji_from_twimg_url,
     _insert_quote_separator,
     _pick_quoted_tweet_url,
     _has_quote_marker,
@@ -487,15 +488,24 @@ def test_quoted_url_from_graphql_id_skips_self():
     )
 
 
+def test_emoji_from_twimg_url_decodes_composite_sequences():
+    assert _emoji_from_twimg_url("https://abs-0.twimg.com/emoji/v2/svg/1f447.svg") == "👇"
+    assert _emoji_from_twimg_url("https://abs.twimg.com/emoji/v2/svg/1f64f.svg") == "🙏"
+    assert _emoji_from_twimg_url("https://abs-0.twimg.com/emoji/v2/svg/1f1ea-1f1fa.svg") == "🇪🇺"
+    assert _emoji_from_twimg_url("https://abs-0.twimg.com/emoji/v2/svg/1f468-1f3fb-200d-1f4bb.svg") == "👨🏻‍💻"
+
+
 def test_media_markdown_lines_include_direct_links():
     lines = _media_markdown_lines(
         [
             "https://pbs.twimg.com/media/img1?format=jpg",
+            "https://abs-0.twimg.com/emoji/v2/svg/1f447.svg",
             "https://pbs.twimg.com/media/img2?format=jpg",
         ]
     )
     assert lines[0] == "[![image 1](https://pbs.twimg.com/media/img1?format=jpg)](https://pbs.twimg.com/media/img1?format=jpg)"
-    assert lines[1] == "[![image 2](https://pbs.twimg.com/media/img2?format=jpg)](https://pbs.twimg.com/media/img2?format=jpg)"
+    assert lines[1] == "👇"
+    assert lines[2] == "[![image 3](https://pbs.twimg.com/media/img2?format=jpg)](https://pbs.twimg.com/media/img2?format=jpg)"
 
 
 def test_build_single_tweet_markdown_includes_external_link_without_media():

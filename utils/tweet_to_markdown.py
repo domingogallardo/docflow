@@ -103,6 +103,7 @@ TRANSLATION_PROMPT_INLINE_RE = re.compile(
     ),
     re.IGNORECASE,
 )
+TWIMG_EMOJI_PATH_RE = re.compile(r"/emoji/v\d+/(?:svg|72x72)/([0-9a-fA-F-]+)\.[a-z0-9]+$")
 VALID_CAPTURE_SOURCES = {"liked", "posted"}
 PLATFORM_PROMO_STRONG_PHRASES = (
     "access your post analytics",
@@ -204,6 +205,37 @@ LOGIN_TEXT_HINTS = (
     "Iniciar sesion",
     "Iniciar sesión",
 )
+ARTICLE_TEXT_WITH_EMOJI_SCRIPT = """el => {
+  const root = el.closest('article, div[data-testid="tweet"]') || el;
+  const clone = root.cloneNode(true);
+  const decodeEmoji = (url) => {
+    try {
+      const pathname = new URL(url, window.location.href).pathname;
+      const match = pathname.match(/\\/emoji\\/v\\d+\\/(?:svg|72x72)\\/([0-9a-fA-F-]+)\\.[a-z0-9]+$/);
+      if (!match) return null;
+      const codepoints = match[1]
+        .split('-')
+        .map((part) => Number.parseInt(part, 16));
+      if (!codepoints.length || codepoints.some((value) => Number.isNaN(value))) {
+        return null;
+      }
+      return String.fromCodePoint(...codepoints);
+    } catch (error) {
+      return null;
+    }
+  };
+
+  clone.querySelectorAll('img').forEach((img) => {
+    const src = img.getAttribute('src') || '';
+    const emoji = decodeEmoji(src);
+    if (!emoji) {
+      return;
+    }
+    img.replaceWith(document.createTextNode(emoji));
+  });
+
+  return clone.innerText;
+}"""
 UNAVAILABLE_TEXT_HINTS = (
     "This Post is unavailable",
     "This post is unavailable",
@@ -503,15 +535,13 @@ def _read_article_text(
             best_text = _prefer_richer_text(best_text, evaluated)
         if anchor_handle is not None:
             try:
-                text = anchor_handle.evaluate(
-                    "el => el.closest('article, div[data-testid=\"tweet\"]').innerText"
-                )
+                text = anchor_handle.evaluate(ARTICLE_TEXT_WITH_EMOJI_SCRIPT)
                 best_text = _prefer_richer_text(best_text, text)
             except Exception:
                 pass
         if best_text and "\n" not in best_text:
             try:
-                refined = current.evaluate("el => el.innerText")
+                refined = current.evaluate(ARTICLE_TEXT_WITH_EMOJI_SCRIPT)
                 best_text = _prefer_richer_text(best_text, refined)
             except Exception:
                 pass
@@ -538,7 +568,7 @@ def _read_article_text(
 
     if current is not None:
         try:
-            return current.evaluate("el => el.innerText")
+            return current.evaluate(ARTICLE_TEXT_WITH_EMOJI_SCRIPT)
         except Exception:
             pass
     if last_exc:
@@ -562,10 +592,9 @@ def _anchor_handle_for_tweet(page, tweet_url: str):
 def _evaluate_article_text(page, tweet_id: str) -> str | None:
     if page is None or not tweet_id:
         return None
-    script = """el => el.closest('article, div[data-testid="tweet"]').innerText"""
     try:
         selector = f"a[href*='/status/{tweet_id}']"
-        return page.locator(selector).first.evaluate(script)
+        return page.locator(selector).first.evaluate(ARTICLE_TEXT_WITH_EMOJI_SCRIPT)
     except Exception:
         return None
 
@@ -1217,6 +1246,22 @@ def _split_image_urls(image_urls: List[str]) -> Tuple[Optional[str], List[str]]:
     return avatar, media
 
 
+def _emoji_from_twimg_url(url: str) -> str | None:
+    match = TWIMG_EMOJI_PATH_RE.search(urlparse(url).path)
+    if not match:
+        return None
+
+    codepoints = []
+    for part in match.group(1).split("-"):
+        try:
+            codepoints.append(int(part, 16))
+        except ValueError:
+            return None
+    if not codepoints:
+        return None
+    return "".join(chr(codepoint) for codepoint in codepoints)
+
+
 def _strip_media_params(url: str) -> str:
     if "pbs.twimg.com/media" not in url:
         return url
@@ -1233,14 +1278,12 @@ def _strip_media_params(url: str) -> str:
 def _media_markdown_lines(media_urls: List[str]) -> List[str]:
     lines: List[str] = []
     for idx, image_url in enumerate(media_urls, start=1):
-        if "abs-0.twimg.com/emoji" in image_url:
-            lines.append(
-                f'<img src="{image_url}" alt="emoji {idx}" '
-                'style="width:32px;height:auto;vertical-align:middle;" />'
-            )
-        else:
-            clean_url = _strip_media_params(image_url)
-            lines.append(f"[![image {idx}]({clean_url})]({clean_url})")
+        emoji = _emoji_from_twimg_url(image_url)
+        if emoji:
+            lines.append(emoji)
+            continue
+        clean_url = _strip_media_params(image_url)
+        lines.append(f"[![image {idx}]({clean_url})]({clean_url})")
     return lines
 
 
@@ -1352,6 +1395,8 @@ def _extract_tweet_parts(
                 parts = [p.strip() for p in srcset.split(",") if p.strip()]
                 if parts:
                     candidate = parts[-1].split(" ")[0]
+        if candidate and _emoji_from_twimg_url(candidate):
+            continue
         if candidate and candidate not in seen:
             seen.add(candidate)
             image_candidates.append((img, candidate))
