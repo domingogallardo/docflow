@@ -188,6 +188,134 @@ def test_strip_tweet_stats_removes_trailing_show_more_after_metrics():
     assert result == "Contenido válido."
 
 
+def test_strip_tweet_stats_removes_metrics_block_ending_in_relevant():
+    raw = "\n".join(
+        [
+            "Contenido válido.",
+            "8:59 PM · Mar 10, 2026",
+            "·",
+            "53.2K",
+            "Views",
+            "43",
+            "55",
+            "551",
+            "104",
+            "Relevant",
+        ]
+    )
+    result = strip_tweet_stats(raw)
+    assert result == "Contenido válido."
+
+
+def test_strip_tweet_stats_removes_reply_controls_after_metrics():
+    raw = "\n".join(
+        [
+            "Contenido válido.",
+            "6:44 PM · Apr 17, 2026",
+            "·",
+            "1.1M",
+            "Views",
+            "206",
+            "2.6K",
+            "15K",
+            "4.7K",
+            "Relevant",
+            "View quotes",
+            "You can reply to this post.",
+        ]
+    )
+    result = strip_tweet_stats(raw)
+    assert result == "Contenido válido."
+
+
+def test_strip_tweet_stats_removes_multiline_reply_controls_after_metrics():
+    raw = "\n".join(
+        [
+            "Contenido válido.",
+            "8:10 PM · Mar 9, 2026",
+            "·",
+            "22.7K",
+            "Views",
+            "130",
+            "632",
+            "297",
+            "Who can reply?",
+            "Accounts",
+            "@GoogleResearch",
+            "mentioned can reply",
+        ]
+    )
+    result = strip_tweet_stats(raw)
+    assert result == "Contenido válido."
+
+
+def test_strip_tweet_stats_removes_view_post_engagements_after_metrics():
+    raw = "\n".join(
+        [
+            "Contenido válido.",
+            "10:28 AM · Jan 20, 2026",
+            "·",
+            "32",
+            "Views",
+            "View post engagements",
+        ]
+    )
+    result = strip_tweet_stats(raw)
+    assert result == "Contenido válido."
+
+
+def test_strip_tweet_stats_removes_new_version_prompts_after_metrics():
+    raw = "\n".join(
+        [
+            "Contenido válido.",
+            "12:12 PM · Nov 27, 2025",
+            "·",
+            "1,628",
+            "Views",
+            "There's a new version of this post.",
+            "See the latest post",
+        ]
+    )
+    result = strip_tweet_stats(raw)
+    assert result == "Contenido válido."
+
+
+def test_strip_tweet_stats_keeps_non_metric_relevant_line():
+    raw = "\n".join(
+        [
+            "Contenido válido.",
+            "Relevant",
+        ]
+    )
+    result = strip_tweet_stats(raw)
+    assert result == raw
+
+
+def test_strip_tweet_stats_removes_platform_boilerplate_lines():
+    raw = "\n".join(
+        [
+            "Contenido válido.",
+            "",
+            "Access your post analytics",
+            "Unlock advanced analytics with X Premium",
+            "Learn more",
+        ]
+    )
+    result = strip_tweet_stats(raw)
+    assert result == "Contenido válido."
+
+
+def test_strip_tweet_stats_removes_inline_platform_boilerplate_tail():
+    raw = (
+        "Contenido válido. "
+        "Access your post analytics "
+        "Unlock advanced anlytics with X Premium "
+        "Learn more"
+    )
+    result = strip_tweet_stats(raw)
+    assert result == "Contenido válido."
+
+
 def test_insert_quote_separator_adds_hr_before_quote():
     raw = "\n".join(
         [

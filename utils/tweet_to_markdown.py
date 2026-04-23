@@ -89,6 +89,35 @@ SHOW_MORE_LABELS_NORMALIZED = {
     "leer mas",
 }
 VALID_CAPTURE_SOURCES = {"liked", "posted"}
+PLATFORM_PROMO_STRONG_PHRASES = (
+    "access your post analytics",
+    "unlock advanced analytics with premium",
+    "unlock advanced analytics with x premium",
+    "unlock advanced anlytics with premium",
+    "unlock advanced anlytics with x premium",
+)
+PLATFORM_PROMO_WEAK_PHRASES = {"learn more"}
+PLATFORM_PROMO_ALL_PHRASES = (
+    *PLATFORM_PROMO_STRONG_PHRASES,
+    *sorted(PLATFORM_PROMO_WEAK_PHRASES),
+)
+METRIC_TAIL_MARKERS = {
+    "relevant",
+    "relevante",
+    "view quote",
+    "view quotes",
+    "view reply",
+    "view replies",
+    "view post engagements",
+    "there's a new version of this post",
+    "there’s a new version of this post",
+    "see the latest post",
+}
+REPLY_CONTROL_PROMPTS = {
+    "who can reply",
+    "you can reply to this post",
+    "you can reply to this reply",
+}
 METRIC_WORD_TOKENS = {
     "am",
     "pm",
@@ -659,6 +688,124 @@ def _is_show_more_line(line: str) -> bool:
     return line.strip().lower() in SHOW_MORE_LABELS_NORMALIZED
 
 
+def _previous_nonblank_line(lines: List[str], idx: int) -> str | None:
+    for prev_idx in range(idx - 1, -1, -1):
+        candidate = lines[prev_idx].strip()
+        if candidate:
+            return lines[prev_idx]
+    return None
+
+
+def _normalize_platform_text(text: str) -> str:
+    return " ".join(text.strip().lower().split()).rstrip(" .!?:;")
+
+
+def _is_strong_platform_boilerplate_line(line: str) -> bool:
+    normalized = _normalize_platform_text(line)
+    return any(phrase in normalized for phrase in PLATFORM_PROMO_STRONG_PHRASES) and _is_platform_promo_sequence(
+        normalized
+    )
+
+
+def _is_platform_boilerplate_line(lines: List[str], idx: int) -> bool:
+    normalized = _normalize_platform_text(lines[idx])
+    if not normalized:
+        return False
+    if _is_strong_platform_boilerplate_line(lines[idx]):
+        return True
+    if normalized not in PLATFORM_PROMO_WEAK_PHRASES:
+        return False
+
+    for previous in reversed(lines[:idx]):
+        if not previous:
+            continue
+        return _is_strong_platform_boilerplate_line(previous)
+    return False
+
+
+def _is_metric_tail_context_line(line: str | None) -> bool:
+    if not line:
+        return False
+    normalized = _normalize_platform_text(line)
+    stripped = line.strip()
+    return (
+        _is_timestamp_line(line)
+        or _is_keyword_stat(line)
+        or _is_numeric_stat(line)
+        or normalized in METRIC_TAIL_MARKERS
+        or normalized in REPLY_CONTROL_PROMPTS
+        or normalized == "accounts"
+        or normalized.endswith("can reply")
+        or bool(HANDLE_ONLY_RE.match(stripped))
+    )
+
+
+def _is_contextual_platform_tail_line(lines: List[str], idx: int) -> bool:
+    stripped = lines[idx].strip()
+    normalized = _normalize_platform_text(stripped)
+    if not normalized:
+        return False
+
+    previous = _previous_nonblank_line(lines, idx)
+    previous_normalized = _normalize_platform_text(previous) if previous else ""
+
+    if normalized in METRIC_TAIL_MARKERS:
+        return _is_metric_tail_context_line(previous)
+    if normalized in REPLY_CONTROL_PROMPTS:
+        return _is_metric_tail_context_line(previous)
+    if normalized.endswith("can reply"):
+        return _is_metric_tail_context_line(previous)
+    if HANDLE_ONLY_RE.match(stripped):
+        return previous_normalized == "accounts"
+    if normalized == "accounts":
+        return previous_normalized in REPLY_CONTROL_PROMPTS
+    return False
+
+
+def _is_platform_promo_sequence(text: str) -> bool:
+    normalized = _normalize_platform_text(text)
+    if not normalized:
+        return False
+
+    while normalized:
+        matched = False
+        for phrase in PLATFORM_PROMO_ALL_PHRASES:
+            if normalized == phrase:
+                return True
+            if normalized.startswith(f"{phrase} "):
+                normalized = normalized[len(phrase) + 1 :].lstrip()
+                matched = True
+                break
+        if not matched:
+            return False
+
+    return True
+
+
+def _strip_platform_boilerplate_tail(text: str) -> str:
+    stripped = text.strip()
+    if not stripped:
+        return ""
+
+    lowered = stripped.lower()
+    for phrase in PLATFORM_PROMO_STRONG_PHRASES:
+        search_from = len(lowered)
+        while True:
+            start = lowered.rfind(phrase, 0, search_from)
+            if start < 0:
+                break
+            prefix = stripped[:start].rstrip()
+            if prefix and prefix[-1] not in ".!?\n":
+                search_from = start
+                continue
+            suffix = stripped[start:]
+            if _is_platform_promo_sequence(suffix):
+                return prefix
+            search_from = start
+
+    return stripped
+
+
 def _is_metric_only_line(line: str) -> bool:
     stripped = line.strip()
     if not stripped:
@@ -712,12 +859,14 @@ def strip_tweet_stats(text: str) -> str:
         or _is_keyword_stat(lines[-1])
         or _is_numeric_stat(lines[-1])
         or _is_show_more_line(lines[-1])
+        or _is_platform_boilerplate_line(lines, len(lines) - 1)
+        or _is_contextual_platform_tail_line(lines, len(lines) - 1)
     ):
         lines.pop()
         while lines and not lines[-1]:
             lines.pop()
 
-    return "\n".join(lines).strip()
+    return _strip_platform_boilerplate_tail("\n".join(lines)).strip()
 
 
 def _text_quality(text: str) -> tuple[int, int]:
