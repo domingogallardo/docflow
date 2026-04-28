@@ -24,16 +24,28 @@ import utils as U
 from utils.highlight_store import load_highlights_for_path, save_highlights_for_path
 from utils.site_paths import rel_path_from_abs
 try:
-    from utils.tweet_to_markdown import strip_tweet_stats as _strip_tweet_stats
+    from utils.tweet_to_markdown import (
+        strip_platform_inline_prompts as _strip_platform_inline_prompts,
+        strip_tweet_stats as _strip_tweet_stats,
+    )
 except Exception:  # pragma: no cover - defensive fallback
+    def _strip_platform_inline_prompts(text: str) -> str:
+        return text
+
     def _strip_tweet_stats(text: str) -> str:
         return text
 
 
 TITLE_PREFIX_RE = re.compile(r"^Tweet(?:\s+posted)?\s*-\s*", re.IGNORECASE)
 GENERIC_H1_RE = re.compile(r"^#\s*(tweet|thread)\b", re.IGNORECASE)
+H1_AUTHOR_HANDLE_RE = re.compile(r"\((@[A-Za-z0-9_]{1,20})\)")
+MARKDOWN_HEADING_LINE_RE = re.compile(r"^(?P<indent>[ \t]{0,3})(?P<heading>#{1,6})(?=\s)")
 X_URL_RE = re.compile(r"https?://x\.com/[^\s)]+")
 VIEW_QUOTED_RE = re.compile(r"^\[view quoted tweet\]\(", re.IGNORECASE)
+QUOTED_TWEET_HEADING_RE = re.compile(r"^#{1,6}\s+Tweet citado\s*$", re.IGNORECASE)
+INLINE_QUOTED_TWEET_RE = re.compile(
+    r"Quote(?=[A-ZÁÉÍÓÚÜÑ][^@\n]{1,80}@[A-Za-z0-9_]{1,20}(?:·|\b))"
+)
 PARAGRAPH_TAG_RE = re.compile(r"(<p[^>]*>)(.*?)(</p>)", re.IGNORECASE | re.DOTALL)
 PARAGRAPH_BLOCK_TAG_RE = re.compile(
     r"</?(?:address|article|aside|blockquote|div|dl|fieldset|figcaption|figure|footer|form|h[1-6]|header|hr|li|main|nav|ol|p|pre|section|table|tbody|td|tfoot|th|thead|tr|ul)\b",
@@ -316,13 +328,19 @@ def _entry_kind(meta: dict[str, str]) -> str:
     return "Thread"
 
 
-def _clean_body(body: str) -> str:
+def _clean_body(body: str, meta: dict[str, str] | None = None) -> str:
     lines = body.splitlines()
+    author_name = (meta or {}).get("tweet_author_name", "").strip().strip('"')
+    author_handle = (meta or {}).get("tweet_author", "").strip().strip('"')
 
     while lines and not lines[0].strip():
         lines.pop(0)
 
     if lines and GENERIC_H1_RE.match(lines[0].strip()):
+        if not author_handle:
+            match = H1_AUTHOR_HANDLE_RE.search(lines[0])
+            if match:
+                author_handle = match.group(1)
         lines.pop(0)
         while lines and not lines[0].strip():
             lines.pop(0)
@@ -336,10 +354,56 @@ def _clean_body(body: str) -> str:
             while lines and not lines[0].strip():
                 lines.pop(0)
 
-    text = _strip_stats_by_sections("\n".join(lines).strip())
+    text = _strip_platform_prompts_preserving_blanks(
+        "\n".join(lines).strip(),
+        author_name=author_name,
+        author_handle=author_handle,
+    )
+    text = _strip_stats_by_sections(text)
+    text = _split_inline_quoted_tweets(text)
     text = _blockquote_quoted_sections(text)
+    text = _escape_literal_markdown_headings(text)
     text = _normalize_wrapped_dash_lists(text)
     return text + ("\n" if text else "")
+
+
+def _escape_literal_markdown_headings(text: str) -> str:
+    """Keep tweet text that starts with '# ' from becoming Markdown headings."""
+    escaped: list[str] = []
+    for line in text.splitlines():
+        if line.strip() == "#### Tweet citado":
+            escaped.append(line)
+            continue
+        match = MARKDOWN_HEADING_LINE_RE.match(line)
+        if not match:
+            escaped.append(line)
+            continue
+        escaped.append(
+            f"{match.group('indent')}\\{line[len(match.group('indent')):]}"
+        )
+    return "\n".join(escaped).strip()
+
+
+def _strip_platform_prompts_preserving_blanks(
+    text: str,
+    *,
+    author_name: str | None = None,
+    author_handle: str | None = None,
+) -> str:
+    cleaned_lines: list[str] = []
+    for raw in text.splitlines():
+        if not raw.strip():
+            cleaned_lines.append("")
+            continue
+        cleaned = _strip_platform_inline_prompts(
+            raw,
+            author_name=author_name,
+            author_handle=author_handle,
+        )
+        if not cleaned:
+            continue
+        cleaned_lines.extend(cleaned.splitlines())
+    return "\n".join(cleaned_lines)
 
 
 def _strip_stats_by_sections(text: str) -> str:
@@ -551,6 +615,39 @@ def _strip_metric_blocks(text: str) -> str:
     return "\n".join(out).strip()
 
 
+def _is_quoted_tweet_heading(line: str) -> bool:
+    return bool(QUOTED_TWEET_HEADING_RE.match(line.strip()))
+
+
+def _append_quote_separator(out: list[str]) -> None:
+    last_nonblank = next((line.strip() for line in reversed(out) if line.strip()), "")
+    if last_nonblank == "---":
+        while out and not out[-1].strip():
+            out.pop()
+        return
+    if out and out[-1].strip():
+        out.append("")
+    out.append("---")
+
+
+def _append_quoted_tweet_heading(out: list[str]) -> None:
+    """Append the standard separator and heading for quoted tweet sections."""
+    _append_quote_separator(out)
+    if out and out[-1].strip():
+        out.append("")
+    out.append("#### Tweet citado")
+
+
+def _pop_trailing_quoted_tweet_heading(out: list[str]) -> None:
+    while out and not out[-1].strip():
+        out.pop()
+    if not out or not _is_quoted_tweet_heading(out[-1]):
+        return
+    out.pop()
+    while out and not out[-1].strip():
+        out.pop()
+
+
 def _blockquote_quoted_sections(text: str) -> str:
     if not text:
         return ""
@@ -559,14 +656,23 @@ def _blockquote_quoted_sections(text: str) -> str:
     out: list[str] = []
     in_quoted_section = False
 
-    for line in lines:
+    idx = 0
+    while idx < len(lines):
+        line = lines[idx]
         stripped = line.strip()
 
         if VIEW_QUOTED_RE.match(stripped):
+            _pop_trailing_quoted_tweet_heading(out)
+            _append_quote_separator(out)
+            out.append(line)
+            idx += 1
+            while idx < len(lines) and not lines[idx].strip():
+                idx += 1
+            if idx < len(lines) and _is_quoted_tweet_heading(lines[idx]):
+                idx += 1
             if out and out[-1].strip():
                 out.append("")
-            out.append("###### Tweet citado")
-            out.append(line)
+            out.append("#### Tweet citado")
             in_quoted_section = True
             continue
 
@@ -574,12 +680,69 @@ def _blockquote_quoted_sections(text: str) -> str:
             in_quoted_section = False
             out.append("")
             out.append("---")
+            idx += 1
+            continue
+
+        if in_quoted_section and _is_quoted_tweet_heading(stripped):
+            idx += 1
             continue
 
         if in_quoted_section and stripped.lower() == "quote":
+            idx += 1
+            continue
+
+        if in_quoted_section and stripped.startswith("> "):
+            out.append(stripped[2:].strip())
+            idx += 1
             continue
 
         out.append(line)
+        idx += 1
+
+    return "\n".join(out).strip()
+
+
+def _split_inline_quoted_tweets(text: str) -> str:
+    """Separate compact X quote-card text into the historical quoted-tweet section format."""
+    if not text or "Quote" not in text:
+        return text
+
+    lines = text.splitlines()
+    out: list[str] = []
+    in_inline_quote = False
+
+    for line in lines:
+        stripped = line.strip()
+
+        if in_inline_quote:
+            if not stripped:
+                out.append("")
+                in_inline_quote = False
+                continue
+            if stripped.startswith("[![") or stripped.startswith("!["):
+                in_inline_quote = False
+                out.append(line)
+                continue
+            if stripped.startswith("> "):
+                out.append(stripped[2:].strip())
+                continue
+            out.append(stripped)
+            continue
+
+        match = INLINE_QUOTED_TWEET_RE.search(line)
+        if match is None:
+            out.append(line)
+            continue
+
+        before = line[: match.start()].rstrip()
+        quoted = line[match.end() :].strip()
+        if before:
+            out.append(before)
+        _append_quoted_tweet_heading(out)
+        out.append("")
+        if quoted:
+            out.append(quoted)
+            in_inline_quote = True
 
     return "\n".join(out).strip()
 
@@ -719,8 +882,8 @@ def _markdown_to_html_fragment(md_text: str) -> str:
         return f"<p>{safe}</p>"
 
 
-def _render_full_html(md_text: str, title: str) -> str:
-    body_html = markdown.markdown(
+def _markdown_document_to_html(md_text: str) -> str:
+    return markdown.markdown(
         md_text,
         extensions=[
             "fenced_code",
@@ -730,6 +893,9 @@ def _render_full_html(md_text: str, title: str) -> str:
         ],
         output_format="html5",
     )
+
+
+def _render_full_html(body_html: str, title: str) -> str:
     safe_title = html.escape(title)
     return (
         "<!DOCTYPE html>\n"
@@ -748,7 +914,7 @@ def _build_entry(path: Path) -> TweetEntry:
 
     if not body.strip():
         body = raw
-    cleaned_body = _clean_body(body)
+    cleaned_body = _clean_body(body, meta)
 
     return TweetEntry(
         path=path,
@@ -968,6 +1134,27 @@ def _render_markdown(day: str, entries: Iterable[TweetEntry], *, capture_source:
         f"- Total de ficheros: **{len(entry_list)}**",
         f"- Hilos detectados: **{thread_total}**",
         "",
+    ]
+
+    for entry in entry_list:
+        lines.append(f"## {entry.title}")
+        lines.append("")
+        lines.append(f"- Autor: {entry.author_label}")
+        lines.append(f"- Tipo: {entry.kind}")
+        if entry.tweet_url:
+            lines.append(f"- X: [Abrir en X]({entry.tweet_url})")
+        lines.append("")
+        if entry.body:
+            lines.append(entry.body.rstrip())
+            lines.append("")
+        lines.append("---")
+        lines.append("")
+
+    return "\n".join(lines).rstrip() + "\n"
+
+
+def _render_entries_html(entries: Iterable[TweetEntry]) -> str:
+    lines: list[str] = [
         "<style>",
         ".dg-entry {",
         "  border: 1px solid #e5e7eb;",
@@ -1005,7 +1192,7 @@ def _render_markdown(day: str, entries: Iterable[TweetEntry], *, capture_source:
         "",
     ]
 
-    for entry in entry_list:
+    for entry in entries:
         author = html.escape(entry.author_label)
         title = html.escape(entry.title)
         kind = html.escape(entry.kind)
@@ -1027,6 +1214,25 @@ def _render_markdown(day: str, entries: Iterable[TweetEntry], *, capture_source:
         lines.append("")
 
     return "\n".join(lines).rstrip() + "\n"
+
+
+def _render_html_document(day: str, entries: Iterable[TweetEntry], *, title: str, capture_source: str) -> str:
+    entry_list = list(entries)
+    thread_total = sum(1 for entry in entry_list if entry.kind.startswith("Thread"))
+    header_markdown = "\n".join(
+        [
+            f"# {_heading_for_capture_source(capture_source)} ({day})",
+            "",
+            f"- Total de ficheros: **{len(entry_list)}**",
+            f"- Hilos detectados: **{thread_total}**",
+        ]
+    )
+    body_html = (
+        _markdown_document_to_html(header_markdown)
+        + "\n"
+        + _render_entries_html(entry_list)
+    )
+    return _render_full_html(body_html, title)
 
 
 def _run_cleanup_for_existing_daily_consolidated(
@@ -1100,7 +1306,7 @@ def _build_daily_consolidated_from_markdown(
     markdown_text = _render_markdown(day, entries, capture_source=capture_source)
     md_path.write_text(markdown_text, encoding="utf-8")
 
-    html_text = _render_full_html(markdown_text, md_path.stem)
+    html_text = _render_html_document(day, entries, title=md_path.stem, capture_source=capture_source)
     html_path.write_text(html_text, encoding="utf-8")
     U.add_margins_to_html_files(tweets_dir, file_filter=lambda path: path == html_path)
 

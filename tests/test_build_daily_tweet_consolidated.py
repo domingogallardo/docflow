@@ -132,6 +132,50 @@ def test_main_keeps_source_markdown_and_removes_source_html_after_consolidation(
     assert not html2.exists()
 
 
+def test_main_writes_plain_markdown_but_keeps_styled_html(tmp_path: Path, monkeypatch) -> None:
+    day = "2026-02-13"
+    tweets_dir = tmp_path / "Tweets 2026"
+    tweets_dir.mkdir(parents=True)
+
+    _write_tweet_pair(
+        tweets_dir,
+        "Tweet - user-1",
+        day,
+        hour=10,
+        body="Line one\nLine two\n\n[![image 1](https://example.com/image.jpg)](https://example.com/image.jpg)",
+    )
+
+    args = argparse.Namespace(
+        day=day,
+        year=2026,
+        tweets_dir=tweets_dir,
+        output_base=None,
+        capture_source="liked",
+        cleanup_if_consolidated=False,
+    )
+    monkeypatch.setattr(mod, "parse_args", lambda: args)
+
+    exit_code = mod.main()
+    assert exit_code == 0
+
+    consolidated_md = tweets_dir / f"Tweets {day}.md"
+    consolidated_html = tweets_dir / f"Tweets {day}.html"
+    md_text = consolidated_md.read_text(encoding="utf-8")
+    html_text = consolidated_html.read_text(encoding="utf-8")
+
+    assert "<style>" not in md_text
+    assert "<article" not in md_text
+    assert "<div" not in md_text
+    assert "## user-1" in md_text
+    assert "- Autor:" in md_text
+    assert "[![image 1](https://example.com/image.jpg)](https://example.com/image.jpg)" in md_text
+
+    assert "<style>" in html_text
+    assert '<article class="dg-entry">' in html_text
+    assert '<div class="dg-entry-body">' in html_text
+    assert '<img alt="image 1" src="https://example.com/image.jpg"' in html_text
+
+
 def test_main_ports_source_tweet_highlights_to_consolidated_html(
     tmp_path: Path,
     monkeypatch,
@@ -414,7 +458,178 @@ def test_clean_body_keeps_compact_line_with_real_content() -> None:
     cleaned = mod._clean_body(body)
 
     assert "OpenClaw se va a OpenAi" in cleaned
+    assert "---\n\n#### Tweet citado" in cleaned
+    assert "#### Tweet citado" in cleaned
+    assert "Sam Altman@sama" in cleaned
+    assert "> Sam Altman@sama" not in cleaned
     assert "image 1" in cleaned
+
+
+def test_clean_body_removes_glued_subscribe_prompt_and_formats_poll() -> None:
+    body = "\n".join(
+        [
+            "# Tweet by Aella (@Aella_Girl)",
+            "",
+            "[View on X](https://x.com/Aella_Girl/status/1)",
+            "",
+            "Aella@Aella_GirlSubscribeClick to Subscribe to Aella_Girl"
+            "Imagine a circle. Where did it land?"
+            "On the red 80.2%On the yellow19.8%"
+            "7,864 votes·6 days left"
+            "12:49 AM · Apr 26, 2026·397.2K Views3765014.2K875RelevantView quotes",
+        ]
+    )
+
+    cleaned = mod._clean_body(body)
+
+    assert "SubscribeClick" not in cleaned
+    assert "View quotes" not in cleaned
+    assert "Aella @Aella_Girl\nImagine a circle." in cleaned
+    assert "- On the red: 80.2%" in cleaned
+    assert "- On the yellow: 19.8%" in cleaned
+    assert "7,864 votes · 6 days left" in cleaned
+
+
+def test_clean_body_renders_inline_quoted_tweet_as_historical_section() -> None:
+    from bs4 import BeautifulSoup
+
+    body = "\n".join(
+        [
+            "# Tweet by Demis Hassabis (@demishassabis)",
+            "",
+            "[View on X](https://x.com/demishassabis/status/1)",
+            "",
+            "Demis Hassabis@demishassabisThanks for inviting me!Quote"
+            "Garry Tan@garrytan·9hTruly an honor and blessing.",
+            "> continued quoted line",
+            "",
+            "[![image 1](https://pbs.twimg.com/media/example.jpg)](https://pbs.twimg.com/media/example.jpg)",
+        ]
+    )
+
+    cleaned = mod._clean_body(body)
+    html_fragment = mod._markdown_to_html_fragment(cleaned)
+    soup = BeautifulSoup(html_fragment, "html.parser")
+
+    assert "QuoteGarry" not in cleaned
+    assert "---\n\n#### Tweet citado" in cleaned
+    assert "> Garry Tan" not in cleaned
+    assert "> continued quoted line" not in cleaned
+    assert "continued quoted line" in cleaned
+    assert "Tweet citado" in soup.get_text(" ", strip=True)
+    assert soup.find("blockquote") is None
+    assert "Garry Tan@garrytan" in soup.get_text(" ", strip=True)
+
+
+def test_clean_body_removes_blockquote_markers_inside_quoted_tweet_section() -> None:
+    body = "\n".join(
+        [
+            "# Tweet by Example (@example)",
+            "",
+            "[View on X](https://x.com/example/status/1)",
+            "",
+            "Main text",
+            "",
+            "[View quoted tweet](https://x.com/i/web/status/2)",
+            "Quote",
+            "> quoted line one",
+            "> quoted line two",
+        ]
+    )
+
+    cleaned = mod._clean_body(body)
+
+    assert "---\n[View quoted tweet](https://x.com/i/web/status/2)\n\n#### Tweet citado" in cleaned
+    assert cleaned.count("#### Tweet citado") == 1
+    assert "> quoted line" not in cleaned
+    assert "quoted line one" in cleaned
+    assert "quoted line two" in cleaned
+
+
+def test_clean_body_does_not_duplicate_existing_quoted_tweet_heading() -> None:
+    body = "\n".join(
+        [
+            "# Tweet by Example (@example)",
+            "",
+            "[View on X](https://x.com/example/status/1)",
+            "",
+            "Main text",
+            "",
+            "---",
+            "[View quoted tweet](https://x.com/i/web/status/2)",
+            "",
+            "#### Tweet citado",
+            "",
+            "Quoted author @quoted",
+            "quoted line",
+        ]
+    )
+
+    cleaned = mod._clean_body(body)
+
+    assert cleaned.count("#### Tweet citado") == 1
+    assert "---\n[View quoted tweet](https://x.com/i/web/status/2)\n\n#### Tweet citado" in cleaned
+    assert "Quoted author @quoted" in cleaned
+    assert "quoted line" in cleaned
+
+
+def test_clean_body_removes_legacy_heading_before_quoted_tweet_link() -> None:
+    body = "\n".join(
+        [
+            "# Tweet by Example (@example)",
+            "",
+            "[View on X](https://x.com/example/status/1)",
+            "",
+            "Main text",
+            "",
+            "---",
+            "",
+            "#### Tweet citado",
+            "[View quoted tweet](https://x.com/i/web/status/2)",
+            "",
+            "#### Tweet citado",
+            "",
+            "Quoted author @quoted",
+            "quoted line",
+        ]
+    )
+
+    cleaned = mod._clean_body(body)
+
+    assert cleaned.count("#### Tweet citado") == 1
+    assert "---\n[View quoted tweet](https://x.com/i/web/status/2)\n\n#### Tweet citado" in cleaned
+    assert "Quoted author @quoted" in cleaned
+    assert "quoted line" in cleaned
+
+
+def test_clean_body_escapes_literal_markdown_headings_but_keeps_quote_heading() -> None:
+    from bs4 import BeautifulSoup
+
+    body = "\n".join(
+        [
+            "# Tweet by Example (@example)",
+            "",
+            "[View on X](https://x.com/example/status/1)",
+            "",
+            "Texto previo",
+            "# =============================================================================",
+            "# Bases y Tipos Generales SS",
+            "",
+            "[View quoted tweet](https://x.com/i/web/status/2)",
+            "Quote",
+            "quoted line",
+        ]
+    )
+
+    cleaned = mod._clean_body(body)
+    html_fragment = mod._markdown_to_html_fragment(cleaned)
+    soup = BeautifulSoup(html_fragment, "html.parser")
+
+    assert "\\# =============================================================================" in cleaned
+    assert "\\# Bases y Tipos Generales SS" in cleaned
+    assert "#### Tweet citado" in cleaned
+    assert soup.find("h1") is None
+    assert soup.find("h4").get_text(strip=True) == "Tweet citado"
 
 
 def test_markdown_to_html_fragment_preserves_paragraph_hard_breaks() -> None:

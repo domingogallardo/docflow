@@ -3,6 +3,7 @@
 from utils.tweet_to_markdown import (
     rebuild_urls_from_lines,
     normalize_inline_mention_breaks,
+    normalize_glued_author_body_breaks,
     strip_platform_inline_prompts,
     strip_tweet_stats,
     _media_markdown_lines,
@@ -121,6 +122,51 @@ def test_normalize_inline_mention_breaks_keeps_author_name_and_handle_separate()
     assert result == raw
 
 
+def test_normalize_glued_author_body_breaks_splits_body_with_spaced_handle():
+    raw = "Henry Shevlin@dioscuriI am confident that Turing would agree."
+    result = normalize_glued_author_body_breaks(
+        raw,
+        author_name="Henry Shevlin",
+        author_handle="@dioscuri",
+    )
+    assert result == "Henry Shevlin @dioscuri\nI am confident that Turing would agree."
+
+
+def test_normalize_glued_author_body_breaks_keeps_time_with_author_line():
+    raw = "Ethan Mollick@emollick·10hA thing I see missing from AI job debates."
+    result = normalize_glued_author_body_breaks(
+        raw,
+        author_name="Ethan Mollick",
+        author_handle="@emollick",
+    )
+    assert result == "Ethan Mollick @emollick·10h\nA thing I see missing from AI job debates."
+
+
+def test_normalize_glued_author_body_breaks_allows_display_name_emoji():
+    raw = "Peter Steinberger \U0001f99e@steipeteWanted a truly local storage."
+    result = normalize_glued_author_body_breaks(
+        raw,
+        author_name="Peter Steinberger",
+        author_handle="@steipete",
+    )
+    assert result == "Peter Steinberger \U0001f99e @steipete\nWanted a truly local storage."
+
+
+def test_strip_platform_inline_prompts_separates_glued_link_card():
+    raw = (
+        "Wanted a truly local storage since they are not fully accessible via the api)."
+        "Releases · steipete/birdclawFrom github.com"
+    )
+    result = strip_platform_inline_prompts(raw)
+    assert result == "\n".join(
+        [
+            "Wanted a truly local storage since they are not fully accessible via the api).",
+            "Releases · steipete/birdclaw",
+            "From github.com",
+        ]
+    )
+
+
 def test_strip_platform_inline_prompts_removes_show_translation_line():
     raw = "\n".join(
         [
@@ -149,8 +195,25 @@ def test_strip_platform_inline_prompts_removes_translation_variants():
 
 def test_strip_platform_inline_prompts_removes_glued_translation_prompt():
     raw = "Antonio Ortiz@antonelloShow translationPues ya es oficial."
-    result = strip_platform_inline_prompts(raw)
-    assert result == "Antonio Ortiz@antonello\nPues ya es oficial."
+    result = strip_platform_inline_prompts(
+        raw,
+        author_name="Antonio Ortiz",
+        author_handle="@antonello",
+    )
+    assert result == "Antonio Ortiz @antonello\nPues ya es oficial."
+
+
+def test_strip_platform_inline_prompts_removes_glued_subscribe_prompt():
+    raw = (
+        "Aella@Aella_GirlSubscribeClick to Subscribe to Aella_Girl"
+        "Imagine a circle."
+    )
+    result = strip_platform_inline_prompts(
+        raw,
+        author_name="Aella",
+        author_handle="@Aella_Girl",
+    )
+    assert result == "Aella @Aella_Girl\nImagine a circle."
 
 
 def test_strip_tweet_stats_removes_metrics_lines():
@@ -350,6 +413,37 @@ def test_strip_tweet_stats_removes_inline_platform_boilerplate_tail():
     assert result == "Contenido válido."
 
 
+def test_strip_tweet_stats_removes_compact_metric_tail():
+    raw = (
+        "Contenido válido7:46 AM · Apr 24, 2026·75 Views"
+        "Access your post analytics Unlock advanced analytics with X PremiumLearn more111"
+    )
+    result = strip_tweet_stats(raw)
+    assert result == "Contenido válido"
+
+
+def test_strip_tweet_stats_formats_compact_poll_results():
+    raw = (
+        "Aella@Aella_Girl\n"
+        "Imagine a circle. Where did it land?"
+        "On the red 80.2%On the yellow19.8%"
+        "7,864 votes·6 days left"
+        "12:49 AM · Apr 26, 2026·397.2K Views3765014.2K875RelevantView quotes"
+    )
+    result = strip_tweet_stats(raw)
+    assert result == "\n".join(
+        [
+            "Aella@Aella_Girl",
+            "Imagine a circle. Where did it land?",
+            "",
+            "- On the red: 80.2%",
+            "- On the yellow: 19.8%",
+            "",
+            "7,864 votes · 6 days left",
+        ]
+    )
+
+
 def test_insert_quote_separator_adds_hr_before_quote():
     raw = "\n".join(
         [
@@ -365,7 +459,8 @@ def test_insert_quote_separator_adds_hr_before_quote():
             "Texto del tweet.",
             "",
             "---",
-            "Quote",
+            "",
+            "#### Tweet citado",
             "@autor",
             "Texto citado.",
         ]
@@ -389,9 +484,38 @@ def test_insert_quote_separator_adds_quoted_link_after_hr():
             "",
             "---",
             "[View quoted tweet](https://x.com/i/web/status/999)",
-            "Quote",
+            "",
+            "#### Tweet citado",
             "@autor",
             "Texto citado.",
+        ]
+    )
+    assert result == expected
+
+
+def test_insert_quote_separator_splits_inline_quote_card():
+    raw = "\n".join(
+        [
+            "Texto del tweet.QuoteAutor Citado@autor·1hTexto citado.",
+            "> línea citada",
+            "",
+            "[![image 1](https://example.com/img.jpg)](https://example.com/img.jpg)",
+        ]
+    )
+    result = _insert_quote_separator(raw, "https://x.com/i/web/status/999")
+    expected = "\n".join(
+        [
+            "Texto del tweet.",
+            "",
+            "---",
+            "[View quoted tweet](https://x.com/i/web/status/999)",
+            "",
+            "#### Tweet citado",
+            "",
+            "Autor Citado@autor·1hTexto citado.",
+            "línea citada",
+            "",
+            "[![image 1](https://example.com/img.jpg)](https://example.com/img.jpg)",
         ]
     )
     assert result == expected
@@ -409,7 +533,8 @@ def test_insert_media_before_quote_places_block_before_hr():
             "",
             "---",
             "[View quoted tweet](https://x.com/i/web/status/999)",
-            "Quote",
+            "",
+            "#### Tweet citado",
             "Texto citado.",
         ]
     )
@@ -423,7 +548,8 @@ def test_insert_media_before_quote_places_block_before_hr():
             "",
             "---",
             "[View quoted tweet](https://x.com/i/web/status/999)",
-            "Quote",
+            "",
+            "#### Tweet citado",
             "Texto citado.",
         ]
     )
@@ -454,6 +580,11 @@ def test_pick_quoted_tweet_url_accepts_i_web_status():
 
 def test_has_quote_marker_detects_standalone_quote_line():
     raw = "\n".join(["Texto", "Quote", "Mas texto"])
+    assert _has_quote_marker(raw) is True
+
+
+def test_has_quote_marker_detects_inline_quote_card():
+    raw = "Texto del tweet.QuoteAutor Citado@autor·1hTexto citado."
     assert _has_quote_marker(raw) is True
 
 

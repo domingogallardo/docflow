@@ -63,9 +63,32 @@ TIME_RE = re.compile(r"\b\d{1,2}:\d{2}\b")
 METRIC_TOKEN_RE = re.compile(r"[0-9]+(?:[.,][0-9]+)?[kmb]?|[a-záéíóúñü]+", re.IGNORECASE)
 METRIC_NUMBER_TOKEN_RE = re.compile(r"^\d+(?:[.,]\d+)?[kmb]?$", re.IGNORECASE)
 HANDLE_ONLY_RE = re.compile(r"^@[A-Za-z0-9_]+$")
+INLINE_AUTHOR_HANDLE_ONLY_RE = re.compile(
+    r"^(?P<name>(?![#>\[])[^@\n]{1,80}?)(?P<handle>@[A-Za-z0-9_]{1,20})$"
+)
+INLINE_AUTHOR_HANDLE_TIME_RE = re.compile(
+    r"^(?P<name>(?![#>\[])[^@\n]{1,80}?)(?P<handle>@[A-Za-z0-9_]{1,20})"
+    r"(?P<rest>·.*)$"
+)
+INLINE_AUTHOR_TIME_RE = re.compile(
+    r"^(?P<time>·\s*(?:\d+\s?[smhd]|[A-Z][a-z]{2,8}\s+\d{1,2}(?:,\s*20\d{2})?))"
+    r"(?P<body>\S.*)$"
+)
+LINK_CARD_SOURCE_RE = re.compile(
+    r"(?<![\s\n])(?P<source>(?:From|De) [A-Za-z0-9][A-Za-z0-9.-]*\.[A-Za-z]{2,})\b"
+)
+LINK_CARD_TITLE_BOUNDARY_RE = re.compile(
+    r"(?<=[.!?…\)])"
+    r"(?=(?:[A-ZÁÉÍÓÚÜÑ0-9]|GitHub -|Release |Releases )"
+    r"[^\n]{1,180}\n(?:From|De) [A-Za-z0-9][A-Za-z0-9.-]*\.[A-Za-z]{2,}\b)"
+)
 LEADING_POSSESSIVE_RE = re.compile(r"^[\'’]")
 SENTENCE_END_RE = re.compile(r"[.!?…:;](?:[\"')\]”’]+)?$")
 QUOTE_MARKERS = {"quote"}
+QUOTED_TWEET_HEADING = "#### Tweet citado"
+INLINE_QUOTED_TWEET_RE = re.compile(
+    r"Quote(?=[A-ZÁÉÍÓÚÜÑ][^@\n]{1,80}@[A-Za-z0-9_]{1,20}(?:·|\b))"
+)
 QUOTE_MARKERS_JS = ", ".join(f'"{m}"' for m in sorted(QUOTE_MARKERS))
 SHOW_MORE_LABELS = (
     "Show more",
@@ -102,6 +125,50 @@ TRANSLATION_PROMPT_INLINE_RE = re.compile(
         for label in sorted(TRANSLATION_PROMPT_LABELS_NORMALIZED, key=len, reverse=True)
     ),
     re.IGNORECASE,
+)
+SUBSCRIBE_PROMPT_WITH_HANDLE_RE = re.compile(
+    r"@(?P<handle>[A-Za-z0-9_]{1,20})"
+    r"Subscribe\s*Click\s*to\s*Subscribe\s*to\s*(?P=handle)",
+    re.IGNORECASE,
+)
+SUBSCRIBE_PROMPT_LINE_RE = re.compile(
+    r"^Subscribe\s*Click\s*to\s*Subscribe\s*to\s*@?[A-Za-z0-9_]{1,20}$",
+    re.IGNORECASE,
+)
+COMPACT_TIMESTAMP_TAIL_RE = re.compile(
+    r"\d{1,2}:\d{2}\s*(?:AM|PM)\s*·\s*"
+    r"(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+"
+    r"\d{1,2},\s+20\d{2}(?P<tail>.*)$",
+    re.IGNORECASE,
+)
+COMPACT_METRIC_TAIL_HINTS = (
+    "view",
+    "views",
+    "visualizaciones",
+    "impresiones",
+    "relevant",
+    "relevante",
+    "quote",
+    "quotes",
+    "reply",
+    "replies",
+    "retweet",
+    "retweets",
+    "repost",
+    "likes",
+    "bookmarks",
+    "access your post analytics",
+    "unlock advanced analytics",
+    "unlock advanced anlytics",
+    "learn more",
+)
+POLL_METADATA_RE = re.compile(
+    r"(?P<count>\d[\d,.]*)\s+(?P<label>votes|votos)\s*·\s*"
+    r"(?P<remaining>\d+\s+[^·\n]*?(?:left|restantes?))",
+    re.IGNORECASE,
+)
+POLL_OPTION_RESULT_RE = re.compile(
+    r"(?P<label>.+?)(?P<percent>\d{1,3}(?:[.,]\d+)?%)"
 )
 TWIMG_EMOJI_PATH_RE = re.compile(r"/emoji/v\d+/(?:svg|72x72)/([0-9a-fA-F-]+)\.[a-z0-9]+$")
 VALID_CAPTURE_SOURCES = {"liked", "posted"}
@@ -351,13 +418,143 @@ def normalize_inline_mention_breaks(text: str) -> str:
     return "\n".join(normalized)
 
 
-def strip_platform_inline_prompts(text: str) -> str:
+def _split_known_author_handle_line(
+    line: str,
+    *,
+    author_name: str | None,
+    author_handle: str | None,
+) -> List[str] | None:
+    if not author_handle:
+        return None
+    handle = author_handle.strip().strip('"')
+    if not handle:
+        return None
+    if not handle.startswith("@"):
+        handle = f"@{handle}"
+
+    expected_name = (author_name or "").strip().strip('"')
+    if expected_name:
+        compact_prefix = f"{expected_name}{handle}"
+        spaced_prefix = f"{expected_name} {handle}"
+        if line.startswith(compact_prefix):
+            name = expected_name
+            rest = line[len(compact_prefix) :].lstrip()
+        elif line.startswith(spaced_prefix):
+            name = expected_name
+            rest = line[len(spaced_prefix) :].lstrip()
+        else:
+            idx = line.find(handle)
+            if idx <= 0:
+                return None
+            name = line[:idx].rstrip()
+            if not name.startswith(expected_name):
+                return None
+            display_suffix = name[len(expected_name) :].strip()
+            if (
+                len(display_suffix) > 24
+                or re.search(r"[\w@/#]", display_suffix, flags=re.UNICODE)
+            ):
+                return None
+            rest = line[idx + len(handle) :].lstrip()
+    else:
+        idx = line.find(handle)
+        if idx <= 0:
+            return None
+        name = line[:idx].rstrip()
+        rest = line[idx + len(handle) :].lstrip()
+
+    if not name or name.startswith(("#", ">", "[")):
+        return None
+    author = f"{name} {handle}"
+    if not rest:
+        return [author]
+    if rest.startswith((".", ":", "/")):
+        return None
+
+    time_match = INLINE_AUTHOR_TIME_RE.match(rest)
+    if time_match:
+        return [f"{author}{time_match.group('time').rstrip()}", time_match.group("body").lstrip()]
+    return [author, rest]
+
+
+def normalize_glued_author_body_breaks(
+    text: str,
+    *,
+    author_name: str | None = None,
+    author_handle: str | None = None,
+) -> str:
+    """Separate X's glued top author/handle label from the tweet body."""
+    normalized: List[str] = []
+    for original_line in text.splitlines():
+        stripped = original_line.strip()
+        if not stripped:
+            normalized.append("")
+            continue
+
+        known_split = _split_known_author_handle_line(
+            stripped,
+            author_name=author_name,
+            author_handle=author_handle,
+        )
+        if known_split is not None:
+            normalized.extend(known_split)
+            continue
+
+        match = INLINE_AUTHOR_HANDLE_ONLY_RE.match(stripped) or INLINE_AUTHOR_HANDLE_TIME_RE.match(stripped)
+        if not match:
+            normalized.append(stripped)
+            continue
+
+        author = f"{match.group('name').rstrip()} {match.group('handle')}"
+        rest = (match.groupdict().get("rest") or "").lstrip()
+        if not rest:
+            normalized.append(author)
+            continue
+        # Avoid turning email addresses or URL-like text into fake author lines.
+        if rest.startswith((".", ":", "/")):
+            normalized.append(stripped)
+            continue
+
+        time_match = INLINE_AUTHOR_TIME_RE.match(rest)
+        if time_match:
+            normalized.append(f"{author}{time_match.group('time').rstrip()}")
+            normalized.append(time_match.group("body").lstrip())
+            continue
+
+        normalized.append(author)
+        normalized.append(rest)
+
+    return "\n".join(normalized)
+
+
+def normalize_glued_link_card_breaks(text: str) -> str:
+    """Separate compact X link-card title/source text from the tweet body."""
+    text = LINK_CARD_SOURCE_RE.sub(r"\n\g<source>", text)
+    return LINK_CARD_TITLE_BOUNDARY_RE.sub("\n", text)
+
+
+def strip_platform_inline_prompts(
+    text: str,
+    *,
+    author_name: str | None = None,
+    author_handle: str | None = None,
+) -> str:
     """Remove standalone platform UI prompts embedded in tweet text."""
     def is_prompt_line(line: str) -> bool:
         probe = re.sub(r"(?i)<br\s*/?>", "", line).strip()
         probe = re.sub(r"(?i)^<p>\s*", "", probe)
         probe = re.sub(r"(?i)\s*</p>$", "", probe)
-        return _normalize_platform_text(probe) in TRANSLATION_PROMPT_LABELS_NORMALIZED
+        normalized = _normalize_platform_text(probe)
+        return (
+            normalized in TRANSLATION_PROMPT_LABELS_NORMALIZED
+            or bool(SUBSCRIBE_PROMPT_LINE_RE.match(probe))
+        )
+
+    def strip_subscribe_prompt(line: str) -> str:
+        return SUBSCRIBE_PROMPT_WITH_HANDLE_RE.sub(
+            lambda match: f"@{match.group('handle')}\n",
+            line,
+        )
 
     def strip_glued_prompt(line: str) -> str:
         def repl(match: re.Match[str]) -> str:
@@ -378,11 +575,18 @@ def strip_platform_inline_prompts(text: str) -> str:
     for line in text.splitlines():
         if is_prompt_line(line):
             continue
-        cleaned = strip_glued_prompt(line)
+        cleaned = normalize_glued_link_card_breaks(
+            strip_glued_prompt(strip_subscribe_prompt(line))
+        )
         for cleaned_line in cleaned.splitlines():
             if is_prompt_line(cleaned_line):
                 continue
-            filtered.append(cleaned_line.strip())
+            for normalized_line in normalize_glued_author_body_breaks(
+                cleaned_line,
+                author_name=author_name,
+                author_handle=author_handle,
+            ).splitlines():
+                filtered.append(normalized_line.strip())
     return "\n".join(_collapse_blank_lines(filtered))
 
 
@@ -885,6 +1089,75 @@ def _strip_platform_boilerplate_tail(text: str) -> str:
     return stripped
 
 
+def _strip_compact_metric_tail_line(line: str) -> str:
+    match = COMPACT_TIMESTAMP_TAIL_RE.search(line)
+    if not match:
+        return line
+
+    tail = match.group("tail")
+    if not tail.strip():
+        return line[: match.start()].rstrip()
+
+    probe = tail.replace("·", " ").lower()
+    if any(hint in probe for hint in COMPACT_METRIC_TAIL_HINTS):
+        return line[: match.start()].rstrip()
+    return line
+
+
+def _format_compact_poll_line(line: str) -> str:
+    poll_match = POLL_METADATA_RE.search(line)
+    if not poll_match:
+        return line
+
+    before_poll_meta = line[: poll_match.start()].rstrip()
+    question_idx = before_poll_meta.rfind("?")
+    if question_idx < 0:
+        return line
+
+    intro = before_poll_meta[: question_idx + 1].rstrip()
+    options_blob = before_poll_meta[question_idx + 1 :].strip()
+    option_matches = list(POLL_OPTION_RESULT_RE.finditer(options_blob))
+    if len(option_matches) < 2:
+        return line
+
+    options: List[tuple[str, str]] = []
+    for option_match in option_matches:
+        label = option_match.group("label").strip(" \t-–—:;")
+        percent = option_match.group("percent")
+        if not label:
+            return line
+        options.append((label, percent))
+
+    metadata = (
+        f"{poll_match.group('count')} "
+        f"{poll_match.group('label').lower()} · "
+        f"{poll_match.group('remaining').strip()}"
+    )
+
+    return "\n".join(
+        [
+            intro,
+            "",
+            *(f"- {label}: {percent}" for label, percent in options),
+            "",
+            metadata,
+        ]
+    )
+
+
+def _normalize_compact_poll_results(text: str) -> str:
+    lines: List[str] = []
+    changed = False
+    for line in text.splitlines():
+        formatted = _format_compact_poll_line(line)
+        if formatted != line:
+            changed = True
+        lines.extend(formatted.splitlines())
+    if not changed:
+        return text
+    return "\n".join(_collapse_blank_lines(lines))
+
+
 def _is_metric_only_line(line: str) -> bool:
     stripped = line.strip()
     if not stripped:
@@ -945,7 +1218,12 @@ def strip_tweet_stats(text: str) -> str:
         while lines and not lines[-1]:
             lines.pop()
 
-    return _strip_platform_boilerplate_tail("\n".join(lines)).strip()
+    cleaned = _strip_platform_boilerplate_tail("\n".join(lines)).strip()
+    cleaned = "\n".join(
+        _strip_compact_metric_tail_line(line).rstrip()
+        for line in cleaned.splitlines()
+    )
+    return _normalize_compact_poll_results(cleaned).strip()
 
 
 def _text_quality(text: str) -> tuple[int, int]:
@@ -967,18 +1245,53 @@ def _insert_quote_separator(text: str, quoted_url: str | None = None) -> str:
     lines = text.splitlines()
     out: List[str] = []
     inserted_link = False
+    in_inline_quote = False
+
+    def append_quote_heading() -> None:
+        nonlocal inserted_link
+        if not out or out[-1].strip() != "---":
+            if out and out[-1].strip():
+                out.append("")
+            out.append("---")
+        if quoted_url and not inserted_link:
+            out.append(f"[View quoted tweet]({quoted_url})")
+            inserted_link = True
+        if out and out[-1].strip():
+            out.append("")
+        out.append(QUOTED_TWEET_HEADING)
 
     for line in lines:
         stripped = line.strip()
+        if in_inline_quote:
+            if not stripped:
+                out.append("")
+                in_inline_quote = False
+                continue
+            if stripped.startswith("[![") or stripped.startswith("!["):
+                in_inline_quote = False
+                out.append(line)
+                continue
+            if stripped.startswith("> "):
+                out.append(stripped[2:].strip())
+                continue
+            out.append(stripped)
+            continue
+
+        inline_match = INLINE_QUOTED_TWEET_RE.search(line)
+        if inline_match is not None:
+            before = line[: inline_match.start()].rstrip()
+            quoted = line[inline_match.end() :].strip()
+            if before:
+                out.append(before)
+            append_quote_heading()
+            if quoted:
+                out.append("")
+                out.append(quoted)
+                in_inline_quote = True
+            continue
+
         if stripped.lower() in QUOTE_MARKERS:
-            if not out or out[-1].strip() != "---":
-                if out and out[-1].strip():
-                    out.append("")
-                out.append("---")
-            if quoted_url and not inserted_link:
-                out.append(f"[View quoted tweet]({quoted_url})")
-                inserted_link = True
-            out.append(line)
+            append_quote_heading()
             continue
         out.append(line)
 
@@ -990,7 +1303,8 @@ def _insert_media_before_quote(text: str, media_lines: List[str]) -> str:
         return text
     lines = text.splitlines()
     for idx, line in enumerate(lines):
-        if line.strip().lower() in QUOTE_MARKERS:
+        stripped = line.strip()
+        if stripped.lower() in QUOTE_MARKERS or stripped == QUOTED_TWEET_HEADING:
             insert_at = idx
             for j in range(idx - 1, -1, -1):
                 if lines[j].strip() == "---":
@@ -1144,7 +1458,9 @@ def _extract_quoted_tweet_url(article, tweet_url: str) -> str | None:
 
 
 def _has_quote_marker(text: str) -> bool:
-    return any(line.strip().lower() in QUOTE_MARKERS for line in text.splitlines())
+    return any(line.strip().lower() in QUOTE_MARKERS for line in text.splitlines()) or bool(
+        INLINE_QUOTED_TWEET_RE.search(text)
+    )
 
 
 def _attach_quoted_status_listener(page) -> dict[str, str | None]:
@@ -1412,7 +1728,9 @@ def _extract_tweet_parts(
     )
     body_text = strip_tweet_stats(
         strip_platform_inline_prompts(
-            normalize_inline_mention_breaks(rebuild_urls_from_lines(raw_text).strip())
+            normalize_inline_mention_breaks(rebuild_urls_from_lines(raw_text).strip()),
+            author_name=author_name,
+            author_handle=author_handle,
         )
     )
 
