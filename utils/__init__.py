@@ -21,6 +21,7 @@ from utils.markdown_utils import (
     front_matter_meta_tags,
     markdown_to_html,
     markdown_to_html_body,
+    original_source_link_html,
     split_front_matter,
 )
 from utils.podcasts import (
@@ -46,6 +47,7 @@ __all__ = [
     "list_podcast_files",
     "markdown_to_html",
     "markdown_to_html_body",
+    "original_source_link_html",
     "move_files",
     "move_files_with_replacement",
     "register_paths",

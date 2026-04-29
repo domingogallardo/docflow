@@ -47,6 +47,67 @@ source: podcast
     assert podcast_md.exists()
 
 
+def test_markdown_processor_accepts_external_source_url(tmp_path):
+    incoming = tmp_path / "Incoming"
+    incoming.mkdir()
+    destination = tmp_path / "Posts" / "Posts 2025"
+
+    generic_md = incoming / "article.md"
+    generic_md.write_text(
+        """---
+title: External article
+source: "https://example.com/article"
+---
+
+# External article
+
+Contenido.""",
+        encoding="utf-8",
+    )
+
+    processor = MarkdownProcessor(incoming, destination)
+    processor.title_updater.update_titles = lambda files, renamer: None
+    moved = processor.process_markdown()
+
+    moved_names = {p.name for p in moved}
+    assert "article.md" in moved_names
+    assert "article.html" in moved_names
+
+    html_content = (destination / "article.html").read_text(encoding="utf-8")
+    assert "Original link:" in html_content
+    assert 'href="https://example.com/article"' in html_content
+    assert ">https://example.com/article</a>" in html_content
+
+
+def test_markdown_processor_preserves_remote_images(tmp_path):
+    incoming = tmp_path / "Incoming"
+    incoming.mkdir()
+    destination = tmp_path / "Posts" / "Posts 2025"
+
+    generic_md = incoming / "article-with-image.md"
+    image_url = "https://content.example.com/images/diagram.png"
+    generic_md.write_text(
+        f"""---
+title: External article
+source: "https://example.com/article"
+---
+
+# External article
+
+![Diagram]({image_url} "Diagram")
+""",
+        encoding="utf-8",
+    )
+
+    processor = MarkdownProcessor(incoming, destination)
+    processor.title_updater.update_titles = lambda files, renamer: None
+    processor.process_markdown()
+
+    html_content = (destination / "article-with-image.html").read_text(encoding="utf-8")
+    assert f'<img alt="Diagram" src="{image_url}" title="Diagram"/>' in html_content
+    assert f'<a class="image-zoom" href="{image_url}"' in html_content
+
+
 def test_markdown_processor_moves_existing_html(tmp_path):
     incoming = tmp_path / "Incoming"
     incoming.mkdir()

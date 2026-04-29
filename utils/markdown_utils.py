@@ -58,6 +58,21 @@ def front_matter_meta_tags(meta: dict[str, str]) -> str:
     return "\n".join(tags) + ("\n" if tags else "")
 
 
+def original_source_link_html(meta: dict[str, str]) -> str:
+    """Render a visible original-source link for external clipped articles."""
+    source = meta.get("source", "").strip()
+    if not source.startswith(("http://", "https://")):
+        return ""
+
+    escaped_source = html.escape(source, quote=True)
+    return (
+        '<p class="docflow-original-link">'
+        f'Original link: <a href="{escaped_source}" target="_blank" '
+        f'rel="noopener">{escaped_source}</a>'
+        "</p>\n"
+    )
+
+
 def clean_duplicate_markdown_links(text: str) -> str:
     """Clean Markdown links where the text and URL are identical."""
     duplicate_link_pattern = r'\[(https?://[^\]]+)\]\(\1\)'
@@ -162,12 +177,14 @@ def markdown_to_html(md_text: str, title: str = None) -> str:
 
     title_tag = f"<title>{title}</title>\n" if title else ""
     meta_tags = front_matter_meta_tags(front_matter)
+    original_link = original_source_link_html(front_matter)
     return (
         "<!DOCTYPE html>\n"
         "<html>\n<head>\n<meta charset=\"UTF-8\">\n"
         f"{meta_tags}"
         f"{title_tag}"
         "</head>\n<body>\n"
+        f"{original_link}"
         f"{html_body}\n"
         "</body>\n</html>\n"
     )

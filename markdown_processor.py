@@ -14,6 +14,8 @@ from openai_client import build_openai_client
 class MarkdownProcessor:
     """Process Markdown files in Incoming/ that do not belong to other pipelines."""
 
+    RESERVED_SOURCES = {"instapaper", "podcast", "tweet"}
+
     def __init__(self, incoming_dir: Path, destination_dir: Path):
         self.incoming_dir = incoming_dir
         self.destination_dir = destination_dir
@@ -113,7 +115,7 @@ class MarkdownProcessor:
         """Determine whether the Markdown file does not belong to other specialized pipelines."""
         if not path.is_file() or path.suffix.lower() != ".md":
             return False
-        return self._front_matter_source(path) == ""
+        return self._front_matter_source(path) not in self.RESERVED_SOURCES
 
     @staticmethod
     def is_tweet_markdown(path: Path) -> bool:
