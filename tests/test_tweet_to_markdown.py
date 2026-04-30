@@ -26,6 +26,8 @@ from utils.tweet_to_markdown import (
     _build_single_tweet_markdown,
     _build_filename,
     TweetParts,
+    ReplyParentContext,
+    _reply_parent_url_from_payload,
 )
 
 
@@ -853,6 +855,82 @@ def test_build_single_tweet_markdown_marks_capture_source():
     )
 
     assert "tweet_capture_source: posted" in md
+
+
+def test_build_single_tweet_markdown_includes_reply_parent_context():
+    parent = TweetParts(
+        author_name="Parent",
+        author_handle="@parent",
+        body_text="Parent tweet.",
+        avatar_url=None,
+        trailing_media_lines=[],
+        media_present=False,
+        external_link=None,
+    )
+    reply = TweetParts(
+        author_name="Author",
+        author_handle="@author",
+        body_text="Reply body.",
+        avatar_url=None,
+        trailing_media_lines=[],
+        media_present=False,
+        external_link=None,
+    )
+
+    md = _build_single_tweet_markdown(
+        reply,
+        "https://x.com/author/status/123",
+        capture_source="posted",
+        posted_kind="reply",
+        reply_parent_context=ReplyParentContext(
+            url="https://x.com/parent/status/99",
+            parts=parent,
+        ),
+    )
+
+    assert "tweet_posted_kind: reply" in md
+    assert "tweet_reply_to_url: https://x.com/parent/status/99" in md
+    assert "tweet_reply_context_included: true" in md
+    assert "#### En respuesta a" in md
+    assert "**Parent @parent**" in md
+    assert "Parent tweet." in md
+    assert "#### Mi respuesta" in md
+    assert "Reply body." in md
+
+
+def test_reply_parent_url_from_payload_uses_immediate_parent():
+    payload = {
+        "data": {
+            "threaded_conversation_with_injections_v2": {
+                "instructions": [
+                    {
+                        "entries": [
+                            {
+                                "content": {
+                                    "itemContent": {
+                                        "tweet_results": {
+                                            "result": {
+                                                "__typename": "Tweet",
+                                                "rest_id": "123",
+                                                "legacy": {
+                                                    "in_reply_to_status_id_str": "99",
+                                                    "in_reply_to_screen_name": "parent",
+                                                },
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        ]
+                    }
+                ]
+            }
+        }
+    }
+
+    url = _reply_parent_url_from_payload(payload, "https://x.com/author/status/123")
+
+    assert url == "https://x.com/parent/status/99"
 
 
 def test_build_filename_uses_posted_prefix_for_posted_source():

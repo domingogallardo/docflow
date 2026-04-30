@@ -25,7 +25,12 @@ PIPELINE_STEPS = (
 TARGET_HANDLERS = {name: method for name, method in PIPELINE_STEPS}
 PIPELINE_TARGETS = tuple(name for name, _ in PIPELINE_STEPS)
 from utils.tweet_to_markdown import fetch_tweet_thread_markdown
-from utils.x_likes_fetcher import LikeTweet, fetch_like_items_with_state, fetch_post_items_with_state
+from utils.x_likes_fetcher import (
+    LikeTweet,
+    fetch_like_items_with_state,
+    fetch_post_items_with_state,
+    fetch_reply_items_with_state,
+)
 
 
 class DocumentProcessor:
@@ -45,6 +50,8 @@ class DocumentProcessor:
         self.tweets_failed = self.incoming / "tweets_failed.txt"
         self.tweets_posted_processed = self.incoming / "tweets_posted_processed.txt"
         self.tweets_posted_failed = self.incoming / "tweets_posted_failed.txt"
+        self.tweets_replies_processed = self.incoming / "tweets_replies_processed.txt"
+        self.tweets_replies_failed = self.incoming / "tweets_replies_failed.txt"
 
         self.pdf_processor = PDFProcessor(self.incoming, self.pdfs_dest)
         self.instapaper_processor = InstapaperProcessor(self.incoming, self.posts_dest)
@@ -79,11 +86,25 @@ class DocumentProcessor:
                 generated,
                 self._process_tweet_source(
                     capture_source="posted",
-                    timeline_label="your posted tweets",
+                    timeline_label="your posted tweets/reposts",
                     processed_path=self.tweets_posted_processed,
                     failed_path=self.tweets_posted_failed,
                     max_setting_name="TWEET_POSTS_MAX",
                     fetch_items=self._fetch_post_items,
+                    default_posted_kind="post",
+                ),
+            )
+            generated = self._merge_paths(
+                generated,
+                self._process_tweet_source(
+                    capture_source="posted",
+                    timeline_label="your replies",
+                    processed_path=self.tweets_replies_processed,
+                    failed_path=self.tweets_replies_failed,
+                    max_setting_name="TWEET_REPLIES_MAX",
+                    fetch_items=self._fetch_reply_items,
+                    default_posted_kind="reply",
+                    skip_processed_paths=(self.tweets_posted_processed,),
                 ),
             )
         return generated
@@ -97,10 +118,17 @@ class DocumentProcessor:
         failed_path: Path,
         max_setting_name: str,
         fetch_items: Callable[..., Tuple[List[LikeTweet], bool, int]],
+        default_posted_kind: str | None = None,
+        skip_processed_paths: Sequence[Path] = (),
     ) -> List[Path]:
         failed_urls = self._load_failed_urls(failed_path=failed_path)
         processed_urls = self._load_processed_urls(processed_path=processed_path)
-        processed_set = set(processed_urls)
+        skip_processed_set = {
+            url
+            for skip_path in skip_processed_paths
+            for url in self._load_processed_urls(processed_path=skip_path)
+        }
+        processed_set = set(processed_urls) | skip_processed_set
         pending_failed = {url: None for url in failed_urls if url not in processed_set}
         fetch_error = False
         stop_found = False
@@ -122,7 +150,7 @@ class DocumentProcessor:
                     anchor_url,
                     processed_path=processed_path,
                 )
-                processed_set = set(processed_urls)
+                processed_set = set(processed_urls) | skip_processed_set
             else:
                 print(
                     "⚠️  Last processed URL not found in "
@@ -151,9 +179,12 @@ class DocumentProcessor:
         generated: List[Path] = []
         written_fresh_urls: List[str] = []
         written_retry_urls: List[str] = []
-        queue: List[LikeTweet] = list(fresh_items) + [LikeTweet(url=url) for url in retry_urls]
+        queue: List[LikeTweet] = list(fresh_items) + [
+            LikeTweet(url=url, posted_kind=default_posted_kind) for url in retry_urls
+        ]
 
         for item in queue:
+            posted_kind = item.posted_kind or default_posted_kind
             try:
                 markdown, filename = fetch_tweet_thread_markdown(
                     item.url,
@@ -163,6 +194,8 @@ class DocumentProcessor:
                     context_time_text=item.time_text,
                     context_time_datetime=item.time_datetime,
                     capture_source=capture_source,
+                    posted_kind=posted_kind,
+                    reply_parent_url=item.reply_to_url,
                 )
             except Exception as exc:
                 print(f"❌ Error processing {item.url}: {exc}")
@@ -222,6 +255,25 @@ class DocumentProcessor:
             cfg.TWEET_LIKES_STATE,
             posts_url=cfg.TWEET_POSTS_URL,
             max_tweets=cfg.TWEET_POSTS_MAX,
+            stop_at_url=last_processed,
+            headless=True,
+        )
+        return items, stop_found, total_articles
+
+    def _fetch_reply_items(
+        self,
+        *,
+        last_processed: str | None,
+    ) -> Tuple[List[LikeTweet], bool, int]:
+        if not cfg.TWEET_LIKES_STATE:
+            raise RuntimeError("Configure TWEET_LIKES_STATE with the storage_state exported from X.")
+        if not cfg.TWEET_POSTS_URL:
+            return [], False, 0
+        replies_url = cfg.TWEET_REPLIES_URL or cfg.TWEET_POSTS_URL.rstrip("/") + "/with_replies"
+        items, stop_found, total_articles = fetch_reply_items_with_state(
+            cfg.TWEET_LIKES_STATE,
+            replies_url=replies_url,
+            max_tweets=cfg.TWEET_REPLIES_MAX,
             stop_at_url=last_processed,
             headless=True,
         )

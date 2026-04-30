@@ -46,3 +46,5 @@ TWEET_LIKES_URL = os.getenv("TWEET_LIKES_URL", "https://x.com/domingogallardo/li
 TWEET_LIKES_MAX = int(os.getenv("TWEET_LIKES_MAX", "50"))
 TWEET_POSTS_URL = os.getenv("TWEET_POSTS_URL", "").strip()
 TWEET_POSTS_MAX = int(os.getenv("TWEET_POSTS_MAX", "50"))
+TWEET_REPLIES_URL = os.getenv("TWEET_REPLIES_URL", "").strip()
+TWEET_REPLIES_MAX = int(os.getenv("TWEET_REPLIES_MAX", str(TWEET_POSTS_MAX)))

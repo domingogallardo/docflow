@@ -316,6 +316,11 @@ def _author_label(meta: dict[str, str]) -> str:
 
 
 def _entry_kind(meta: dict[str, str]) -> str:
+    posted_kind = meta.get("tweet_posted_kind", "").strip().lower()
+    if posted_kind == "reply":
+        return "Reply"
+    if posted_kind == "repost":
+        return "Repost"
     is_thread = meta.get("tweet_thread", "").strip().lower() == "true"
     if not is_thread:
         return "Tweet"
@@ -1120,7 +1125,7 @@ def _cleanup_after_daily_consolidation(
 def _heading_for_capture_source(capture_source: str) -> str:
     normalized = _normalize_capture_source(capture_source)
     if normalized == "posted":
-        return "Consolidado diario de tweets publicados"
+        return "Consolidado diario de tweets publicados/reposteados/respuestas"
     return "Consolidado diario de tweets"
 
 

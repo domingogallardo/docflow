@@ -172,6 +172,7 @@ POLL_OPTION_RESULT_RE = re.compile(
 )
 TWIMG_EMOJI_PATH_RE = re.compile(r"/emoji/v\d+/(?:svg|72x72)/([0-9a-fA-F-]+)\.[a-z0-9]+$")
 VALID_CAPTURE_SOURCES = {"liked", "posted"}
+VALID_POSTED_KINDS = {"post", "repost", "reply"}
 PLATFORM_PROMO_STRONG_PHRASES = (
     "access your post analytics",
     "unlock advanced analytics with premium",
@@ -329,6 +330,12 @@ class TweetParts:
     trailing_media_lines: List[str]
     media_present: bool
     external_link: str | None
+
+
+@dataclass(frozen=True)
+class ReplyParentContext:
+    url: str
+    parts: TweetParts | None = None
 
 
 def rebuild_urls_from_lines(text: str) -> str:
@@ -613,6 +620,18 @@ def _normalize_capture_source(capture_source: str | None) -> str:
         raise ValueError(
             f"Unsupported capture_source '{capture_source}'. "
             f"Use one of: {', '.join(sorted(VALID_CAPTURE_SOURCES))}."
+        )
+    return normalized
+
+
+def _normalize_posted_kind(posted_kind: str | None) -> str | None:
+    if not posted_kind:
+        return None
+    normalized = posted_kind.strip().lower()
+    if normalized not in VALID_POSTED_KINDS:
+        raise ValueError(
+            f"Unsupported posted_kind '{posted_kind}'. "
+            f"Use one of: {', '.join(sorted(VALID_POSTED_KINDS))}."
         )
     return normalized
 
@@ -1426,6 +1445,46 @@ def _find_quoted_status_id(payload: object) -> str | None:
     return None
 
 
+def _find_tweet_result_by_rest_id(payload: object, rest_id: str | None) -> dict | None:
+    if not rest_id:
+        return None
+    if isinstance(payload, dict):
+        if payload.get("__typename") == "Tweet" and str(payload.get("rest_id") or "") == rest_id:
+            return payload
+        for value in payload.values():
+            found = _find_tweet_result_by_rest_id(value, rest_id)
+            if found:
+                return found
+    elif isinstance(payload, list):
+        for item in payload:
+            found = _find_tweet_result_by_rest_id(item, rest_id)
+            if found:
+                return found
+    return None
+
+
+def _reply_parent_url_from_payload(payload: object | None, tweet_url: str) -> str | None:
+    if payload is None:
+        return None
+    tweet_id = _status_id_from_url(tweet_url)
+    tweet_result = _find_tweet_result_by_rest_id(payload, tweet_id)
+    if not tweet_result:
+        return None
+    legacy = tweet_result.get("legacy") or {}
+    if not isinstance(legacy, dict):
+        return None
+    parent_id = legacy.get("in_reply_to_status_id_str") or legacy.get("in_reply_to_status_id")
+    if not parent_id:
+        return None
+    parent_id = str(parent_id)
+    if tweet_id and parent_id == tweet_id:
+        return None
+    parent_screen_name = legacy.get("in_reply_to_screen_name")
+    if parent_screen_name:
+        return f"https://x.com/{parent_screen_name}/status/{parent_id}"
+    return f"https://x.com/i/web/status/{parent_id}"
+
+
 def _quoted_url_from_graphql_id(quoted_id: str | None, tweet_url: str) -> str | None:
     if not quoted_id:
         return None
@@ -1770,6 +1829,120 @@ def _extract_tweet_parts(
     )
 
 
+def _author_label_from_parts(parts: TweetParts) -> str:
+    bits: List[str] = []
+    if parts.author_name:
+        bits.append(parts.author_name)
+    if parts.author_handle:
+        bits.append(parts.author_handle)
+    return " ".join(bits) if bits else "Autor desconocido"
+
+
+def _strip_leading_author_label(text: str, parts: TweetParts) -> str:
+    if not text:
+        return ""
+    lines = text.splitlines()
+    while lines and not lines[0].strip():
+        lines.pop(0)
+
+    author_name = (parts.author_name or "").strip()
+    author_handle = (parts.author_handle or "").strip()
+    while lines:
+        first = lines[0].strip()
+        if author_name and first == author_name:
+            lines.pop(0)
+            continue
+        if author_handle and first == author_handle:
+            lines.pop(0)
+            continue
+        if author_name and author_handle and first.startswith(author_name) and author_handle in first:
+            lines.pop(0)
+            continue
+        break
+    return "\n".join(lines).strip()
+
+
+def _append_tweet_content_lines(lines: List[str], parts: TweetParts, *, strip_author: bool = False) -> None:
+    body_text = _strip_leading_author_label(parts.body_text, parts) if strip_author else parts.body_text
+    if body_text:
+        lines.extend(["", body_text])
+    if parts.trailing_media_lines:
+        lines.append("")
+        lines.extend(parts.trailing_media_lines)
+        lines.append("")
+    if _should_append_external_link(body_text, parts.external_link):
+        lines.extend(["", f"Original link: {parts.external_link}"])
+
+
+def _reply_parent_markdown_lines(parent_context: ReplyParentContext | None) -> List[str]:
+    if parent_context is None:
+        return []
+    lines = ["", "#### En respuesta a", "", f"[Ver tweet padre en X]({parent_context.url})"]
+    if parent_context.parts is not None:
+        lines.extend(["", f"**{_author_label_from_parts(parent_context.parts)}**"])
+        _append_tweet_content_lines(lines, parent_context.parts, strip_author=True)
+    return lines
+
+
+def _find_article_index_for_status(articles, status_url: str | None) -> int | None:
+    status_id = _status_id_from_url(status_url)
+    if not status_id:
+        return None
+    selector = f"a[href*='/status/{status_id}']"
+    total = articles.count()
+    for idx in range(total):
+        if articles.nth(idx).locator(selector).count() > 0:
+            return idx
+    return None
+
+
+def _extract_reply_parent_context(
+    page,
+    articles,
+    *,
+    target_idx: int | None,
+    parent_url: str | None,
+) -> ReplyParentContext | None:
+    if page is None:
+        return ReplyParentContext(parent_url) if parent_url else None
+
+    candidate_url = parent_url
+    candidate_article = None
+    parent_idx = _find_article_index_for_status(articles, parent_url)
+    if parent_idx is not None and parent_idx != target_idx:
+        candidate_article = articles.nth(parent_idx)
+
+    if candidate_article is None and target_idx is not None and target_idx > 0:
+        candidate_article = articles.nth(target_idx - 1)
+        candidate_url = _extract_article_status_url(candidate_article, None) or candidate_url
+
+    if candidate_url:
+        try:
+            page.goto(candidate_url, wait_until="domcontentloaded", timeout=60000)
+            _wait_with_log(page, WAIT_MS, "load the parent tweet")
+            parent_article = _locate_tweet_article(page, candidate_url)
+            if parent_article is not None:
+                return ReplyParentContext(
+                    url=candidate_url,
+                    parts=_extract_tweet_parts(parent_article, candidate_url, page=page),
+                )
+        except Exception:
+            pass
+    if candidate_article is not None and candidate_url:
+        try:
+            return ReplyParentContext(
+                url=candidate_url,
+                parts=_extract_tweet_parts(candidate_article, candidate_url, page=page),
+            )
+        except Exception:
+            return ReplyParentContext(candidate_url)
+
+    if candidate_url:
+        return ReplyParentContext(candidate_url)
+
+    return None
+
+
 def _normalize_link_for_match(url: str) -> str:
     return url.strip().rstrip("/").lower()
 
@@ -1788,8 +1961,17 @@ def _build_single_tweet_markdown(
     tweet_url: str,
     *,
     capture_source: str = "liked",
+    posted_kind: str | None = None,
+    reply_parent_context: ReplyParentContext | None = None,
+    reply_parent_url: str | None = None,
 ) -> str:
     source = _normalize_capture_source(capture_source)
+    kind = _normalize_posted_kind(posted_kind) if source == "posted" else None
+    if kind != "reply":
+        reply_parent_context = None
+        reply_parent_url = None
+    if reply_parent_context is not None:
+        reply_parent_url = reply_parent_context.url
     title = _build_title(parts.author_name, parts.author_handle)
     front_matter = [
         "---",
@@ -1797,6 +1979,12 @@ def _build_single_tweet_markdown(
         f"tweet_url: {tweet_url}",
         f"tweet_capture_source: {source}",
     ]
+    if kind:
+        front_matter.append(f"tweet_posted_kind: {kind}")
+    if reply_parent_url:
+        front_matter.append(f"tweet_reply_to_url: {reply_parent_url}")
+        included = "true" if reply_parent_context and reply_parent_context.parts else "false"
+        front_matter.append(f"tweet_reply_context_included: {included}")
     if parts.author_handle:
         front_matter.append(f'tweet_author: "{parts.author_handle}"')
     if parts.author_name:
@@ -1807,16 +1995,12 @@ def _build_single_tweet_markdown(
     if parts.avatar_url:
         md_lines.extend(["", f"![avatar]({parts.avatar_url})"])
 
-    if parts.body_text:
-        md_lines.extend(["", parts.body_text])
+    parent_lines = _reply_parent_markdown_lines(reply_parent_context)
+    if parent_lines:
+        md_lines.extend(parent_lines)
+        md_lines.extend(["", "---", "", "#### Mi respuesta"])
 
-    if parts.trailing_media_lines:
-        md_lines.append("")
-        md_lines.extend(parts.trailing_media_lines)
-        md_lines.append("")
-
-    if _should_append_external_link(parts.body_text, parts.external_link):
-        md_lines.extend(["", f"Original link: {parts.external_link}"])
+    _append_tweet_content_lines(md_lines, parts, strip_author=bool(parent_lines))
 
     return "\n".join(md_lines).strip() + "\n"
 
@@ -1830,6 +2014,8 @@ def fetch_tweet_thread_markdown(
     context_time_text: str | None = None,
     context_time_datetime: str | None = None,
     capture_source: str = "liked",
+    posted_kind: str | None = None,
+    reply_parent_url: str | None = None,
 ) -> tuple[str, str]:
     """Return (markdown, filename) for a tweet, expanding threads when possible."""
     if sync_playwright is None:
@@ -1838,6 +2024,9 @@ def fetch_tweet_thread_markdown(
             "'playwright install chromium' to use this tool."
         )
     normalized_capture_source = _normalize_capture_source(capture_source)
+    normalized_posted_kind = (
+        _normalize_posted_kind(posted_kind) if normalized_capture_source == "posted" else None
+    )
     with sync_playwright() as playwright:
         browser = playwright.chromium.launch(headless=headless)
         state_path = _resolve_storage_state(storage_state)
@@ -1878,15 +2067,40 @@ def fetch_tweet_thread_markdown(
             capture_source=normalized_capture_source,
         )
 
+        thread_payload = tweet_detail.get("payload")
+        if normalized_posted_kind == "reply":
+            if thread_payload is None:
+                thread_payload = _wait_for_tweet_detail(page, TWEET_DETAIL_WAIT_MS)
+                if thread_payload is not None:
+                    tweet_detail["payload"] = thread_payload
+            parent_url = reply_parent_url or _reply_parent_url_from_payload(thread_payload, url)
+            articles = page.locator("article")
+            target_idx = _find_article_index_for_status(articles, url)
+            parent_context = _extract_reply_parent_context(
+                page,
+                articles,
+                target_idx=target_idx,
+                parent_url=parent_url,
+            )
+            browser.close()
+            return _build_single_tweet_markdown(
+                target_parts,
+                url,
+                capture_source=normalized_capture_source,
+                posted_kind=normalized_posted_kind,
+                reply_parent_context=parent_context,
+                reply_parent_url=parent_url,
+            ), filename
+
         if not effective_author_handle or not (effective_time_text or effective_time_datetime):
             browser.close()
             return _build_single_tweet_markdown(
                 target_parts,
                 url,
                 capture_source=normalized_capture_source,
+                posted_kind=normalized_posted_kind,
             ), filename
 
-        thread_payload = tweet_detail.get("payload")
         if thread_payload is None:
             thread_payload = _wait_for_tweet_detail(page, TWEET_DETAIL_WAIT_MS)
             if thread_payload is not None:
@@ -1918,6 +2132,7 @@ def fetch_tweet_thread_markdown(
                     target_parts,
                     url,
                     capture_source=normalized_capture_source,
+                    posted_kind=normalized_posted_kind,
                 ), filename
 
         target_id = _status_id_from_url(url)
@@ -1969,7 +2184,12 @@ def fetch_tweet_thread_markdown(
         else:
             if len(selected_indices) <= 1:
                 browser.close()
-                return _build_single_tweet_markdown(target_parts, url), filename
+                return _build_single_tweet_markdown(
+                    target_parts,
+                    url,
+                    capture_source=normalized_capture_source,
+                    posted_kind=normalized_posted_kind,
+                ), filename
 
             primary_handle = effective_author_handle
             thread_parts = []
@@ -1986,6 +2206,7 @@ def fetch_tweet_thread_markdown(
                 target_parts,
                 url,
                 capture_source=normalized_capture_source,
+                posted_kind=normalized_posted_kind,
             ), filename
 
         print(f"🧵 Thread downloaded ({len(thread_parts)} tweets).")
@@ -2000,6 +2221,8 @@ def fetch_tweet_thread_markdown(
             "tweet_thread: true",
             f"tweet_thread_count: {count}",
         ]
+        if normalized_posted_kind:
+            front_matter.append(f"tweet_posted_kind: {normalized_posted_kind}")
         if author_handle:
             front_matter.append(f'tweet_author: "{author_handle}"')
         if target_parts.author_name:

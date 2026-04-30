@@ -48,6 +48,25 @@ def mock_posts(monkeypatch, urls, stop_found=True):
     monkeypatch.setattr("pipeline_manager.fetch_post_items_with_state", fake_fetch)
 
 
+def mock_replies(monkeypatch, urls, stop_found=True):
+    items = [
+        LikeTweet(
+            url=url,
+            author_handle="@self",
+            time_text="1h",
+            time_datetime="2026-01-10T12:00:00.000Z",
+            posted_kind="reply",
+            reply_to_url="https://x.com/other/status/9",
+        )
+        for url in urls
+    ]
+
+    def fake_fetch(*args, **kwargs):
+        return list(items), stop_found, len(items)
+
+    monkeypatch.setattr("pipeline_manager.fetch_reply_items_with_state", fake_fetch)
+
+
 def test_process_tweet_urls_creates_files_from_likes(tmp_path, monkeypatch):
     processor, incoming = prepare_processor(tmp_path)
     mock_likes(
@@ -303,6 +322,7 @@ def test_process_tweet_urls_creates_files_from_posts_with_separate_state(tmp_pat
     monkeypatch.setattr("pipeline_manager.cfg.TWEET_POSTS_URL", "https://x.com/self")
     mock_likes(monkeypatch, [])
     mock_posts(monkeypatch, [url])
+    mock_replies(monkeypatch, [])
 
     with patch(
         "pipeline_manager.fetch_tweet_thread_markdown",
@@ -318,3 +338,49 @@ def test_process_tweet_urls_creates_files_from_posts_with_separate_state(tmp_pat
     assert processor.tweets_posted_processed.read_text(encoding="utf-8") == url + "\n"
     assert not processor.tweets_processed.exists()
     assert mocked.call_args.kwargs["capture_source"] == "posted"
+
+
+def test_process_tweet_urls_creates_files_from_replies_with_parent_context(
+    tmp_path,
+    monkeypatch,
+):
+    processor, incoming = prepare_processor(tmp_path)
+    url = "https://x.com/self/status/11"
+
+    monkeypatch.setattr("pipeline_manager.cfg.TWEET_POSTS_URL", "https://x.com/self")
+    mock_likes(monkeypatch, [])
+    mock_posts(monkeypatch, [])
+    mock_replies(monkeypatch, [url])
+
+    with patch(
+        "pipeline_manager.fetch_tweet_thread_markdown",
+        return_value=(
+            "---\nsource: tweet\ntweet_capture_source: posted\ntweet_posted_kind: reply\n---\n\n# T\n",
+            "Tweet posted - self-11.md",
+        ),
+    ) as mocked:
+        created = processor.process_tweet_urls()
+
+    assert len(created) == 1
+    assert (incoming / "Tweet posted - self-11.md").exists()
+    assert processor.tweets_replies_processed.read_text(encoding="utf-8") == url + "\n"
+    assert mocked.call_args.kwargs["capture_source"] == "posted"
+    assert mocked.call_args.kwargs["posted_kind"] == "reply"
+    assert mocked.call_args.kwargs["reply_parent_url"] == "https://x.com/other/status/9"
+
+
+def test_process_tweet_urls_skips_replies_already_processed_as_posts(tmp_path, monkeypatch):
+    processor, _ = prepare_processor(tmp_path)
+    url = "https://x.com/self/status/11"
+    processor.tweets_posted_processed.write_text(url + "\n", encoding="utf-8")
+
+    monkeypatch.setattr("pipeline_manager.cfg.TWEET_POSTS_URL", "https://x.com/self")
+    mock_likes(monkeypatch, [])
+    mock_posts(monkeypatch, [])
+    mock_replies(monkeypatch, [url], stop_found=False)
+
+    with patch("pipeline_manager.fetch_tweet_thread_markdown") as mocked:
+        created = processor.process_tweet_urls()
+
+    assert created == []
+    mocked.assert_not_called()

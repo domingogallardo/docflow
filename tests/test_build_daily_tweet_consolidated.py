@@ -392,6 +392,29 @@ def test_collect_daily_source_markdown_filters_posted_only(tmp_path: Path) -> No
     assert liked_md not in selected
 
 
+def test_collect_daily_source_markdown_includes_reposts_marked_as_posted(tmp_path: Path) -> None:
+    day = "2026-02-13"
+    tweets_dir = tmp_path / "Tweets 2026"
+    tweets_dir.mkdir(parents=True)
+
+    repost_md, _ = _write_tweet_pair(
+        tweets_dir,
+        "Tweet posted - other-author-repost",
+        day,
+        hour=12,
+        capture_source="posted",
+    )
+
+    selected = mod._collect_daily_source_markdown(tweets_dir, day, capture_source="posted")
+
+    assert selected == [repost_md]
+
+
+def test_entry_kind_uses_posted_kind_metadata() -> None:
+    assert mod._entry_kind({"tweet_posted_kind": "reply"}) == "Reply"
+    assert mod._entry_kind({"tweet_posted_kind": "repost"}) == "Repost"
+
+
 def test_main_builds_posted_consolidated_without_touching_liked_sources(
     tmp_path: Path,
     monkeypatch,
@@ -432,7 +455,9 @@ def test_main_builds_posted_consolidated_without_touching_liked_sources(
     consolidated_html = tweets_dir / f"Tweets posted {day}.html"
     assert consolidated_md.is_file()
     assert consolidated_html.is_file()
-    assert "Total de ficheros: **1**" in consolidated_md.read_text(encoding="utf-8")
+    consolidated_text = consolidated_md.read_text(encoding="utf-8")
+    assert "# Consolidado diario de tweets publicados/reposteados/respuestas" in consolidated_text
+    assert "Total de ficheros: **1**" in consolidated_text
 
     assert liked_md.is_file()
     assert posted_md.is_file()
