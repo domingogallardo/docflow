@@ -54,10 +54,16 @@ class TitleAIUpdater:
         for md_file in md_files:
             try:
                 old_title, snippet = self._extract_content(md_file)
+                tweet_posted_kind = self._tweet_posted_kind(md_file)
                 lang_sample = self._extract_language_sample(md_file)
                 lang_probe = lang_sample or " ".join(snippet.split()[:50])
                 lang = self._detect_language(lang_probe)
-                new_title = self._generate_title(snippet, lang, old_title)
+                new_title = self._generate_title(
+                    snippet,
+                    lang,
+                    old_title,
+                    tweet_posted_kind=tweet_posted_kind,
+                )
                 print(f"📄 {old_title} → {new_title} [{lang}]")
                 rename_pair(md_file, new_title)
                 time.sleep(self.delay_seconds)
@@ -78,6 +84,22 @@ class TitleAIUpdater:
                     break
         snippet = " ".join(words[: self.num_words]).encode("utf-8")[: self.max_bytes_md].decode("utf-8", "ignore")
         return raw_name, snippet
+
+    def _tweet_posted_kind(self, path: Path) -> str:
+        try:
+            lines = path.read_text(encoding="utf-8", errors="ignore").splitlines()
+        except Exception:
+            return ""
+        if not lines or lines[0].strip() != "---":
+            return ""
+        for line in lines[1:]:
+            stripped = line.strip()
+            if stripped == "---":
+                break
+            if not stripped.startswith("tweet_posted_kind:"):
+                continue
+            return stripped.split(":", 1)[1].strip().strip("'\"").lower()
+        return ""
 
     def _extract_language_sample(self, path: Path) -> str:
         try:
@@ -316,7 +338,14 @@ class TitleAIUpdater:
             return "Spanish"
         return "English"
 
-    def _generate_title(self, snippet: str, lang: str, original_title: str) -> str:
+    def _generate_title(
+        self,
+        snippet: str,
+        lang: str,
+        original_title: str,
+        *,
+        tweet_posted_kind: str = "",
+    ) -> str:
         system = (
             "Return ONLY a single-line title and nothing else. "
             f"Write it in {lang}. "
@@ -343,7 +372,10 @@ class TitleAIUpdater:
             title = title.replace(bad, "-")
         title = re.sub(r"\s+", " ", title).strip()
 
-        if "Tweet" in original_title and "Tweet" not in title:
+        if tweet_posted_kind == "repost":
+            title = re.sub(r"^(?:Tweet|Repost)\s*-\s*", "", title, flags=re.IGNORECASE).strip()
+            title = f"Repost - {title}" if title else "Repost -"
+        elif "Tweet" in original_title and "Tweet" not in title:
             title = f"Tweet - {title}" if title else "Tweet -"
 
         return title[: self.max_title_len]

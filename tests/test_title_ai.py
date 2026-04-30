@@ -41,6 +41,38 @@ def test_extract_language_sample_ignores_tweet_boilerplate(tmp_path: Path) -> No
     assert "@sebkrier" not in sample
 
 
+def test_tweet_posted_kind_reads_repost_metadata(tmp_path: Path) -> None:
+    content = (
+        "---\n"
+        "source: tweet\n"
+        "tweet_capture_source: posted\n"
+        "tweet_posted_kind: repost\n"
+        "---\n"
+        "\n"
+        "# Tweet by Someone\n"
+    )
+    path = tmp_path / "Tweet posted - test.md"
+    path.write_text(content, encoding="utf-8")
+
+    updater = TitleAIUpdater(ai_client=object())
+
+    assert updater._tweet_posted_kind(path) == "repost"
+
+
+def test_generate_title_prefixes_reposts(monkeypatch) -> None:
+    updater = TitleAIUpdater(ai_client=object())
+    monkeypatch.setattr(updater, "_ai_text", lambda **_kwargs: "Tweet - Useful thread about AI")
+
+    title = updater._generate_title(
+        "Useful thread about AI",
+        "English",
+        "Tweet posted - author-123",
+        tweet_posted_kind="repost",
+    )
+
+    assert title == "Repost - Useful thread about AI"
+
+
 def test_detect_language_fallback_ignores_single_accent(monkeypatch) -> None:
     updater = TitleAIUpdater(ai_client=object())
 
