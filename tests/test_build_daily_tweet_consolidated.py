@@ -657,6 +657,41 @@ def test_clean_body_escapes_literal_markdown_headings_but_keeps_quote_heading() 
     assert soup.find("h4").get_text(strip=True) == "Tweet citado"
 
 
+def test_clean_body_keeps_reply_section_headings_for_html_rendering() -> None:
+    from bs4 import BeautifulSoup
+
+    body = "\n".join(
+        [
+            "# Tweet by Domingo (@domingo)",
+            "",
+            "[View on X](https://x.com/domingo/status/2)",
+            "",
+            "#### En respuesta a",
+            "",
+            "[Ver tweet padre en X](https://x.com/parent/status/1)",
+            "",
+            "**Parent Author (@parent)**",
+            "",
+            "Parent body.",
+            "",
+            "---",
+            "",
+            "#### Mi respuesta",
+            "",
+            "My reply.",
+        ]
+    )
+
+    cleaned = mod._clean_body(body)
+    html_fragment = mod._markdown_to_html_fragment(cleaned)
+    soup = BeautifulSoup(html_fragment, "html.parser")
+    headings = [heading.get_text(strip=True) for heading in soup.find_all("h4")]
+
+    assert "\\#### En respuesta a" not in cleaned
+    assert "\\#### Mi respuesta" not in cleaned
+    assert headings == ["En respuesta a", "Mi respuesta"]
+
+
 def test_markdown_to_html_fragment_preserves_paragraph_hard_breaks() -> None:
     body = "\n".join(
         [

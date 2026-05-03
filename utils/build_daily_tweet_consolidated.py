@@ -374,9 +374,14 @@ def _clean_body(body: str, meta: dict[str, str] | None = None) -> str:
 
 def _escape_literal_markdown_headings(text: str) -> str:
     """Keep tweet text that starts with '# ' from becoming Markdown headings."""
+    structural_headings = {
+        "#### Tweet citado",
+        "#### En respuesta a",
+        "#### Mi respuesta",
+    }
     escaped: list[str] = []
     for line in text.splitlines():
-        if line.strip() == "#### Tweet citado":
+        if line.strip() in structural_headings:
             escaped.append(line)
             continue
         match = MARKDOWN_HEADING_LINE_RE.match(line)
