@@ -255,6 +255,7 @@ def test_strip_article_metric_preamble_removes_x_article_counters():
             "257",
             "60K",
             "Like all good articles, this one is a reaction.",
+            "",
             "The main issue is benchmark shape.",
         ]
     )
@@ -266,7 +267,6 @@ def test_strip_article_metric_preamble_removes_x_article_counters():
             "Lisan al Gaib",
             "@scaling01",
             "The AI model gap is bigger than you think",
-            "",
             "Like all good articles, this one is a reaction.",
             "",
             "The main issue is benchmark shape.",

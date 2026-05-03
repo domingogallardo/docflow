@@ -649,25 +649,9 @@ def strip_article_metric_preamble(
         if not next_text or _is_metric_only_line(next_text):
             continue
 
-        return _paragraphize_x_article_lines([*lines[:idx], *lines[end:]], body_start=idx)
+        return "\n".join([*lines[:idx], *lines[end:]])
 
     return text
-
-
-def _paragraphize_x_article_lines(lines: List[str], *, body_start: int) -> str:
-    out: List[str] = []
-    for pos, line in enumerate(lines):
-        stripped = line.strip()
-        if pos < body_start:
-            out.append(line)
-            continue
-        if not stripped:
-            out.append("")
-            continue
-        if out and out[-1].strip():
-            out.append("")
-        out.append(line)
-    return "\n".join(_collapse_blank_lines(out))
 
 
 def _safe_filename(name: str) -> str:
