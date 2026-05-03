@@ -119,6 +119,10 @@ TRANSLATION_PROMPT_LABELS_NORMALIZED = {
     "ver traducción",
     "ver traduccion",
 }
+ARTICLE_PROMPT_LABELS_NORMALIZED = {
+    "want to publish your own article",
+    "upgrade to premium",
+}
 TRANSLATION_PROMPT_INLINE_RE = re.compile(
     "|".join(
         re.escape(label)
@@ -554,6 +558,7 @@ def strip_platform_inline_prompts(
         normalized = _normalize_platform_text(probe)
         return (
             normalized in TRANSLATION_PROMPT_LABELS_NORMALIZED
+            or normalized in ARTICLE_PROMPT_LABELS_NORMALIZED
             or bool(SUBSCRIBE_PROMPT_LINE_RE.match(probe))
         )
 
@@ -580,6 +585,9 @@ def strip_platform_inline_prompts(
 
     filtered: List[str] = []
     for line in text.splitlines():
+        if not line.strip():
+            filtered.append("")
+            continue
         if is_prompt_line(line):
             continue
         cleaned = normalize_glued_link_card_breaks(
@@ -595,6 +603,71 @@ def strip_platform_inline_prompts(
             ).splitlines():
                 filtered.append(normalized_line.strip())
     return "\n".join(_collapse_blank_lines(filtered))
+
+
+def strip_article_metric_preamble(
+    text: str,
+    *,
+    author_handle: str | None = None,
+) -> str:
+    """Remove X Article metric counters that appear between title and body."""
+    lines = text.splitlines()
+    if len(lines) < 6:
+        return text
+
+    handle = (author_handle or "").strip().strip('"')
+    if handle and not handle.startswith("@"):
+        handle = f"@{handle}"
+    search_limit = min(len(lines), 10)
+
+    for idx in range(2, search_limit):
+        stripped = lines[idx].strip()
+        if not _is_numeric_stat(stripped):
+            continue
+
+        before = [line.strip() for line in lines[:idx] if line.strip()]
+        if len(before) < 2:
+            continue
+        if handle:
+            has_author_handle = any(line == handle or handle in line for line in before[:3])
+        else:
+            has_author_handle = any(HANDLE_ONLY_RE.match(line) for line in before[:3])
+        if not has_author_handle:
+            continue
+
+        end = idx
+        while end < len(lines) and _is_numeric_stat(lines[end].strip()):
+            end += 1
+        if end - idx < 4:
+            continue
+
+        next_text = ""
+        for candidate in lines[end:]:
+            next_text = candidate.strip()
+            if next_text:
+                break
+        if not next_text or _is_metric_only_line(next_text):
+            continue
+
+        return _paragraphize_x_article_lines([*lines[:idx], *lines[end:]], body_start=idx)
+
+    return text
+
+
+def _paragraphize_x_article_lines(lines: List[str], *, body_start: int) -> str:
+    out: List[str] = []
+    for pos, line in enumerate(lines):
+        stripped = line.strip()
+        if pos < body_start:
+            out.append(line)
+            continue
+        if not stripped:
+            out.append("")
+            continue
+        if out and out[-1].strip():
+            out.append("")
+        out.append(line)
+    return "\n".join(_collapse_blank_lines(out))
 
 
 def _safe_filename(name: str) -> str:
@@ -768,10 +841,9 @@ def _read_article_text(
                 best_text = _prefer_richer_text(best_text, refined)
             except Exception:
                 pass
-        if best_text:
-            return best_text
         try:
-            return current.inner_text(timeout=timeout_ms)
+            text = current.inner_text(timeout=timeout_ms)
+            best_text = _prefer_richer_text(best_text, text)
         except PlaywrightTimeoutError as exc:
             last_exc = exc
             try:
@@ -779,15 +851,17 @@ def _read_article_text(
             except PlaywrightTimeoutError:
                 content = None
             if content:
-                return content
-            if page is None:
-                break
-            _wait_with_log(page, WAIT_MS, "retry tweet text")
-            refreshed = _locate_tweet_article(page, tweet_url, timeout_ms=timeout_ms)
-            if refreshed is None:
-                break
-            _expand_show_more(refreshed, page)
-            current = refreshed
+                best_text = _prefer_richer_text(best_text, content)
+        if best_text:
+            return best_text
+        if page is None:
+            break
+        _wait_with_log(page, WAIT_MS, "retry tweet text")
+        refreshed = _locate_tweet_article(page, tweet_url, timeout_ms=timeout_ms)
+        if refreshed is None:
+            break
+        _expand_show_more(refreshed, page)
+        current = refreshed
 
     if current is not None:
         try:
@@ -1786,9 +1860,12 @@ def _extract_tweet_parts(
         anchor_handle=anchor_handle,
     )
     body_text = strip_tweet_stats(
-        strip_platform_inline_prompts(
-            normalize_inline_mention_breaks(rebuild_urls_from_lines(raw_text).strip()),
-            author_name=author_name,
+        strip_article_metric_preamble(
+            strip_platform_inline_prompts(
+                normalize_inline_mention_breaks(rebuild_urls_from_lines(raw_text).strip()),
+                author_name=author_name,
+                author_handle=author_handle,
+            ),
             author_handle=author_handle,
         )
     )

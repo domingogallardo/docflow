@@ -5,6 +5,7 @@ from utils.tweet_to_markdown import (
     normalize_inline_mention_breaks,
     normalize_glued_author_body_breaks,
     strip_platform_inline_prompts,
+    strip_article_metric_preamble,
     strip_tweet_stats,
     _media_markdown_lines,
     _emoji_from_twimg_url,
@@ -216,6 +217,75 @@ def test_strip_platform_inline_prompts_removes_glued_subscribe_prompt():
         author_handle="@Aella_Girl",
     )
     assert result == "Aella @Aella_Girl\nImagine a circle."
+
+
+def test_strip_platform_inline_prompts_preserves_meaningful_blank_lines():
+    raw = "\n".join(
+        [
+            "First paragraph.",
+            "",
+            "",
+            "Second paragraph.",
+        ]
+    )
+
+    assert strip_platform_inline_prompts(raw) == "First paragraph.\n\nSecond paragraph."
+
+
+def test_strip_platform_inline_prompts_removes_x_article_premium_prompt():
+    raw = "\n".join(
+        [
+            "Actual article ending.",
+            "Want to publish your own Article?",
+            "Upgrade to Premium",
+        ]
+    )
+
+    assert strip_platform_inline_prompts(raw) == "Actual article ending."
+
+
+def test_strip_article_metric_preamble_removes_x_article_counters():
+    raw = "\n".join(
+        [
+            "Lisan al Gaib",
+            "@scaling01",
+            "The AI model gap is bigger than you think",
+            "14",
+            "28",
+            "257",
+            "60K",
+            "Like all good articles, this one is a reaction.",
+            "The main issue is benchmark shape.",
+        ]
+    )
+
+    result = strip_article_metric_preamble(raw, author_handle="@scaling01")
+
+    assert result == "\n".join(
+        [
+            "Lisan al Gaib",
+            "@scaling01",
+            "The AI model gap is bigger than you think",
+            "",
+            "Like all good articles, this one is a reaction.",
+            "",
+            "The main issue is benchmark shape.",
+        ]
+    )
+
+
+def test_strip_article_metric_preamble_leaves_regular_numeric_body():
+    raw = "\n".join(
+        [
+            "Author",
+            "@author",
+            "42",
+            "is still the answer.",
+            "More text.",
+        ]
+    )
+
+    assert strip_article_metric_preamble(raw, author_handle="@author") == raw
 
 
 def test_strip_tweet_stats_removes_metrics_lines():
@@ -1062,10 +1132,10 @@ def test_read_article_text_uses_anchor_handle_first():
     assert result == "from-handle"
 
 
-def test_read_article_text_prefers_richer_page_text_over_compact_anchor():
+def test_read_article_text_prefers_richer_inner_text_over_compact_evaluations():
     class FakeArticle:
         def inner_text(self, timeout=None):
-            raise AssertionError("should not call inner_text when richer text is available")
+            return "line 1\nline 2 from page\nline 3 from inner text"
 
     class FakeHandle:
         def evaluate(self, script):
@@ -1090,7 +1160,7 @@ def test_read_article_text_prefers_richer_page_text_over_compact_anchor():
         anchor_handle=FakeHandle(),
         timeout_ms=10,
     )
-    assert result == "line 1\nline 2 from page"
+    assert result == "line 1\nline 2 from page\nline 3 from inner text"
 
 
 def test_select_thread_indices_requires_context():

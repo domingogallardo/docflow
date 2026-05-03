@@ -3,8 +3,16 @@
 from pathlib import Path
 from unittest.mock import patch
 
+import pytest
+
 from pipeline_manager import DocumentProcessor
 from utils.x_likes_fetcher import LikeTweet
+
+
+@pytest.fixture(autouse=True)
+def isolate_tweet_queue_config(monkeypatch):
+    monkeypatch.setattr("pipeline_manager.cfg.TWEET_POSTS_URL", "")
+    monkeypatch.setattr("pipeline_manager.cfg.TWEET_REPLIES_URL", "")
 
 
 def prepare_processor(tmp_path):
