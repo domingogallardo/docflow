@@ -13,6 +13,7 @@ Podcast snippets are typically captured in [Snipd](https://www.snipd.com) and th
 - Single local source of truth: `BASE_DIR` (resolved from `DOCFLOW_BASE_DIR`, typically in `~/.docflow_env`).
 - Static site output under `BASE_DIR/_site`.
 - Local workflow state under `BASE_DIR/state`.
+- Generic Markdown ingestion reads both `BASE_DIR/Incoming/*.md` and `.md` files found in iCloud Downloads.
 - Image ingestion moves files into the yearly folder and, when `OPENAI_API_KEY` is configured, renames them with an AI-generated descriptive filename before rebuilding the gallery.
 
 ### Local services currently in use
@@ -117,6 +118,13 @@ The shared cron log is:
 - `_site/` (generated)
 - `state/` (generated)
 
+External input folders:
+
+- iCloud Downloads: `~/Library/Mobile Documents/com~apple~CloudDocs/Downloads`
+  - The `md` step imports generic `.md` files from this folder into `Incoming/`, then processes them through the normal Markdown flow.
+  - Imported files are moved, not copied, so successfully processed files disappear from iCloud Downloads.
+  - Override the folder with `DOCFLOW_ICLOUD_DOWNLOADS_DIR` when needed.
+
 ## Operation and maintenance
 
 ### BASE_DIR location
@@ -168,6 +176,7 @@ export OPENAI_API_KEY=...
 export INSTAPAPER_USERNAME=...
 export INSTAPAPER_PASSWORD=...
 export DOCFLOW_BASE_DIR="/path/to/BASE_DIR"
+export DOCFLOW_ICLOUD_DOWNLOADS_DIR="$HOME/Library/Mobile Documents/com~apple~CloudDocs/Downloads"
 export TWEET_LIKES_STATE="$HOME/.secrets/docflow/x_state.json"
 export TWEET_LIKES_URL=https://x.com/<user>/likes
 export TWEET_LIKES_MAX=50
@@ -186,6 +195,20 @@ If `TWEET_POSTS_URL` is set, the tweet pipeline also downloads your published tw
 
 ```bash
 python process_documents.py all --year 2026
+```
+
+For normal local use, prefer the wrapper because it also rebuilds the intranet
+indexes after a successful run:
+
+```bash
+bash bin/docflow.sh all --year 2026
+```
+
+To process only Markdown notes, including `.md` files waiting in iCloud
+Downloads, run:
+
+```bash
+bash bin/docflow.sh md --year 2026
 ```
 
 3. Build local intranet pages manually:
