@@ -730,13 +730,28 @@
     return rangeFromIndices(indexData, trimmedStart, trimmedEnd) || range;
   }
 
-  function buildHighlightFromRange(range, root) {
+  function textContextFromIndex(indexData, startIndex, endIndex, maxLen) {
+    var fullText = String((indexData && indexData.text) || '');
+    if (!fullText || startIndex < 0 || endIndex <= startIndex) {
+      return null;
+    }
+    var limit = maxLen || 32;
+    return {
+      prefix: fullText.slice(Math.max(0, startIndex - limit), startIndex),
+      suffix: fullText.slice(endIndex, endIndex + limit)
+    };
+  }
+
+  function buildHighlightFromRange(range, root, indexData) {
     if (!range || range.collapsed || !root) return null;
     if (!root.contains(range.startContainer) || !root.contains(range.endContainer)) return null;
     var text = _trimTextEdges(range.toString());
     if (!text || text.length < 2) return null;
-    var prefix = getPrefixText(range, root, 32);
-    var suffix = getSuffixText(range, root, 32);
+    var startIndex = _boundaryIndex(indexData, range.startContainer, range.startOffset);
+    var endIndex = _boundaryIndex(indexData, range.endContainer, range.endOffset);
+    var context = textContextFromIndex(indexData, startIndex, endIndex, 32);
+    var prefix = context ? context.prefix : getPrefixText(range, root, 32);
+    var suffix = context ? context.suffix : getSuffixText(range, root, 32);
     return {
       id: makeId(),
       text: text,
@@ -1411,7 +1426,7 @@
     if (!range || !root) return Promise.resolve({ ok: false, reason: 'empty' });
     var indexData = buildTextIndex(root);
     var normalizedRange = trimRangeWhitespace(range, indexData);
-    var highlight = buildHighlightFromRange(normalizedRange, root);
+    var highlight = buildHighlightFromRange(normalizedRange, root, indexData);
     if (!highlight) return Promise.resolve({ ok: false, reason: 'empty' });
     return initHighlights().then(function() {
       if (isDuplicateHighlight(highlight, highlightState.highlights)) {

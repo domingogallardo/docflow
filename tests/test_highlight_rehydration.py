@@ -212,3 +212,76 @@ def test_highlight_selection_across_list_items_keeps_separator_text(tmp_path: Pa
     finally:
         server.shutdown()
         server.server_close()
+
+
+def test_highlight_selection_near_paragraph_start_after_blocks(tmp_path: Path):
+    playwright = pytest.importorskip("playwright.sync_api")
+    sync_playwright = playwright.sync_playwright
+
+    base = tmp_path / "base"
+    tweets = base / "Tweets" / "Tweets 2026"
+    tweets.mkdir(parents=True)
+
+    target = (
+        "thank you for this feedback and ofc I am using some poetic/rhetorical "
+        "flourishes here. I think you are setting up claude to be an ultimate "
+        "arbiter of good and it's even a valid design choice"
+    )
+    html = (
+        "<html><body>"
+        "<p>Earlier paragraph with enough text to create rendered block separators.</p>"
+        "<hr>"
+        '<p><a href="https://x.com/example/status/1">View on X</a></p>'
+        f"<p>yes {target}</p>"
+        "</body></html>"
+    )
+    (tweets / "doc.html").write_text(html, encoding="utf-8")
+
+    rel = "Tweets/Tweets 2026/doc.html"
+
+    server, port = _start_server(base)
+    try:
+        with sync_playwright() as p:
+            browser = p.chromium.launch(headless=True)
+            page = browser.new_page()
+            page.goto(f"http://127.0.0.1:{port}/tweets/raw/Tweets%202026/doc.html", wait_until="domcontentloaded")
+            page.wait_for_selector("#articlejs-highlight-btn", state="attached")
+            result = page.evaluate(
+                """
+                async (needle) => {
+                  const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
+                  let targetNode = null;
+                  let start = -1;
+                  while (walker.nextNode()) {
+                    const node = walker.currentNode;
+                    const idx = (node.nodeValue || '').indexOf(needle);
+                    if (idx >= 0) {
+                      targetNode = node;
+                      start = idx;
+                      break;
+                    }
+                  }
+                  if (!targetNode || start < 0) {
+                    return { ok: false, reason: 'needle-not-found' };
+                  }
+                  const range = document.createRange();
+                  range.setStart(targetNode, start);
+                  range.setEnd(targetNode, start + needle.length);
+                  const selection = window.getSelection();
+                  selection.removeAllRanges();
+                  selection.addRange(range);
+                  return window.ArticleJS.highlightSelection();
+                }
+                """,
+                target,
+            )
+            browser.close()
+
+        assert result["ok"] is True, result
+
+        payload = load_highlights_for_path(base, rel)
+        texts = [item.get("text") for item in payload.get("highlights", []) if isinstance(item, dict)]
+        assert target in texts
+    finally:
+        server.shutdown()
+        server.server_close()
