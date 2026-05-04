@@ -122,12 +122,21 @@ TRANSLATION_PROMPT_LABELS_NORMALIZED = {
 ARTICLE_PROMPT_LABELS_NORMALIZED = {
     "want to publish your own article",
     "upgrade to premium",
+    "upgrade to premium+",
+}
+SUBSCRIBE_PROMPT_LABELS_NORMALIZED = {
+    "subscribe",
+    "click to subscribe",
 }
 TRANSLATION_PROMPT_INLINE_RE = re.compile(
     "|".join(
         re.escape(label)
         for label in sorted(TRANSLATION_PROMPT_LABELS_NORMALIZED, key=len, reverse=True)
     ),
+    re.IGNORECASE,
+)
+ARTICLE_PROMPT_INLINE_RE = re.compile(
+    r"Want\s+to\s+publish\s+your\s+own\s+Article\?\s*Upgrade\s+to\s+Premium\+?",
     re.IGNORECASE,
 )
 SUBSCRIBE_PROMPT_WITH_HANDLE_RE = re.compile(
@@ -137,6 +146,15 @@ SUBSCRIBE_PROMPT_WITH_HANDLE_RE = re.compile(
 )
 SUBSCRIBE_PROMPT_LINE_RE = re.compile(
     r"^Subscribe\s*Click\s*to\s*Subscribe\s*to\s*@?[A-Za-z0-9_]{1,20}$",
+    re.IGNORECASE,
+)
+COMPACT_ARTICLE_METRIC_PREAMBLE_RE = re.compile(
+    r"^(?P<prefix>.+?)(?P<metrics>\d[\d.,]*(?:[kmbKMB])?(?:\d[\d.,]*(?:[kmbKMB])?){3,})"
+    r"(?P<body>[A-ZÁÉÍÓÚÜÑ][^\n]*)$"
+)
+EMBEDDED_TWEET_DATE_RE = re.compile(
+    r"^(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec|"
+    r"Ene|Feb|Mar|Abr|May|Jun|Jul|Ago|Sep|Oct|Nov|Dic)\s+\d{1,2}$",
     re.IGNORECASE,
 )
 COMPACT_TIMESTAMP_TAIL_RE = re.compile(
@@ -559,6 +577,7 @@ def strip_platform_inline_prompts(
         return (
             normalized in TRANSLATION_PROMPT_LABELS_NORMALIZED
             or normalized in ARTICLE_PROMPT_LABELS_NORMALIZED
+            or normalized in SUBSCRIBE_PROMPT_LABELS_NORMALIZED
             or bool(SUBSCRIBE_PROMPT_LINE_RE.match(probe))
         )
 
@@ -583,6 +602,16 @@ def strip_platform_inline_prompts(
 
         return TRANSLATION_PROMPT_INLINE_RE.sub(repl, line)
 
+    def strip_article_prompt_tail(line: str) -> str:
+        match = ARTICLE_PROMPT_INLINE_RE.search(line)
+        if not match:
+            return line
+        before = line[: match.start()].rstrip()
+        after = line[match.end() :].lstrip()
+        if before and after:
+            return f"{before}\n{after}"
+        return before or after
+
     filtered: List[str] = []
     for line in text.splitlines():
         if not line.strip():
@@ -591,7 +620,7 @@ def strip_platform_inline_prompts(
         if is_prompt_line(line):
             continue
         cleaned = normalize_glued_link_card_breaks(
-            strip_glued_prompt(strip_subscribe_prompt(line))
+            strip_glued_prompt(strip_subscribe_prompt(strip_article_prompt_tail(line)))
         )
         for cleaned_line in cleaned.splitlines():
             if is_prompt_line(cleaned_line):
@@ -610,19 +639,66 @@ def strip_article_metric_preamble(
     *,
     author_handle: str | None = None,
 ) -> str:
-    """Remove X Article metric counters that appear between title and body."""
+    """Remove X Article metric counters around article and embedded-tweet text."""
     lines = text.splitlines()
-    if len(lines) < 6:
+    if len(lines) < 3:
         return text
 
     handle = (author_handle or "").strip().strip('"')
     if handle and not handle.startswith("@"):
         handle = f"@{handle}"
     search_limit = min(len(lines), 10)
+    cleaned_text: str | None = None
 
+    if len(lines) >= 6:
+        for idx in range(2, search_limit):
+            stripped = lines[idx].strip()
+            if not _is_numeric_stat(stripped):
+                continue
+
+            before = [line.strip() for line in lines[:idx] if line.strip()]
+            if len(before) < 2:
+                continue
+            if before[-1].endswith(":"):
+                continue
+            if handle:
+                has_author_handle = any(line == handle or handle in line for line in before[:3])
+            else:
+                has_author_handle = any(HANDLE_ONLY_RE.match(line) for line in before[:3])
+            if not has_author_handle:
+                continue
+
+            end = idx
+            while end < len(lines) and _is_numeric_stat(lines[end].strip()):
+                end += 1
+            if end - idx < 4:
+                continue
+
+            next_text = ""
+            for candidate in lines[end:]:
+                next_text = candidate.strip()
+                if next_text:
+                    break
+            if not next_text or _is_metric_only_line(next_text):
+                continue
+
+            cleaned_text = "\n".join([*lines[:idx], *lines[end:]])
+            break
+
+    if cleaned_text is None:
+        compact = _strip_compact_article_metric_preamble(lines, handle=handle)
+        cleaned_text = compact if compact is not None else text
+
+    embedded = _strip_embedded_article_metric_blocks(cleaned_text.splitlines())
+    return embedded if embedded is not None else cleaned_text
+
+
+def _strip_compact_article_metric_preamble(lines: List[str], *, handle: str) -> str | None:
+    search_limit = min(len(lines), 10)
     for idx in range(2, search_limit):
         stripped = lines[idx].strip()
-        if not _is_numeric_stat(stripped):
+        match = COMPACT_ARTICLE_METRIC_PREAMBLE_RE.match(stripped)
+        if not match:
             continue
 
         before = [line.strip() for line in lines[:idx] if line.strip()]
@@ -635,23 +711,52 @@ def strip_article_metric_preamble(
         if not has_author_handle:
             continue
 
+        metrics = match.group("metrics")
+        compact_metrics = re.sub(r"[.,\s]", "", metrics).lower()
+        if not re.search(r"\d[kmb]$", compact_metrics) or len(re.findall(r"\d", compact_metrics)) < 4:
+            continue
+
+        prefix = match.group("prefix").rstrip()
+        body = match.group("body").lstrip()
+        if not prefix or not body or _is_metric_only_line(body):
+            continue
+
+        return "\n".join([*lines[:idx], prefix, body, *lines[idx + 1 :]])
+    return None
+
+
+def _strip_embedded_article_metric_blocks(lines: List[str]) -> str | None:
+    cleaned: List[str] = []
+    idx = 0
+    changed = False
+    while idx < len(lines):
+        stripped = lines[idx].strip()
+        if not _is_numeric_stat(stripped):
+            cleaned.append(lines[idx])
+            idx += 1
+            continue
+
         end = idx
         while end < len(lines) and _is_numeric_stat(lines[end].strip()):
             end += 1
-        if end - idx < 4:
-            continue
+        if end - idx >= 4 and _has_embedded_tweet_chrome(lines, idx):
+            next_text = next((line.strip() for line in lines[end:] if line.strip()), "")
+            if next_text and not _is_metric_only_line(next_text):
+                changed = True
+                idx = end
+                continue
 
-        next_text = ""
-        for candidate in lines[end:]:
-            next_text = candidate.strip()
-            if next_text:
-                break
-        if not next_text or _is_metric_only_line(next_text):
-            continue
+        cleaned.extend(lines[idx:end])
+        idx = end
 
-        return "\n".join([*lines[:idx], *lines[end:]])
+    return "\n".join(cleaned) if changed else None
 
-    return text
+
+def _has_embedded_tweet_chrome(lines: List[str], metric_idx: int) -> bool:
+    previous = [line.strip() for line in lines[max(0, metric_idx - 12) : metric_idx] if line.strip()]
+    if not any(HANDLE_ONLY_RE.match(line) for line in previous):
+        return False
+    return any(line == "·" or EMBEDDED_TWEET_DATE_RE.match(line) for line in previous)
 
 
 def _safe_filename(name: str) -> str:
@@ -2066,6 +2171,48 @@ def _build_single_tweet_markdown(
     return "\n".join(md_lines).strip() + "\n"
 
 
+def _build_thread_markdown(
+    thread_parts: List[tuple[str | None, TweetParts]],
+    tweet_url: str,
+    target_parts: TweetParts,
+    *,
+    author_handle: str | None,
+    capture_source: str = "liked",
+    posted_kind: str | None = None,
+) -> str:
+    normalized_capture_source = _normalize_capture_source(capture_source)
+    normalized_posted_kind = (
+        _normalize_posted_kind(posted_kind) if normalized_capture_source == "posted" else None
+    )
+    title = _build_title(target_parts.author_name, author_handle, kind="Thread")
+    front_matter = [
+        "---",
+        "source: tweet",
+        f"tweet_url: {tweet_url}",
+        f"tweet_capture_source: {normalized_capture_source}",
+        "tweet_thread: true",
+        f"tweet_thread_count: {len(thread_parts)}",
+    ]
+    if normalized_posted_kind:
+        front_matter.append(f"tweet_posted_kind: {normalized_posted_kind}")
+    if author_handle:
+        front_matter.append(f'tweet_author: "{author_handle}"')
+    if target_parts.author_name:
+        front_matter.append(f'tweet_author_name: "{target_parts.author_name}"')
+    front_matter.extend(["---", ""])
+
+    md_lines = [*front_matter, f"# {title}"]
+    if target_parts.avatar_url:
+        md_lines.extend(["", f"![avatar]({target_parts.avatar_url})"])
+
+    for section_url, parts in thread_parts:
+        link_url = section_url or tweet_url
+        md_lines.extend(["", "---", f"[View on X]({link_url})"])
+        _append_tweet_content_lines(md_lines, parts, strip_author=True)
+
+    return "\n".join(md_lines).strip() + "\n"
+
+
 def fetch_tweet_thread_markdown(
     url: str,
     *,
@@ -2271,42 +2418,14 @@ def fetch_tweet_thread_markdown(
             ), filename
 
         print(f"🧵 Thread downloaded ({len(thread_parts)} tweets).")
-        author_handle = effective_author_handle
-        title = _build_title(target_parts.author_name, author_handle, kind="Thread")
-        count = len(thread_parts)
-        front_matter = [
-            "---",
-            "source: tweet",
-            f"tweet_url: {url}",
-            f"tweet_capture_source: {normalized_capture_source}",
-            "tweet_thread: true",
-            f"tweet_thread_count: {count}",
-        ]
-        if normalized_posted_kind:
-            front_matter.append(f"tweet_posted_kind: {normalized_posted_kind}")
-        if author_handle:
-            front_matter.append(f'tweet_author: "{author_handle}"')
-        if target_parts.author_name:
-            front_matter.append(f'tweet_author_name: "{target_parts.author_name}"')
-        front_matter.extend(["---", ""])
-
-        md_lines = [*front_matter, f"# {title}"]
-        if target_parts.avatar_url:
-            md_lines.extend(["", f"![avatar]({target_parts.avatar_url})"])
-
-        for section_url, parts in thread_parts:
-            link_url = section_url or url
-            md_lines.extend(["", "---", f"[View on X]({link_url})"])
-            if parts.body_text:
-                md_lines.extend(["", parts.body_text])
-            if parts.trailing_media_lines:
-                md_lines.append("")
-                md_lines.extend(parts.trailing_media_lines)
-                md_lines.append("")
-            if _should_append_external_link(parts.body_text, parts.external_link):
-                md_lines.extend(["", f"Original link: {parts.external_link}"])
-
-        markdown = "\n".join(md_lines).strip() + "\n"
+        markdown = _build_thread_markdown(
+            thread_parts,
+            url,
+            target_parts,
+            author_handle=effective_author_handle,
+            capture_source=normalized_capture_source,
+            posted_kind=normalized_posted_kind,
+        )
         browser.close()
         return markdown, filename
 

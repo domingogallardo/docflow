@@ -25,6 +25,7 @@ from utils.tweet_to_markdown import (
     _select_thread_indices,
     _extract_thread_ids_from_payload,
     _build_single_tweet_markdown,
+    _build_thread_markdown,
     _build_filename,
     TweetParts,
     ReplyParentContext,
@@ -219,6 +220,31 @@ def test_strip_platform_inline_prompts_removes_glued_subscribe_prompt():
     assert result == "Aella @Aella_Girl\nImagine a circle."
 
 
+def test_strip_platform_inline_prompts_removes_standalone_subscribe_line():
+    raw = "\n".join(
+        [
+            "Nathan Lambert",
+            "@natolambert",
+            "Subscribe",
+            "So much rests on which trend line is more representative.",
+        ]
+    )
+
+    result = strip_platform_inline_prompts(
+        raw,
+        author_name="Nathan Lambert",
+        author_handle="@natolambert",
+    )
+
+    assert result == "\n".join(
+        [
+            "Nathan Lambert",
+            "@natolambert",
+            "So much rests on which trend line is more representative.",
+        ]
+    )
+
+
 def test_strip_platform_inline_prompts_preserves_meaningful_blank_lines():
     raw = "\n".join(
         [
@@ -237,11 +263,22 @@ def test_strip_platform_inline_prompts_removes_x_article_premium_prompt():
         [
             "Actual article ending.",
             "Want to publish your own Article?",
-            "Upgrade to Premium",
+            "Upgrade to Premium+",
         ]
     )
 
     assert strip_platform_inline_prompts(raw) == "Actual article ending."
+
+
+def test_strip_platform_inline_prompts_removes_glued_x_article_prompt_tail():
+    raw = (
+        "If you build something impressive, share it below."
+        "Want to publish your own Article?Upgrade to Premium+"
+    )
+
+    assert strip_platform_inline_prompts(raw) == (
+        "If you build something impressive, share it below."
+    )
 
 
 def test_strip_article_metric_preamble_removes_x_article_counters():
@@ -274,6 +311,31 @@ def test_strip_article_metric_preamble_removes_x_article_counters():
     )
 
 
+def test_strip_article_metric_preamble_removes_compact_x_article_counters():
+    raw = "\n".join(
+        [
+            "Lisan al Gaib",
+            "@scaling01",
+            "The AI model gap is bigger than you think142019430KLike all good articles, this one is a reaction.",
+            "",
+            "The main issue is benchmark shape.",
+        ]
+    )
+
+    result = strip_article_metric_preamble(raw, author_handle="@scaling01")
+
+    assert result == "\n".join(
+        [
+            "Lisan al Gaib",
+            "@scaling01",
+            "The AI model gap is bigger than you think",
+            "Like all good articles, this one is a reaction.",
+            "",
+            "The main issue is benchmark shape.",
+        ]
+    )
+
+
 def test_strip_article_metric_preamble_leaves_regular_numeric_body():
     raw = "\n".join(
         [
@@ -282,6 +344,72 @@ def test_strip_article_metric_preamble_leaves_regular_numeric_body():
             "42",
             "is still the answer.",
             "More text.",
+        ]
+    )
+
+    assert strip_article_metric_preamble(raw, author_handle="@author") == raw
+
+
+def test_strip_article_metric_preamble_keeps_compact_year_in_title():
+    raw = "\n".join(
+        [
+            "Author",
+            "@author",
+            "Model release 2026Introduces lower latency.",
+            "More text.",
+        ]
+    )
+
+    assert strip_article_metric_preamble(raw, author_handle="@author") == raw
+
+
+def test_strip_article_metric_preamble_removes_embedded_tweet_metric_block():
+    raw = "\n".join(
+        [
+            "Chris Hayduk",
+            "@ChrisHayduk",
+            "On the Looped Transformers Controversy",
+            "Chris Hayduk",
+            "@ChrisHayduk",
+            "·",
+            "Apr 10",
+            "I strongly suspect that Claude Mythos is a looped language model.",
+            "111",
+            "422",
+            "4K",
+            "595K",
+            "This was not meant to be taken as fact.",
+        ]
+    )
+
+    result = strip_article_metric_preamble(raw, author_handle="@ChrisHayduk")
+
+    assert result == "\n".join(
+        [
+            "Chris Hayduk",
+            "@ChrisHayduk",
+            "On the Looped Transformers Controversy",
+            "Chris Hayduk",
+            "@ChrisHayduk",
+            "·",
+            "Apr 10",
+            "I strongly suspect that Claude Mythos is a looped language model.",
+            "This was not meant to be taken as fact.",
+        ]
+    )
+
+
+def test_strip_article_metric_preamble_keeps_numeric_body_without_embedded_tweet_chrome():
+    raw = "\n".join(
+        [
+            "Author",
+            "@author",
+            "Useful thresholds:",
+            "111",
+            "422",
+            "4K",
+            "595K",
+            "Those thresholds are intentionally strange.",
         ]
     )
 
@@ -737,6 +865,42 @@ def test_build_single_tweet_markdown_skips_duplicate_external_link():
     )
     md = _build_single_tweet_markdown(parts, "https://x.com/autor/status/123")
     assert "Original link: https://example.com/post" not in md
+
+
+def test_build_thread_markdown_strips_repeated_author_headers():
+    first = TweetParts(
+        author_name="Jack Cole",
+        author_handle="@MindsAI_Jack",
+        body_text="Jack Cole\n@MindsAI_Jack\n1/ Humpty Dumpty sat on a wall.",
+        avatar_url="https://pbs.twimg.com/profile_images/avatar_normal.jpg",
+        trailing_media_lines=[],
+        media_present=False,
+        external_link=None,
+    )
+    second = TweetParts(
+        author_name="Jack Cole",
+        author_handle="@MindsAI_Jack",
+        body_text="Jack Cole\n@MindsAI_Jack\n2/ The agent spun up 400 subagents.",
+        avatar_url=None,
+        trailing_media_lines=[],
+        media_present=False,
+        external_link=None,
+    )
+
+    md = _build_thread_markdown(
+        [
+            ("https://x.com/MindsAI_Jack/status/1", first),
+            ("https://x.com/MindsAI_Jack/status/2", second),
+        ],
+        "https://x.com/MindsAI_Jack/status/2",
+        first,
+        author_handle="@MindsAI_Jack",
+    )
+
+    assert "# Thread by Jack Cole (@MindsAI_Jack)" in md
+    assert md.count("Jack Cole\n@MindsAI_Jack") == 0
+    assert "1/ Humpty Dumpty sat on a wall." in md
+    assert "2/ The agent spun up 400 subagents." in md
 
 
 def test_wait_for_tweet_detail_returns_payload():

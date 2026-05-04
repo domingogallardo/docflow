@@ -14,7 +14,7 @@ import html
 import os
 import re
 from dataclasses import dataclass
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Iterable
 
@@ -23,13 +23,28 @@ import markdown
 import utils as U
 from utils.highlight_store import load_highlights_for_path, save_highlights_for_path
 from utils.site_paths import rel_path_from_abs
+from utils.site_state import (
+    load_done_state,
+    load_reading_state,
+    save_done_state,
+    save_reading_state,
+)
 try:
     from utils.tweet_to_markdown import (
+        strip_article_metric_preamble as _strip_article_metric_preamble,
         strip_platform_inline_prompts as _strip_platform_inline_prompts,
         strip_tweet_stats as _strip_tweet_stats,
     )
 except Exception:  # pragma: no cover - defensive fallback
-    def _strip_platform_inline_prompts(text: str) -> str:
+    def _strip_article_metric_preamble(text: str, *, author_handle: str | None = None) -> str:
+        return text
+
+    def _strip_platform_inline_prompts(
+        text: str,
+        *,
+        author_name: str | None = None,
+        author_handle: str | None = None,
+    ) -> str:
         return text
 
     def _strip_tweet_stats(text: str) -> str:
@@ -364,6 +379,7 @@ def _clean_body(body: str, meta: dict[str, str] | None = None) -> str:
         author_name=author_name,
         author_handle=author_handle,
     )
+    text = _strip_article_metric_preamble(text, author_handle=author_handle)
     text = _strip_stats_by_sections(text)
     text = _split_inline_quoted_tweets(text)
     text = _blockquote_quoted_sections(text)
@@ -1006,6 +1022,22 @@ def _merge_highlight_lists(*highlight_lists: list[dict[str, object]]) -> list[di
     return merged
 
 
+def _utc_now_iso() -> str:
+    return (
+        datetime.now(timezone.utc)
+        .replace(microsecond=0)
+        .isoformat()
+        .replace("+00:00", "Z")
+    )
+
+
+def _select_iso_timestamp(values: Iterable[object], *, latest: bool) -> str | None:
+    timestamps = [value.strip() for value in values if isinstance(value, str) and value.strip()]
+    if not timestamps:
+        return None
+    return max(timestamps) if latest else min(timestamps)
+
+
 def _source_tweet_html_paths(
     source_markdown: Iterable[Path],
     *,
@@ -1110,21 +1142,142 @@ def _delete_daily_source_html_only(
     return deleted_html
 
 
+def _port_source_stage_to_consolidated(
+    tweets_dir: Path,
+    source_markdown: Iterable[Path],
+    *,
+    destination_html: Path | None,
+    keep_paths: Iterable[Path] = (),
+) -> tuple[int, int, str]:
+    if destination_html is None:
+        return 0, 0, ""
+
+    base_dir = _state_base_dir_for_tweets_dir(tweets_dir)
+    destination_rel = _safe_rel_path(base_dir, destination_html)
+    if base_dir is None or destination_rel is None:
+        return 0, 0, ""
+
+    source_rels = [
+        rel_path
+        for rel_path in (
+            _safe_rel_path(base_dir, html_path)
+            for html_path in _source_tweet_html_paths(source_markdown, keep_paths=keep_paths)
+        )
+        if rel_path is not None
+    ]
+    if not source_rels:
+        return 0, 0, ""
+
+    done_state = load_done_state(base_dir)
+    done_items = done_state.get("items", {})
+    if not isinstance(done_items, dict):
+        done_items = {}
+        done_state["items"] = done_items
+
+    reading_state = load_reading_state(base_dir)
+    reading_items = reading_state.get("items", {})
+    if not isinstance(reading_items, dict):
+        reading_items = {}
+        reading_state["items"] = reading_items
+
+    source_done_entries = [
+        entry for rel_path in source_rels if isinstance((entry := done_items.get(rel_path)), dict)
+    ]
+    source_reading_entries = [
+        entry for rel_path in source_rels if isinstance((entry := reading_items.get(rel_path)), dict)
+    ]
+    if not source_done_entries and not source_reading_entries:
+        return 0, 0, ""
+
+    removed_done = 0
+    removed_reading = 0
+    destination_stage = ""
+
+    if source_done_entries:
+        destination_stage = "done"
+        destination_entry = done_items.get(destination_rel)
+        if not isinstance(destination_entry, dict):
+            destination_entry = {}
+            done_items[destination_rel] = destination_entry
+
+        if "done_at" not in destination_entry:
+            destination_entry["done_at"] = (
+                _select_iso_timestamp(
+                    (entry.get("done_at") for entry in source_done_entries),
+                    latest=True,
+                )
+                or _utc_now_iso()
+            )
+
+        if "reading_started_at" not in destination_entry:
+            reading_started_at = _select_iso_timestamp(
+                [
+                    *(entry.get("reading_started_at") for entry in source_done_entries),
+                    *(entry.get("reading_at") for entry in source_reading_entries),
+                ],
+                latest=False,
+            )
+            if reading_started_at:
+                destination_entry["reading_started_at"] = reading_started_at
+
+        reading_items.pop(destination_rel, None)
+
+    elif source_reading_entries and destination_rel not in done_items:
+        destination_stage = "reading"
+        destination_entry = reading_items.get(destination_rel)
+        if not isinstance(destination_entry, dict):
+            destination_entry = {}
+            reading_items[destination_rel] = destination_entry
+
+        if "reading_at" not in destination_entry:
+            destination_entry["reading_at"] = (
+                _select_iso_timestamp(
+                    (entry.get("reading_at") for entry in source_reading_entries),
+                    latest=False,
+                )
+                or _utc_now_iso()
+            )
+
+    for rel_path in source_rels:
+        if done_items.pop(rel_path, None) is not None:
+            removed_done += 1
+        if reading_items.pop(rel_path, None) is not None:
+            removed_reading += 1
+
+    save_done_state(base_dir, done_state)
+    save_reading_state(base_dir, reading_state)
+    return removed_done, removed_reading, destination_stage
+
+
 def _cleanup_after_daily_consolidation(
     tweets_dir: Path,
     source_markdown: Iterable[Path],
     *,
     keep_paths: Iterable[Path],
     destination_html: Path | None,
-) -> tuple[int, int, int]:
+) -> tuple[int, int, int, int, int, str]:
+    source_markdown_list = list(source_markdown)
     migrated_docs, migrated_highlights = _port_source_highlights_to_consolidated(
         tweets_dir,
-        source_markdown,
+        source_markdown_list,
         destination_html=destination_html,
         keep_paths=keep_paths,
     )
-    deleted_html = _delete_daily_source_html_only(source_markdown, keep_paths=keep_paths)
-    return deleted_html, migrated_docs, migrated_highlights
+    migrated_done, migrated_reading, migrated_stage = _port_source_stage_to_consolidated(
+        tweets_dir,
+        source_markdown_list,
+        destination_html=destination_html,
+        keep_paths=keep_paths,
+    )
+    deleted_html = _delete_daily_source_html_only(source_markdown_list, keep_paths=keep_paths)
+    return (
+        deleted_html,
+        migrated_docs,
+        migrated_highlights,
+        migrated_done,
+        migrated_reading,
+        migrated_stage,
+    )
 
 
 def _heading_for_capture_source(capture_source: str) -> str:
@@ -1268,7 +1421,14 @@ def _run_cleanup_for_existing_daily_consolidated(
     )
     keep_paths = [path for pair in pairs for path in pair]
     destination_html = pairs[0][1]
-    deleted_html, migrated_docs, migrated_highlights = _cleanup_after_daily_consolidation(
+    (
+        deleted_html,
+        migrated_docs,
+        migrated_highlights,
+        migrated_done,
+        migrated_reading,
+        migrated_stage,
+    ) = _cleanup_after_daily_consolidation(
         tweets_dir,
         source_markdown,
         keep_paths=keep_paths,
@@ -1282,6 +1442,12 @@ def _run_cleanup_for_existing_daily_consolidated(
         print(
             f"🟡 Migrated {migrated_highlights} highlight(s) from "
             f"{migrated_docs} source tweet HTML file(s) to {destination_html.name}"
+        )
+    if migrated_stage:
+        migrated_total = migrated_done + migrated_reading
+        print(
+            f"📚 Migrated {migrated_total} reading/done state entries "
+            f"to {destination_html.name} as {migrated_stage}"
         )
     return 0
 
@@ -1324,7 +1490,14 @@ def _build_daily_consolidated_from_markdown(
     _set_mtime(md_path, consolidated_mtime)
     _set_mtime(html_path, consolidated_mtime)
 
-    deleted_html, migrated_docs, migrated_highlights = _cleanup_after_daily_consolidation(
+    (
+        deleted_html,
+        migrated_docs,
+        migrated_highlights,
+        migrated_done,
+        migrated_reading,
+        migrated_stage,
+    ) = _cleanup_after_daily_consolidation(
         tweets_dir,
         source_markdown,
         keep_paths=(md_path, html_path),
@@ -1339,6 +1512,12 @@ def _build_daily_consolidated_from_markdown(
         print(
             f"🟡 Migrated {migrated_highlights} highlight(s) from "
             f"{migrated_docs} source tweet HTML file(s) to {html_path.name}"
+        )
+    if migrated_stage:
+        migrated_total = migrated_done + migrated_reading
+        print(
+            f"📚 Migrated {migrated_total} reading/done state entries "
+            f"to {html_path.name} as {migrated_stage}"
         )
     return 0
 

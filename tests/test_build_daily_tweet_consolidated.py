@@ -7,6 +7,7 @@ from pathlib import Path
 
 from utils import build_daily_tweet_consolidated as mod
 from utils import highlight_store
+from utils import site_state
 
 
 def _set_mtime_for_day(path: Path, day: str, *, hour: int) -> float:
@@ -232,6 +233,116 @@ def test_main_ports_source_tweet_highlights_to_consolidated_html(
         base_dir,
         "Tweets/Tweets 2026/Tweet - user-2.html",
     )["highlights"] == []
+
+
+def test_main_ports_source_reading_state_to_consolidated_html(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    day = "2026-02-13"
+    base_dir = tmp_path
+    tweets_dir = base_dir / "Tweets" / "Tweets 2026"
+    tweets_dir.mkdir(parents=True)
+
+    _write_tweet_pair(tweets_dir, "Tweet - user-1", day, hour=10)
+    _write_tweet_pair(tweets_dir, "Tweet - user-2", day, hour=11)
+
+    site_state.save_reading_state(
+        base_dir,
+        {
+            "version": site_state.STATE_VERSION,
+            "items": {
+                "Tweets/Tweets 2026/Tweet - user-1.html": {
+                    "reading_at": "2026-02-13T10:30:00Z",
+                },
+                "Tweets/Tweets 2026/Tweet - user-2.html": {
+                    "reading_at": "2026-02-13T10:15:00Z",
+                },
+            },
+        },
+    )
+
+    args = argparse.Namespace(
+        day=day,
+        year=2026,
+        tweets_dir=tweets_dir,
+        output_base=None,
+        capture_source="liked",
+        cleanup_if_consolidated=False,
+    )
+    monkeypatch.setattr(mod, "parse_args", lambda: args)
+    monkeypatch.setattr(mod.cfg, "BASE_DIR", base_dir)
+
+    exit_code = mod.main()
+    assert exit_code == 0
+
+    reading_items = site_state.load_reading_state(base_dir)["items"]
+    assert reading_items == {
+        f"Tweets/Tweets 2026/Tweets {day}.html": {
+            "reading_at": "2026-02-13T10:15:00Z",
+        }
+    }
+    assert site_state.load_done_state(base_dir)["items"] == {}
+
+
+def test_main_ports_source_done_state_to_consolidated_html_and_done_wins(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    day = "2026-02-13"
+    base_dir = tmp_path
+    tweets_dir = base_dir / "Tweets" / "Tweets 2026"
+    tweets_dir.mkdir(parents=True)
+
+    _write_tweet_pair(tweets_dir, "Tweet - reading-source", day, hour=10)
+    _write_tweet_pair(tweets_dir, "Tweet - done-source", day, hour=11)
+
+    site_state.save_reading_state(
+        base_dir,
+        {
+            "version": site_state.STATE_VERSION,
+            "items": {
+                "Tweets/Tweets 2026/Tweet - reading-source.html": {
+                    "reading_at": "2026-02-13T09:00:00Z",
+                },
+            },
+        },
+    )
+    site_state.save_done_state(
+        base_dir,
+        {
+            "version": site_state.STATE_VERSION,
+            "items": {
+                "Tweets/Tweets 2026/Tweet - done-source.html": {
+                    "done_at": "2026-02-13T12:00:00Z",
+                    "reading_started_at": "2026-02-13T08:00:00Z",
+                },
+            },
+        },
+    )
+
+    args = argparse.Namespace(
+        day=day,
+        year=2026,
+        tweets_dir=tweets_dir,
+        output_base=None,
+        capture_source="liked",
+        cleanup_if_consolidated=False,
+    )
+    monkeypatch.setattr(mod, "parse_args", lambda: args)
+    monkeypatch.setattr(mod.cfg, "BASE_DIR", base_dir)
+
+    exit_code = mod.main()
+    assert exit_code == 0
+
+    assert site_state.load_reading_state(base_dir)["items"] == {}
+    done_items = site_state.load_done_state(base_dir)["items"]
+    assert done_items == {
+        f"Tweets/Tweets 2026/Tweets {day}.html": {
+            "done_at": "2026-02-13T12:00:00Z",
+            "reading_started_at": "2026-02-13T08:00:00Z",
+        }
+    }
 
 
 def test_main_keeps_output_files_when_output_base_matches_input_stem(tmp_path: Path, monkeypatch) -> None:
@@ -513,6 +624,61 @@ def test_clean_body_removes_glued_subscribe_prompt_and_formats_poll() -> None:
     assert "- On the red: 80.2%" in cleaned
     assert "- On the yellow: 19.8%" in cleaned
     assert "7,864 votes · 6 days left" in cleaned
+
+
+def test_clean_body_removes_standalone_subscribe_prompt() -> None:
+    body = "\n".join(
+        [
+            "# Tweet by Nathan Lambert (@natolambert)",
+            "",
+            "[View on X](https://x.com/natolambert/status/1)",
+            "",
+            "Nathan Lambert",
+            "@natolambert",
+            "Subscribe",
+            "So much rests on which of these trend lines is more representative.",
+        ]
+    )
+
+    cleaned = mod._clean_body(
+        body,
+        {
+            "tweet_author_name": "Nathan Lambert",
+            "tweet_author": "@natolambert",
+        },
+    )
+
+    assert "Subscribe" not in cleaned
+    assert "So much rests on which of these trend lines" in cleaned
+
+
+def test_clean_body_removes_compact_article_metrics_and_prompt_tail() -> None:
+    body = "\n".join(
+        [
+            "# Tweet by Lisan al Gaib (@scaling01)",
+            "",
+            "[View on X](https://x.com/scaling01/status/1)",
+            "",
+            "Lisan al Gaib",
+            "@scaling01",
+            "The AI model gap is bigger than you think142019430KLike all good articles, this one is a reaction.",
+            "If you build something impressive, share it below.Want to publish your own Article?Upgrade to Premium+",
+        ]
+    )
+
+    cleaned = mod._clean_body(
+        body,
+        {
+            "tweet_author_name": "Lisan al Gaib",
+            "tweet_author": "@scaling01",
+        },
+    )
+
+    assert "142019430K" not in cleaned
+    assert "Want to publish" not in cleaned
+    assert "Upgrade to Premium" not in cleaned
+    assert "The AI model gap is bigger than you think" in cleaned
+    assert "Like all good articles, this one is a reaction." in cleaned
 
 
 def test_clean_body_renders_inline_quoted_tweet_as_historical_section() -> None:
