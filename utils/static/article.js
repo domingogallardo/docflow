@@ -446,11 +446,26 @@
     var el = node.parentElement;
     while (el) {
       if (el.getAttribute && el.getAttribute('data-articlejs-ui') === '1') return true;
+      if (el.id === 'dg-overlay') return true;
       var tag = (el.nodeName || '').toLowerCase();
       if (tag === 'script' || tag === 'style' || tag === 'noscript') return true;
       el = el.parentElement;
     }
     return false;
+  }
+
+  function contextMatches(fullText, idx, targetLength, prefix, suffix, mode) {
+    if (prefix && mode !== 'suffix') {
+      var actualPrefix = fullText.slice(Math.max(0, idx - prefix.length), idx);
+      var expectedPrefix = prefix.slice(prefix.length - actualPrefix.length);
+      if (actualPrefix !== expectedPrefix) return false;
+    }
+    if (suffix && mode !== 'prefix') {
+      var actualSuffix = fullText.slice(idx + targetLength, idx + targetLength + suffix.length);
+      var expectedSuffix = suffix.slice(0, actualSuffix.length);
+      if (actualSuffix !== expectedSuffix) return false;
+    }
+    return true;
   }
 
   function buildTextIndex(root) {
@@ -479,24 +494,32 @@
 
   function findMatchIndex(fullText, target, prefix, suffix) {
     if (!target) return -1;
+    var candidates = [];
     var start = 0;
     while (true) {
-      var idx = fullText.indexOf(target, start);
-      if (idx === -1) return -1;
-      var ok = true;
-      if (prefix) {
-        var actualPrefix = fullText.slice(Math.max(0, idx - prefix.length), idx);
-        var expectedPrefix = prefix.slice(prefix.length - actualPrefix.length);
-        if (actualPrefix !== expectedPrefix) ok = false;
-      }
-      if (suffix && ok) {
-        var actualSuffix = fullText.slice(idx + target.length, idx + target.length + suffix.length);
-        var expectedSuffix = suffix.slice(0, actualSuffix.length);
-        if (actualSuffix !== expectedSuffix) ok = false;
-      }
-      if (ok) return idx;
-      start = idx + target.length;
+      var found = fullText.indexOf(target, start);
+      if (found === -1) break;
+      candidates.push(found);
+      start = found + target.length;
     }
+    if (!candidates.length) return -1;
+
+    var modes = ['exact'];
+    if (prefix) modes.push('prefix');
+    if (suffix) modes.push('suffix');
+    modes.push('text');
+
+    for (var modeIndex = 0; modeIndex < modes.length; modeIndex++) {
+      var mode = modes[modeIndex];
+      for (var i = 0; i < candidates.length; i++) {
+        var idx = candidates[i];
+        if (mode === 'text' || contextMatches(fullText, idx, target.length, prefix || '', suffix || '', mode)) {
+          return idx;
+        }
+      }
+    }
+
+    return -1;
   }
 
   function rangeFromIndices(indexData, startIndex, endIndex) {

@@ -8,6 +8,7 @@ import pytest
 
 from utils import docflow_server
 from utils.highlight_store import load_highlights_for_path, save_highlights_for_path
+from utils.site_state import set_done_path
 
 
 def _start_server(base_dir: Path) -> tuple[ThreadingHTTPServer, int]:
@@ -147,8 +148,66 @@ def test_highlight_selection_same_text_node_mid_tail_span(tmp_path: Path):
         assert target in result["byId"].values()
 
         payload = load_highlights_for_path(base, rel)
-        texts = [item.get("text") for item in payload.get("highlights", []) if isinstance(item, dict)]
+        highlights = [item for item in payload.get("highlights", []) if isinstance(item, dict)]
+        texts = [item.get("text") for item in highlights]
         assert target in texts
+        assert all("Inside Browse" not in str(item.get("suffix", "")) for item in highlights)
+    finally:
+        server.shutdown()
+        server.server_close()
+
+
+def test_done_page_rehydrates_highlight_with_stale_overlay_suffix(tmp_path: Path):
+    playwright = pytest.importorskip("playwright.sync_api")
+    sync_playwright = playwright.sync_playwright
+
+    base = tmp_path / "base"
+    posts = base / "Posts" / "Posts 2026"
+    posts.mkdir(parents=True)
+
+    target = "selected text that should stay highlighted after done transition"
+    (posts / "doc.html").write_text(
+        f"<html><body><p>Before</p><hr><p>yes {target}</p></body></html>",
+        encoding="utf-8",
+    )
+
+    rel = "Posts/Posts 2026/doc.html"
+    save_highlights_for_path(
+        base,
+        rel,
+        {
+            "highlights": [
+                {
+                    "id": "h_stale",
+                    "text": target,
+                    "prefix": "Beforeyes ",
+                    "suffix": "Inside BrowsePDFMove to ReadingMove to Done",
+                    "created_at": "2026-05-04T00:00:00Z",
+                }
+            ]
+        },
+    )
+    set_done_path(base, rel)
+
+    server, port = _start_server(base)
+    try:
+        with sync_playwright() as p:
+            browser = p.chromium.launch(headless=True)
+            page = browser.new_page()
+            page.goto(f"http://127.0.0.1:{port}/posts/raw/Posts%202026/doc.html", wait_until="domcontentloaded")
+            page.wait_for_selector("#dg-overlay")
+            progress = page.evaluate("() => window.ArticleJS.getHighlightProgress()")
+            rendered = page.evaluate(
+                """
+                () => [...document.querySelectorAll('span.articlejs-highlight[data-highlight-id="h_stale"]')]
+                  .map((node) => node.textContent || '')
+                  .join('')
+                """
+            )
+            browser.close()
+
+        assert progress["total"] == 1
+        assert rendered == target
     finally:
         server.shutdown()
         server.server_close()
