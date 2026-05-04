@@ -57,7 +57,11 @@ class DocumentProcessor:
         self.instapaper_processor = InstapaperProcessor(self.incoming, self.posts_dest)
         self.podcast_processor = PodcastProcessor(self.incoming, self.podcasts_dest)
         self.image_processor = ImageProcessor(self.incoming, self.images_dest)
-        self.markdown_processor = MarkdownProcessor(self.incoming, self.posts_dest)
+        self.markdown_processor = MarkdownProcessor(
+            self.incoming,
+            self.posts_dest,
+            source_dirs=(cfg.ICLOUD_DOWNLOADS_DIR,),
+        )
         self.tweet_processor = MarkdownProcessor(self.incoming, self.tweets_dest)
         self._history: List[Path] = []
 

@@ -4,6 +4,7 @@ from datetime import datetime
 
 DOCPIPE_YEAR_ENV = "DOCPIPE_YEAR"
 DOCFLOW_BASE_DIR_ENV = "DOCFLOW_BASE_DIR"
+DOCFLOW_ICLOUD_DOWNLOADS_DIR_ENV = "DOCFLOW_ICLOUD_DOWNLOADS_DIR"
 
 
 def _system_year() -> int:
@@ -36,6 +37,12 @@ def _require_path_env(var_name: str) -> Path:
 BASE_DIR = _require_path_env(DOCFLOW_BASE_DIR_ENV)
 INCOMING = BASE_DIR / "Incoming"
 PROCESSED_HISTORY = INCOMING / "processed_history.txt"
+ICLOUD_DOWNLOADS_DIR = Path(
+    os.getenv(
+        DOCFLOW_ICLOUD_DOWNLOADS_DIR_ENV,
+        "~/Library/Mobile Documents/com~apple~CloudDocs/Downloads",
+    )
+).expanduser()
 
 OPENAI_KEY = os.getenv("OPENAI_API_KEY")
 INSTAPAPER_USERNAME = os.environ.get("INSTAPAPER_USERNAME")

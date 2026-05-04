@@ -127,6 +127,75 @@ def test_markdown_processor_moves_existing_html(tmp_path):
     assert (destination / "nota.html").exists()
 
 
+def test_markdown_processor_imports_markdown_from_source_dir(tmp_path):
+    incoming = tmp_path / "Incoming"
+    incoming.mkdir()
+    downloads = tmp_path / "iCloud Downloads"
+    downloads.mkdir()
+    destination = tmp_path / "Posts" / "Posts 2025"
+
+    downloaded_md = downloads / "downloaded.md"
+    downloaded_md.write_text("# Downloaded\n\nContenido", encoding="utf-8")
+
+    processor = MarkdownProcessor(incoming, destination, source_dirs=(downloads,))
+    processor.title_updater.update_titles = lambda files, renamer: None
+    moved = processor.process_markdown()
+
+    moved_names = {path.name for path in moved}
+    assert "downloaded.md" in moved_names
+    assert "downloaded.html" in moved_names
+    assert not downloaded_md.exists()
+    assert not (incoming / "downloaded.md").exists()
+    assert (destination / "downloaded.md").exists()
+    assert (destination / "downloaded.html").exists()
+
+
+def test_markdown_processor_import_uses_unique_name_for_collisions(tmp_path):
+    incoming = tmp_path / "Incoming"
+    incoming.mkdir()
+    downloads = tmp_path / "iCloud Downloads"
+    downloads.mkdir()
+    destination = tmp_path / "Posts" / "Posts 2025"
+
+    (incoming / "nota.md").write_text("# Existing\n\nIncoming", encoding="utf-8")
+    (downloads / "nota.md").write_text("# Downloaded\n\nDownloads", encoding="utf-8")
+
+    processor = MarkdownProcessor(incoming, destination, source_dirs=(downloads,))
+    processor.title_updater.update_titles = lambda files, renamer: None
+    processor.process_markdown()
+
+    assert (destination / "nota.md").exists()
+    assert (destination / "nota.html").exists()
+    assert (destination / "nota (1).md").exists()
+    assert (destination / "nota (1).html").exists()
+
+
+def test_markdown_processor_does_not_import_reserved_source_markdown(tmp_path):
+    incoming = tmp_path / "Incoming"
+    incoming.mkdir()
+    downloads = tmp_path / "iCloud Downloads"
+    downloads.mkdir()
+    destination = tmp_path / "Posts" / "Posts 2025"
+
+    podcast_md = downloads / "snipd.md"
+    podcast_md.write_text(
+        """---
+source: podcast
+---
+
+# Podcast
+""",
+        encoding="utf-8",
+    )
+
+    processor = MarkdownProcessor(incoming, destination, source_dirs=(downloads,))
+    processor.title_updater.update_titles = lambda files, renamer: None
+    moved = processor.process_markdown()
+
+    assert moved == []
+    assert podcast_md.exists()
+
+
 def test_markdown_processor_applies_ai_titles(tmp_path):
     incoming = tmp_path / "Incoming"
     incoming.mkdir()

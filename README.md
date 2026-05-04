@@ -124,6 +124,9 @@ The shared cron log is:
 - `BASE_DIR` comes from environment variable `DOCFLOW_BASE_DIR`.
 - Canonical place to set it: `~/.docflow_env`.
 - If `DOCFLOW_BASE_DIR` is missing, importing `config.py` fails with a clear error.
+- Generic Markdown processing also imports `.md` files from iCloud Downloads
+  (`~/Library/Mobile Documents/com~apple~CloudDocs/Downloads`). Override with
+  `DOCFLOW_ICLOUD_DOWNLOADS_DIR` if your folder lives elsewhere.
 - For direct commands from this repo, load your environment first:
 
 ```bash
@@ -134,6 +137,7 @@ Recommended `~/.docflow_env` snippet:
 
 ```bash
 export DOCFLOW_BASE_DIR="/path/to/BASE_DIR"
+export DOCFLOW_ICLOUD_DOWNLOADS_DIR="$HOME/Library/Mobile Documents/com~apple~CloudDocs/Downloads"
 export INTRANET_BASE_DIR="$DOCFLOW_BASE_DIR"
 export HIGHLIGHTS_DAILY_DIR="/path/to/Obsidian/Subrayados"
 export DONE_LINKS_FILE="/path/to/Obsidian/Leidos.md"

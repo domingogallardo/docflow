@@ -3,10 +3,12 @@
 from __future__ import annotations
 
 from pathlib import Path
+import shutil
 from typing import Iterable, List
 
 import config as cfg
 import utils as U
+from path_utils import unique_path
 from title_ai import TitleAIUpdater, rename_markdown_pair
 from openai_client import build_openai_client
 
@@ -16,14 +18,22 @@ class MarkdownProcessor:
 
     RESERVED_SOURCES = {"instapaper", "podcast", "tweet"}
 
-    def __init__(self, incoming_dir: Path, destination_dir: Path):
+    def __init__(
+        self,
+        incoming_dir: Path,
+        destination_dir: Path,
+        *,
+        source_dirs: Iterable[Path] = (),
+    ):
         self.incoming_dir = incoming_dir
         self.destination_dir = destination_dir
+        self.source_dirs = [Path(path).expanduser() for path in source_dirs]
         openai_client = build_openai_client(cfg.OPENAI_KEY)
         self.title_updater = TitleAIUpdater(openai_client)
 
     def process_markdown(self) -> List[Path]:
         """Convert Markdown to HTML, apply margins, and move both files to the yearly destination."""
+        self._import_source_markdown()
         markdown_files = [
             path
             for path in self.incoming_dir.glob("*.md")
@@ -38,6 +48,37 @@ class MarkdownProcessor:
             markdown_files,
             context="📝 Processing Markdown files...",
         )
+
+    def _import_source_markdown(self) -> List[Path]:
+        """Move generic Markdown from configured external folders into Incoming/."""
+        imported: List[Path] = []
+        self.incoming_dir.mkdir(parents=True, exist_ok=True)
+
+        for source_dir in self.source_dirs:
+            if not source_dir.is_dir():
+                continue
+            try:
+                same_dir = source_dir.resolve() == self.incoming_dir.resolve()
+            except OSError:
+                same_dir = False
+            if same_dir:
+                continue
+
+            for source_path in sorted(source_dir.glob("*.md")):
+                if not self._is_generic_markdown(source_path):
+                    continue
+
+                destination = unique_path(self.incoming_dir / source_path.name)
+                try:
+                    shutil.move(str(source_path), destination)
+                except Exception as exc:
+                    print(f"❌ Error importing Markdown from {source_path}: {exc}")
+                    continue
+
+                imported.append(destination)
+                print(f"📥 Imported Markdown from iCloud Downloads: {destination.name}")
+
+        return imported
 
     def process_tweet_markdown_subset(self, markdown_files: Iterable[Path]) -> List[Path]:
         """Process a specific tweet Markdown subset (for example, newly downloaded tweets)."""
