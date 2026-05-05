@@ -2,6 +2,7 @@
 """MarkdownProcessor - convert generic Markdown to HTML and archive alongside Instapaper."""
 from __future__ import annotations
 
+from datetime import datetime
 from pathlib import Path
 import shutil
 from typing import Iterable, List
@@ -56,29 +57,73 @@ class MarkdownProcessor:
 
         for source_dir in self.source_dirs:
             if not source_dir.is_dir():
+                self._write_import_audit(f"source missing or not a directory: {source_dir}")
                 continue
             try:
                 same_dir = source_dir.resolve() == self.incoming_dir.resolve()
             except OSError:
                 same_dir = False
             if same_dir:
+                self._write_import_audit(f"source skipped because it is Incoming: {source_dir}")
                 continue
 
-            for source_path in sorted(source_dir.glob("*.md")):
+            markdown_candidates = sorted(source_dir.glob("*.md"))
+            placeholder_candidates = sorted(
+                path
+                for path in source_dir.glob("*.icloud")
+                if ".md" in path.name.lower() or ".markdown" in path.name.lower()
+            )
+            self._write_import_audit(
+                f"scanning {source_dir}: "
+                f"{len(markdown_candidates)} markdown candidate(s), "
+                f"{len(placeholder_candidates)} iCloud placeholder candidate(s)"
+            )
+            for placeholder_path in placeholder_candidates:
+                self._write_import_audit(f"placeholder not importable yet: {placeholder_path.name}")
+
+            imported_from_source = 0
+            ignored_from_source = 0
+            for source_path in markdown_candidates:
                 if not self._is_generic_markdown(source_path):
+                    ignored_from_source += 1
+                    source = self._front_matter_source(source_path) or "reserved/non-generic"
+                    self._write_import_audit(f"ignored Markdown ({source}): {source_path.name}")
                     continue
 
                 destination = unique_path(self.incoming_dir / source_path.name)
                 try:
                     shutil.move(str(source_path), destination)
                 except Exception as exc:
+                    message = f"error importing Markdown from {source_path}: {exc}"
                     print(f"❌ Error importing Markdown from {source_path}: {exc}")
+                    self._write_import_audit(message)
                     continue
 
                 imported.append(destination)
+                imported_from_source += 1
                 print(f"📥 Imported Markdown from iCloud Downloads: {destination.name}")
+                self._write_import_audit(
+                    f"imported Markdown: {source_path.name} -> {destination}"
+                )
+
+            self._write_import_audit(
+                f"finished {source_dir}: imported {imported_from_source}, ignored {ignored_from_source}"
+            )
 
         return imported
+
+    def _write_import_audit(self, message: str) -> None:
+        """Append an import audit entry and mirror it to stdout for cron logs."""
+        timestamp = datetime.now().isoformat(timespec="seconds")
+        line = f"{timestamp} markdown {message}"
+        print(f"🧾 Markdown import audit: {message}")
+        try:
+            audit_path = self.incoming_dir / "import_audit.log"
+            audit_path.parent.mkdir(parents=True, exist_ok=True)
+            with audit_path.open("a", encoding="utf-8") as fh:
+                fh.write(line + "\n")
+        except Exception as exc:
+            print(f"⚠️ Could not write Markdown import audit: {exc}")
 
     def process_tweet_markdown_subset(self, markdown_files: Iterable[Path]) -> List[Path]:
         """Process a specific tweet Markdown subset (for example, newly downloaded tweets)."""

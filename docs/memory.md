@@ -117,6 +117,7 @@ This file stores stable, reusable operational notes for future agent runs.
 - Imported PDFs are moved into `Incoming/`, then moved to `Pdfs/Pdfs <YEAR>/` by `PDFProcessor`.
 - Use `bash bin/docflow.sh md --year YYYY` or `bash bin/docflow.sh pdfs --year YYYY` for day-to-day runs so the intranet indexes are rebuilt after processing. `python process_documents.py ... --year YYYY` processes files but does not rebuild `_site`.
 - Successful imports disappear from iCloud Downloads; if a later download recreates the same file there, it is treated as a new input.
+- iCloud import scans append audit entries to `BASE_DIR/Incoming/import_audit.log` and mirror them to stdout/cron logs, including candidate counts, placeholders, imports, ignores, and errors.
 
 ### Clipboard Cleaner Shortcut
 

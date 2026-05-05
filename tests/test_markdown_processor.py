@@ -127,7 +127,7 @@ def test_markdown_processor_moves_existing_html(tmp_path):
     assert (destination / "nota.html").exists()
 
 
-def test_markdown_processor_imports_markdown_from_source_dir(tmp_path):
+def test_markdown_processor_imports_markdown_from_source_dir(tmp_path, capsys):
     incoming = tmp_path / "Incoming"
     incoming.mkdir()
     downloads = tmp_path / "iCloud Downloads"
@@ -148,6 +148,12 @@ def test_markdown_processor_imports_markdown_from_source_dir(tmp_path):
     assert not (incoming / "downloaded.md").exists()
     assert (destination / "downloaded.md").exists()
     assert (destination / "downloaded.html").exists()
+    captured = capsys.readouterr()
+    assert "Markdown import audit: scanning" in captured.out
+    audit_content = (incoming / "import_audit.log").read_text(encoding="utf-8")
+    assert "markdown scanning" in audit_content
+    assert "1 markdown candidate(s)" in audit_content
+    assert "imported Markdown: downloaded.md" in audit_content
 
 
 def test_markdown_processor_import_uses_unique_name_for_collisions(tmp_path):
@@ -194,6 +200,29 @@ source: podcast
 
     assert moved == []
     assert podcast_md.exists()
+    audit_content = (incoming / "import_audit.log").read_text(encoding="utf-8")
+    assert "ignored Markdown (podcast): snipd.md" in audit_content
+
+
+def test_markdown_processor_audits_icloud_placeholders(tmp_path):
+    incoming = tmp_path / "Incoming"
+    incoming.mkdir()
+    downloads = tmp_path / "iCloud Downloads"
+    downloads.mkdir()
+    destination = tmp_path / "Posts" / "Posts 2025"
+
+    placeholder = downloads / "article.md.icloud"
+    placeholder.write_text("placeholder", encoding="utf-8")
+
+    processor = MarkdownProcessor(incoming, destination, source_dirs=(downloads,))
+    processor.title_updater.update_titles = lambda files, renamer: None
+    moved = processor.process_markdown()
+
+    assert moved == []
+    assert placeholder.exists()
+    audit_content = (incoming / "import_audit.log").read_text(encoding="utf-8")
+    assert "0 markdown candidate(s), 1 iCloud placeholder candidate(s)" in audit_content
+    assert "placeholder not importable yet: article.md.icloud" in audit_content
 
 
 def test_markdown_processor_applies_ai_titles(tmp_path):
