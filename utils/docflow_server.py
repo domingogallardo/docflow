@@ -213,9 +213,16 @@ def _browse_index_url_for_raw_library_path(request_path: str) -> str:
     return "/browse/"
 
 
-def _append_done_link_entry(rel_path: str) -> None:
+def _append_done_link_entry(base_dir: Path, rel_path: str) -> None:
     log_file_raw = str(os.getenv(DONE_LINKS_FILE_ENV, "")).strip()
     if not log_file_raw:
+        return
+
+    try:
+        canonical_base_dir = resolve_base_dir()
+        if base_dir.expanduser().resolve() != canonical_base_dir.expanduser().resolve():
+            return
+    except Exception:
         return
 
     normalized = normalize_rel_path(rel_path)
@@ -349,7 +356,7 @@ class DocflowApp:
         if changed:
             self.rebuild_for_stage_transition(normalized, before_stage, "done")
             try:
-                _append_done_link_entry(normalized)
+                _append_done_link_entry(self.base_dir, normalized)
             except Exception as exc:
                 print(f"Docflow: could not append done link entry: {exc}", file=sys.stderr)
         return {"changed": changed, "path": normalized, "stage": "done"}

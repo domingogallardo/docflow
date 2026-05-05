@@ -193,6 +193,7 @@ def test_api_to_done_appends_entry_to_done_links_file(tmp_path: Path, monkeypatc
     (posts / "doc.html").write_text("<html><body>Doc</body></html>", encoding="utf-8")
 
     done_links_file = tmp_path / "obsidian" / "Leidos.md"
+    monkeypatch.setenv("DOCFLOW_BASE_DIR", str(base))
     monkeypatch.setenv("DONE_LINKS_FILE", str(done_links_file))
     monkeypatch.setenv("DONE_LINKS_BASE_URL", "http://localhost:8080")
 
@@ -205,6 +206,25 @@ def test_api_to_done_appends_entry_to_done_links_file(tmp_path: Path, monkeypatc
     today = datetime.now().strftime("%d/%m/%Y")
     expected = f"- **{today}**: [doc.html](http://localhost:8080/posts/raw/Posts%202026/doc.html)"
     assert expected in content
+
+
+def test_api_to_done_skips_done_links_file_for_noncanonical_base(tmp_path: Path, monkeypatch):
+    base = tmp_path / "base"
+    posts = base / "Posts" / "Posts 2026"
+    posts.mkdir(parents=True)
+    rel = "Posts/Posts 2026/doc.html"
+    (posts / "doc.html").write_text("<html><body>Doc</body></html>", encoding="utf-8")
+
+    done_links_file = tmp_path / "obsidian" / "Leidos.md"
+    monkeypatch.setenv("DOCFLOW_BASE_DIR", str(tmp_path / "canonical-base"))
+    monkeypatch.setenv("DONE_LINKS_FILE", str(done_links_file))
+    monkeypatch.setenv("DONE_LINKS_BASE_URL", "http://localhost:8080")
+
+    app = docflow_server.DocflowApp(base)
+    result = app.api_to_done(rel)
+    assert result["stage"] == "done"
+    assert result["changed"] is True
+    assert not done_links_file.exists()
 
 
 def test_api_to_done_links_file_skips_duplicate_url(tmp_path: Path, monkeypatch):
@@ -222,6 +242,7 @@ def test_api_to_done_links_file_skips_duplicate_url(tmp_path: Path, monkeypatch)
     )
     done_links_file.write_text(existing, encoding="utf-8")
 
+    monkeypatch.setenv("DOCFLOW_BASE_DIR", str(base))
     monkeypatch.setenv("DONE_LINKS_FILE", str(done_links_file))
     monkeypatch.setenv("DONE_LINKS_BASE_URL", "http://localhost:8080")
 
@@ -249,6 +270,7 @@ def test_api_to_done_prepends_entry_as_first_bullet(tmp_path: Path, monkeypatch)
         encoding="utf-8",
     )
 
+    monkeypatch.setenv("DOCFLOW_BASE_DIR", str(base))
     monkeypatch.setenv("DONE_LINKS_FILE", str(done_links_file))
     monkeypatch.setenv("DONE_LINKS_BASE_URL", "http://localhost:8080")
 
