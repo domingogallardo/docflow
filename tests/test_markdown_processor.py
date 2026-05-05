@@ -225,6 +225,23 @@ def test_markdown_processor_audits_icloud_placeholders(tmp_path):
     assert "placeholder not importable yet: article.md.icloud" in audit_content
 
 
+def test_markdown_processor_does_not_audit_empty_source_dir(tmp_path, capsys):
+    incoming = tmp_path / "Incoming"
+    incoming.mkdir()
+    downloads = tmp_path / "iCloud Downloads"
+    downloads.mkdir()
+    destination = tmp_path / "Posts" / "Posts 2025"
+
+    processor = MarkdownProcessor(incoming, destination, source_dirs=(downloads,))
+    processor.title_updater.update_titles = lambda files, renamer: None
+    moved = processor.process_markdown()
+
+    assert moved == []
+    assert not (incoming / "import_audit.log").exists()
+    captured = capsys.readouterr()
+    assert "Markdown import audit" not in captured.out
+
+
 def test_markdown_processor_applies_ai_titles(tmp_path):
     incoming = tmp_path / "Incoming"
     incoming.mkdir()

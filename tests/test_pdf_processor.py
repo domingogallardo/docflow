@@ -188,3 +188,22 @@ def test_pdf_processor_audits_icloud_placeholders(tmp_path):
     audit_content = (incoming / "import_audit.log").read_text(encoding="utf-8")
     assert "0 PDF candidate(s), 1 iCloud placeholder candidate(s)" in audit_content
     assert "placeholder not importable yet: paper.pdf.icloud" in audit_content
+
+
+def test_pdf_processor_does_not_audit_empty_source_dir(tmp_path, capsys):
+    """Empty external source folders do not add audit noise."""
+
+    incoming = tmp_path / "Incoming"
+    incoming.mkdir()
+    downloads = tmp_path / "iCloud Downloads"
+    downloads.mkdir()
+    destination = tmp_path / "Pdfs"
+    destination.mkdir()
+
+    processor = PDFProcessor(incoming, destination, source_dirs=(downloads,))
+    moved_pdfs = processor.process_pdfs()
+
+    assert moved_pdfs == []
+    assert not (incoming / "import_audit.log").exists()
+    captured = capsys.readouterr()
+    assert "PDF import audit" not in captured.out

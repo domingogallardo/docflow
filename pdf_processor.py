@@ -67,20 +67,21 @@ class PDFProcessor:
                 for path in source_dir.glob("*.icloud")
                 if ".pdf" in path.name.lower()
             )
-            self._write_import_audit(
+            has_activity = bool(pdf_candidates or placeholder_candidates)
+            audit_events = [
                 f"scanning {source_dir}: "
                 f"{len(pdf_candidates)} PDF candidate(s), "
                 f"{len(placeholder_candidates)} iCloud placeholder candidate(s)"
-            )
+            ]
             for placeholder_path in placeholder_candidates:
-                self._write_import_audit(f"placeholder not importable yet: {placeholder_path.name}")
+                audit_events.append(f"placeholder not importable yet: {placeholder_path.name}")
 
             imported_from_source = 0
             ignored_from_source = 0
             for source_path in pdf_candidates:
                 if not source_path.is_file():
                     ignored_from_source += 1
-                    self._write_import_audit(f"ignored non-file PDF candidate: {source_path.name}")
+                    audit_events.append(f"ignored non-file PDF candidate: {source_path.name}")
                     continue
 
                 destination = unique_path(self.incoming_dir / source_path.name)
@@ -89,17 +90,20 @@ class PDFProcessor:
                 except Exception as exc:
                     message = f"error importing PDF from {source_path}: {exc}"
                     print(f"❌ Error importing PDF from {source_path}: {exc}")
-                    self._write_import_audit(message)
+                    audit_events.append(message)
                     continue
 
                 imported.append(destination)
                 imported_from_source += 1
                 print(f"📥 Imported PDF from iCloud Downloads: {destination.name}")
-                self._write_import_audit(f"imported PDF: {source_path.name} -> {destination}")
+                audit_events.append(f"imported PDF: {source_path.name} -> {destination}")
 
-            self._write_import_audit(
-                f"finished {source_dir}: imported {imported_from_source}, ignored {ignored_from_source}"
-            )
+            if has_activity:
+                audit_events.append(
+                    f"finished {source_dir}: imported {imported_from_source}, ignored {ignored_from_source}"
+                )
+                for event in audit_events:
+                    self._write_import_audit(event)
 
         return imported
 
