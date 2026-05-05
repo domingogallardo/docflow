@@ -235,7 +235,7 @@ def test_main_ports_source_tweet_highlights_to_consolidated_html(
     )["highlights"] == []
 
 
-def test_main_ports_source_reading_state_to_consolidated_html(
+def test_main_keeps_source_reading_html_state_and_highlights_when_consolidating(
     tmp_path: Path,
     monkeypatch,
 ) -> None:
@@ -244,8 +244,13 @@ def test_main_ports_source_reading_state_to_consolidated_html(
     tweets_dir = base_dir / "Tweets" / "Tweets 2026"
     tweets_dir.mkdir(parents=True)
 
-    _write_tweet_pair(tweets_dir, "Tweet - user-1", day, hour=10)
-    _write_tweet_pair(tweets_dir, "Tweet - user-2", day, hour=11)
+    _, html1 = _write_tweet_pair(tweets_dir, "Tweet - user-1", day, hour=10)
+    _, html2 = _write_tweet_pair(tweets_dir, "Tweet - user-2", day, hour=11)
+    highlight_store.save_highlights_for_path(
+        base_dir,
+        "Tweets/Tweets 2026/Tweet - user-1.html",
+        {"highlights": [{"id": "h1", "text": "Reading highlight."}]},
+    )
 
     site_state.save_reading_state(
         base_dir,
@@ -276,16 +281,29 @@ def test_main_ports_source_reading_state_to_consolidated_html(
     exit_code = mod.main()
     assert exit_code == 0
 
-    reading_items = site_state.load_reading_state(base_dir)["items"]
-    assert reading_items == {
-        f"Tweets/Tweets 2026/Tweets {day}.html": {
+    assert html1.is_file()
+    assert html2.is_file()
+    assert site_state.load_reading_state(base_dir)["items"] == {
+        "Tweets/Tweets 2026/Tweet - user-1.html": {
+            "reading_at": "2026-02-13T10:30:00Z",
+        },
+        "Tweets/Tweets 2026/Tweet - user-2.html": {
             "reading_at": "2026-02-13T10:15:00Z",
-        }
+        },
     }
     assert site_state.load_done_state(base_dir)["items"] == {}
+    assert f"Tweets/Tweets 2026/Tweets {day}.html" not in site_state.load_reading_state(base_dir)["items"]
+    assert highlight_store.load_highlights_for_path(
+        base_dir,
+        "Tweets/Tweets 2026/Tweet - user-1.html",
+    )["highlights"] == [{"id": "h1", "text": "Reading highlight."}]
+    assert highlight_store.load_highlights_for_path(
+        base_dir,
+        f"Tweets/Tweets 2026/Tweets {day}.html",
+    )["highlights"] == []
 
 
-def test_main_ports_source_done_state_to_consolidated_html_and_done_wins(
+def test_main_keeps_source_done_html_state_and_highlights_when_consolidating(
     tmp_path: Path,
     monkeypatch,
 ) -> None:
@@ -294,8 +312,13 @@ def test_main_ports_source_done_state_to_consolidated_html_and_done_wins(
     tweets_dir = base_dir / "Tweets" / "Tweets 2026"
     tweets_dir.mkdir(parents=True)
 
-    _write_tweet_pair(tweets_dir, "Tweet - reading-source", day, hour=10)
-    _write_tweet_pair(tweets_dir, "Tweet - done-source", day, hour=11)
+    _, reading_html = _write_tweet_pair(tweets_dir, "Tweet - reading-source", day, hour=10)
+    _, done_html = _write_tweet_pair(tweets_dir, "Tweet - done-source", day, hour=11)
+    highlight_store.save_highlights_for_path(
+        base_dir,
+        "Tweets/Tweets 2026/Tweet - done-source.html",
+        {"highlights": [{"id": "h1", "text": "Done highlight."}]},
+    )
 
     site_state.save_reading_state(
         base_dir,
@@ -335,14 +358,28 @@ def test_main_ports_source_done_state_to_consolidated_html_and_done_wins(
     exit_code = mod.main()
     assert exit_code == 0
 
-    assert site_state.load_reading_state(base_dir)["items"] == {}
-    done_items = site_state.load_done_state(base_dir)["items"]
-    assert done_items == {
-        f"Tweets/Tweets 2026/Tweets {day}.html": {
+    assert reading_html.is_file()
+    assert done_html.is_file()
+    assert site_state.load_reading_state(base_dir)["items"] == {
+        "Tweets/Tweets 2026/Tweet - reading-source.html": {
+            "reading_at": "2026-02-13T09:00:00Z",
+        },
+    }
+    assert site_state.load_done_state(base_dir)["items"] == {
+        "Tweets/Tweets 2026/Tweet - done-source.html": {
             "done_at": "2026-02-13T12:00:00Z",
             "reading_started_at": "2026-02-13T08:00:00Z",
         }
     }
+    assert f"Tweets/Tweets 2026/Tweets {day}.html" not in site_state.load_done_state(base_dir)["items"]
+    assert highlight_store.load_highlights_for_path(
+        base_dir,
+        "Tweets/Tweets 2026/Tweet - done-source.html",
+    )["highlights"] == [{"id": "h1", "text": "Done highlight."}]
+    assert highlight_store.load_highlights_for_path(
+        base_dir,
+        f"Tweets/Tweets 2026/Tweets {day}.html",
+    )["highlights"] == []
 
 
 def test_main_keeps_output_files_when_output_base_matches_input_stem(tmp_path: Path, monkeypatch) -> None:
@@ -456,6 +493,74 @@ def test_cleanup_only_if_consolidated_ports_and_clears_source_highlights(
     assert highlight_store.load_highlights_for_path(
         base_dir,
         "Tweets/Tweets 2026/Tweet - keep-cleaning.html",
+    )["highlights"] == []
+
+
+def test_cleanup_only_if_consolidated_keeps_stateful_source_html_and_highlights(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    day = "2026-02-13"
+    base_dir = tmp_path
+    tweets_dir = base_dir / "Tweets" / "Tweets 2026"
+    tweets_dir.mkdir(parents=True)
+
+    _, src_html = _write_tweet_pair(
+        tweets_dir,
+        "Tweet - keep-stateful",
+        day,
+        hour=10,
+        body="Stateful highlighted body.",
+    )
+    consolidated_md = tweets_dir / f"Tweets {day}.md"
+    consolidated_html = tweets_dir / f"Tweets {day}.html"
+    consolidated_md.write_text("already built", encoding="utf-8")
+    consolidated_html.write_text("<html><body>Stateful highlighted body.</body></html>", encoding="utf-8")
+
+    site_state.save_done_state(
+        base_dir,
+        {
+            "version": site_state.STATE_VERSION,
+            "items": {
+                "Tweets/Tweets 2026/Tweet - keep-stateful.html": {
+                    "done_at": "2026-02-13T12:00:00Z",
+                },
+            },
+        },
+    )
+    highlight_store.save_highlights_for_path(
+        base_dir,
+        "Tweets/Tweets 2026/Tweet - keep-stateful.html",
+        {"highlights": [{"id": "h1", "text": "Stateful highlighted body."}]},
+    )
+
+    args = argparse.Namespace(
+        day=day,
+        year=2026,
+        tweets_dir=tweets_dir,
+        output_base=None,
+        capture_source="liked",
+        cleanup_if_consolidated=True,
+    )
+    monkeypatch.setattr(mod, "parse_args", lambda: args)
+    monkeypatch.setattr(mod.cfg, "BASE_DIR", base_dir)
+
+    exit_code = mod.main()
+    assert exit_code == 0
+
+    assert src_html.is_file()
+    assert site_state.load_done_state(base_dir)["items"] == {
+        "Tweets/Tweets 2026/Tweet - keep-stateful.html": {
+            "done_at": "2026-02-13T12:00:00Z",
+        },
+    }
+    assert highlight_store.load_highlights_for_path(
+        base_dir,
+        "Tweets/Tweets 2026/Tweet - keep-stateful.html",
+    )["highlights"] == [{"id": "h1", "text": "Stateful highlighted body."}]
+    assert highlight_store.load_highlights_for_path(
+        base_dir,
+        f"Tweets/Tweets 2026/Tweets {day}.html",
     )["highlights"] == []
 
 
