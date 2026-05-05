@@ -13,7 +13,7 @@ Podcast snippets are typically captured in [Snipd](https://www.snipd.com) and th
 - Single local source of truth: `BASE_DIR` (resolved from `DOCFLOW_BASE_DIR`, typically in `~/.docflow_env`).
 - Static site output under `BASE_DIR/_site`.
 - Local workflow state under `BASE_DIR/state`.
-- Generic Markdown ingestion reads both `BASE_DIR/Incoming/*.md` and `.md` files found in iCloud Downloads.
+- Markdown and PDF ingestion reads both `BASE_DIR/Incoming/` and matching files found in iCloud Downloads.
 - Image ingestion moves files into the yearly folder and, when `OPENAI_API_KEY` is configured, renames them with an AI-generated descriptive filename before rebuilding the gallery.
 
 ### Local services currently in use
@@ -122,6 +122,7 @@ External input folders:
 
 - iCloud Downloads: `~/Library/Mobile Documents/com~apple~CloudDocs/Downloads`
   - The `md` step imports generic `.md` files from this folder into `Incoming/`, then processes them through the normal Markdown flow.
+  - The `pdfs` step imports `.pdf` files from this folder into `Incoming/`, then moves them to `Pdfs/Pdfs <YEAR>/`.
   - Imported files are moved, not copied, so successfully processed files disappear from iCloud Downloads.
   - Override the folder with `DOCFLOW_ICLOUD_DOWNLOADS_DIR` when needed.
 
@@ -132,7 +133,7 @@ External input folders:
 - `BASE_DIR` comes from environment variable `DOCFLOW_BASE_DIR`.
 - Canonical place to set it: `~/.docflow_env`.
 - If `DOCFLOW_BASE_DIR` is missing, importing `config.py` fails with a clear error.
-- Generic Markdown processing also imports `.md` files from iCloud Downloads
+- Generic Markdown and PDF processing also import `.md` and `.pdf` files from iCloud Downloads
   (`~/Library/Mobile Documents/com~apple~CloudDocs/Downloads`). Override with
   `DOCFLOW_ICLOUD_DOWNLOADS_DIR` if your folder lives elsewhere.
 - For direct commands from this repo, load your environment first:
@@ -204,11 +205,11 @@ indexes after a successful run:
 bash bin/docflow.sh all --year 2026
 ```
 
-To process only Markdown notes, including `.md` files waiting in iCloud
-Downloads, run:
+To process only files waiting in iCloud Downloads, use the matching target:
 
 ```bash
 bash bin/docflow.sh md --year 2026
+bash bin/docflow.sh pdfs --year 2026
 ```
 
 3. Build local intranet pages manually:

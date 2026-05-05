@@ -96,3 +96,66 @@ def test_pdf_processor_mixed_files(tmp_path):
     assert (incoming / "article.html").exists()
     assert (incoming / "notes.md").exists()
     assert (incoming / "image.jpg").exists() 
+
+
+def test_pdf_processor_imports_pdfs_from_source_dir(tmp_path):
+    """PDFs downloaded outside Incoming are imported before processing."""
+
+    incoming = tmp_path / "Incoming"
+    incoming.mkdir()
+    downloads = tmp_path / "iCloud Downloads"
+    downloads.mkdir()
+    destination = tmp_path / "Pdfs"
+    destination.mkdir()
+
+    downloaded_pdf = downloads / "paper.pdf"
+    downloaded_pdf.write_bytes(b"%PDF downloaded")
+
+    processor = PDFProcessor(incoming, destination, source_dirs=(downloads,))
+    moved_pdfs = processor.process_pdfs()
+
+    assert len(moved_pdfs) == 1
+    assert not downloaded_pdf.exists()
+    assert not (incoming / "paper.pdf").exists()
+    assert (destination / "paper.pdf").read_bytes() == b"%PDF downloaded"
+
+
+def test_pdf_processor_import_uses_unique_name_for_collisions(tmp_path):
+    """Imported PDFs keep both files when Incoming already has the same name."""
+
+    incoming = tmp_path / "Incoming"
+    incoming.mkdir()
+    downloads = tmp_path / "iCloud Downloads"
+    downloads.mkdir()
+    destination = tmp_path / "Pdfs"
+    destination.mkdir()
+
+    (incoming / "paper.pdf").write_bytes(b"%PDF incoming")
+    (downloads / "paper.pdf").write_bytes(b"%PDF downloaded")
+
+    processor = PDFProcessor(incoming, destination, source_dirs=(downloads,))
+    processor.process_pdfs()
+
+    assert (destination / "paper.pdf").read_bytes() == b"%PDF incoming"
+    assert (destination / "paper (1).pdf").read_bytes() == b"%PDF downloaded"
+
+
+def test_pdf_processor_does_not_import_non_pdf_from_source_dir(tmp_path):
+    """Only PDFs are imported from external source folders."""
+
+    incoming = tmp_path / "Incoming"
+    incoming.mkdir()
+    downloads = tmp_path / "iCloud Downloads"
+    downloads.mkdir()
+    destination = tmp_path / "Pdfs"
+    destination.mkdir()
+
+    note = downloads / "note.md"
+    note.write_text("# Not a PDF", encoding="utf-8")
+
+    processor = PDFProcessor(incoming, destination, source_dirs=(downloads,))
+    moved_pdfs = processor.process_pdfs()
+
+    assert moved_pdfs == []
+    assert note.exists()
+    assert list(destination.iterdir()) == []

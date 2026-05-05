@@ -53,7 +53,11 @@ class DocumentProcessor:
         self.tweets_replies_processed = self.incoming / "tweets_replies_processed.txt"
         self.tweets_replies_failed = self.incoming / "tweets_replies_failed.txt"
 
-        self.pdf_processor = PDFProcessor(self.incoming, self.pdfs_dest)
+        self.pdf_processor = PDFProcessor(
+            self.incoming,
+            self.pdfs_dest,
+            source_dirs=(cfg.ICLOUD_DOWNLOADS_DIR,),
+        )
         self.instapaper_processor = InstapaperProcessor(self.incoming, self.posts_dest)
         self.podcast_processor = PodcastProcessor(self.incoming, self.podcasts_dest)
         self.image_processor = ImageProcessor(self.incoming, self.images_dest)
