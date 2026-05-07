@@ -245,6 +245,59 @@ def test_strip_platform_inline_prompts_removes_standalone_subscribe_line():
     )
 
 
+def test_strip_platform_inline_prompts_separates_glued_edit_prompt_from_url():
+    raw = "https://arxiv.org/abs/2501.09223Last edited"
+
+    result = strip_platform_inline_prompts(raw)
+
+    assert result == "https://arxiv.org/abs/2501.09223"
+
+
+def test_strip_platform_inline_prompts_removes_view_activity_line():
+    raw = "\n".join(
+        [
+            "Contenido válido.",
+            "View activity",
+        ]
+    )
+
+    result = strip_platform_inline_prompts(raw)
+
+    assert result == "Contenido válido."
+
+
+def test_strip_platform_inline_prompts_separates_glued_view_activity():
+    raw = "Contenido válido.View activity"
+
+    result = strip_platform_inline_prompts(raw)
+
+    assert result == "Contenido válido."
+
+
+def test_tweet_cleanup_keeps_url_when_edit_prompt_glues_metrics():
+    raw = "\n".join(
+        [
+            "It's freely available on arXiv:",
+            "",
+            "https://arxiv.org/abs/2501.09223",
+            "Last edited",
+            "7:12 PM · Feb 17, 2026 · 2.4M Views",
+            "340 1.2K 10K 11K Relevant View quotes",
+        ]
+    )
+
+    rebuilt = rebuild_urls_from_lines(raw)
+    cleaned = strip_tweet_stats(strip_platform_inline_prompts(rebuilt))
+
+    assert cleaned == "\n".join(
+        [
+            "It's freely available on arXiv:",
+            "",
+            "https://arxiv.org/abs/2501.09223",
+        ]
+    )
+
+
 def test_strip_platform_inline_prompts_preserves_meaningful_blank_lines():
     raw = "\n".join(
         [

@@ -128,6 +128,11 @@ SUBSCRIBE_PROMPT_LABELS_NORMALIZED = {
     "subscribe",
     "click to subscribe",
 }
+PLATFORM_UI_PROMPT_LABELS_NORMALIZED = {
+    "last edited",
+    "opens edit history",
+    "view activity",
+}
 TRANSLATION_PROMPT_INLINE_RE = re.compile(
     "|".join(
         re.escape(label)
@@ -146,6 +151,10 @@ SUBSCRIBE_PROMPT_WITH_HANDLE_RE = re.compile(
 )
 SUBSCRIBE_PROMPT_LINE_RE = re.compile(
     r"^Subscribe\s*Click\s*to\s*Subscribe\s*to\s*@?[A-Za-z0-9_]{1,20}$",
+    re.IGNORECASE,
+)
+PLATFORM_UI_PROMPT_INLINE_RE = re.compile(
+    r"(Last edited|Opens edit history|View activity)",
     re.IGNORECASE,
 )
 COMPACT_ARTICLE_METRIC_PREAMBLE_RE = re.compile(
@@ -578,6 +587,7 @@ def strip_platform_inline_prompts(
             normalized in TRANSLATION_PROMPT_LABELS_NORMALIZED
             or normalized in ARTICLE_PROMPT_LABELS_NORMALIZED
             or normalized in SUBSCRIBE_PROMPT_LABELS_NORMALIZED
+            or normalized in PLATFORM_UI_PROMPT_LABELS_NORMALIZED
             or bool(SUBSCRIBE_PROMPT_LINE_RE.match(probe))
         )
 
@@ -612,6 +622,19 @@ def strip_platform_inline_prompts(
             return f"{before}\n{after}"
         return before or after
 
+    def strip_platform_ui_prompts(line: str) -> str:
+        parts: List[str] = []
+        cursor = 0
+        for match in PLATFORM_UI_PROMPT_INLINE_RE.finditer(line):
+            before = line[cursor : match.start()].strip()
+            if before:
+                parts.append(before)
+            cursor = match.end()
+        after = line[cursor:].strip()
+        if after:
+            parts.append(after)
+        return "\n".join(parts)
+
     filtered: List[str] = []
     for line in text.splitlines():
         if not line.strip():
@@ -620,7 +643,9 @@ def strip_platform_inline_prompts(
         if is_prompt_line(line):
             continue
         cleaned = normalize_glued_link_card_breaks(
-            strip_glued_prompt(strip_subscribe_prompt(strip_article_prompt_tail(line)))
+            strip_platform_ui_prompts(
+                strip_glued_prompt(strip_subscribe_prompt(strip_article_prompt_tail(line)))
+            )
         )
         for cleaned_line in cleaned.splitlines():
             if is_prompt_line(cleaned_line):
