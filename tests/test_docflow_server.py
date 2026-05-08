@@ -385,6 +385,10 @@ def test_raw_route_serves_library_file(tmp_path: Path):
         assert "dg-hl-nav" in body
         assert "dg-row-status" in body
         assert "dg-row-actions" in body
+        assert "dg-actions-toggle" in body
+        assert "aria-controls', 'dg-overlay-actions'" in body
+        assert "aria-expanded', actionsExpanded ? 'true' : 'false'" in body
+        assert "actionsRow.hidden = true" in body
         assert "dg-row-highlights" in body
         assert "Jump to highlight:" in body
         assert "articlejs:highlight-progress" in body

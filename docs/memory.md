@@ -25,8 +25,8 @@ This file stores stable, reusable operational notes for future agent runs.
   - `ArticleJS.getHighlightProgress()`
   - `articlejs:highlight-progress` (document event)
 - Overlay integration lives in `utils/docflow_server.py` and is intentionally split in three rows:
-  - First row: status context link (`Inside Browse|Reading|Done`) plus `PDF` export on the fly.
-  - Second row: stage actions (`to-reading`, `to-done`, `to-browse`, `reopen`, etc.).
+  - First row: status context link (`Inside Browse|Reading|Done`) plus `PDF` export on the fly and an `Actions` toggle.
+  - Second row: stage actions (`to-reading`, `to-done`, `to-browse`, `reopen`, etc.); keep it hidden until the `Actions` toggle expands it.
   - Third row: highlight jump controls (`Jump to highlight:` + counter + up/down controls).
   - Keep the third row hidden when highlight progress total is `0`.
 - Highlight payload normalization in `utils/highlight_store.py` must keep stable `id` values; when a highlight arrives without `id`, generate one deterministically to support legacy data and navigation state.

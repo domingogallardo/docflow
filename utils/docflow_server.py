@@ -1052,6 +1052,9 @@ pre code {
 #dg-overlay .dg-row-highlights {
   justify-content: flex-start;
 }
+#dg-overlay .dg-row-actions[hidden] {
+  display: none;
+}
 #dg-overlay button {
   padding: 4px 8px;
   border: 1px solid #bfbfbf;
@@ -1075,10 +1078,14 @@ pre code {
   text-decoration: none;
 }
 #dg-overlay .dg-row-status .dg-link,
-#dg-overlay .dg-row-highlights button {
+#dg-overlay .dg-row-highlights button,
+#dg-overlay .dg-actions-toggle {
   border: 0;
   background: #f3f3f3;
   box-shadow: 0 1px 4px rgba(0,0,0,0.12);
+}
+#dg-overlay .dg-actions-toggle {
+  margin-left: auto;
 }
 #dg-overlay .dg-hl-nav {
   display: none;
@@ -1152,6 +1159,7 @@ OVERLAY_JS = """
   let highlightProgressListenerAttached = false;
   let hashListenerAttached = false;
   let highlightRefreshTimer = 0;
+  let actionsExpanded = false;
 
   function callApi(action, path) {
     const body = path ? { path } : {};
@@ -1253,6 +1261,22 @@ OVERLAY_JS = """
     link.href = `/api/export-markdown?path=${encodeURIComponent(relPath)}&_r=${Date.now()}`;
     link.download = '';
     return link;
+  }
+
+  function makeActionsToggle() {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'dg-actions-toggle';
+    button.textContent = actionsExpanded ? 'Hide actions' : 'Actions';
+    button.setAttribute('aria-controls', 'dg-overlay-actions');
+    button.setAttribute('aria-expanded', actionsExpanded ? 'true' : 'false');
+    button.title = actionsExpanded ? 'Hide article actions' : 'Show article actions';
+    button.addEventListener('click', () => {
+      if (busy) return;
+      actionsExpanded = !actionsExpanded;
+      render();
+    });
+    return button;
   }
 
   function makeChevronIcon(direction) {
@@ -1408,10 +1432,15 @@ OVERLAY_JS = """
     if (hasMarkdownDownload) {
       statusRow.appendChild(makeMarkdownLink());
     }
+    statusRow.appendChild(makeActionsToggle());
     bar.appendChild(statusRow);
 
     const actionsRow = document.createElement('div');
+    actionsRow.id = 'dg-overlay-actions';
     actionsRow.className = 'dg-row dg-row-actions';
+    if (!actionsExpanded) {
+      actionsRow.hidden = true;
+    }
     for (const [label, action] of stageActions()) {
       actionsRow.appendChild(makeButton(label, action));
     }
