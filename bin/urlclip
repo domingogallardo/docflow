@@ -1,0 +1,13 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+ENV_FILE="${HOME}/.docflow_env"
+if [ -f "${ENV_FILE}" ]; then
+  # shellcheck source=/dev/null
+  source "${ENV_FILE}"
+fi
+
+ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+PYTHON_BIN="${PYTHON_BIN:-python3}"
+
+exec "${PYTHON_BIN}" "${ROOT_DIR}/web_clipper_wrapper.py" "$@"

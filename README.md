@@ -1,6 +1,6 @@
 # docflow (Local Intranet)
 
-docflow automates your personal document pipeline (Instapaper posts, podcasts, Markdown notes, PDFs, images, and tweets) and serves everything locally from `BASE_DIR`.
+docflow automates your personal document pipeline (web URLs, Instapaper posts, podcasts, Markdown notes, PDFs, images, and tweets) and serves everything locally from `BASE_DIR`.
 
 Podcast snippets are typically captured in [Snipd](https://www.snipd.com) and then exported into this pipeline.
 
@@ -14,6 +14,7 @@ Podcast snippets are typically captured in [Snipd](https://www.snipd.com) and th
 - Static site output under `BASE_DIR/_site`.
 - Local workflow state under `BASE_DIR/state`.
 - Markdown and PDF ingestion reads both `BASE_DIR/Incoming/` and matching files found in iCloud Downloads.
+- URL ingestion reads `BASE_DIR/Incoming/links.txt`, downloads articles as Markdown, and leaves failed URLs queued for retry.
 - Image ingestion moves files into the yearly folder and, when `OPENAI_API_KEY` is configured, renames them with an AI-generated descriptive filename before rebuilding the gallery.
 
 ### Local services currently in use
@@ -125,6 +126,10 @@ External input folders:
   - The `pdfs` step imports `.pdf` files from this folder into `Incoming/`, then moves them to `Pdfs/Pdfs <YEAR>/`.
   - Imported files are moved, not copied, so successfully processed files disappear from iCloud Downloads.
   - Override the folder with `DOCFLOW_ICLOUD_DOWNLOADS_DIR` when needed.
+- URL queue: `BASE_DIR/Incoming/links.txt`
+  - The `urls` step downloads each URL as Markdown into `Incoming/`.
+  - Successful URLs are removed from `links.txt` and recorded in `processed_history.txt`.
+  - Failed URLs stay queued and append timestamped diagnostics to `links_failed.txt`.
 
 ## Operation and maintenance
 
@@ -166,6 +171,13 @@ Optional for X likes queue:
 ```bash
 pip install "playwright>=1.55"
 playwright install chromium
+```
+
+Optional for URL-to-Markdown clipping:
+
+```bash
+# Requires Node.js and a local Obsidian Web Clipper checkout.
+export DOCFLOW_OBSIDIAN_CLIPPER_CLI="$HOME/Repos-Github/obsidian-clipper/dist/cli.cjs"
 ```
 
 ### Manual quick start
@@ -211,6 +223,27 @@ To process only files waiting in iCloud Downloads, use the matching target:
 bash bin/docflow.sh md --year 2026
 bash bin/docflow.sh pdfs --year 2026
 ```
+
+To download article URLs as Markdown into `Incoming/`, add URLs to
+`$DOCFLOW_BASE_DIR/Incoming/links.txt` and run the URL target:
+
+```bash
+bash bin/docflow.sh urls
+```
+
+Successful URLs are removed from `links.txt` and added to
+`Incoming/processed_history.txt`. Failed URLs stay in `links.txt` for retry,
+with timestamped error details appended to `Incoming/links_failed.txt`.
+
+You can also pass URLs directly:
+
+```bash
+bin/urlclip "https://example.com/article"
+```
+
+`bin/urlclip` is a low-level downloader for one-off tests; the queue bookkeeping
+(`links.txt`, `processed_history.txt`, and `links_failed.txt`) is handled by the
+`urls` pipeline target.
 
 3. Build local intranet pages manually:
 

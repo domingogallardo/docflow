@@ -4,6 +4,7 @@ DocumentProcessor - main class for document processing.
 """
 from pathlib import Path
 from typing import Callable, Iterable, List, Optional, Sequence, Tuple
+from datetime import datetime
 
 import utils as U
 import config as cfg
@@ -13,8 +14,14 @@ from podcast_processor import PodcastProcessor
 from image_processor import ImageProcessor
 from markdown_processor import MarkdownProcessor
 from path_utils import unique_path
+from web_clipper_wrapper import (
+    URL_RE,
+    download_url_to_markdown,
+    read_urls_from_file,
+)
 
 PIPELINE_STEPS = (
+    ("urls", "process_web_urls"),
     ("tweets", "process_tweets_pipeline"),
     ("podcasts", "process_podcasts"),
     ("posts", "process_instapaper_posts"),
@@ -52,6 +59,8 @@ class DocumentProcessor:
         self.tweets_posted_failed = self.incoming / "tweets_posted_failed.txt"
         self.tweets_replies_processed = self.incoming / "tweets_replies_processed.txt"
         self.tweets_replies_failed = self.incoming / "tweets_replies_failed.txt"
+        self.links_file = self.incoming / "links.txt"
+        self.links_failed = self.incoming / "links_failed.txt"
 
         self.pdf_processor = PDFProcessor(
             self.incoming,
@@ -322,6 +331,48 @@ class DocumentProcessor:
         self._write_url_file(processed_path or self.tweets_processed, urls)
 
     @staticmethod
+    def _append_url_history(urls: Sequence[str], *, history_path: Path) -> None:
+        if not urls:
+            return
+        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        lines_new = [f"{url} - {timestamp}\n" for url in urls]
+        old_content = history_path.read_text(encoding="utf-8") if history_path.exists() else ""
+        history_path.parent.mkdir(parents=True, exist_ok=True)
+        history_path.write_text("".join(lines_new) + old_content, encoding="utf-8")
+
+    @staticmethod
+    def _append_link_failures(failures: Sequence[Tuple[str, str]], *, failed_path: Path) -> None:
+        if not failures:
+            return
+        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        failed_path.parent.mkdir(parents=True, exist_ok=True)
+        with failed_path.open("a", encoding="utf-8") as fh:
+            for url, reason in failures:
+                clean_reason = " ".join(str(reason).replace("\t", " ").split())
+                fh.write(f"{timestamp}\t{url}\t{clean_reason}\n")
+
+    @staticmethod
+    def _remove_urls_from_links_file(path: Path, processed_urls: Sequence[str]) -> None:
+        if not processed_urls or not path.exists():
+            return
+
+        processed_set = set(processed_urls)
+        kept_lines: List[str] = []
+        changed = False
+        for line in path.read_text(encoding="utf-8", errors="replace").splitlines():
+            found_urls = {match.group(0).rstrip(").,;") for match in URL_RE.finditer(line)}
+            if found_urls & processed_set:
+                changed = True
+                continue
+            kept_lines.append(line)
+
+        if changed:
+            new_content = "\n".join(kept_lines)
+            if new_content:
+                new_content += "\n"
+            path.write_text(new_content, encoding="utf-8")
+
+    @staticmethod
     def _dedupe_urls(urls: Sequence[str]) -> List[str]:
         seen: set[str] = set()
         ordered: List[str] = []
@@ -400,6 +451,41 @@ class DocumentProcessor:
     def process_markdown(self) -> List[Path]:
         """Process generic Markdown files."""
         return self._run_and_remember(self.markdown_processor.process_markdown)
+
+    def process_web_urls(self) -> List[Path]:
+        """Download article URLs from Incoming/links.txt as Markdown files."""
+        urls = read_urls_from_file(self.links_file)
+        if not urls:
+            print("🔗 No URLs found to download")
+            return []
+
+        generated: List[Path] = []
+        processed_urls: List[str] = []
+        failures: List[Tuple[str, str]] = []
+
+        print(f"🔗 Downloading {len(urls)} URL(s) as Markdown...")
+        for url in urls:
+            try:
+                result = download_url_to_markdown(url, output_dir=self.incoming)
+            except Exception as exc:
+                failures.append((url, str(exc)))
+                print(f"❌ Error downloading {url}: {exc}")
+                continue
+
+            generated.append(result.output_path)
+            processed_urls.append(url)
+            print(f"✅ URL saved as Markdown: {result.output_path.name}")
+
+        if processed_urls:
+            self._remove_urls_from_links_file(self.links_file, processed_urls)
+            self._append_url_history(processed_urls, history_path=self.processed_history)
+            print(f"🔗 {len(processed_urls)} URL(s) processed and removed from links.txt")
+
+        if failures:
+            self._append_link_failures(failures, failed_path=self.links_failed)
+            print(f"⚠️  {len(failures)} URL(s) failed; see {self.links_failed}")
+
+        return generated
     
     def process_tweets_pipeline(self, *, log_empty_conversion: bool = True) -> List[Path]:
         """Process the tweet queue and move results to the yearly Tweets folder."""
