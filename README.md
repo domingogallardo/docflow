@@ -131,6 +131,41 @@ External input folders:
   - Successful URLs are removed from `links.txt` and recorded in `processed_history.txt`.
   - Failed URLs stay queued and append timestamped diagnostics to `links_failed.txt`.
 
+### Markdown metadata
+
+Markdown outputs keep a canonical YAML front matter block. Existing source
+fields are preserved, and docflow adds derived fields where available.
+
+Common fields:
+
+- `source`: logical source preserved from the pipeline (`tweet`, `podcast`,
+  `instapaper`, a URL, etc.).
+- `title`: detected, extracted, or generated title.
+- `source_url`: canonical source URL when the item has one.
+- `docflow_source_type`: normalized type (`markdown`, `web`, `tweet`,
+  `podcast`, or `instapaper`).
+- `docflow_ingested_at`: UTC timestamp for when docflow incorporated the item.
+- `docflow_html_generated_at`: UTC timestamp for when docflow generated the
+  associated HTML.
+- `docflow_body_chars` and `docflow_word_count`: body-only Markdown statistics.
+
+Source-specific fields:
+
+- URL clipping: `docflow_extractor`, `docflow_extraction_attempt`,
+  `docflow_final_url`, `docflow_original_url`, and
+  `docflow_removed_data_images`.
+- Instapaper: `instapaper_id` and `source_name`.
+- Podcasts: `podcast_show`, `podcast_episode_title`,
+  `podcast_publish_date`, and `podcast_export_date`.
+- Tweets: `tweet_url`, `tweet_id`, `tweet_author`, `tweet_author_name`,
+  `tweet_capture_source`, `tweet_posted_kind`, `tweet_thread`,
+  `tweet_thread_count`, `tweet_reply_to_url`, and
+  `tweet_reply_context_included`.
+
+Supported fields are also exported to generated HTML as `docflow-*` meta tags
+where relevant, for example `docflow-source-url`, `docflow-html-generated-at`,
+or `docflow-tweet-id`.
+
 ## Operation and maintenance
 
 ### BASE_DIR location

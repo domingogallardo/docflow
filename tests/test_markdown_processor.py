@@ -42,6 +42,12 @@ source: podcast
     html_content = (destination / "nota.html").read_text(encoding="utf-8")
     assert "body { margin-left: 6%;" in html_content
     assert "Contenido en <strong>Markdown</strong>." in html_content
+    md_content = (destination / "nota.md").read_text(encoding="utf-8")
+    assert 'title: "Título"' in md_content
+    assert "docflow_source_type: markdown" in md_content
+    assert "docflow_html_generated_at:" in md_content
+    assert "docflow_word_count:" in md_content
+    assert 'name="docflow-html-generated-at"' in html_content
 
     # Ignored files should remain in Incoming.
     assert podcast_md.exists()
@@ -77,6 +83,9 @@ Contenido.""",
     assert "Original link:" in html_content
     assert 'href="https://example.com/article"' in html_content
     assert ">https://example.com/article</a>" in html_content
+    md_content = (destination / "article.md").read_text(encoding="utf-8")
+    assert "source_url: https://example.com/article" in md_content
+    assert "docflow_source_type: web" in md_content
 
 
 def test_markdown_processor_preserves_remote_images(tmp_path):

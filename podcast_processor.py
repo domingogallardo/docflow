@@ -48,6 +48,10 @@ class PodcastProcessor:
 
             # 1. Clean Snipd files.
             self._clean_snipd_files()
+
+            # 1b. Add canonical docflow metadata after cleaning.
+            podcasts = U.list_podcast_files(self.incoming_dir)
+            self._enrich_podcast_metadata(podcasts)
             
             # 2. Convert Markdown to HTML.
             self._convert_markdown_to_html()
@@ -176,6 +180,34 @@ class PodcastProcessor:
 
         if tagged:
             print(f"🏷️ Tagged {tagged} podcast file(s) with source: podcast")
+
+    def _enrich_podcast_metadata(self, md_files: Iterable[Path]) -> None:
+        """Add stable podcast metadata used by the intranet and exports."""
+        for md_file in md_files:
+            try:
+                original = md_file.read_text(encoding="utf-8", errors="ignore")
+                extra = self._podcast_metadata_from_body(original)
+                title = U.extract_episode_title(md_file) or U.extract_markdown_title(original) or md_file.stem
+                updated = U.enrich_markdown_metadata(original, title=title, extra=extra)
+                if updated != original:
+                    md_file.write_text(updated, encoding="utf-8")
+            except Exception as e:
+                print(f"❌ Error enriching podcast metadata for {md_file}: {e}")
+
+    @staticmethod
+    def _podcast_metadata_from_body(text: str) -> dict[str, str]:
+        fields = {
+            "podcast_show": r"- Show:\s*(.+)",
+            "podcast_episode_title": r"- Episode title:\s*(.+)",
+            "podcast_publish_date": r"- Episode publish date:\s*(.+)",
+            "podcast_export_date": r"- Export date:\s*(.+)",
+        }
+        metadata: dict[str, str] = {}
+        for key, pattern in fields.items():
+            match = re.search(pattern, text)
+            if match:
+                metadata[key] = match.group(1).strip()
+        return metadata
 
     @staticmethod
     def _looks_like_podcast(text: str) -> bool:
@@ -399,6 +431,11 @@ class PodcastProcessor:
                     continue
                 
                 md_text = md_file.read_text(encoding="utf-8")
+                md_text = U.upsert_front_matter(
+                    md_text,
+                    {"docflow_html_generated_at": U.utc_now_iso()},
+                )
+                md_file.write_text(md_text, encoding="utf-8")
                 front_matter, md_body = U.split_front_matter(md_text)
                 html_body = self._md_to_html(md_body)
                 meta_tags = U.front_matter_meta_tags(front_matter)

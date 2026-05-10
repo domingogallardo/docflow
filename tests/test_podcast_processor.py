@@ -216,11 +216,14 @@ def test_podcast_processor_markdown_to_html_conversion(tmp_path):
     assert "<!DOCTYPE html>" in html_content
     assert "<meta charset=\"UTF-8\">" in html_content
     assert "<meta name=\"docflow-source\" content=\"podcast\">" in html_content
+    assert "<meta name=\"docflow-html-generated-at\"" in html_content
     assert "<strong>Bold text</strong>" in html_content
     assert "<em>italic text</em>" in html_content
     assert "<code>Code snippet</code>" in html_content
     assert "<ol>" in html_content  # Ordered list
     assert "<a href=\"https://example.com\">" in html_content
+    md_files = [f for f in moved_podcasts if f.suffix == ".md"]
+    assert "docflow_html_generated_at:" in md_files[0].read_text(encoding="utf-8")
 
 
 def test_podcast_processor_mixed_files(tmp_path):

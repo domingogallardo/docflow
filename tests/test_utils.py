@@ -218,4 +218,36 @@ Intro paragraph in code block
     assert "<blockquote><br>" not in html
 
 
+def test_enrich_markdown_metadata_adds_canonical_fields():
+    from utils import enrich_markdown_metadata, split_front_matter
+
+    md = "# Demo title\n\nBody with words."
+    enriched = enrich_markdown_metadata(
+        md,
+        source_url="https://example.com/article",
+        extra={"docflow_extractor": "test"},
+        now="2026-01-02T03:04:05Z",
+    )
+
+    meta, body = split_front_matter(enriched)
+    assert meta["title"] == "Demo title"
+    assert meta["source_url"] == "https://example.com/article"
+    assert meta["docflow_source_type"] == "web"
+    assert meta["docflow_ingested_at"] == "2026-01-02T03:04:05Z"
+    assert meta["docflow_extractor"] == "test"
+    assert meta["docflow_word_count"] == "5"
+    assert body.lstrip().startswith("# Demo title")
+
+
+def test_upsert_front_matter_preserves_unrelated_lines():
+    from utils import upsert_front_matter
+
+    md = "---\n# keep this comment\nsource: instapaper\n---\n\n# Demo\n"
+    updated = upsert_front_matter(md, {"title": "Demo"})
+
+    assert "# keep this comment" in updated
+    assert "source: instapaper" in updated
+    assert "title: Demo" in updated
+
+
 # (tests for Instapaper-starred utils were removed)

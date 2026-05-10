@@ -152,6 +152,8 @@ class MarkdownProcessor:
     ) -> List[Path]:
         print(context)
 
+        markdown_files = self._ensure_docflow_metadata(markdown_files)
+
         generated_html: List[Path] = []
         for md_file in markdown_files:
             html_path = md_file.with_suffix(".html")
@@ -162,6 +164,11 @@ class MarkdownProcessor:
 
             try:
                 md_text = md_file.read_text(encoding="utf-8", errors="replace")
+                md_text = U.upsert_front_matter(
+                    md_text,
+                    {"docflow_html_generated_at": U.utc_now_iso()},
+                )
+                md_file.write_text(md_text, encoding="utf-8")
                 full_html = U.markdown_to_html(md_text, title=md_file.stem)
                 html_path.write_text(full_html, encoding="utf-8")
                 generated_html.append(html_path)
@@ -181,6 +188,7 @@ class MarkdownProcessor:
 
         def _rename(md_path: Path, new_title: str) -> Path:
             new_path = rename_markdown_pair(md_path, new_title)
+            self._refresh_title_metadata(new_path, new_title)
             tracked_paths.append(new_path)
             return new_path
 
@@ -198,6 +206,35 @@ class MarkdownProcessor:
             print(f"📝 {len(moved_files)} Markdown file(s) moved to {self.destination_dir}")
 
         return moved_files
+
+    def _ensure_docflow_metadata(self, markdown_files: Iterable[Path]) -> List[Path]:
+        """Ensure Markdown files carry baseline docflow metadata before conversion."""
+        updated_paths: List[Path] = []
+        for md_file in markdown_files:
+            if not md_file.exists():
+                continue
+            try:
+                original = md_file.read_text(encoding="utf-8", errors="replace")
+                title = U.extract_markdown_title(original) or md_file.stem
+                updated = U.enrich_markdown_metadata(original, title=title)
+                if updated != original:
+                    md_file.write_text(updated, encoding="utf-8")
+            except Exception as exc:
+                print(f"⚠️ Could not update metadata for {md_file.name}: {exc}")
+            updated_paths.append(md_file)
+        return updated_paths
+
+    @staticmethod
+    def _refresh_title_metadata(md_path: Path, title: str) -> None:
+        if not md_path.exists():
+            return
+        try:
+            original = md_path.read_text(encoding="utf-8", errors="replace")
+            updated = U.upsert_front_matter(original, {"title": title})
+            if updated != original:
+                md_path.write_text(updated, encoding="utf-8")
+        except Exception as exc:
+            print(f"⚠️ Could not refresh title metadata for {md_path.name}: {exc}")
 
     def _is_generic_markdown(self, path: Path) -> bool:
         """Determine whether the Markdown file does not belong to other specialized pipelines."""

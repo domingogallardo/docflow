@@ -9,6 +9,7 @@ Medium) blocked the download when Instapaper created its copy, those images are
 already missing and the pipeline cannot recover them.
 """
 from __future__ import annotations
+import html
 import re
 import time
 import requests
@@ -304,18 +305,34 @@ class InstapaperProcessor:
         file_path = self.incoming_dir / file_name
 
         origin_html = str(origin) if origin else ""
+        html_generated_at = U.utc_now_iso()
         html_content = self._build_article_html(
             title=title,
             origin_html=origin_html,
             article_id=article_id,
+            html_generated_at=html_generated_at,
             content=content,
         )
 
         file_path.write_text(html_content, encoding="utf-8")
         return file_path
 
-    def _build_article_html(self, *, title: str, origin_html: str, article_id: str, content: str) -> str:
-        source_meta = '<meta name="docflow-source" content="instapaper">\n'
+    def _build_article_html(
+        self,
+        *,
+        title: str,
+        origin_html: str,
+        article_id: str,
+        html_generated_at: str,
+        content: str,
+    ) -> str:
+        safe_article_id = html.escape(article_id, quote=True)
+        safe_html_generated_at = html.escape(html_generated_at, quote=True)
+        source_meta = (
+            '<meta name="docflow-source" content="instapaper">\n'
+            f'<meta name="docflow-instapaper-id" content="{safe_article_id}">\n'
+            f'<meta name="docflow-html-generated-at" content="{safe_html_generated_at}">\n'
+        )
         return (
             "<!DOCTYPE html>\n"
             "<html>\n"
@@ -353,6 +370,25 @@ class InstapaperProcessor:
         for html_file in html_files:
             try:
                 html_content = html_file.read_text(encoding='utf-8')
+                soup = BeautifulSoup(html_content, "html.parser")
+                title = ""
+                if soup.title and soup.title.string:
+                    title = soup.title.string.strip()
+                h1 = soup.find("h1")
+                if not title and h1:
+                    title = h1.get_text(" ", strip=True)
+                instapaper_id = ""
+                meta_id = soup.find("meta", attrs={"name": "docflow-instapaper-id"})
+                if meta_id:
+                    instapaper_id = str(meta_id.get("content", "")).strip()
+                html_generated_at = ""
+                meta_generated = soup.find("meta", attrs={"name": "docflow-html-generated-at"})
+                if meta_generated:
+                    html_generated_at = str(meta_generated.get("content", "")).strip()
+                source_name = ""
+                origin = soup.find(id="origin")
+                if origin:
+                    source_name = origin.get_text(" ", strip=True).split("·", 1)[0].strip()
 
                 markdown_body = md(html_content, heading_style="ATX")
                 
@@ -361,7 +397,16 @@ class InstapaperProcessor:
                     "source: instapaper\n"
                     "---\n\n"
                 )
-                markdown_content = front_matter + markdown_body
+                extra = {
+                    "instapaper_id": instapaper_id,
+                    "source_name": source_name,
+                    "docflow_html_generated_at": html_generated_at or U.utc_now_iso(),
+                }
+                markdown_content = U.enrich_markdown_metadata(
+                    front_matter + markdown_body,
+                    title=title,
+                    extra=extra,
+                )
 
                 md_file = html_file.with_suffix('.md')
                 md_file.write_text(markdown_content, encoding='utf-8')

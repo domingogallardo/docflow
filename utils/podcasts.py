@@ -4,7 +4,7 @@ import re
 from config import INCOMING
 from path_utils import unique_pair
 from utils.file_ops import list_files
-from utils.markdown_utils import split_front_matter
+from utils.markdown_utils import split_front_matter, upsert_front_matter
 
 
 def is_podcast_file(file_path: Path) -> bool:
@@ -64,6 +64,13 @@ def rename_podcast_files(podcasts: list[Path]) -> list[Path]:
         new_md_path, new_html_path = unique_pair(new_md_path, new_html_path)
 
         podcast.rename(new_md_path)
+        try:
+            original = new_md_path.read_text(encoding="utf-8", errors="ignore")
+            updated = upsert_front_matter(original, {"title": title})
+            if updated != original:
+                new_md_path.write_text(updated, encoding="utf-8")
+        except Exception:
+            pass
         renamed_files.append(new_md_path)
 
         html_path = podcast.with_suffix('.html')

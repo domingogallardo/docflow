@@ -8,7 +8,7 @@ from instapaper_processor import InstapaperDownloadRegistry, InstapaperProcessor
 
 
 def test_instapaper_download_writes_html_and_markdown(tmp_path):
-    """Downloads HTML and builds Markdown with only source front matter."""
+    """Downloads HTML and builds Markdown with docflow metadata."""
     incoming = tmp_path / "Incoming"
     destination = tmp_path / "Posts"
     incoming.mkdir()
@@ -42,16 +42,23 @@ def test_instapaper_download_writes_html_and_markdown(tmp_path):
     html_text = html_path.read_text(encoding="utf-8")
 
     assert '<meta name="docflow-source" content="instapaper">' in html_text
+    assert '<meta name="docflow-instapaper-id" content="12345">' in html_text
+    assert '<meta name="docflow-html-generated-at"' in html_text
     assert '<meta name="instapaper-starred"' not in html_text
     assert 'data-instapaper-starred="true"' not in html_text
     assert "<title>⭐ Starred Sample</title>" in html_text
     assert "<h1>⭐ Starred Sample</h1>" in html_text
 
-    # Converting to Markdown should add only source front matter.
+    # Converting to Markdown should add canonical front matter.
     processor._convert_html_to_markdown()
     md_path = html_path.with_suffix('.md')
     md_text = md_path.read_text(encoding="utf-8")
-    assert md_text.startswith("---\nsource: instapaper\n---\n")
+    assert md_text.startswith("---\nsource: instapaper\n")
+    assert 'title: "⭐ Starred Sample"' in md_text
+    assert "docflow_source_type: instapaper" in md_text
+    assert "docflow_html_generated_at:" in md_text
+    assert "instapaper_id: 12345" in md_text
+    assert "source_name: Example.com" in md_text
     assert "instapaper_starred" not in md_text
 
 

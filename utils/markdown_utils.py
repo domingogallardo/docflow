@@ -11,13 +11,19 @@ _FRONT_MATTER_KEYS = {
     "title": "docflow-title",
     "docflow_source_type": "docflow-source-type",
     "docflow_ingested_at": "docflow-ingested-at",
+    "docflow_html_generated_at": "docflow-html-generated-at",
     "docflow_extractor": "docflow-extractor",
     "docflow_extraction_attempt": "docflow-extraction-attempt",
     "docflow_final_url": "docflow-final-url",
     "docflow_original_url": "docflow-original-url",
     "docflow_word_count": "docflow-word-count",
     "docflow_body_chars": "docflow-body-chars",
+    "docflow_removed_data_images": "docflow-removed-data-images",
     "instapaper_id": "docflow-instapaper-id",
+    "podcast_show": "docflow-podcast-show",
+    "podcast_episode_title": "docflow-podcast-episode-title",
+    "podcast_publish_date": "docflow-podcast-publish-date",
+    "podcast_export_date": "docflow-podcast-export-date",
     "tweet_url": "docflow-tweet-url",
     "tweet_id": "docflow-tweet-id",
     "tweet_author": "docflow-tweet-author",
@@ -128,27 +134,50 @@ def upsert_front_matter(
     """Insert or update leading YAML front matter while preserving key order."""
     bounds = _front_matter_bounds(md_text)
     if bounds is None:
-        meta: dict[str, object] = {}
+        front_lines: list[str] = []
+        parsed: dict[str, str] = {}
         body = md_text.lstrip("\n")
     else:
         parsed, front_lines, body = bounds
-        meta = dict(parsed)
-        for line in front_lines:
-            if ":" not in line:
-                continue
-            key = line.split(":", 1)[0].strip()
-            if key and key not in meta:
-                meta[key] = ""
 
-    for mapping, overwrite in ((defaults or {}, False), (values, True)):
+    defaults = defaults or {}
+    applied: set[str] = set()
+    new_front_lines: list[str] = []
+
+    def _line_key(line: str) -> str:
+        match = re.match(r"^\s*([A-Za-z_][A-Za-z0-9_-]*)\s*:", line)
+        return match.group(1) if match else ""
+
+    for line in front_lines:
+        key = _line_key(line)
+        if key in values and values[key] not in (None, ""):
+            new_front_lines.append(f"{key}: {_format_front_matter_value(values[key])}")
+            applied.add(key)
+            continue
+        if (
+            key in defaults
+            and defaults[key] not in (None, "")
+            and str(parsed.get(key, "")).strip() == ""
+        ):
+            new_front_lines.append(f"{key}: {_format_front_matter_value(defaults[key])}")
+            applied.add(key)
+            continue
+        if key:
+            applied.add(key)
+        new_front_lines.append(line)
+
+    for mapping, overwrite in ((defaults, False), (values, True)):
         for key, value in mapping.items():
             if value is None or value == "":
                 continue
-            if not overwrite and key in meta and str(meta[key]).strip() != "":
+            if key in applied:
                 continue
-            meta[key] = value
+            if not overwrite and str(parsed.get(key, "")).strip() != "":
+                continue
+            new_front_lines.append(f"{key}: {_format_front_matter_value(value)}")
+            applied.add(key)
 
-    front = _serialize_front_matter(meta)
+    front = "\n".join(["---", *new_front_lines, "---"])
     return f"{front}\n\n{body.lstrip()}"
 
 

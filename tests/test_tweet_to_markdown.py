@@ -904,6 +904,9 @@ def test_build_single_tweet_markdown_includes_external_link_without_media():
     )
     md = _build_single_tweet_markdown(parts, "https://x.com/autor/status/123")
     assert "Original link: https://example.com/post" in md
+    assert "source_url: https://x.com/autor/status/123" in md
+    assert "tweet_id: 123" in md
+    assert "docflow_source_type: tweet" in md
 
 
 def test_build_single_tweet_markdown_skips_duplicate_external_link():

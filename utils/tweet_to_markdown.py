@@ -17,6 +17,7 @@ except ImportError:  # pragma: no cover - environment without Playwright
     sync_playwright = None  # type: ignore[assignment]
 
 import config as cfg
+from utils.markdown_utils import enrich_markdown_metadata
 
 USER_AGENT = (
     "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
@@ -2193,7 +2194,13 @@ def _build_single_tweet_markdown(
 
     _append_tweet_content_lines(md_lines, parts, strip_author=bool(parent_lines))
 
-    return "\n".join(md_lines).strip() + "\n"
+    markdown = "\n".join(md_lines).strip() + "\n"
+    return enrich_markdown_metadata(
+        markdown,
+        source_url=tweet_url,
+        title=title,
+        extra={"tweet_id": _status_id_from_url(tweet_url) or ""},
+    )
 
 
 def _build_thread_markdown(
@@ -2235,7 +2242,13 @@ def _build_thread_markdown(
         md_lines.extend(["", "---", f"[View on X]({link_url})"])
         _append_tweet_content_lines(md_lines, parts, strip_author=True)
 
-    return "\n".join(md_lines).strip() + "\n"
+    markdown = "\n".join(md_lines).strip() + "\n"
+    return enrich_markdown_metadata(
+        markdown,
+        source_url=tweet_url,
+        title=title,
+        extra={"tweet_id": _status_id_from_url(tweet_url) or ""},
+    )
 
 
 def fetch_tweet_thread_markdown(
