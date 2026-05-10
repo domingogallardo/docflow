@@ -59,11 +59,32 @@ def add_margins_to_html_files(directory: Path, file_filter=None):
     from bs4 import BeautifulSoup
 
     margin_style = "body { margin-left: 6%; margin-right: 6%; }"
+    legacy_margin_style = (
+        "body { margin-left: 6%; margin-right: 6%; background: #fff; color: #222; "
+        "font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; "
+        "line-height: 1.55; }"
+    )
     img_rule = "img { max-width: 300px; height: auto; cursor: zoom-in; }"
     pre_rule = (
         "pre { white-space: pre-wrap; overflow-wrap: anywhere; word-break: break-word; "
         "overflow-x: auto; max-width: 100%; }\n"
         "pre code { white-space: inherit; }\n"
+    )
+    embed_rule = (
+        ".docflow-embed { border: 1px solid #e5e7eb; border-radius: 12px; padding: 14px 16px; "
+        "margin: 18px 0 24px; background: #fff; box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04); "
+        "max-width: 620px; }\n"
+        ".docflow-embed > :first-child { margin-top: 0; }\n"
+        ".docflow-embed > :last-child { margin-bottom: 0; }\n"
+        ".docflow-embed p { margin: 0 0 7px; }\n"
+        ".docflow-embed hr { border: 0; border-top: 1px solid #d1d5db; margin: 14px 0; }\n"
+        ".docflow-embed img { max-width: min(220px, 100%); }\n"
+        ".docflow-embed a { word-break: break-word; }\n"
+        ".docflow-embed-source { display: inline-block; margin-top: 6px; font-weight: 600; }\n"
+        ".docflow-embed-tiktok { display: inline-block; max-width: min(260px, 100%); }\n"
+        ".docflow-embed-tiktok img { display: block; max-width: min(220px, 100%); }\n"
+        "a[href*=\"tiktok.com\"] img { max-width: min(220px, 100%); }\n"
+        "iframe { max-width: 100%; }\n"
     )
     viewer_css = (
         ".image-viewer-overlay { position: fixed; inset: 0; background: #111; display: none; "
@@ -162,7 +183,9 @@ def add_margins_to_html_files(directory: Path, file_filter=None):
             if head is None:
                 head = soup.new_tag("head")
                 style_tag = soup.new_tag("style")
-                style_tag.string = margin_style + "\n" + img_rule + "\n" + pre_rule + "\n" + viewer_css
+                style_tag.string = (
+                    margin_style + "\n" + img_rule + "\n" + pre_rule + "\n" + embed_rule + "\n" + viewer_css
+                )
                 head.append(style_tag)
                 script_tag = soup.new_tag("script", id="image-viewer")
                 script_tag.string = viewer_script
@@ -173,6 +196,9 @@ def add_margins_to_html_files(directory: Path, file_filter=None):
                 style_tag = head.find("style")
                 if style_tag:
                     existing = style_tag.string or ""
+                    if legacy_margin_style in existing:
+                        existing = existing.replace(legacy_margin_style, margin_style)
+                        style_tag.string = existing
                     if margin_style not in existing:
                         style_tag.string = (existing + ("\n" if existing else "") + margin_style)
                         existing = style_tag.string
@@ -180,11 +206,15 @@ def add_margins_to_html_files(directory: Path, file_filter=None):
                         style_tag.string += "\n" + img_rule
                     if pre_rule not in (style_tag.string or ""):
                         style_tag.string += "\n" + pre_rule
+                    if embed_rule not in (style_tag.string or ""):
+                        style_tag.string += "\n" + embed_rule
                     if viewer_css not in (style_tag.string or ""):
                         style_tag.string += "\n" + viewer_css
                 else:
                     style_tag = soup.new_tag("style")
-                    style_tag.string = margin_style + "\n" + img_rule + "\n" + pre_rule + "\n" + viewer_css
+                    style_tag.string = (
+                        margin_style + "\n" + img_rule + "\n" + pre_rule + "\n" + embed_rule + "\n" + viewer_css
+                    )
                     head.append(style_tag)
                 script_tag = head.find("script", id="image-viewer")
                 if not script_tag:

@@ -218,6 +218,68 @@ Intro paragraph in code block
     assert "<blockquote><br>" not in html
 
 
+def test_markdown_to_html_normalizes_substack_block_embeds():
+    from bs4 import BeautifulSoup
+    from utils import markdown_to_html
+
+    md = """# Demo
+
+[
+
+![X avatar](https://img.example/avatar.jpg)
+
+Author @handle
+
+Embedded tweet text.
+
+](https://x.com/handle/status/123)
+"""
+    html = markdown_to_html(md, title="Demo")
+
+    assert "<p>[</p>" not in html
+    assert "](https://x.com/handle/status/123)" not in html
+
+    soup = BeautifulSoup(html, "html.parser")
+    embed = soup.find("div", class_="docflow-embed")
+    assert embed is not None
+    assert embed.find("a", string="View on X")["href"] == "https://x.com/handle/status/123"
+    assert "Embedded tweet text." in embed.get_text()
+
+
+def test_markdown_to_html_strips_unstable_tiktok_artifacts():
+    from bs4 import BeautifulSoup
+    from utils import markdown_to_html
+
+    md = """# Demo
+
+<iframe class="tiktok-iframe" src="https://cdn.iframe.ly/api/iframe?url=https%3A%2F%2Fwww.tiktok.com%2F%40u%2Fvideo%2F1"></iframe><iframe class="third-party-cookie-check-iframe" src="https://example.com/cookie.html"></iframe>
+
+[![](https://img.example/poster.jpg)](https://www.tiktok.com/@u/video/1)
+
+[@u](https://www.tiktok.com/@u)[A very long TikTok caption that should not become a huge visible link.](https://www.tiktok.com/@u/video/1)
+
+![](https://substackcdn.com//img/alert-circle.svg)Tiktok failed to load.  
+
+Enable 3rd party cookies or use another browser
+"""
+    html = markdown_to_html(md, title="Demo")
+
+    assert "tiktok-iframe" not in html
+    assert "third-party-cookie-check-iframe" not in html
+    assert "Tiktok failed to load" not in html
+    assert "3rd party cookies" not in html
+    assert "A very long TikTok caption" not in html
+
+    soup = BeautifulSoup(html, "html.parser")
+    embed = soup.find("div", class_="docflow-embed-tiktok")
+    assert embed is not None
+    poster = soup.find("a", href="https://www.tiktok.com/@u/video/1")
+    assert poster is not None
+    assert poster.find("img")["src"] == "https://img.example/poster.jpg"
+    assert embed.find("a", string="@u")["href"] == "https://www.tiktok.com/@u"
+    assert embed.find("a", string="View on TikTok")["href"] == "https://www.tiktok.com/@u/video/1"
+
+
 def test_enrich_markdown_metadata_adds_canonical_fields():
     from utils import enrich_markdown_metadata, split_front_matter
 

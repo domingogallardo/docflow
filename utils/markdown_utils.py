@@ -326,6 +326,151 @@ def convert_urls_to_links(text: str) -> str:
     return '\n'.join(processed_lines)
 
 
+_BLOCK_LINK_CLOSE_RE = re.compile(r"^\]\((https?://[^)]+)\)\s*$")
+_TIKTOK_IFRAME_RE = re.compile(
+    r"<iframe\b[^>]*(?:tiktok|iframe\.ly)[^>]*>\s*</iframe>",
+    flags=re.IGNORECASE,
+)
+_THIRD_PARTY_COOKIE_IFRAME_RE = re.compile(
+    r"<iframe\b[^>]*third-party-cookie-check-iframe[^>]*>\s*</iframe>",
+    flags=re.IGNORECASE,
+)
+_TIKTOK_IMAGE_LINK_RE = re.compile(
+    r"^\[!\[[^\]]*\]\((?P<img>https?://[^)]+)\)\]\((?P<url>https?://(?:www\.)?tiktok\.com/[^)]+)\)\s*$",
+    flags=re.IGNORECASE,
+)
+_TIKTOK_AUTHOR_LINK_RE = re.compile(
+    r"^\[(?P<label>@[^\]]+)\]\((?P<profile>https?://(?:www\.)?tiktok\.com/[^)]+)\)",
+    flags=re.IGNORECASE,
+)
+
+
+def _embedded_link_label(url: str) -> str:
+    lower = url.lower()
+    if "x.com/" in lower or "twitter.com/" in lower:
+        return "View on X"
+    if "tiktok.com/" in lower:
+        return "View on TikTok"
+    if "youtube.com/" in lower or "youtu.be/" in lower:
+        return "View on YouTube"
+    if "monosestocasticos.com/" in lower or "substack.com/" in lower:
+        return "Read full story"
+    return "View embedded item"
+
+
+def normalize_markdown_block_links(text: str) -> str:
+    """Convert Substack-style block links into parseable Markdown embed blocks."""
+    lines = text.splitlines()
+    output: list[str] = []
+    idx = 0
+
+    while idx < len(lines):
+        if lines[idx].strip() != "[":
+            output.append(lines[idx])
+            idx += 1
+            continue
+
+        close_idx = idx + 1
+        close_match = None
+        while close_idx < len(lines):
+            close_match = _BLOCK_LINK_CLOSE_RE.match(lines[close_idx].strip())
+            if close_match:
+                break
+            close_idx += 1
+
+        if not close_match:
+            output.append(lines[idx])
+            idx += 1
+            continue
+
+        content = lines[idx + 1 : close_idx]
+        if not any(line.strip() for line in content):
+            idx = close_idx + 1
+            continue
+
+        url = close_match.group(1)
+        label = _embedded_link_label(url)
+        output.append('<div class="docflow-embed" markdown="1">')
+        output.extend(content)
+        output.append("")
+        output.append(f"[{label}]({url}){{ .docflow-embed-source }}")
+        output.append("</div>")
+        idx = close_idx + 1
+
+    result = "\n".join(output)
+    if text.endswith("\n"):
+        result += "\n"
+    return result
+
+
+def strip_unstable_embed_artifacts(text: str) -> str:
+    """Remove third-party embed chrome that renders poorly in local archived pages."""
+    text = _THIRD_PARTY_COOKIE_IFRAME_RE.sub("", text)
+    text = _TIKTOK_IFRAME_RE.sub("", text)
+
+    cleaned_lines: list[str] = []
+    skip_next_cookie_hint = False
+    for line in text.splitlines():
+        lowered = line.lower()
+        if "tiktok failed to load" in lowered:
+            skip_next_cookie_hint = True
+            continue
+        if "3rd party cookies" in lowered:
+            skip_next_cookie_hint = False
+            continue
+        skip_next_cookie_hint = False
+        cleaned_lines.append(line)
+
+    result = "\n".join(cleaned_lines)
+    if text.endswith("\n"):
+        result += "\n"
+    return result
+
+
+def normalize_tiktok_fallbacks(text: str) -> str:
+    """Collapse TikTok fallback captures into compact local cards."""
+    lines = text.splitlines()
+    output: list[str] = []
+    idx = 0
+
+    while idx < len(lines):
+        image_match = _TIKTOK_IMAGE_LINK_RE.match(lines[idx].strip())
+        if not image_match:
+            output.append(lines[idx])
+            idx += 1
+            continue
+
+        image_line = lines[idx].strip()
+        tiktok_url = image_match.group("url")
+        next_idx = idx + 1
+        while next_idx < len(lines) and not lines[next_idx].strip():
+            next_idx += 1
+
+        author_line = ""
+        if next_idx < len(lines) and tiktok_url in lines[next_idx]:
+            author_match = _TIKTOK_AUTHOR_LINK_RE.match(lines[next_idx].strip())
+            if author_match:
+                label = author_match.group("label")
+                profile = author_match.group("profile")
+                author_line = f"[{label}]({profile})"
+            next_idx += 1
+
+        output.append('<div class="docflow-embed docflow-embed-tiktok" markdown="1">')
+        output.append(image_line)
+        if author_line:
+            output.append("")
+            output.append(author_line)
+        output.append("")
+        output.append(f"[{_embedded_link_label(tiktok_url)}]({tiktok_url}){{ .docflow-embed-source }}")
+        output.append("</div>")
+        idx = next_idx
+
+    result = "\n".join(output)
+    if text.endswith("\n"):
+        result += "\n"
+    return result
+
+
 def convert_newlines_to_br(html_text: str) -> str:
     """
     Convert single line breaks to <br> elements, but only inside content,
@@ -352,6 +497,9 @@ def markdown_to_html(md_text: str, title: str = None) -> str:
 
     md_text = md_text.replace('\xa0', ' ')
     front_matter, md_body = split_front_matter(md_text)
+    md_body = strip_unstable_embed_artifacts(md_body)
+    md_body = normalize_tiktok_fallbacks(md_body)
+    md_body = normalize_markdown_block_links(md_body)
     md_body = convert_urls_to_links(md_body)
 
     try:
@@ -362,6 +510,7 @@ def markdown_to_html(md_text: str, title: str = None) -> str:
                 "tables",
                 "toc",
                 "attr_list",
+                "md_in_html",
             ],
             output_format="html5",
         )
