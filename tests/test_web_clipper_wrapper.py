@@ -6,6 +6,7 @@ from web_clipper_wrapper import (
     default_output_path,
     markdown_quality,
     read_urls_from_file,
+    resolve_node_bin,
     strip_frontmatter,
 )
 
@@ -129,3 +130,19 @@ def test_default_output_path_uses_url_slug(tmp_path: Path):
     )
 
     assert path == tmp_path / "clipper-radiografia-del-alquiler.md"
+
+
+def test_resolve_node_bin_accepts_explicit_path(tmp_path: Path):
+    node = tmp_path / "node"
+    node.write_text("#!/bin/sh\n", encoding="utf-8")
+
+    assert resolve_node_bin(str(node)) == str(node)
+
+
+def test_resolve_node_bin_raises_for_missing_custom_binary():
+    try:
+        resolve_node_bin("definitely-missing-node-for-docflow-tests")
+    except RuntimeError as exc:
+        assert "Node.js executable not found" in str(exc)
+    else:
+        raise AssertionError("missing Node binary should fail")

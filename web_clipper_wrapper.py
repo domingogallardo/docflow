@@ -40,6 +40,7 @@ DEFAULT_CLIPPER_CLI = (
 )
 URL_RE = re.compile(r"https?://[^\s<>\"]+")
 DATA_IMAGE_RE = re.compile(r"data:image/[^)\s\"']+", re.IGNORECASE)
+DEFAULT_NODE_BIN = Path("/opt/homebrew/bin/node")
 
 
 @dataclass(frozen=True)
@@ -228,6 +229,22 @@ def build_template(attempt: ClipAttempt) -> dict:
     }
 
 
+def resolve_node_bin(node_bin: str) -> str:
+    """Resolve Node.js in cron-friendly locations as well as PATH."""
+    expanded = Path(node_bin).expanduser()
+    if expanded.parent != Path(".") and expanded.exists():
+        return str(expanded)
+
+    found = shutil.which(node_bin)
+    if found:
+        return found
+
+    if node_bin == "node" and DEFAULT_NODE_BIN.exists():
+        return str(DEFAULT_NODE_BIN)
+
+    raise RuntimeError(f"Node.js executable not found: {node_bin}")
+
+
 def run_clipper(
     *,
     clipper_cli: Path,
@@ -240,11 +257,10 @@ def run_clipper(
     """Run Obsidian Web Clipper CLI for one template attempt."""
     if not clipper_cli.exists():
         raise RuntimeError(f"Obsidian Clipper CLI not found: {clipper_cli}")
-    if shutil.which(node_bin) is None:
-        raise RuntimeError(f"Node.js executable not found: {node_bin}")
+    resolved_node_bin = resolve_node_bin(node_bin)
 
     command = [
-        node_bin,
+        resolved_node_bin,
         str(clipper_cli),
         url,
         "--template",
