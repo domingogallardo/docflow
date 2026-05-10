@@ -24,6 +24,7 @@ import requests
 from bs4 import BeautifulSoup
 
 import config as cfg
+import utils as U
 from path_utils import unique_path
 
 
@@ -373,6 +374,19 @@ def download_url_to_markdown(
             last_quality = quality
             last_attempt_name = attempt.name
             if quality.usable:
+                extra_metadata = {
+                    "docflow_extractor": "obsidian-clipper",
+                    "docflow_extraction_attempt": attempt.name,
+                    "docflow_final_url": final_url,
+                    "docflow_removed_data_images": removed_data_images,
+                }
+                if url.rstrip("/") != final_url.rstrip("/"):
+                    extra_metadata["docflow_original_url"] = url
+                markdown = U.enrich_markdown_metadata(
+                    markdown,
+                    source_url=final_url,
+                    extra=extra_metadata,
+                )
                 destination.write_text(markdown, encoding="utf-8")
                 return ArticleDownloadResult(
                     url=url,

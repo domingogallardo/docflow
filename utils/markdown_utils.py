@@ -1,13 +1,31 @@
 import re
 import html
+from datetime import datetime, timezone
+from typing import Mapping
 
 
 _FRONT_MATTER_KEYS = {
     "source": "docflow-source",
+    "source_url": "docflow-source-url",
+    "source_name": "docflow-source-name",
+    "title": "docflow-title",
+    "docflow_source_type": "docflow-source-type",
+    "docflow_ingested_at": "docflow-ingested-at",
+    "docflow_extractor": "docflow-extractor",
+    "docflow_extraction_attempt": "docflow-extraction-attempt",
+    "docflow_final_url": "docflow-final-url",
+    "docflow_original_url": "docflow-original-url",
+    "docflow_word_count": "docflow-word-count",
+    "docflow_body_chars": "docflow-body-chars",
+    "instapaper_id": "docflow-instapaper-id",
     "tweet_url": "docflow-tweet-url",
+    "tweet_id": "docflow-tweet-id",
     "tweet_author": "docflow-tweet-author",
     "tweet_author_name": "docflow-tweet-author-name",
     "tweet_capture_source": "docflow-tweet-capture-source",
+    "tweet_posted_kind": "docflow-tweet-posted-kind",
+    "tweet_thread": "docflow-tweet-thread",
+    "tweet_thread_count": "docflow-tweet-thread-count",
 }
 
 
@@ -48,6 +66,155 @@ def _parse_front_matter(lines: list[str]) -> dict[str, str]:
     return meta
 
 
+def _format_front_matter_value(value: object) -> str:
+    if isinstance(value, bool):
+        return "true" if value else "false"
+    if isinstance(value, int):
+        return str(value)
+
+    text = str(value)
+    if text == "":
+        return '""'
+
+    plain_pattern = re.compile(r"^[A-Za-z0-9_@./:+%?&=#, -]+$")
+    needs_quotes = (
+        text != text.strip()
+        or "\n" in text
+        or '"' in text
+        or "\\" in text
+        or text.startswith(("-", "{", "}", "[", "]", "&", "*", "!", "|", ">", "%", "@", "`"))
+        or text.lower() in {"true", "false", "null", "yes", "no", "on", "off"}
+        or not plain_pattern.match(text)
+    )
+    if not needs_quotes:
+        return text
+
+    escaped = text.replace("\\", "\\\\").replace('"', '\\"')
+    return f'"{escaped}"'
+
+
+def _serialize_front_matter(meta: Mapping[str, object]) -> str:
+    lines = ["---"]
+    for key, value in meta.items():
+        if value is None:
+            continue
+        lines.append(f"{key}: {_format_front_matter_value(value)}")
+    lines.append("---")
+    return "\n".join(lines)
+
+
+def _front_matter_bounds(md_text: str) -> tuple[dict[str, str], list[str], str] | None:
+    lines = md_text.splitlines()
+    if not lines or lines[0].strip() != "---":
+        return None
+
+    front_lines: list[str] = []
+    for idx in range(1, len(lines)):
+        if lines[idx].strip() == "---":
+            body = "\n".join(lines[idx + 1 :])
+            if md_text.endswith("\n") and not body.endswith("\n"):
+                body += "\n"
+            return _parse_front_matter(front_lines), front_lines, body
+        front_lines.append(lines[idx])
+    return None
+
+
+def upsert_front_matter(
+    md_text: str,
+    values: Mapping[str, object],
+    *,
+    defaults: Mapping[str, object] | None = None,
+) -> str:
+    """Insert or update leading YAML front matter while preserving key order."""
+    bounds = _front_matter_bounds(md_text)
+    if bounds is None:
+        meta: dict[str, object] = {}
+        body = md_text.lstrip("\n")
+    else:
+        parsed, front_lines, body = bounds
+        meta = dict(parsed)
+        for line in front_lines:
+            if ":" not in line:
+                continue
+            key = line.split(":", 1)[0].strip()
+            if key and key not in meta:
+                meta[key] = ""
+
+    for mapping, overwrite in ((defaults or {}, False), (values, True)):
+        for key, value in mapping.items():
+            if value is None or value == "":
+                continue
+            if not overwrite and key in meta and str(meta[key]).strip() != "":
+                continue
+            meta[key] = value
+
+    front = _serialize_front_matter(meta)
+    return f"{front}\n\n{body.lstrip()}"
+
+
+def extract_markdown_title(md_text: str) -> str:
+    """Return the first H1 title from Markdown text, ignoring front matter."""
+    _, body = split_front_matter(md_text)
+    for line in body.splitlines():
+        match = re.match(r"^#\s+(.+?)\s*$", line)
+        if match:
+            return match.group(1).strip()
+    return ""
+
+
+def markdown_body_stats(md_text: str) -> dict[str, int]:
+    """Return simple body-only stats suitable for front matter."""
+    _, body = split_front_matter(md_text)
+    words = re.findall(r"\w+", body, flags=re.UNICODE)
+    return {
+        "docflow_body_chars": len(body.strip()),
+        "docflow_word_count": len(words),
+    }
+
+
+def utc_now_iso() -> str:
+    return datetime.now(timezone.utc).isoformat(timespec="seconds").replace("+00:00", "Z")
+
+
+def infer_source_type(meta: Mapping[str, str], source_url: str | None = None) -> str:
+    source = str(meta.get("source", "")).strip().lower()
+    if source in {"tweet", "podcast", "instapaper"}:
+        return source
+    candidate = source_url or str(meta.get("source_url", "")).strip() or source
+    if candidate.startswith(("http://", "https://")):
+        return "web"
+    return "markdown"
+
+
+def enrich_markdown_metadata(
+    md_text: str,
+    *,
+    source_url: str | None = None,
+    title: str | None = None,
+    extra: Mapping[str, object] | None = None,
+    now: str | None = None,
+) -> str:
+    """Add canonical docflow metadata without removing existing source fields."""
+    meta, _ = split_front_matter(md_text)
+    candidate_source = str(meta.get("source", "")).strip()
+    effective_source_url = source_url
+    if not effective_source_url and candidate_source.startswith(("http://", "https://")):
+        effective_source_url = candidate_source
+
+    defaults: dict[str, object] = {
+        "title": title or extract_markdown_title(md_text),
+        "source_url": effective_source_url or "",
+        "docflow_source_type": infer_source_type(meta, effective_source_url),
+        "docflow_ingested_at": now or utc_now_iso(),
+    }
+    values: dict[str, object] = {}
+    values.update(markdown_body_stats(md_text))
+    if extra:
+        values.update(extra)
+
+    return upsert_front_matter(md_text, values, defaults=defaults)
+
+
 def front_matter_meta_tags(meta: dict[str, str]) -> str:
     tags: list[str] = []
     for key, meta_name in _FRONT_MATTER_KEYS.items():
@@ -60,7 +227,7 @@ def front_matter_meta_tags(meta: dict[str, str]) -> str:
 
 def original_source_link_html(meta: dict[str, str]) -> str:
     """Render a visible original-source link for external clipped articles."""
-    source = meta.get("source", "").strip()
+    source = (meta.get("source_url") or meta.get("source", "")).strip()
     if not source.startswith(("http://", "https://")):
         return ""
 
