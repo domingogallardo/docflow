@@ -41,6 +41,7 @@ DEFAULT_CLIPPER_CLI = (
 URL_RE = re.compile(r"https?://[^\s<>\"]+")
 DATA_IMAGE_RE = re.compile(r"data:image/[^)\s\"']+", re.IGNORECASE)
 DEFAULT_NODE_BIN = Path("/opt/homebrew/bin/node")
+ESCAPED_JSON_NOISE_RE = re.compile(r"\\n|\\/|\\u[0-9A-Fa-f]{4}")
 
 
 @dataclass(frozen=True)
@@ -110,6 +111,17 @@ DOMAIN_RULES: tuple[DomainRule, ...] = (
             ClipAttempt(
                 "lesswrong-post-content",
                 "{{selectorHtml:.PostsPage-postContent|markdown}}",
+            ),
+        ),
+    ),
+    DomainRule(
+        "marginalrevolution.com",
+        (
+            ClipAttempt(
+                "marginalrevolution-entry-content",
+                "{{selectorHtml:h1.entry-title|markdown}}\n\n"
+                "{{selectorHtml:.byline|markdown}}\n\n"
+                "{{selectorHtml:.entry-content|markdown}}",
             ),
         ),
     ),
@@ -292,6 +304,7 @@ def markdown_quality(
     body_chars = len(body)
     words = re.findall(r"\w+", body, flags=re.UNICODE)
     data_image_count = len(DATA_IMAGE_RE.findall(markdown))
+    escaped_json_noise_count = len(ESCAPED_JSON_NOISE_RE.findall(body))
 
     if data_image_count:
         return MarkdownQuality(
@@ -300,6 +313,22 @@ def markdown_quality(
             len(words),
             data_image_count,
             "contains data:image payloads",
+        )
+    if body.startswith(("\\[", "[")) and escaped_json_noise_count >= 20:
+        return MarkdownQuality(
+            False,
+            body_chars,
+            len(words),
+            0,
+            "looks like escaped JSON instead of Markdown",
+        )
+    if "childrenIDs" in body and escaped_json_noise_count >= 20:
+        return MarkdownQuality(
+            False,
+            body_chars,
+            len(words),
+            0,
+            "contains escaped comment JSON",
         )
     if body_chars < min_chars:
         return MarkdownQuality(False, body_chars, len(words), 0, "body too short")

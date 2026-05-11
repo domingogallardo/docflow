@@ -84,6 +84,19 @@ def test_markdown_quality_rejects_data_images():
     assert quality.reason == "contains data:image payloads"
 
 
+def test_markdown_quality_rejects_escaped_json_payload():
+    escaped_comments = "<\\\\/p>\\\\n".join(["Comment"] * 25)
+    noisy_body = (
+        '\\["\\n\\n# Title\\n\\nBody text",'
+        '"childrenIDs":[1,2],'
+        '"content":"' + escaped_comments + '"}'
+    )
+    quality = markdown_quality(noisy_body, min_chars=20, min_words=2)
+
+    assert not quality.usable
+    assert quality.reason == "looks like escaped JSON instead of Markdown"
+
+
 def test_strip_frontmatter_returns_body_only():
     assert strip_frontmatter("---\na: b\n---\nBody\n") == "Body"
 
@@ -110,6 +123,18 @@ def test_attempts_for_lesswrong_include_post_content_after_content():
     ]
 
     assert attempts[:2] == ["content", "lesswrong-post-content"]
+
+
+def test_attempts_for_marginal_revolution_include_entry_content_after_content():
+    attempts = attempts_for_url(
+        "https://marginalrevolution.com/marginalrevolution/2026/05/example.html"
+    )
+
+    assert [attempt.name for attempt in attempts[:2]] == [
+        "content",
+        "marginalrevolution-entry-content",
+    ]
+    assert "{{selectorHtml:.byline|markdown}}" in attempts[1].content_format
 
 
 def test_attempts_for_thenewthings_include_beehiiv_content_after_content():
