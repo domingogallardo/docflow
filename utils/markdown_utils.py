@@ -301,6 +301,30 @@ def _raw_html_block_end_tag(line: str) -> str:
     return "" if end_tag in line.lower() else end_tag
 
 
+def _position_inside_markdown_link(line: str, position: int) -> bool:
+    patterns = (
+        r"\[!\[[^\]]*\]\([^)]+\)\]\([^)]+\)",
+        r"!\[[^\]]*\]\([^)]+\)",
+        r"\[[^\]]+\]\([^)]+\)",
+    )
+    for pattern in patterns:
+        for match in re.finditer(pattern, line):
+            if match.start() <= position < match.end():
+                return True
+    return False
+
+
+def _fenced_code_marker(line: str) -> str:
+    match = re.match(r"^\s*(`{3,}|~{3,})", line)
+    if not match:
+        return ""
+    return match.group(1)[0]
+
+
+def _closes_fenced_code(line: str, marker: str) -> bool:
+    return bool(marker and re.match(rf"^\s*{re.escape(marker)}{{3,}}\s*$", line))
+
+
 def convert_urls_to_links(text: str) -> str:
     """Convert plain-text URLs to Markdown links robustly."""
     text = clean_duplicate_markdown_links(text)
@@ -308,8 +332,21 @@ def convert_urls_to_links(text: str) -> str:
     lines = text.split('\n')
     processed_lines = []
     raw_html_end_tag = ""
+    fenced_code_marker = ""
 
     for line in lines:
+        if fenced_code_marker:
+            processed_lines.append(line)
+            if _closes_fenced_code(line, fenced_code_marker):
+                fenced_code_marker = ""
+            continue
+
+        marker = _fenced_code_marker(line)
+        if marker:
+            fenced_code_marker = marker
+            processed_lines.append(line)
+            continue
+
         if raw_html_end_tag:
             processed_lines.append(line)
             if raw_html_end_tag in line.lower():
@@ -332,7 +369,10 @@ def convert_urls_to_links(text: str) -> str:
                 prefix = line[:start_pos].lower()
 
                 prefix_lines = prefix.split('\n')
-                is_in_markdown_link = '](' in prefix_lines[-1] if prefix_lines else False
+                is_in_markdown_link = (
+                    ('](' in prefix_lines[-1] if prefix_lines else False)
+                    or _position_inside_markdown_link(line, start_pos)
+                )
 
                 prefix_words = prefix.split()
                 last_word = prefix_words[-1] if prefix_words else ""
@@ -349,7 +389,15 @@ def convert_urls_to_links(text: str) -> str:
     return '\n'.join(processed_lines)
 
 
-_BLOCK_LINK_CLOSE_RE = re.compile(r"^\]\((https?://[^)]+)\)\s*$")
+_BLOCK_LINK_CLOSE_RE = re.compile(r"^\]\((https?://[^)]+)\)(.*)$")
+_X_STATUS_LINK_CLOSE_RE = re.compile(
+    r"^(?P<body>.*)\]\((?P<url>https?://(?:www\.)?(?:x|twitter)\.com/[^)]+/status/[^)]+)\)(?P<trailing>.*)$",
+    flags=re.IGNORECASE,
+)
+_X_IMAGE_LINK_RE = re.compile(
+    r"^\[!\[[^\]]*\]\((?P<img>https?://[^)]+)\)\]\((?P<url>https?://(?:www\.)?(?:x|twitter)\.com/[^)]+/status/[^)]+)\)\s*$",
+    flags=re.IGNORECASE,
+)
 _TIKTOK_IFRAME_RE = re.compile(
     r"<iframe\b[^>]*(?:tiktok|iframe\.ly)[^>]*>\s*</iframe>",
     flags=re.IGNORECASE,
@@ -391,7 +439,7 @@ def _is_image_only_block(lines: list[str]) -> bool:
     return bool(content) and all(line.startswith("![") for line in content)
 
 
-def _find_block_link_close(lines: list[str], open_idx: int) -> tuple[int, str] | None:
+def _find_block_link_close(lines: list[str], open_idx: int) -> tuple[int, str, str] | None:
     depth = 1
     idx = open_idx + 1
     while idx < len(lines):
@@ -403,9 +451,81 @@ def _find_block_link_close(lines: list[str], open_idx: int) -> tuple[int, str] |
             if close_match:
                 depth -= 1
                 if depth == 0:
-                    return idx, close_match.group(1)
+                    return idx, close_match.group(1), close_match.group(2).strip()
         idx += 1
     return None
+
+
+def _is_multiline_x_embed_start(line: str) -> bool:
+    return line.lstrip().startswith("[![")
+
+
+def _strip_multiline_embed_open(line: str) -> str:
+    return re.sub(r"^(\s*)\[!", r"\1!", line, count=1)
+
+
+def normalize_multiline_x_embeds(text: str) -> str:
+    """Collapse old multiline Substack/X captures into compact local cards."""
+    lines = text.splitlines()
+    output: list[str] = []
+    idx = 0
+
+    while idx < len(lines):
+        image_link_match = _X_IMAGE_LINK_RE.match(lines[idx].strip())
+        if image_link_match:
+            output.append('<div class="docflow-embed" markdown="1">')
+            output.append(f"![]({image_link_match.group('img')})")
+            output.append("")
+            output.append(
+                f"[{_embedded_link_label(image_link_match.group('url'))}]"
+                f"({image_link_match.group('url')}){{ .docflow-embed-source }}"
+            )
+            output.append("</div>")
+            idx += 1
+            continue
+
+        if not _is_multiline_x_embed_start(lines[idx]):
+            output.append(lines[idx])
+            idx += 1
+            continue
+
+        close_idx = -1
+        close_match = None
+        for scan_idx in range(idx + 1, len(lines)):
+            match = _X_STATUS_LINK_CLOSE_RE.match(lines[scan_idx].strip())
+            if match:
+                close_idx = scan_idx
+                close_match = match
+                break
+            if lines[scan_idx].startswith("# "):
+                break
+
+        if close_match is None:
+            output.append(lines[idx])
+            idx += 1
+            continue
+
+        url = close_match.group("url")
+        final_body = close_match.group("body").rstrip()
+        trailing = close_match.group("trailing").strip()
+        content = lines[idx:close_idx]
+        content[0] = _strip_multiline_embed_open(content[0])
+        if final_body:
+            content.append(final_body)
+
+        output.append('<div class="docflow-embed" markdown="1">')
+        output.extend(content)
+        output.append("")
+        output.append(f"[{_embedded_link_label(url)}]({url}){{ .docflow-embed-source }}")
+        output.append("</div>")
+        if trailing:
+            lines.insert(close_idx + 1, trailing)
+        idx = close_idx + 1
+
+    result = "\n".join(output)
+    if text.endswith("\n"):
+        result += "\n"
+    return result
 
 
 def _collapse_nested_block_links(lines: list[str], outer_url: str) -> list[str]:
@@ -423,19 +543,25 @@ def _collapse_nested_block_links(lines: list[str], outer_url: str) -> list[str]:
             idx += 1
             continue
 
-        close_idx, url = close
+        close_idx, url, trailing = close
         body = lines[idx + 1 : close_idx]
         body_text = " ".join(line.strip() for line in body if line.strip())
         normalized_text = body_text.lower()
         if url == outer_url and normalized_text in _READ_MORE_LABELS:
+            if trailing:
+                collapsed.append(trailing)
             idx = close_idx + 1
             continue
         if body_text and not any(line.lstrip().startswith(("!", "#", "<")) for line in body):
             collapsed.append(f"[{body_text}]({url})")
+            if trailing:
+                collapsed.append(trailing)
             idx = close_idx + 1
             continue
 
         collapsed.extend(lines[idx : close_idx + 1])
+        if trailing:
+            collapsed.append(trailing)
         idx = close_idx + 1
 
     return collapsed
@@ -459,7 +585,7 @@ def normalize_markdown_block_links(text: str) -> str:
             idx += 1
             continue
 
-        close_idx, url = close
+        close_idx, url, trailing = close
         content = lines[idx + 1 : close_idx]
         if not any(line.strip() for line in content):
             idx = close_idx + 1
@@ -475,6 +601,8 @@ def normalize_markdown_block_links(text: str) -> str:
         output.append("")
         output.append(f"[{label}]({url}){{ .docflow-embed-source }}")
         output.append("</div>")
+        if trailing:
+            lines.insert(close_idx + 1, trailing)
         idx = close_idx + 1
 
     result = "\n".join(output)
@@ -581,6 +709,7 @@ def markdown_to_html(md_text: str, title: str = None) -> str:
     front_matter, md_body = split_front_matter(md_text)
     md_body = strip_unstable_embed_artifacts(md_body)
     md_body = normalize_tiktok_fallbacks(md_body)
+    md_body = normalize_multiline_x_embeds(md_body)
     md_body = normalize_markdown_block_links(md_body)
     md_body = convert_urls_to_links(md_body)
 

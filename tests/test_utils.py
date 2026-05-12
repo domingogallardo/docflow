@@ -199,6 +199,43 @@ def test_convert_urls_does_not_linkify_inside_raw_iframe_blocks():
     assert "src=&quot;https://www.instagram.com/embed.js&quot;" in result
 
 
+def test_convert_urls_does_not_linkify_urls_inside_markdown_link_text():
+    from utils import convert_urls_to_links
+
+    md = "[*https://x.com/ProfAviLoeb*](https://x.com/ProfAviLoeb)"
+
+    result = convert_urls_to_links(md)
+
+    assert result == md
+
+
+def test_convert_urls_does_not_linkify_inside_markdown_image_links():
+    from utils import convert_urls_to_links
+
+    md = "[![](https://img.example/post.png)](https://x.com/handle/status/123)"
+
+    result = convert_urls_to_links(md)
+
+    assert result == md
+
+
+def test_convert_urls_does_not_linkify_inside_fenced_code_blocks():
+    from utils import convert_urls_to_links
+
+    md = """Intro https://example.com/plain
+
+```
+https://x.com/someone/status/123
+```
+"""
+
+    result = convert_urls_to_links(md)
+
+    assert "[https://example.com/plain](https://example.com/plain)" in result
+    assert "[https://x.com/someone/status/123]" not in result
+    assert "```\nhttps://x.com/someone/status/123\n```" in result
+
+
 def test_convert_newlines_to_br_does_not_inject_breaks_in_list_items():
     from utils import convert_newlines_to_br
 
@@ -284,6 +321,81 @@ Embedded tweet text.
     assert embed is not None
     assert embed.find("a", string="View on X")["href"] == "https://x.com/handle/status/123"
     assert "Embedded tweet text." in embed.get_text()
+
+
+def test_markdown_to_html_normalizes_substack_block_embeds_with_trailing_text():
+    from bs4 import BeautifulSoup
+    from utils import markdown_to_html
+
+    md = """# Demo
+
+[
+
+![X avatar](https://img.example/avatar.jpg)
+
+Author @handle
+
+](https://x.com/handle/status/123)[example.com](https://example.com) trailing text.
+"""
+    html = markdown_to_html(md, title="Demo")
+
+    assert "](https://x.com/handle/status/123)" not in html
+    assert "[example.com]" not in html
+
+    soup = BeautifulSoup(html, "html.parser")
+    embed = soup.find("div", class_="docflow-embed")
+    assert embed is not None
+    assert embed.find("a", string="View on X")["href"] == "https://x.com/handle/status/123"
+    assert soup.find("a", string="example.com")["href"] == "https://example.com"
+
+
+def test_markdown_to_html_normalizes_multiline_x_embeds():
+    from bs4 import BeautifulSoup
+    from utils import markdown_to_html
+
+    md = """# Demo
+
+[![](https://img.example/avatar.jpg)
+
+Author @handle
+
+Embedded tweet text.
+
+![](https://img.example/media.jpg)
+
+9:14 PM · Mar 31, 2026 · 247K Views
+
+25 Replies · 164 Reposts · 768 Likes](https://x.com/handle/status/123?s=20)
+"""
+    html = markdown_to_html(md, title="Demo")
+
+    assert "](https://x.com/handle/status/123" not in html
+
+    soup = BeautifulSoup(html, "html.parser")
+    embed = soup.find("div", class_="docflow-embed")
+    assert embed is not None
+    assert embed.find("a", string="View on X")["href"] == "https://x.com/handle/status/123?s=20"
+    assert "Embedded tweet text." in embed.get_text()
+    assert "25 Replies" in embed.get_text()
+
+
+def test_markdown_to_html_normalizes_single_line_x_image_links():
+    from bs4 import BeautifulSoup
+    from utils import markdown_to_html
+
+    md = """# Demo
+
+[![](https://img.example/post.png)](https://x.com/handle/status/123)
+"""
+    html = markdown_to_html(md, title="Demo")
+
+    assert "](https://x.com/handle/status/123)" not in html
+
+    soup = BeautifulSoup(html, "html.parser")
+    embed = soup.find("div", class_="docflow-embed")
+    assert embed is not None
+    assert embed.find("img")["src"] == "https://img.example/post.png"
+    assert embed.find("a", string="View on X")["href"] == "https://x.com/handle/status/123"
 
 
 def test_markdown_to_html_drops_substack_profile_avatar_cards():
