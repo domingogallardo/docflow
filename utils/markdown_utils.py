@@ -290,14 +290,37 @@ def clean_duplicate_markdown_links(text: str) -> str:
     return re.sub(duplicate_link_pattern, replace_duplicate_link, text)
 
 
+def _raw_html_block_end_tag(line: str) -> str:
+    match = re.match(r"^\s*<([A-Za-z][A-Za-z0-9:-]*)\b", line)
+    if not match:
+        return ""
+    tag_name = match.group(1).lower()
+    if tag_name not in {"iframe", "script", "style"}:
+        return ""
+    end_tag = f"</{tag_name}>"
+    return "" if end_tag in line.lower() else end_tag
+
+
 def convert_urls_to_links(text: str) -> str:
     """Convert plain-text URLs to Markdown links robustly."""
     text = clean_duplicate_markdown_links(text)
 
     lines = text.split('\n')
     processed_lines = []
+    raw_html_end_tag = ""
 
     for line in lines:
+        if raw_html_end_tag:
+            processed_lines.append(line)
+            if raw_html_end_tag in line.lower():
+                raw_html_end_tag = ""
+            continue
+
+        raw_html_end_tag = _raw_html_block_end_tag(line)
+        if raw_html_end_tag:
+            processed_lines.append(line)
+            continue
+
         if 'http' in line:
             url_pattern = r'https?://[^\s\)\]>"\']+'
             matches = list(re.finditer(url_pattern, line))

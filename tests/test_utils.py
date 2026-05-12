@@ -95,6 +95,24 @@ def test_add_margins_wraps_images(tmp_path):
     assert img is not None
     assert img.get("src") == "https://img.test/x.jpg"
     assert "cursor: zoom-in" in out
+    assert "body { margin-left: 6%; margin-right: 6%; background: #fff; color: #111; }" in out
+
+
+def test_add_margins_replaces_minimal_body_style(tmp_path):
+    html = tmp_path / "sample.html"
+    html.write_text(
+        (
+            "<html><head><style>body { margin-left: 6%; margin-right: 6%; }</style></head>"
+            "<body><p>hola</p></body></html>"
+        ),
+        encoding="utf-8",
+    )
+
+    utils.add_margins_to_html_files(tmp_path)
+
+    out = html.read_text(encoding="utf-8")
+    assert "body { margin-left: 6%; margin-right: 6%; background: #fff; color: #111; }" in out
+    assert "font-family" not in out
 
 
 def test_add_margins_reuses_existing_anchor_and_fixes_nested_image_links(tmp_path):
@@ -157,6 +175,28 @@ URL aislada: https://x.com/SchmidhuberAI/status/1950194864940835159"""
     
     # Verify the standalone URL was converted to a link.
     assert "[https://x.com/SchmidhuberAI/status/1950194864940835159](https://x.com/SchmidhuberAI/status/1950194864940835159)" in result 
+
+
+def test_convert_urls_does_not_linkify_inside_raw_iframe_blocks():
+    from utils import convert_urls_to_links
+
+    md = """Intro https://example.com/plain
+
+<iframe srcdoc="<!doctype html>
+<blockquote
+  class=&quot;instagram-media&quot;
+  data-instgrm-permalink=&quot;https://instagram.com/p/DX_WjYuspNk/?utm_source=ig_embed&utm_campaign=loading&quot;
+></blockquote>
+<script async src=&quot;https://www.instagram.com/embed.js&quot;></script>
+</iframe>
+"""
+
+    result = convert_urls_to_links(md)
+
+    assert "[https://example.com/plain](https://example.com/plain)" in result
+    assert "[https://instagram.com" not in result
+    assert "data-instgrm-permalink=&quot;https://instagram.com/p/DX_WjYuspNk/" in result
+    assert "src=&quot;https://www.instagram.com/embed.js&quot;" in result
 
 
 def test_convert_newlines_to_br_does_not_inject_breaks_in_list_items():

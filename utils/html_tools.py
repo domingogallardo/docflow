@@ -58,7 +58,8 @@ def add_margins_to_html_files(directory: Path, file_filter=None):
     """
     from bs4 import BeautifulSoup
 
-    margin_style = "body { margin-left: 6%; margin-right: 6%; }"
+    minimal_margin_style = "body { margin-left: 6%; margin-right: 6%; }"
+    margin_style = "body { margin-left: 6%; margin-right: 6%; background: #fff; color: #111; }"
     legacy_margin_style = (
         "body { margin-left: 6%; margin-right: 6%; background: #fff; color: #222; "
         "font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; "
@@ -198,6 +199,9 @@ def add_margins_to_html_files(directory: Path, file_filter=None):
                     existing = style_tag.string or ""
                     if legacy_margin_style in existing:
                         existing = existing.replace(legacy_margin_style, margin_style)
+                        style_tag.string = existing
+                    if minimal_margin_style in existing:
+                        existing = existing.replace(minimal_margin_style, margin_style)
                         style_tag.string = existing
                     if margin_style not in existing:
                         style_tag.string = (existing + ("\n" if existing else "") + margin_style)
