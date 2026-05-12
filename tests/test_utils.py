@@ -295,6 +295,28 @@ Intro paragraph in code block
     assert "<blockquote><br>" not in html
 
 
+def test_markdown_to_html_handles_definition_list_quotes():
+    from bs4 import BeautifulSoup
+    from utils import markdown_to_html
+
+    md = """[Daring Fireball](https://daringfireball.net)
+·
+by John Gruber
+
+:   Chance Miller:
+
+    > Epic Games [announced](https://x.com/fortnite/status/123) the return.
+"""
+    html = markdown_to_html(md, title="Demo")
+
+    assert "[announced](https://x.com/fortnite/status/123)" not in html
+    assert "<pre><code>" not in html
+
+    soup = BeautifulSoup(html, "html.parser")
+    assert soup.find("dl") is not None
+    assert soup.find("a", string="announced")["href"] == "https://x.com/fortnite/status/123"
+
+
 def test_markdown_to_html_normalizes_substack_block_embeds():
     from bs4 import BeautifulSoup
     from utils import markdown_to_html

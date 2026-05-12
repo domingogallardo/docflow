@@ -722,6 +722,7 @@ def markdown_to_html(md_text: str, title: str = None) -> str:
                 "toc",
                 "attr_list",
                 "md_in_html",
+                "def_list",
             ],
             output_format="html5",
         )
