@@ -343,6 +343,7 @@ _TIKTOK_AUTHOR_LINK_RE = re.compile(
     r"^\[(?P<label>@[^\]]+)\]\((?P<profile>https?://(?:www\.)?tiktok\.com/[^)]+)\)",
     flags=re.IGNORECASE,
 )
+_READ_MORE_LABELS = {"read full story", "read more", "continue reading"}
 
 
 def _embedded_link_label(url: str) -> str:
@@ -358,6 +359,65 @@ def _embedded_link_label(url: str) -> str:
     return "View embedded item"
 
 
+def _is_substack_profile_url(url: str) -> bool:
+    return bool(re.search(r"https?://(?:www\.)?substack\.com/@", url, flags=re.IGNORECASE))
+
+
+def _is_image_only_block(lines: list[str]) -> bool:
+    content = [line.strip() for line in lines if line.strip()]
+    return bool(content) and all(line.startswith("![") for line in content)
+
+
+def _find_block_link_close(lines: list[str], open_idx: int) -> tuple[int, str] | None:
+    depth = 1
+    idx = open_idx + 1
+    while idx < len(lines):
+        stripped = lines[idx].strip()
+        if stripped == "[":
+            depth += 1
+        else:
+            close_match = _BLOCK_LINK_CLOSE_RE.match(stripped)
+            if close_match:
+                depth -= 1
+                if depth == 0:
+                    return idx, close_match.group(1)
+        idx += 1
+    return None
+
+
+def _collapse_nested_block_links(lines: list[str], outer_url: str) -> list[str]:
+    collapsed: list[str] = []
+    idx = 0
+    while idx < len(lines):
+        if lines[idx].strip() != "[":
+            collapsed.append(lines[idx])
+            idx += 1
+            continue
+
+        close = _find_block_link_close(lines, idx)
+        if close is None:
+            collapsed.append(lines[idx])
+            idx += 1
+            continue
+
+        close_idx, url = close
+        body = lines[idx + 1 : close_idx]
+        body_text = " ".join(line.strip() for line in body if line.strip())
+        normalized_text = body_text.lower()
+        if url == outer_url and normalized_text in _READ_MORE_LABELS:
+            idx = close_idx + 1
+            continue
+        if body_text and not any(line.lstrip().startswith(("!", "#", "<")) for line in body):
+            collapsed.append(f"[{body_text}]({url})")
+            idx = close_idx + 1
+            continue
+
+        collapsed.extend(lines[idx : close_idx + 1])
+        idx = close_idx + 1
+
+    return collapsed
+
+
 def normalize_markdown_block_links(text: str) -> str:
     """Convert Substack-style block links into parseable Markdown embed blocks."""
     lines = text.splitlines()
@@ -370,28 +430,25 @@ def normalize_markdown_block_links(text: str) -> str:
             idx += 1
             continue
 
-        close_idx = idx + 1
-        close_match = None
-        while close_idx < len(lines):
-            close_match = _BLOCK_LINK_CLOSE_RE.match(lines[close_idx].strip())
-            if close_match:
-                break
-            close_idx += 1
-
-        if not close_match:
+        close = _find_block_link_close(lines, idx)
+        if close is None:
             output.append(lines[idx])
             idx += 1
             continue
 
+        close_idx, url = close
         content = lines[idx + 1 : close_idx]
         if not any(line.strip() for line in content):
             idx = close_idx + 1
             continue
 
-        url = close_match.group(1)
+        if _is_substack_profile_url(url) and _is_image_only_block(content):
+            idx = close_idx + 1
+            continue
+
         label = _embedded_link_label(url)
         output.append('<div class="docflow-embed" markdown="1">')
-        output.extend(content)
+        output.extend(_collapse_nested_block_links(content, url))
         output.append("")
         output.append(f"[{label}]({url}){{ .docflow-embed-source }}")
         output.append("</div>")
@@ -480,6 +537,8 @@ def convert_newlines_to_br(html_text: str) -> str:
         tag_open = match.group(1)
         content = match.group(2)
         tag_close = match.group(3)
+        if "docflow-embed" in tag_open:
+            return match.group(0)
 
         content_with_br = content.replace('\n', '<br>\n')
 

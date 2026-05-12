@@ -246,6 +246,65 @@ Embedded tweet text.
     assert "Embedded tweet text." in embed.get_text()
 
 
+def test_markdown_to_html_drops_substack_profile_avatar_cards():
+    from bs4 import BeautifulSoup
+    from utils import markdown_to_html
+
+    md = """# Demo
+
+[
+
+![Author avatar](https://img.example/avatar.png)
+
+](https://substack.com/@author)
+
+[Author](https://substack.com/@author)
+"""
+    html = markdown_to_html(md, title="Demo")
+
+    assert "docflow-embed" not in html
+    assert "Read full story" not in html
+
+    soup = BeautifulSoup(html, "html.parser")
+    assert soup.find("a", string="Author")["href"] == "https://substack.com/@author"
+
+
+def test_markdown_to_html_handles_nested_substack_read_more_blocks():
+    from bs4 import BeautifulSoup
+    from utils import markdown_to_html
+
+    md = """# Demo
+
+[
+
+![The Darkness](https://img.example/card.png)
+
+#### The Darkness
+
+[Noah Smith](https://substack.com/profile/8243895-noah-smith)
+
+May 13, 2021
+
+[
+
+Read full story
+
+](https://www.noahpinion.blog/p/the-darkness)
+
+](https://www.noahpinion.blog/p/the-darkness)
+"""
+    html = markdown_to_html(md, title="Demo")
+
+    assert "<p>[</p>" not in html
+    assert "](https://www.noahpinion.blog/p/the-darkness)" not in html
+
+    soup = BeautifulSoup(html, "html.parser")
+    embed = soup.find("div", class_="docflow-embed")
+    assert embed is not None
+    assert embed.find("a", string="View embedded item")["href"] == "https://www.noahpinion.blog/p/the-darkness"
+    assert embed.get_text().count("Read full story") == 0
+
+
 def test_markdown_to_html_strips_unstable_tiktok_artifacts():
     from bs4 import BeautifulSoup
     from utils import markdown_to_html
