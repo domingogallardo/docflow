@@ -411,6 +411,10 @@ _X_IMAGE_LINK_RE = re.compile(
     r"^\[!\[[^\]]*\]\((?P<img>https?://[^)]+)\)\]\((?P<url>https?://(?:www\.)?(?:x|twitter)\.com/[^)]+/status/[^)]+)\)\s*$",
     flags=re.IGNORECASE,
 )
+_YOUTUBE_IMAGE_RE = re.compile(
+    r"^!\[[^\]]*\]\((?P<url>https?://(?:www\.)?(?:youtube\.com/watch|youtu\.be/)[^)]+)\)\s*$",
+    flags=re.IGNORECASE,
+)
 _TIKTOK_IFRAME_RE = re.compile(
     r"<iframe\b[^>]*(?:tiktok|iframe\.ly)[^>]*>\s*</iframe>",
     flags=re.IGNORECASE,
@@ -470,7 +474,10 @@ def _find_block_link_close(lines: list[str], open_idx: int) -> tuple[int, str, s
 
 
 def _is_multiline_x_embed_start(line: str) -> bool:
-    return line.lstrip().startswith("[![")
+    stripped = line.lstrip()
+    if not stripped.startswith("[!["):
+        return False
+    return not re.match(r"^\[!\[[^\]]*\]\([^)]+\)\]\(", stripped)
 
 
 def _strip_multiline_embed_open(line: str) -> str:
@@ -534,6 +541,26 @@ def normalize_multiline_x_embeds(text: str) -> str:
         if trailing:
             lines.insert(close_idx + 1, trailing)
         idx = close_idx + 1
+
+    result = "\n".join(output)
+    if text.endswith("\n"):
+        result += "\n"
+    return result
+
+
+def normalize_youtube_image_links(text: str) -> str:
+    """Turn clipped YouTube image syntax into a normal video link card."""
+    lines = text.splitlines()
+    output: list[str] = []
+    for line in lines:
+        match = _YOUTUBE_IMAGE_RE.match(line.strip())
+        if not match:
+            output.append(line)
+            continue
+        url = match.group("url")
+        output.append('<div class="docflow-embed" markdown="1">')
+        output.append(f"[{_embedded_link_label(url)}]({url}){{ .docflow-embed-source }}")
+        output.append("</div>")
 
     result = "\n".join(output)
     if text.endswith("\n"):
@@ -722,6 +749,7 @@ def markdown_to_html(md_text: str, title: str = None) -> str:
     front_matter, md_body = split_front_matter(md_text)
     md_body = strip_unstable_embed_artifacts(md_body)
     md_body = normalize_tiktok_fallbacks(md_body)
+    md_body = normalize_youtube_image_links(md_body)
     md_body = normalize_multiline_x_embeds(md_body)
     md_body = normalize_markdown_block_links(md_body)
     md_body = convert_urls_to_links(md_body)

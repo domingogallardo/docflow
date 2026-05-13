@@ -401,6 +401,26 @@ Embedded tweet text.
     assert "25 Replies" in embed.get_text()
 
 
+def test_markdown_to_html_does_not_capture_later_inline_x_links_after_image_links():
+    from bs4 import BeautifulSoup
+    from utils import markdown_to_html
+
+    md = """# Demo
+
+[![Author](https://img.example/author.png)](/author/casey/)
+
+Question with [**posted**](https://x.com/handle/status/123) inline.
+"""
+    html = markdown_to_html(md, title="Demo")
+
+    assert "docflow-embed-source" not in html
+    assert "</div>" not in html
+
+    soup = BeautifulSoup(html, "html.parser")
+    assert soup.find("a", href="/author/casey/").find("img") is not None
+    assert soup.find("a", string="posted")["href"] == "https://x.com/handle/status/123"
+
+
 def test_markdown_to_html_normalizes_single_line_x_image_links():
     from bs4 import BeautifulSoup
     from utils import markdown_to_html
@@ -418,6 +438,24 @@ def test_markdown_to_html_normalizes_single_line_x_image_links():
     assert embed is not None
     assert embed.find("img")["src"] == "https://img.example/post.png"
     assert embed.find("a", string="View on X")["href"] == "https://x.com/handle/status/123"
+
+
+def test_markdown_to_html_normalizes_youtube_image_links():
+    from bs4 import BeautifulSoup
+    from utils import markdown_to_html
+
+    md = """# Demo
+
+![](https://www.youtube.com/watch?v=abc123)
+"""
+    html = markdown_to_html(md, title="Demo")
+
+    assert '<img alt="" src="https://www.youtube.com/watch?v=abc123"' not in html
+
+    soup = BeautifulSoup(html, "html.parser")
+    embed = soup.find("div", class_="docflow-embed")
+    assert embed is not None
+    assert embed.find("a", string="View on YouTube")["href"] == "https://www.youtube.com/watch?v=abc123"
 
 
 def test_markdown_to_html_drops_substack_profile_avatar_cards():
