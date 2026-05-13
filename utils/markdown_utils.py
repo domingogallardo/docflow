@@ -32,6 +32,8 @@ _FRONT_MATTER_KEYS = {
     "tweet_posted_kind": "docflow-tweet-posted-kind",
     "tweet_thread": "docflow-tweet-thread",
     "tweet_thread_count": "docflow-tweet-thread-count",
+    "tweet_reply_to_url": "docflow-tweet-reply-to-url",
+    "tweet_reply_context_included": "docflow-tweet-reply-context-included",
 }
 
 
@@ -88,6 +90,7 @@ def _format_front_matter_value(value: object) -> str:
         or "\n" in text
         or '"' in text
         or "\\" in text
+        or bool(re.search(r":\s|\s#", text))
         or text.startswith(("-", "{", "}", "[", "]", "&", "*", "!", "|", ">", "%", "@", "`"))
         or text.lower() in {"true", "false", "null", "yes", "no", "on", "off"}
         or not plain_pattern.match(text)
@@ -95,7 +98,12 @@ def _format_front_matter_value(value: object) -> str:
     if not needs_quotes:
         return text
 
-    escaped = text.replace("\\", "\\\\").replace('"', '\\"')
+    escaped = (
+        text.replace("\\", "\\\\")
+        .replace("\r", "\\r")
+        .replace("\n", "\\n")
+        .replace('"', '\\"')
+    )
     return f'"{escaped}"'
 
 
@@ -107,6 +115,11 @@ def _serialize_front_matter(meta: Mapping[str, object]) -> str:
         lines.append(f"{key}: {_format_front_matter_value(value)}")
     lines.append("---")
     return "\n".join(lines)
+
+
+def front_matter_block(meta: Mapping[str, object]) -> str:
+    """Serialize a YAML front matter block followed by one blank line."""
+    return _serialize_front_matter(meta) + "\n\n"
 
 
 def _front_matter_bounds(md_text: str) -> tuple[dict[str, str], list[str], str] | None:

@@ -392,11 +392,7 @@ class InstapaperProcessor:
 
                 markdown_body = md(html_content, heading_style="ATX")
                 
-                front_matter = (
-                    "---\n"
-                    "source: instapaper\n"
-                    "---\n\n"
-                )
+                front_matter = U.front_matter_block({"source": "instapaper"})
                 extra = {
                     "instapaper_id": instapaper_id,
                     "source_name": source_name,

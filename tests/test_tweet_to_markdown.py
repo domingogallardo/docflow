@@ -1148,6 +1148,24 @@ def test_build_single_tweet_markdown_marks_capture_source():
     assert "tweet_capture_source: posted" in md
 
 
+def test_build_single_tweet_markdown_escapes_front_matter_values():
+    parts = TweetParts(
+        author_name='Piotr "Woz" Wozniak',
+        author_handle="@SuperMemoWoz",
+        body_text="Tweet body.",
+        avatar_url=None,
+        trailing_media_lines=[],
+        media_present=False,
+        external_link=None,
+    )
+
+    md = _build_single_tweet_markdown(parts, "https://x.com/SuperMemoWoz/status/123")
+
+    assert 'tweet_author_name: "Piotr \\"Woz\\" Wozniak"' in md
+    assert 'tweet_author: "@SuperMemoWoz"' in md
+    assert 'tweet_author_name: "Piotr "Woz" Wozniak"' not in md
+
+
 def test_build_single_tweet_markdown_includes_reply_parent_context():
     parent = TweetParts(
         author_name="Parent",

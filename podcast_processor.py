@@ -216,45 +216,7 @@ class PodcastProcessor:
 
     def _ensure_podcast_front_matter(self, text: str) -> str:
         """Ensure podcast files carry a source tag in front matter."""
-        lines = text.splitlines()
-        if not lines or lines[0].strip() != "---":
-            cleaned = text.lstrip("\n")
-            return f"---\nsource: podcast\n---\n\n{cleaned}"
-
-        for idx in range(1, len(lines)):
-            if lines[idx].strip() != "---":
-                continue
-            front_lines = lines[1:idx]
-            body_lines = lines[idx + 1 :]
-            found_source = False
-            updated = False
-            new_front_lines: list[str] = []
-            for line in front_lines:
-                stripped = line.strip()
-                if stripped.startswith("source:"):
-                    found_source = True
-                    if stripped != "source: podcast":
-                        new_front_lines.append("source: podcast")
-                        updated = True
-                    else:
-                        new_front_lines.append(line)
-                    continue
-                new_front_lines.append(line)
-
-            if not found_source:
-                new_front_lines.insert(0, "source: podcast")
-                updated = True
-
-            if not updated:
-                return text
-
-            rebuilt = "\n".join(["---", *new_front_lines, "---", *body_lines])
-            if text.endswith("\n") and not rebuilt.endswith("\n"):
-                rebuilt += "\n"
-            return rebuilt
-
-        cleaned = text.lstrip("\n")
-        return f"---\nsource: podcast\n---\n\n{cleaned}"
+        return U.upsert_front_matter(text, {"source": "podcast"})
     
     def _replace_snip_link(self, match: re.Match[str]) -> str:
         """Return embedded HTML for the snip link."""

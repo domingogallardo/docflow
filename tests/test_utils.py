@@ -545,4 +545,38 @@ def test_upsert_front_matter_preserves_unrelated_lines():
     assert "title: Demo" in updated
 
 
+def test_front_matter_meta_tags_exports_tweet_reply_fields():
+    from utils import front_matter_meta_tags
+
+    html = front_matter_meta_tags(
+        {
+            "tweet_reply_to_url": "https://x.com/parent/status/99",
+            "tweet_reply_context_included": "true",
+        }
+    )
+
+    assert (
+        '<meta name="docflow-tweet-reply-to-url" '
+        'content="https://x.com/parent/status/99">'
+    ) in html
+    assert (
+        '<meta name="docflow-tweet-reply-context-included" content="true">'
+    ) in html
+
+
+def test_front_matter_block_escapes_yaml_sensitive_values():
+    from utils import front_matter_block
+
+    block = front_matter_block(
+        {
+            "name": 'Piotr "Woz"\nWozniak',
+            "title": "A title: with colon",
+        }
+    )
+
+    assert 'name: "Piotr \\"Woz\\"\\nWozniak"' in block
+    assert 'title: "A title: with colon"' in block
+    assert block.endswith("---\n\n")
+
+
 # (tests for Instapaper-starred utils were removed)

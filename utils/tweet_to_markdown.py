@@ -17,7 +17,7 @@ except ImportError:  # pragma: no cover - environment without Playwright
     sync_playwright = None  # type: ignore[assignment]
 
 import config as cfg
-from utils.markdown_utils import enrich_markdown_metadata
+from utils.markdown_utils import enrich_markdown_metadata, front_matter_block
 
 USER_AGENT = (
     "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
@@ -2290,27 +2290,31 @@ def _build_single_tweet_markdown(
     if parent_contexts:
         reply_parent_url = parent_contexts[-1].url
     title = _build_title(parts.author_name, parts.author_handle)
-    front_matter = [
-        "---",
-        "source: tweet",
-        f"tweet_url: {tweet_url}",
-        f"tweet_capture_source: {source}",
-    ]
+    front_matter: dict[str, object] = {
+        "source": "tweet",
+        "tweet_url": tweet_url,
+        "tweet_capture_source": source,
+    }
     if kind:
-        front_matter.append(f"tweet_posted_kind: {kind}")
+        front_matter["tweet_posted_kind"] = kind
     if reply_parent_url:
-        front_matter.append(f"tweet_reply_to_url: {reply_parent_url}")
-        included = "true" if any(context.parts is not None for context in parent_contexts) else "false"
-        front_matter.append(f"tweet_reply_context_included: {included}")
+        front_matter["tweet_reply_to_url"] = reply_parent_url
+        front_matter["tweet_reply_context_included"] = any(
+            context.parts is not None for context in parent_contexts
+        )
     if parent_contexts:
-        front_matter.append(f"tweet_conversation_count: {len(parent_contexts) + 1}")
+        front_matter["tweet_conversation_count"] = len(parent_contexts) + 1
     if parts.author_handle:
-        front_matter.append(f'tweet_author: "{parts.author_handle}"')
+        front_matter["tweet_author"] = parts.author_handle
     if parts.author_name:
-        front_matter.append(f'tweet_author_name: "{parts.author_name}"')
-    front_matter.extend(["---", ""])
+        front_matter["tweet_author_name"] = parts.author_name
 
-    md_lines = [*front_matter, f"# {title}", "", f"[View on X]({tweet_url})"]
+    md_lines = [
+        *front_matter_block(front_matter).splitlines(),
+        f"# {title}",
+        "",
+        f"[View on X]({tweet_url})",
+    ]
     if parts.avatar_url:
         md_lines.extend(["", f"![avatar]({parts.avatar_url})"])
 
@@ -2345,23 +2349,21 @@ def _build_thread_markdown(
         _normalize_posted_kind(posted_kind) if normalized_capture_source == "posted" else None
     )
     title = _build_title(target_parts.author_name, author_handle, kind="Thread")
-    front_matter = [
-        "---",
-        "source: tweet",
-        f"tweet_url: {tweet_url}",
-        f"tweet_capture_source: {normalized_capture_source}",
-        "tweet_thread: true",
-        f"tweet_thread_count: {len(thread_parts)}",
-    ]
+    front_matter: dict[str, object] = {
+        "source": "tweet",
+        "tweet_url": tweet_url,
+        "tweet_capture_source": normalized_capture_source,
+        "tweet_thread": True,
+        "tweet_thread_count": len(thread_parts),
+    }
     if normalized_posted_kind:
-        front_matter.append(f"tweet_posted_kind: {normalized_posted_kind}")
+        front_matter["tweet_posted_kind"] = normalized_posted_kind
     if author_handle:
-        front_matter.append(f'tweet_author: "{author_handle}"')
+        front_matter["tweet_author"] = author_handle
     if target_parts.author_name:
-        front_matter.append(f'tweet_author_name: "{target_parts.author_name}"')
-    front_matter.extend(["---", ""])
+        front_matter["tweet_author_name"] = target_parts.author_name
 
-    md_lines = [*front_matter, f"# {title}"]
+    md_lines = [*front_matter_block(front_matter).splitlines(), f"# {title}"]
     if target_parts.avatar_url:
         md_lines.extend(["", f"![avatar]({target_parts.avatar_url})"])
 
