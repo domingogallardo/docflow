@@ -628,10 +628,14 @@ def normalize_markdown_block_links(text: str) -> str:
         close_idx, url, trailing = close
         content = lines[idx + 1 : close_idx]
         if not any(line.strip() for line in content):
+            if trailing:
+                lines.insert(close_idx + 1, trailing)
             idx = close_idx + 1
             continue
 
         if _is_substack_profile_url(url) and _is_image_only_block(content):
+            if trailing:
+                lines.insert(close_idx + 1, trailing)
             idx = close_idx + 1
             continue
 

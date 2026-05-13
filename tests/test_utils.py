@@ -481,6 +481,36 @@ def test_markdown_to_html_drops_substack_profile_avatar_cards():
     assert soup.find("a", string="Author")["href"] == "https://substack.com/@author"
 
 
+def test_markdown_to_html_drops_adjacent_substack_profile_avatar_cards():
+    from bs4 import BeautifulSoup
+    from utils import markdown_to_html
+
+    md = """# Demo
+
+[
+
+![Author one avatar](https://img.example/one.png)
+
+](https://substack.com/@one)[
+
+![Author two avatar](https://img.example/two.png)
+
+](https://substack.com/@two)
+
+[Author One](https://substack.com/@one) and [Author Two](https://substack.com/@two)
+"""
+    html = markdown_to_html(md, title="Demo")
+
+    assert "](https://substack.com/@two)" not in html
+    assert "<p>[</p>" not in html
+    assert "Author one avatar" not in html
+    assert "Author two avatar" not in html
+
+    soup = BeautifulSoup(html, "html.parser")
+    assert soup.find("a", string="Author One")["href"] == "https://substack.com/@one"
+    assert soup.find("a", string="Author Two")["href"] == "https://substack.com/@two"
+
+
 def test_markdown_to_html_handles_nested_substack_read_more_blocks():
     from bs4 import BeautifulSoup
     from utils import markdown_to_html
