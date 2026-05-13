@@ -723,6 +723,60 @@ def normalize_tiktok_fallbacks(text: str) -> str:
     return result
 
 
+_X_HANDLE_LINE_RE = re.compile(r"^@[A-Za-z0-9_]{1,20}$")
+
+
+def _join_x_handle_linebreaks(content: str) -> str:
+    """Keep standalone X handles inline with their following text."""
+    lines = content.split("\n")
+    if len(lines) < 2:
+        return content
+
+    output: list[str] = []
+    idx = 0
+    while idx < len(lines):
+        line = lines[idx]
+        stripped = line.strip()
+        if not _X_HANDLE_LINE_RE.fullmatch(stripped):
+            output.append(line)
+            idx += 1
+            continue
+
+        combined = line.rstrip()
+        idx += 1
+        while idx < len(lines):
+            next_line = lines[idx]
+            next_text = next_line.strip()
+            if not next_text:
+                break
+            if next_text.startswith("<"):
+                break
+
+            first_char = next_text[0]
+            if first_char in ",.;:!?":
+                combined += next_text
+                idx += 1
+                if len(next_text) > 1:
+                    break
+                continue
+            if first_char == "·":
+                combined += " " + next_text
+                idx += 1
+                continue
+            if _X_HANDLE_LINE_RE.fullmatch(next_text):
+                combined += " " + next_text
+                idx += 1
+                continue
+
+            combined += " " + next_text
+            idx += 1
+            break
+
+        output.append(combined)
+
+    return "\n".join(output)
+
+
 def convert_newlines_to_br(html_text: str) -> str:
     """
     Convert single line breaks to <br> elements, but only inside content,
@@ -735,6 +789,7 @@ def convert_newlines_to_br(html_text: str) -> str:
         if "docflow-embed" in tag_open:
             return match.group(0)
 
+        content = _join_x_handle_linebreaks(content)
         content_with_br = content.replace('\n', '<br>\n')
 
         return f"{tag_open}{content_with_br}{tag_close}"

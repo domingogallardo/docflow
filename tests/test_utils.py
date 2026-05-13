@@ -258,6 +258,28 @@ def test_convert_newlines_to_br_does_not_treat_pre_as_paragraph():
     assert "<pre><code>Intro line\n</code></pre>" in converted
 
 
+def test_convert_newlines_to_br_keeps_x_handle_metadata_inline():
+    from utils import convert_newlines_to_br
+
+    html = "<p>Elon Musk\n@elonmusk\n·\n5h\nOn my way</p>"
+    converted = convert_newlines_to_br(html)
+
+    assert "@elonmusk<br>" not in converted
+    assert "Elon Musk<br>\n@elonmusk · 5h<br>\nOn my way" in converted
+
+
+def test_convert_newlines_to_br_joins_x_handle_punctuation_lists():
+    from utils import convert_newlines_to_br
+
+    html = "<p>Gracias:\n@pablogguz_\n,\n@SantiCalvo_Eco\n,\n@jgjorrin\n. Si me dejo a alguien.</p>"
+    converted = convert_newlines_to_br(html)
+
+    assert "@pablogguz_<br>" not in converted
+    assert "@SantiCalvo_Eco<br>" not in converted
+    assert "@jgjorrin<br>" not in converted
+    assert "@pablogguz_, @SantiCalvo_Eco, @jgjorrin. Si me dejo a alguien." in converted
+
+
 def test_markdown_to_html_avoids_list_item_br_artifacts():
     from bs4 import BeautifulSoup
     from utils import markdown_to_html
