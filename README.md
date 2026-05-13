@@ -159,8 +159,8 @@ Source-specific fields:
   `podcast_publish_date`, and `podcast_export_date`.
 - Tweets: `tweet_url`, `tweet_id`, `tweet_author`, `tweet_author_name`,
   `tweet_capture_source`, `tweet_posted_kind`, `tweet_thread`,
-  `tweet_thread_count`, `tweet_reply_to_url`, and
-  `tweet_reply_context_included`.
+  `tweet_thread_count`, `tweet_reply_to_url`, `tweet_reply_context_included`,
+  and `tweet_conversation_count`.
 
 Supported fields are also exported to generated HTML as `docflow-*` meta tags
 where relevant, for example `docflow-source-url`, `docflow-html-generated-at`,

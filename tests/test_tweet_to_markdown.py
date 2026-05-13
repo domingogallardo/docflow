@@ -30,6 +30,7 @@ from utils.tweet_to_markdown import (
     TweetParts,
     ReplyParentContext,
     _reply_parent_url_from_payload,
+    _is_self_thread_parent,
 )
 
 
@@ -1186,6 +1187,73 @@ def test_build_single_tweet_markdown_includes_reply_parent_context():
     assert "Parent tweet." in md
     assert "#### Mi respuesta" in md
     assert "Reply body." in md
+
+
+def test_build_single_tweet_markdown_includes_liked_conversation_chain():
+    origin = TweetParts(
+        author_name="Origin",
+        author_handle="@origin",
+        body_text="Origin tweet.",
+        avatar_url=None,
+        trailing_media_lines=[],
+        media_present=False,
+        external_link=None,
+    )
+    parent = TweetParts(
+        author_name="Parent",
+        author_handle="@parent",
+        body_text="Parent reply.",
+        avatar_url=None,
+        trailing_media_lines=[],
+        media_present=False,
+        external_link=None,
+    )
+    liked = TweetParts(
+        author_name="Liked",
+        author_handle="@liked",
+        body_text="Liked reply.",
+        avatar_url=None,
+        trailing_media_lines=[],
+        media_present=False,
+        external_link=None,
+    )
+
+    md = _build_single_tweet_markdown(
+        liked,
+        "https://x.com/liked/status/3",
+        capture_source="liked",
+        reply_parent_contexts=[
+            ReplyParentContext("https://x.com/origin/status/1", origin),
+            ReplyParentContext("https://x.com/parent/status/2", parent),
+        ],
+    )
+
+    assert "tweet_capture_source: liked" in md
+    assert "tweet_posted_kind:" not in md
+    assert "tweet_reply_to_url: https://x.com/parent/status/2" in md
+    assert "tweet_reply_context_included: true" in md
+    assert "tweet_conversation_count: 3" in md
+    assert "#### En respuesta a" in md
+    assert "**Origin @origin**" in md
+    assert "**Parent @parent**" in md
+    assert "#### Tweet favorito" in md
+    assert md.index("Origin tweet.") < md.index("Parent reply.") < md.index("Liked reply.")
+
+
+def test_is_self_thread_parent_detects_same_author_parent():
+    parts = TweetParts(
+        author_name="Author",
+        author_handle="@Author",
+        body_text="Reply.",
+        avatar_url=None,
+        trailing_media_lines=[],
+        media_present=False,
+        external_link=None,
+    )
+
+    assert _is_self_thread_parent(parts, "https://x.com/author/status/1")
+    assert not _is_self_thread_parent(parts, "https://x.com/other/status/1")
+    assert not _is_self_thread_parent(parts, "https://x.com/i/web/status/1")
 
 
 def test_reply_parent_url_from_payload_uses_immediate_parent():

@@ -963,6 +963,41 @@ def test_clean_body_keeps_reply_section_headings_for_html_rendering() -> None:
     assert headings == ["En respuesta a", "Mi respuesta"]
 
 
+def test_clean_body_keeps_liked_reply_section_headings_for_html_rendering() -> None:
+    from bs4 import BeautifulSoup
+
+    body = "\n".join(
+        [
+            "# Tweet by Someone (@someone)",
+            "",
+            "[View on X](https://x.com/someone/status/2)",
+            "",
+            "#### En respuesta a",
+            "",
+            "[Ver tweet padre en X](https://x.com/parent/status/1)",
+            "",
+            "**Parent Author (@parent)**",
+            "",
+            "Parent body.",
+            "",
+            "---",
+            "",
+            "#### Tweet favorito",
+            "",
+            "Liked reply.",
+        ]
+    )
+
+    cleaned = mod._clean_body(body)
+    html_fragment = mod._markdown_to_html_fragment(cleaned)
+    soup = BeautifulSoup(html_fragment, "html.parser")
+    headings = [heading.get_text(strip=True) for heading in soup.find_all("h4")]
+
+    assert "\\#### En respuesta a" not in cleaned
+    assert "\\#### Tweet favorito" not in cleaned
+    assert headings == ["En respuesta a", "Tweet favorito"]
+
+
 def test_markdown_to_html_fragment_preserves_paragraph_hard_breaks() -> None:
     body = "\n".join(
         [

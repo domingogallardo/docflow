@@ -393,6 +393,7 @@ def _escape_literal_markdown_headings(text: str) -> str:
         "#### Tweet citado",
         "#### En respuesta a",
         "#### Mi respuesta",
+        "#### Tweet favorito",
     }
     escaped: list[str] = []
     for line in text.splitlines():
