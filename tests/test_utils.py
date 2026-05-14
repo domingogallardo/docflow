@@ -688,6 +688,7 @@ def test_sync_markdown_html_pair_metadata_links_both_files(tmp_path):
     assert meta["docflow_id"]
     assert meta["docflow_markdown_path"] == "Posts/Posts 2026/article.md"
     assert meta["docflow_html_path"] == "Posts/Posts 2026/article.html"
+    assert meta["docflow_render_status"] == "paired_html"
 
     soup = BeautifulSoup(html.read_text(encoding="utf-8"), "html.parser")
     assert soup.find("meta", attrs={"name": "docflow-id"})["content"] == meta["docflow_id"]
@@ -699,6 +700,7 @@ def test_sync_markdown_html_pair_metadata_links_both_files(tmp_path):
         soup.find("meta", attrs={"name": "docflow-html-path"})["content"]
         == "Posts/Posts 2026/article.html"
     )
+    assert soup.find("meta", attrs={"name": "docflow-render-status"})["content"] == "paired_html"
 
 
 def test_sync_markdown_html_pair_metadata_preserves_existing_id(tmp_path):
@@ -713,6 +715,23 @@ def test_sync_markdown_html_pair_metadata_preserves_existing_id(tmp_path):
 
     meta, _ = split_front_matter(md.read_text(encoding="utf-8"))
     assert meta["docflow_id"] == "existing-id"
+
+
+def test_sync_markdown_only_metadata_adds_minimal_front_matter(tmp_path):
+    from utils import split_front_matter, sync_markdown_only_metadata
+
+    md = tmp_path / "Tweets" / "daily.md"
+    md.parent.mkdir()
+    md.write_text("# Daily tweets\n", encoding="utf-8")
+
+    sync_markdown_only_metadata(md, base_dir=tmp_path)
+
+    meta, body = split_front_matter(md.read_text(encoding="utf-8"))
+    assert meta["docflow_id"]
+    assert meta["docflow_markdown_path"] == "Tweets/daily.md"
+    assert meta["docflow_render_status"] == "markdown_only"
+    assert "docflow_html_path" not in meta
+    assert body.lstrip().startswith("# Daily tweets")
 
 
 # (tests for Instapaper-starred utils were removed)

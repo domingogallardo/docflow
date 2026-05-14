@@ -10,6 +10,7 @@ _FRONT_MATTER_KEYS = {
     "docflow_id": "docflow-id",
     "docflow_markdown_path": "docflow-markdown-path",
     "docflow_html_path": "docflow-html-path",
+    "docflow_render_status": "docflow-render-status",
     "source": "docflow-source",
     "source_url": "docflow-source-url",
     "source_name": "docflow-source-name",
@@ -334,6 +335,7 @@ def sync_markdown_html_pair_metadata(
         "docflow_id": docflow_id,
         "docflow_markdown_path": _relative_docflow_path(md_path, base_dir),
         "docflow_html_path": _relative_docflow_path(html_path, base_dir),
+        "docflow_render_status": "paired_html",
     }
 
     updated_md = upsert_front_matter(md_text, relation_meta)
@@ -344,6 +346,29 @@ def sync_markdown_html_pair_metadata(
         meta = {**meta, **relation_meta}
 
     update_html_meta_tags(html_path, meta)
+
+
+def sync_markdown_only_metadata(
+    md_path: Path,
+    *,
+    base_dir: Path | None = None,
+) -> None:
+    """Store identity metadata for Markdown files without an associated HTML file."""
+    if not md_path.exists():
+        return
+
+    md_text = md_path.read_text(encoding="utf-8", errors="replace")
+    meta, _ = split_front_matter(md_text)
+    docflow_id = (meta.get("docflow_id") or "").strip() or str(uuid4())
+    markdown_meta = {
+        "docflow_id": docflow_id,
+        "docflow_markdown_path": _relative_docflow_path(md_path, base_dir),
+        "docflow_render_status": "markdown_only",
+    }
+
+    updated_md = upsert_front_matter(md_text, markdown_meta)
+    if updated_md != md_text:
+        md_path.write_text(updated_md, encoding="utf-8")
 
 
 def sync_markdown_html_pairs_metadata(

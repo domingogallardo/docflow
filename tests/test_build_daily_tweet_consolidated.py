@@ -107,6 +107,8 @@ def test_main_keeps_source_markdown_and_removes_source_html_after_consolidation(
 
     md1, html1 = _write_tweet_pair(tweets_dir, "Tweet - user-1", day, hour=10)
     md2, html2 = _write_tweet_pair(tweets_dir, "Tweet - user-2", day, hour=11)
+    original_md1_mtime = md1.stat().st_mtime
+    original_md2_mtime = md2.stat().st_mtime
 
     args = argparse.Namespace(
         day=day,
@@ -131,6 +133,16 @@ def test_main_keeps_source_markdown_and_removes_source_html_after_consolidation(
     assert md2.exists()
     assert not html1.exists()
     assert not html2.exists()
+    assert md1.stat().st_mtime == original_md1_mtime
+    assert md2.stat().st_mtime == original_md2_mtime
+
+    meta1, _ = mod.U.split_front_matter(md1.read_text(encoding="utf-8"))
+    meta2, _ = mod.U.split_front_matter(md2.read_text(encoding="utf-8"))
+    consolidated_meta, _ = mod.U.split_front_matter(consolidated_md.read_text(encoding="utf-8"))
+    assert meta1["docflow_render_status"] == "markdown_only"
+    assert meta2["docflow_render_status"] == "markdown_only"
+    assert "docflow_html_path" not in meta1
+    assert consolidated_meta["docflow_render_status"] == "paired_html"
 
 
 def test_main_writes_plain_markdown_but_keeps_styled_html(tmp_path: Path, monkeypatch) -> None:
@@ -417,6 +429,7 @@ def test_cleanup_only_if_consolidated_keeps_md_and_removes_html_without_rebuild(
     tweets_dir.mkdir(parents=True)
 
     src_md, src_html = _write_tweet_pair(tweets_dir, "Tweet - keep-cleaning", day, hour=10)
+    original_src_mtime = src_md.stat().st_mtime
     consolidated_md = tweets_dir / f"Tweets {day}.md"
     consolidated_html = tweets_dir / f"Tweets {day}.html"
     consolidated_md.write_text("already built", encoding="utf-8")
@@ -440,6 +453,9 @@ def test_cleanup_only_if_consolidated_keeps_md_and_removes_html_without_rebuild(
     assert consolidated_html.is_file()
     assert src_md.is_file()
     assert not src_html.exists()
+    assert src_md.stat().st_mtime == original_src_mtime
+    meta, _ = mod.U.split_front_matter(src_md.read_text(encoding="utf-8"))
+    assert meta["docflow_render_status"] == "markdown_only"
 
 
 def test_cleanup_only_if_consolidated_ports_and_clears_source_highlights(

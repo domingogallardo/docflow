@@ -1155,14 +1155,42 @@ def _delete_daily_source_html_only(
     return deleted_html
 
 
+def _sync_markdown_only_source_metadata(
+    source_markdown: Iterable[Path],
+    *,
+    keep_paths: Iterable[Path] = (),
+    base_dir: Path | None = None,
+) -> int:
+    keep = {_path_key(path) for path in keep_paths}
+    updated = 0
+
+    for md_path in source_markdown:
+        if _path_key(md_path) in keep:
+            continue
+
+        html_path = md_path.with_suffix(".html")
+        if _path_key(html_path) in keep or html_path.exists():
+            continue
+        if not md_path.is_file():
+            continue
+
+        original_stat = md_path.stat()
+        U.sync_markdown_only_metadata(md_path, base_dir=base_dir)
+        os.utime(md_path, (original_stat.st_atime, original_stat.st_mtime))
+        updated += 1
+
+    return updated
+
+
 def _cleanup_after_daily_consolidation(
     tweets_dir: Path,
     source_markdown: Iterable[Path],
     *,
     keep_paths: Iterable[Path],
     destination_html: Path | None,
-) -> tuple[int, int, int, int]:
+) -> tuple[int, int, int, int, int]:
     source_markdown_list = list(source_markdown)
+    base_dir = _state_base_dir_for_tweets_dir(tweets_dir)
     stateful_html_paths = _source_tweet_html_paths_with_stage_state(
         tweets_dir,
         source_markdown_list,
@@ -1176,11 +1204,17 @@ def _cleanup_after_daily_consolidation(
         keep_paths=cleanup_keep_paths,
     )
     deleted_html = _delete_daily_source_html_only(source_markdown_list, keep_paths=cleanup_keep_paths)
+    markdown_only_synced = _sync_markdown_only_source_metadata(
+        source_markdown_list,
+        keep_paths=cleanup_keep_paths,
+        base_dir=base_dir,
+    )
     return (
         deleted_html,
         migrated_docs,
         migrated_highlights,
         len(stateful_html_paths),
+        markdown_only_synced,
     )
 
 
@@ -1330,6 +1364,7 @@ def _run_cleanup_for_existing_daily_consolidated(
         migrated_docs,
         migrated_highlights,
         kept_stateful_html,
+        markdown_only_synced,
     ) = _cleanup_after_daily_consolidation(
         tweets_dir,
         source_markdown,
@@ -1350,6 +1385,8 @@ def _run_cleanup_for_existing_daily_consolidated(
             f"📚 Kept {kept_stateful_html} source tweet HTML file(s) "
             "with reading/done state"
         )
+    if markdown_only_synced:
+        print(f"🧾 Updated {markdown_only_synced} source tweet Markdown file(s) as markdown_only")
     return 0
 
 
@@ -1386,6 +1423,11 @@ def _build_daily_consolidated_from_markdown(
     html_text = _render_html_document(day, entries, title=md_path.stem, capture_source=capture_source)
     html_path.write_text(html_text, encoding="utf-8")
     U.add_margins_to_html_files(tweets_dir, file_filter=lambda path: path == html_path)
+    U.sync_markdown_html_pair_metadata(
+        md_path,
+        html_path,
+        base_dir=_state_base_dir_for_tweets_dir(tweets_dir),
+    )
 
     # Keep consolidated files interleaved with tweets when listing by mtime.
     _set_mtime(md_path, consolidated_mtime)
@@ -1396,6 +1438,7 @@ def _build_daily_consolidated_from_markdown(
         migrated_docs,
         migrated_highlights,
         kept_stateful_html,
+        markdown_only_synced,
     ) = _cleanup_after_daily_consolidation(
         tweets_dir,
         source_markdown,
@@ -1417,6 +1460,8 @@ def _build_daily_consolidated_from_markdown(
             f"📚 Kept {kept_stateful_html} source tweet HTML file(s) "
             "with reading/done state"
         )
+    if markdown_only_synced:
+        print(f"🧾 Updated {markdown_only_synced} source tweet Markdown file(s) as markdown_only")
     return 0
 
 

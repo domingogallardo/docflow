@@ -143,6 +143,8 @@ Common fields:
 - `docflow_markdown_path` and `docflow_html_path`: reciprocal paths, relative
   to `BASE_DIR` when available, linking each Markdown file to its generated
   HTML pair.
+- `docflow_render_status`: whether the Markdown has a generated HTML pair
+  (`paired_html`) or is intentionally stored as Markdown only (`markdown_only`).
 - `source`: logical source preserved from the pipeline (`tweet`, `podcast`,
   `instapaper`, a URL, etc.).
 - `title`: detected, extracted, or generated title.
@@ -405,7 +407,9 @@ to include just-after-midnight downloads in the previous day. Override with
 `DOCFLOW_TWEET_DAY_ROLLOVER_HOUR` (`0`-`23`) when needed.
 
 `--cleanup-existing` removes source tweet `.html` files for consolidated days and keeps source `.md`.
-Tweet HTML files already in Reading or Done are kept with their existing state and highlights.
+Markdown sources whose HTML is removed are marked as `docflow_render_status: markdown_only`
+without changing their `mtime`. Tweet HTML files already in Reading or Done are kept with
+their existing state and highlights.
 
 Daily highlights report helper:
 
