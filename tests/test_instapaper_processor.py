@@ -162,6 +162,15 @@ def test_instapaper_processor_with_existing_html(tmp_path):
     # Verify the files were renamed.
     renamed_files = list(destination.glob("Amazing Test Article*"))
     assert len(renamed_files) >= 1
+    md_content = md_files[0].read_text(encoding="utf-8")
+    assert "docflow_id:" in md_content
+    assert "docflow_markdown_path:" in md_content
+    assert "docflow_html_path:" in md_content
+    html_files = list(destination.glob("*.html"))
+    html_text = html_files[0].read_text(encoding="utf-8")
+    assert "docflow-id" in html_text
+    assert "docflow-markdown-path" in html_text
+    assert "docflow-html-path" in html_text
 
 
 def test_instapaper_processor_skips_non_instapaper_html(tmp_path):

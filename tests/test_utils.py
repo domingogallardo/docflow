@@ -642,6 +642,7 @@ def test_front_matter_meta_tags_exports_tweet_reply_fields():
         {
             "tweet_reply_to_url": "https://x.com/parent/status/99",
             "tweet_reply_context_included": "true",
+            "tweet_conversation_count": "3",
         }
     )
 
@@ -652,6 +653,7 @@ def test_front_matter_meta_tags_exports_tweet_reply_fields():
     assert (
         '<meta name="docflow-tweet-reply-context-included" content="true">'
     ) in html
+    assert '<meta name="docflow-tweet-conversation-count" content="3">' in html
 
 
 def test_front_matter_block_escapes_yaml_sensitive_values():
@@ -667,6 +669,50 @@ def test_front_matter_block_escapes_yaml_sensitive_values():
     assert 'name: "Piotr \\"Woz\\"\\nWozniak"' in block
     assert 'title: "A title: with colon"' in block
     assert block.endswith("---\n\n")
+
+
+def test_sync_markdown_html_pair_metadata_links_both_files(tmp_path):
+    from bs4 import BeautifulSoup
+    from utils import split_front_matter, sync_markdown_html_pair_metadata
+
+    posts = tmp_path / "Posts" / "Posts 2026"
+    posts.mkdir(parents=True)
+    md = posts / "article.md"
+    html = posts / "article.html"
+    md.write_text("---\ntitle: Article\n---\n\n# Article\n", encoding="utf-8")
+    html.write_text("<html><head><title>Article</title></head><body></body></html>", encoding="utf-8")
+
+    sync_markdown_html_pair_metadata(md, html, base_dir=tmp_path)
+
+    meta, _ = split_front_matter(md.read_text(encoding="utf-8"))
+    assert meta["docflow_id"]
+    assert meta["docflow_markdown_path"] == "Posts/Posts 2026/article.md"
+    assert meta["docflow_html_path"] == "Posts/Posts 2026/article.html"
+
+    soup = BeautifulSoup(html.read_text(encoding="utf-8"), "html.parser")
+    assert soup.find("meta", attrs={"name": "docflow-id"})["content"] == meta["docflow_id"]
+    assert (
+        soup.find("meta", attrs={"name": "docflow-markdown-path"})["content"]
+        == "Posts/Posts 2026/article.md"
+    )
+    assert (
+        soup.find("meta", attrs={"name": "docflow-html-path"})["content"]
+        == "Posts/Posts 2026/article.html"
+    )
+
+
+def test_sync_markdown_html_pair_metadata_preserves_existing_id(tmp_path):
+    from utils import split_front_matter, sync_markdown_html_pair_metadata
+
+    md = tmp_path / "doc.md"
+    html = tmp_path / "doc.html"
+    md.write_text("---\ndocflow_id: existing-id\n---\n\n# Doc\n", encoding="utf-8")
+    html.write_text("<html><head></head><body></body></html>", encoding="utf-8")
+
+    sync_markdown_html_pair_metadata(md, html, base_dir=tmp_path)
+
+    meta, _ = split_front_matter(md.read_text(encoding="utf-8"))
+    assert meta["docflow_id"] == "existing-id"
 
 
 # (tests for Instapaper-starred utils were removed)

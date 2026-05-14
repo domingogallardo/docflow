@@ -138,6 +138,11 @@ fields are preserved, and docflow adds derived fields where available.
 
 Common fields:
 
+- `docflow_id`: stable UUID persisted in the Markdown front matter and mirrored
+  into the generated HTML.
+- `docflow_markdown_path` and `docflow_html_path`: reciprocal paths, relative
+  to `BASE_DIR` when available, linking each Markdown file to its generated
+  HTML pair.
 - `source`: logical source preserved from the pipeline (`tweet`, `podcast`,
   `instapaper`, a URL, etc.).
 - `title`: detected, extracted, or generated title.

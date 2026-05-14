@@ -1,10 +1,15 @@
 import re
 import html
 from datetime import datetime, timezone
+from pathlib import Path
 from typing import Mapping
+from uuid import uuid4
 
 
 _FRONT_MATTER_KEYS = {
+    "docflow_id": "docflow-id",
+    "docflow_markdown_path": "docflow-markdown-path",
+    "docflow_html_path": "docflow-html-path",
     "source": "docflow-source",
     "source_url": "docflow-source-url",
     "source_name": "docflow-source-name",
@@ -34,6 +39,7 @@ _FRONT_MATTER_KEYS = {
     "tweet_thread_count": "docflow-tweet-thread-count",
     "tweet_reply_to_url": "docflow-tweet-reply-to-url",
     "tweet_reply_context_included": "docflow-tweet-reply-context-included",
+    "tweet_conversation_count": "docflow-tweet-conversation-count",
 }
 
 
@@ -265,6 +271,104 @@ def front_matter_meta_tags(meta: dict[str, str]) -> str:
         value = html.escape(str(meta[key]), quote=True)
         tags.append(f'<meta name="{meta_name}" content="{value}">')
     return "\n".join(tags) + ("\n" if tags else "")
+
+
+def _relative_docflow_path(path: Path, base_dir: Path | None) -> str:
+    candidate = Path(path)
+    if base_dir is None:
+        return candidate.as_posix()
+    try:
+        return candidate.resolve().relative_to(Path(base_dir).resolve()).as_posix()
+    except ValueError:
+        return candidate.as_posix()
+
+
+def update_html_meta_tags(html_path: Path, meta: Mapping[str, object]) -> None:
+    """Upsert supported docflow metadata tags into an HTML document."""
+    from bs4 import BeautifulSoup
+
+    html_text = html_path.read_text(encoding="utf-8", errors="replace")
+    soup = BeautifulSoup(html_text, "html.parser")
+
+    if soup.html is None:
+        html_tag = soup.new_tag("html")
+        html_tag.extend(list(soup.contents))
+        soup.clear()
+        soup.append(html_tag)
+
+    head = soup.head
+    if head is None:
+        head = soup.new_tag("head")
+        soup.html.insert(0, head)
+
+    for key, meta_name in _FRONT_MATTER_KEYS.items():
+        if key not in meta or meta[key] in (None, ""):
+            continue
+        tags = head.find_all("meta", attrs={"name": meta_name})
+        tag = tags[0] if tags else soup.new_tag("meta")
+        tag["name"] = meta_name
+        tag["content"] = str(meta[key])
+        if not tags:
+            head.append(tag)
+        for duplicate in tags[1:]:
+            duplicate.decompose()
+
+    output_html = str(soup).replace("<br/>", "<br>").replace("<br />", "<br>")
+    html_path.write_text(output_html, encoding="utf-8")
+
+
+def sync_markdown_html_pair_metadata(
+    md_path: Path,
+    html_path: Path,
+    *,
+    base_dir: Path | None = None,
+) -> None:
+    """Store reciprocal Markdown/HTML identity metadata in both files."""
+    if not md_path.exists() or not html_path.exists():
+        return
+
+    md_text = md_path.read_text(encoding="utf-8", errors="replace")
+    meta, _ = split_front_matter(md_text)
+    docflow_id = (meta.get("docflow_id") or "").strip() or str(uuid4())
+    relation_meta = {
+        "docflow_id": docflow_id,
+        "docflow_markdown_path": _relative_docflow_path(md_path, base_dir),
+        "docflow_html_path": _relative_docflow_path(html_path, base_dir),
+    }
+
+    updated_md = upsert_front_matter(md_text, relation_meta)
+    if updated_md != md_text:
+        md_path.write_text(updated_md, encoding="utf-8")
+        meta, _ = split_front_matter(updated_md)
+    else:
+        meta = {**meta, **relation_meta}
+
+    update_html_meta_tags(html_path, meta)
+
+
+def sync_markdown_html_pairs_metadata(
+    paths: list[Path],
+    *,
+    base_dir: Path | None = None,
+) -> None:
+    """Sync reciprocal metadata for every Markdown/HTML pair in a path list."""
+    by_stem: dict[tuple[Path, str], dict[str, Path]] = {}
+    for raw_path in paths:
+        path = Path(raw_path)
+        suffix = path.suffix.lower()
+        if suffix not in {".md", ".html", ".htm"}:
+            continue
+        group = by_stem.setdefault((path.parent, path.stem), {})
+        if suffix == ".md":
+            group["md"] = path
+        elif suffix in {".html", ".htm"}:
+            group["html"] = path
+
+    for group in by_stem.values():
+        md_path = group.get("md")
+        html_path = group.get("html")
+        if md_path and html_path:
+            sync_markdown_html_pair_metadata(md_path, html_path, base_dir=base_dir)
 
 
 def original_source_link_html(meta: dict[str, str]) -> str:

@@ -44,9 +44,15 @@ source: podcast
     assert "Contenido en <strong>Markdown</strong>." in html_content
     md_content = (destination / "nota.md").read_text(encoding="utf-8")
     assert 'title: "Título"' in md_content
+    assert "docflow_id:" in md_content
+    assert "docflow_markdown_path:" in md_content
+    assert "docflow_html_path:" in md_content
     assert "docflow_source_type: markdown" in md_content
     assert "docflow_html_generated_at:" in md_content
     assert "docflow_word_count:" in md_content
+    assert 'name="docflow-id"' in html_content
+    assert 'name="docflow-markdown-path"' in html_content
+    assert 'name="docflow-html-path"' in html_content
     assert 'name="docflow-html-generated-at"' in html_content
 
     # Ignored files should remain in Incoming.

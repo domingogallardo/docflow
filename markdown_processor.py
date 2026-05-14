@@ -201,6 +201,7 @@ class MarkdownProcessor:
 
         files_to_move = self._collect_move_candidates(markdown_files)
         moved_files = U.move_files_with_replacement(files_to_move, self.destination_dir)
+        U.sync_markdown_html_pairs_metadata(moved_files, base_dir=cfg.BASE_DIR)
 
         if moved_files:
             print(f"📝 {len(moved_files)} Markdown file(s) moved to {self.destination_dir}")

@@ -20,7 +20,7 @@ from typing import Dict, List, Tuple
 from bs4 import BeautifulSoup
 from markdownify import markdownify as md
 
-from config import INSTAPAPER_USERNAME, INSTAPAPER_PASSWORD, OPENAI_KEY
+from config import BASE_DIR, INSTAPAPER_USERNAME, INSTAPAPER_PASSWORD, OPENAI_KEY
 import utils as U
 from title_ai import TitleAIUpdater, rename_markdown_pair
 from openai_client import build_openai_client
@@ -143,6 +143,7 @@ class InstapaperProcessor:
             posts = self._list_processed_files()
             if posts:
                 moved_posts = self._move_files_to_destination(posts)
+                U.sync_markdown_html_pairs_metadata(moved_posts, base_dir=BASE_DIR)
                 print(f"📄 {len(moved_posts)} post(s) moved to {self.destination_dir}")
                 return moved_posts
             print("📄 No processed posts found to move")

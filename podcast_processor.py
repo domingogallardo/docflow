@@ -9,6 +9,7 @@ import unicodedata
 from pathlib import Path
 from typing import List, Iterable
 
+import config as cfg
 import utils as U
 
 
@@ -59,6 +60,7 @@ class PodcastProcessor:
             # 3. Rename and move files.
             renamed_files = U.rename_podcast_files(podcasts)
             moved_files = U.move_files(renamed_files, self.destination_dir)
+            U.sync_markdown_html_pairs_metadata(moved_files, base_dir=cfg.BASE_DIR)
             
             if moved_files:
                 print(f"📻 {len(moved_files)} podcast file(s) moved to {self.destination_dir}")
