@@ -1,3 +1,4 @@
+import re
 from pathlib import Path
 
 from utils import site_state
@@ -70,3 +71,16 @@ def test_reading_roundtrip(tmp_path: Path):
     removed = site_state.pop_reading_path(base, rel)
     assert removed is not None
     assert site_state.is_reading(base, rel) is False
+
+
+def test_reading_entry_uses_local_offset_timestamp(tmp_path: Path):
+    base = tmp_path / "base"
+    base.mkdir()
+    rel = "Posts/Posts 2026/doc.html"
+
+    site_state.set_reading_path(base, rel)
+
+    state = site_state.load_reading_state(base)
+    entry = state["items"][rel]
+    assert re.search(r"[+-]\d{2}:\d{2}$", entry["reading_at"])
+    assert not entry["reading_at"].endswith("Z")

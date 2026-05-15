@@ -5,17 +5,17 @@ from __future__ import annotations
 import json
 import os
 import tempfile
-from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
 from utils.site_paths import done_state_path, normalize_rel_path, reading_state_path
+from utils.time_utils import local_now_iso
 
 STATE_VERSION = 1
 
 
 def _utc_now_iso() -> str:
-    return datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
+    return local_now_iso(timespec="seconds")
 
 
 def _empty_state() -> dict[str, Any]:

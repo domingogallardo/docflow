@@ -362,7 +362,17 @@
   }
 
   function nowIso() {
-    try { return new Date().toISOString(); } catch (_) { return ''; }
+    try {
+      var date = new Date();
+      var offsetMinutes = -date.getTimezoneOffset();
+      var sign = offsetMinutes >= 0 ? '+' : '-';
+      var absoluteMinutes = Math.abs(offsetMinutes);
+      var offsetHours = String(Math.floor(absoluteMinutes / 60)).padStart(2, '0');
+      var offsetRemainder = String(absoluteMinutes % 60).padStart(2, '0');
+      var localMillis = date.getTime() + (offsetMinutes * 60000);
+      var localStamp = new Date(localMillis).toISOString().slice(0, -1);
+      return localStamp + sign + offsetHours + ':' + offsetRemainder;
+    } catch (_) { return ''; }
   }
 
   function makeId() {

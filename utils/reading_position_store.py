@@ -11,18 +11,18 @@ import json
 import math
 import os
 import tempfile
-from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
 from utils.site_paths import normalize_rel_path, state_root
+from utils.time_utils import local_now_iso
 
 MEANINGFUL_SCROLL_Y = 24.0
 MEANINGFUL_PROGRESS = 0.01
 
 
 def _utc_now_iso() -> str:
-    return datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
+    return local_now_iso(timespec="seconds")
 
 
 def reading_positions_state_root(base_dir: Path) -> Path:

@@ -145,3 +145,20 @@ def test_latest_highlight_epoch_falls_back_to_updated_at_when_created_at_missing
 
     assert highlighted is True
     assert latest_epoch == _epoch("2026-02-03T10:06:00Z")
+
+
+def test_save_highlights_generates_local_offset_updated_at_when_missing(tmp_path: Path):
+    import re
+
+    base = tmp_path / "base"
+    base.mkdir()
+    rel = "Posts/Posts 2026/doc.html"
+
+    saved = highlight_store.save_highlights_for_path(
+        base,
+        rel,
+        {"highlights": [{"id": "h1", "text": "Only highlight"}]},
+    )
+
+    assert re.search(r"[+-]\d{2}:\d{2}$", saved["updated_at"])
+    assert not saved["updated_at"].endswith("Z")

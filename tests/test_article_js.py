@@ -37,3 +37,5 @@ def test_article_js_includes_highlights():
     assert "closest('a.image-zoom')" in content
     assert "querySelectorAll('img')" in content
     assert 'img.currentSrc' in content
+    assert 'getTimezoneOffset' in content
+    assert "toISOString().slice(0, -1)" in content

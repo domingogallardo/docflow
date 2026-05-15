@@ -1,3 +1,4 @@
+import re
 from pathlib import Path
 
 from utils import reading_position_store
@@ -82,3 +83,10 @@ def test_load_missing_reading_position_returns_empty_payload(tmp_path: Path):
     assert payload["path"] == rel
     assert payload["scroll_y"] is None
     assert payload["progress"] is None
+
+
+def test_coerce_payload_generates_local_offset_timestamp_when_missing():
+    payload = reading_position_store._coerce_payload("Posts/Posts 2026/doc.html", {"scroll_y": 300})
+    assert payload["updated_at"]
+    assert re.search(r"[+-]\d{2}:\d{2}$", payload["updated_at"])
+    assert not payload["updated_at"].endswith("Z")
