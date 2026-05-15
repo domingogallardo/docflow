@@ -94,6 +94,39 @@ Contenido.""",
     assert "docflow_source_type: web" in md_content
 
 
+def test_markdown_processor_removes_imported_description_and_tags(tmp_path):
+    incoming = tmp_path / "Incoming"
+    incoming.mkdir()
+    destination = tmp_path / "Posts" / "Posts 2025"
+
+    generic_md = incoming / "article.md"
+    generic_md.write_text(
+        """---
+title: External article
+description: "Imported summary"
+tags:
+  - "clippings"
+source: "https://example.com/article"
+---
+
+# External article
+
+Contenido.
+""",
+        encoding="utf-8",
+    )
+
+    processor = MarkdownProcessor(incoming, destination)
+    processor.title_updater.update_titles = lambda files, renamer: None
+    processor.process_markdown()
+
+    md_content = (destination / "article.md").read_text(encoding="utf-8")
+    assert "description:" not in md_content
+    assert "\ntags:\n" not in md_content
+    assert "clippings" not in md_content
+    assert "source_url: https://example.com/article" in md_content
+
+
 def test_markdown_processor_preserves_remote_images(tmp_path):
     incoming = tmp_path / "Incoming"
     incoming.mkdir()

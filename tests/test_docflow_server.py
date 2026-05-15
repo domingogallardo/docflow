@@ -14,6 +14,7 @@ from urllib.parse import quote
 import pytest
 
 from utils import docflow_server
+from utils.markdown_utils import split_front_matter
 from utils.reading_position_store import reading_position_state_path, save_reading_position_for_path
 from utils.site_state import (
     is_done,
@@ -1341,7 +1342,9 @@ def test_api_reading_position_updates_last_read_in_associated_markdown(tmp_path:
         assert payload["path"] == rel_path
 
         md_text = md.read_text(encoding="utf-8")
-        assert "last_read: 2026-05-15T09:30:00Z" in md_text
+        md_meta, _ = split_front_matter(md_text)
+        assert md_meta["docflow_last_read"] == "2026-05-15T09:30:00Z"
+        assert "last_read" not in md_meta
         assert abs(md.stat().st_mtime - original_mtime) < 0.001
 
         html_text = html.read_text(encoding="utf-8")
@@ -1414,7 +1417,8 @@ def test_api_reading_position_ignores_non_meaningful_snapshot_for_last_read(tmp_
         assert payload["scroll_y"] == 0
 
         md_text = md.read_text(encoding="utf-8")
-        assert "last_read:" not in md_text
+        md_meta, _ = split_front_matter(md_text)
+        assert "docflow_last_read" not in md_meta
         assert "docflow-last-read" not in html.read_text(encoding="utf-8")
     finally:
         server.shutdown()
@@ -1450,8 +1454,51 @@ def test_api_reading_position_does_not_update_last_read_without_explicit_flag(tm
         assert status == 200
         assert payload["path"] == rel_path
 
-        assert "last_read:" not in md.read_text(encoding="utf-8")
+        md_meta, _ = split_front_matter(md.read_text(encoding="utf-8"))
+        assert "docflow_last_read" not in md_meta
         assert "docflow-last-read" not in html.read_text(encoding="utf-8")
+    finally:
+        server.shutdown()
+        server.server_close()
+
+
+def test_api_reading_position_replaces_legacy_last_read_field(tmp_path: Path):
+    base = tmp_path / "base"
+    posts = base / "Posts" / "Posts 2026"
+    posts.mkdir(parents=True)
+    md = posts / "doc.md"
+    html = posts / "doc.html"
+    md.write_text(
+        "---\nlast_read: 2026-05-01T08:00:00Z\n---\n\n# Raw Doc\n\nHello world.\n",
+        encoding="utf-8",
+    )
+    html.write_text("<html><head></head><body>Raw Doc</body></html>", encoding="utf-8")
+
+    rel_path = "Posts/Posts 2026/doc.html"
+    encoded = quote(rel_path, safe="")
+
+    server, port = _start_server(base)
+    try:
+        status, payload = _put_json(
+            port,
+            f"/api/reading-position?path={encoded}",
+            {
+                "updated_at": "2026-05-15T09:30:00Z",
+                "persist_last_read": True,
+                "scroll_y": 420,
+                "max_scroll": 1200,
+                "progress": 0.35,
+                "viewport_height": 900,
+                "document_height": 2100,
+            },
+        )
+        assert status == 200
+        assert payload["path"] == rel_path
+
+        md_text = md.read_text(encoding="utf-8")
+        md_meta, _ = split_front_matter(md_text)
+        assert md_meta["docflow_last_read"] == "2026-05-15T09:30:00Z"
+        assert "last_read" not in md_meta
     finally:
         server.shutdown()
         server.server_close()

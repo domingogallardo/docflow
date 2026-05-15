@@ -24,7 +24,7 @@ _FRONT_MATTER_KEYS = {
     "docflow_original_url": "docflow-original-url",
     "docflow_word_count": "docflow-word-count",
     "docflow_body_chars": "docflow-body-chars",
-    "last_read": "docflow-last-read",
+    "docflow_last_read": "docflow-last-read",
     "docflow_removed_data_images": "docflow-removed-data-images",
     "instapaper_id": "docflow-instapaper-id",
     "podcast_show": "docflow-podcast-show",
@@ -43,6 +43,8 @@ _FRONT_MATTER_KEYS = {
     "tweet_reply_context_included": "docflow-tweet-reply-context-included",
     "tweet_conversation_count": "docflow-tweet-conversation-count",
 }
+
+_REMOVED_IMPORTED_FRONT_MATTER_KEYS = frozenset({"description", "tags"})
 
 
 def split_front_matter(md_text: str) -> tuple[dict[str, str], str]:
@@ -146,6 +148,47 @@ def _front_matter_bounds(md_text: str) -> tuple[dict[str, str], list[str], str] 
     return None
 
 
+def _line_key(line: str) -> str:
+    match = re.match(r"^\s*([A-Za-z_][A-Za-z0-9_-]*)\s*:", line)
+    return match.group(1) if match else ""
+
+
+def remove_front_matter_keys(md_text: str, keys: set[str] | frozenset[str]) -> str:
+    """Remove selected top-level front matter keys, including YAML continuation lines."""
+    if not keys:
+        return md_text
+
+    bounds = _front_matter_bounds(md_text)
+    if bounds is None:
+        return md_text
+
+    _, front_lines, body = bounds
+    filtered_lines: list[str] = []
+    index = 0
+
+    while index < len(front_lines):
+        line = front_lines[index]
+        key = _line_key(line)
+        if key and key in keys:
+            index += 1
+            while index < len(front_lines):
+                next_line = front_lines[index]
+                next_key = _line_key(next_line)
+                if next_key:
+                    break
+                if next_line.startswith((" ", "\t")) or next_line.strip() == "":
+                    index += 1
+                    continue
+                break
+            continue
+
+        filtered_lines.append(line)
+        index += 1
+
+    front = "\n".join(["---", *filtered_lines, "---"])
+    return f"{front}\n\n{body.lstrip()}"
+
+
 def upsert_front_matter(
     md_text: str,
     values: Mapping[str, object],
@@ -164,10 +207,6 @@ def upsert_front_matter(
     defaults = defaults or {}
     applied: set[str] = set()
     new_front_lines: list[str] = []
-
-    def _line_key(line: str) -> str:
-        match = re.match(r"^\s*([A-Za-z_][A-Za-z0-9_-]*)\s*:", line)
-        return match.group(1) if match else ""
 
     for line in front_lines:
         key = _line_key(line)
@@ -244,7 +283,8 @@ def enrich_markdown_metadata(
     extra: Mapping[str, object] | None = None,
     now: str | None = None,
 ) -> str:
-    """Add canonical docflow metadata without removing existing source fields."""
+    """Add canonical docflow metadata and drop imported fields Docflow does not use."""
+    md_text = remove_front_matter_keys(md_text, _REMOVED_IMPORTED_FRONT_MATTER_KEYS)
     meta, _ = split_front_matter(md_text)
     candidate_source = str(meta.get("source", "")).strip()
     effective_source_url = source_url
@@ -378,12 +418,13 @@ def update_markdown_last_read(
     *,
     html_path: Path | None = None,
 ) -> bool:
-    """Update last_read in Markdown and mirror it to associated HTML meta tags."""
+    """Update docflow_last_read in Markdown and mirror it to associated HTML meta tags."""
     if not md_path.exists() or not str(last_read).strip():
         return False
 
     md_text = md_path.read_text(encoding="utf-8", errors="replace")
-    updated_md = upsert_front_matter(md_text, {"last_read": last_read})
+    cleaned_md = remove_front_matter_keys(md_text, {"last_read"})
+    updated_md = upsert_front_matter(cleaned_md, {"docflow_last_read": last_read})
     changed = updated_md != md_text
     if changed:
         md_path.write_text(updated_md, encoding="utf-8")

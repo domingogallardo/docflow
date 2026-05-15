@@ -644,6 +644,31 @@ def test_enrich_markdown_metadata_adds_canonical_fields():
     assert body.lstrip().startswith("# Demo title")
 
 
+def test_enrich_markdown_metadata_removes_imported_description_and_tags():
+    from utils import enrich_markdown_metadata, split_front_matter
+
+    md = """---
+title: Demo title
+description: "Imported summary"
+tags:
+  - "clippings"
+source: "https://example.com/article"
+---
+
+# Demo title
+
+Body with words.
+"""
+    enriched = enrich_markdown_metadata(md, now="2026-01-02T03:04:05Z")
+
+    meta, body = split_front_matter(enriched)
+    assert "description" not in meta
+    assert "tags" not in meta
+    assert "clippings" not in enriched
+    assert meta["source_url"] == "https://example.com/article"
+    assert body.lstrip().startswith("# Demo title")
+
+
 def test_upsert_front_matter_preserves_unrelated_lines():
     from utils import upsert_front_matter
 
