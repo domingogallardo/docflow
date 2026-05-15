@@ -976,7 +976,7 @@
     for (key in snapshot) {
       if (Object.prototype.hasOwnProperty.call(snapshot, key)) payload[key] = snapshot[key];
     }
-    if (options.persistLastRead) payload.persist_last_read = true;
+    if (options.persistDocflowLastRead) payload.persist_docflow_last_read = true;
     return fetch(localUrl, {
       method: 'PUT',
       cache: 'no-store',
@@ -992,9 +992,9 @@
   function persistReadingPositionSnapshot(snapshot, options) {
     var signature = readingPositionSignature(snapshot);
     options = options || {};
-    var shouldPersistLastRead = !!options.persistLastRead;
+    var shouldPersistDocflowLastRead = !!options.persistDocflowLastRead;
 
-    if (!options.force && !shouldPersistLastRead && signature && signature === readingPositionState.lastSavedSignature) {
+    if (!options.force && !shouldPersistDocflowLastRead && signature && signature === readingPositionState.lastSavedSignature) {
       return Promise.resolve(true);
     }
 
@@ -1004,7 +1004,7 @@
         options: {
           force: !!options.force,
           keepalive: !!options.keepalive,
-          persistLastRead: shouldPersistLastRead
+          persistDocflowLastRead: shouldPersistDocflowLastRead
         }
       };
       return Promise.resolve(true);
@@ -1014,7 +1014,7 @@
     return writeReadingPosition(snapshot, options)
       .then(function(ok) {
         if (ok) readingPositionState.lastSavedSignature = signature;
-        if (ok && shouldPersistLastRead && hasMeaningfulReadingPosition(snapshot)) {
+        if (ok && shouldPersistDocflowLastRead && hasMeaningfulReadingPosition(snapshot)) {
           readingPositionState.lastReadCommitted = true;
           readingPositionState.lastReadCommittedAtMs = currentTimeMs();
         }
@@ -1045,7 +1045,7 @@
       readingPositionState.saveTimer = 0;
       var snapshot = collectReadingPositionSnapshot();
       persistReadingPositionSnapshot(snapshot, {
-        persistLastRead: shouldPersistLastRead(snapshot, false)
+        persistDocflowLastRead: shouldPersistLastRead(snapshot, false)
       });
     }, delay);
   }
@@ -1168,7 +1168,7 @@
         persistReadingPositionSnapshot(snapshot, {
           keepalive: true,
           force: hasMeaningfulReadingPosition(snapshot),
-          persistLastRead: shouldPersistLastRead(snapshot, true)
+          persistDocflowLastRead: shouldPersistLastRead(snapshot, true)
         });
       });
     }

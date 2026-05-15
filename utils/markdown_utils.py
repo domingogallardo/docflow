@@ -1,5 +1,6 @@
 import re
 import html
+import os
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Mapping
@@ -412,19 +413,18 @@ def sync_markdown_only_metadata(
         md_path.write_text(updated_md, encoding="utf-8")
 
 
-def update_markdown_last_read(
+def update_markdown_docflow_last_read(
     md_path: Path,
-    last_read: str,
+    docflow_last_read: str,
     *,
     html_path: Path | None = None,
 ) -> bool:
     """Update docflow_last_read in Markdown and mirror it to associated HTML meta tags."""
-    if not md_path.exists() or not str(last_read).strip():
+    if not md_path.exists() or not str(docflow_last_read).strip():
         return False
 
     md_text = md_path.read_text(encoding="utf-8", errors="replace")
-    cleaned_md = remove_front_matter_keys(md_text, {"last_read"})
-    updated_md = upsert_front_matter(cleaned_md, {"docflow_last_read": last_read})
+    updated_md = upsert_front_matter(md_text, {"docflow_last_read": docflow_last_read})
     changed = updated_md != md_text
     if changed:
         md_path.write_text(updated_md, encoding="utf-8")
@@ -432,7 +432,9 @@ def update_markdown_last_read(
     target_html = html_path if html_path is not None else md_path.with_suffix(".html")
     if target_html.exists():
         meta, _ = split_front_matter(updated_md if changed else md_text)
+        original_html_stat = target_html.stat()
         update_html_meta_tags(target_html, meta)
+        os.utime(target_html, (original_html_stat.st_atime, original_html_stat.st_mtime))
 
     return changed
 
