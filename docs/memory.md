@@ -105,19 +105,14 @@ This file stores stable, reusable operational notes for future agent runs.
 - `BASE_DIR` is resolved from env var `DOCFLOW_BASE_DIR`.
 - Canonical place to define it: `~/.docflow_env`.
 - For direct shell commands in this repo, run `source ~/.docflow_env` first so imports of `config.py` work consistently.
-- Keep related env vars in the same file when possible (`INTRANET_BASE_DIR`, `DOCFLOW_ICLOUD_DOWNLOADS_DIR`, `HIGHLIGHTS_DAILY_DIR`, `TWEET_LIKES_STATE`).
+- Keep related env vars in the same file when possible (`INTRANET_BASE_DIR`, `HIGHLIGHTS_DAILY_DIR`, `TWEET_LIKES_STATE`).
 
-### Markdown and PDF iCloud Downloads Ingress
+### Incoming Ingress
 
-- The generic Markdown step imports `.md` files from iCloud Downloads before scanning `BASE_DIR/Incoming`.
-- The PDF step imports `.pdf` files from iCloud Downloads before scanning `BASE_DIR/Incoming`.
-- Default source: `~/Library/Mobile Documents/com~apple~CloudDocs/Downloads`.
-- Override source: `DOCFLOW_ICLOUD_DOWNLOADS_DIR`.
-- Imported Markdown is moved into `Incoming/`, then converted/renamed/moved to `Posts/Posts <YEAR>/` by `MarkdownProcessor`.
-- Imported PDFs are moved into `Incoming/`, then moved to `Pdfs/Pdfs <YEAR>/` by `PDFProcessor`.
+- docflow reads source documents from `BASE_DIR/Incoming`.
+- Markdown files in `Incoming/` are converted/renamed/moved to `Posts/Posts <YEAR>/` by `MarkdownProcessor`.
+- PDFs in `Incoming/` are moved to `Pdfs/Pdfs <YEAR>/` by `PDFProcessor`.
 - Use `bash bin/docflow.sh md --year YYYY` or `bash bin/docflow.sh pdfs --year YYYY` for day-to-day runs so the intranet indexes are rebuilt after processing. `python process_documents.py ... --year YYYY` processes files but does not rebuild `_site`.
-- Successful imports disappear from iCloud Downloads; if a later download recreates the same file there, it is treated as a new input.
-- iCloud import scans append audit entries to `BASE_DIR/Incoming/import_audit.log` and mirror them to stdout/cron logs when there is activity, including candidate counts, placeholders, imports, ignores, and errors.
 
 ### Clipboard Cleaner Shortcut
 

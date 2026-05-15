@@ -13,7 +13,7 @@ Podcast snippets are typically captured in [Snipd](https://www.snipd.com) and th
 - Single local source of truth: `BASE_DIR` (resolved from `DOCFLOW_BASE_DIR`, typically in `~/.docflow_env`).
 - Static site output under `BASE_DIR/_site`.
 - Local workflow state under `BASE_DIR/state`.
-- Markdown and PDF ingestion reads both `BASE_DIR/Incoming/` and matching files found in iCloud Downloads.
+- Markdown and PDF ingestion reads files from `BASE_DIR/Incoming/`.
 - URL ingestion reads `BASE_DIR/Incoming/links.txt`, downloads articles as Markdown, and leaves failed URLs queued for retry.
 - Image ingestion moves files into the yearly folder and, when `OPENAI_API_KEY` is configured, renames them with an AI-generated descriptive filename before rebuilding the gallery.
 
@@ -95,8 +95,12 @@ Current `crontab` jobs related to docflow:
 
 - Every 6 hours: `/Users/domingo/Programacion/computer-ops/ops/bin/docflow_all.sh`
   - Runs the full ingestion pipeline and rebuilds the intranet outputs.
+- Five minutes before each 6-hour run: `/Users/domingo/Programacion/computer-ops/ops/bin/docflow_import_incoming.sh`
+  - Prepares `Incoming/` before docflow runs.
 - Daily at `02:00`: `/Users/domingo/Programacion/computer-ops/ops/bin/docflow_tweet_daily.sh`
   - Builds the previous day's consolidated tweets and rebuilds the intranet outputs.
+- Daily at `01:55`: `/Users/domingo/Programacion/computer-ops/ops/bin/docflow_import_incoming.sh`
+  - Prepares `Incoming/` before the nightly docflow jobs.
 - Daily at `02:05`: `/Users/domingo/Programacion/computer-ops/ops/bin/docflow_highlights_daily.sh`
   - Builds the previous day's highlights report Markdown.
 
@@ -119,13 +123,9 @@ The shared cron log is:
 - `_site/` (generated)
 - `state/` (generated)
 
-External input folders:
+External input files:
 
-- iCloud Downloads: `~/Library/Mobile Documents/com~apple~CloudDocs/Downloads`
-  - The `md` step imports generic `.md` files from this folder into `Incoming/`, then processes them through the normal Markdown flow.
-  - The `pdfs` step imports `.pdf` files from this folder into `Incoming/`, then moves them to `Pdfs/Pdfs <YEAR>/`.
-  - Imported files are moved, not copied, so successfully processed files disappear from iCloud Downloads.
-  - Override the folder with `DOCFLOW_ICLOUD_DOWNLOADS_DIR` when needed.
+- Drop local `.md`, `.pdf`, images, and other source files into `BASE_DIR/Incoming/`.
 - URL queue: `BASE_DIR/Incoming/links.txt`
   - The `urls` step downloads each URL as Markdown into `Incoming/`.
   - Successful URLs are removed from `links.txt` and recorded in `processed_history.txt`.
@@ -180,9 +180,6 @@ or `docflow-tweet-id`.
 - `BASE_DIR` comes from environment variable `DOCFLOW_BASE_DIR`.
 - Canonical place to set it: `~/.docflow_env`.
 - If `DOCFLOW_BASE_DIR` is missing, importing `config.py` fails with a clear error.
-- Generic Markdown and PDF processing also import `.md` and `.pdf` files from iCloud Downloads
-  (`~/Library/Mobile Documents/com~apple~CloudDocs/Downloads`). Override with
-  `DOCFLOW_ICLOUD_DOWNLOADS_DIR` if your folder lives elsewhere.
 - For direct commands from this repo, load your environment first:
 
 ```bash
@@ -193,7 +190,6 @@ Recommended `~/.docflow_env` snippet:
 
 ```bash
 export DOCFLOW_BASE_DIR="/path/to/BASE_DIR"
-export DOCFLOW_ICLOUD_DOWNLOADS_DIR="$HOME/Library/Mobile Documents/com~apple~CloudDocs/Downloads"
 export INTRANET_BASE_DIR="$DOCFLOW_BASE_DIR"
 export HIGHLIGHTS_DAILY_DIR="/path/to/Obsidian/Subrayados"
 export DONE_LINKS_FILE="/path/to/Obsidian/Leidos.md"
@@ -231,7 +227,6 @@ export OPENAI_API_KEY=...
 export INSTAPAPER_USERNAME=...
 export INSTAPAPER_PASSWORD=...
 export DOCFLOW_BASE_DIR="/path/to/BASE_DIR"
-export DOCFLOW_ICLOUD_DOWNLOADS_DIR="$HOME/Library/Mobile Documents/com~apple~CloudDocs/Downloads"
 export TWEET_LIKES_STATE="$HOME/.secrets/docflow/x_state.json"
 export TWEET_LIKES_URL=https://x.com/<user>/likes
 export TWEET_LIKES_MAX=50
@@ -259,10 +254,9 @@ indexes after a successful run:
 bash bin/docflow.sh all --year 2026
 ```
 
-To process only files waiting in iCloud Downloads, use the matching target:
+To process only PDFs already present in `Incoming/`, use the matching target:
 
 ```bash
-bash bin/docflow.sh md --year 2026
 bash bin/docflow.sh pdfs --year 2026
 ```
 
