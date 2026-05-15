@@ -804,8 +804,13 @@
     saveInFlight: false,
     pendingSave: null,
     lastSavedSignature: '',
-    lastReadCommitted: false
+    lastReadCommitted: false,
+    lastReadCommittedAtMs: 0,
+    readingStarted: false,
+    scrollInputSeen: false,
+    restoreScrollIgnoreUntilMs: 0
   };
+  var lastReadMinWriteIntervalMs = 3000;
 
   function getScrollElement() {
     if (!document) return null;
@@ -867,6 +872,40 @@
     if (scrollY !== null && scrollY > 24) return true;
     var progress = finiteNumber(snapshot && snapshot.progress);
     return progress !== null && progress > 0.01;
+  }
+
+  function currentTimeMs() {
+    try {
+      if (Date && typeof Date.now === 'function') return Date.now();
+    } catch (_) {}
+    return new Date().getTime();
+  }
+
+  function shouldPersistLastRead(snapshot, allowRepeat) {
+    if (!readingPositionState.readingStarted) return false;
+    if (!hasMeaningfulReadingPosition(snapshot)) return false;
+    if (!readingPositionState.lastReadCommitted) return true;
+    if (!allowRepeat) return false;
+    var elapsed = currentTimeMs() - (readingPositionState.lastReadCommittedAtMs || 0);
+    return elapsed >= lastReadMinWriteIntervalMs;
+  }
+
+  function markReadingScrollInput() {
+    readingPositionState.scrollInputSeen = true;
+  }
+
+  function suppressRestoredScrollEvents(durationMs) {
+    var duration = finiteNumber(durationMs);
+    if (duration === null || duration < 0) duration = 0;
+    var until = currentTimeMs() + duration;
+    if (until > readingPositionState.restoreScrollIgnoreUntilMs) {
+      readingPositionState.restoreScrollIgnoreUntilMs = until;
+    }
+  }
+
+  function isReadingScrollIntent() {
+    if (readingPositionState.scrollInputSeen) return true;
+    return currentTimeMs() >= (readingPositionState.restoreScrollIgnoreUntilMs || 0);
   }
 
   function normalizeReadingPositionSnapshot(payload) {
@@ -977,6 +1016,7 @@
         if (ok) readingPositionState.lastSavedSignature = signature;
         if (ok && shouldPersistLastRead && hasMeaningfulReadingPosition(snapshot)) {
           readingPositionState.lastReadCommitted = true;
+          readingPositionState.lastReadCommittedAtMs = currentTimeMs();
         }
         return ok;
       })
@@ -1005,7 +1045,7 @@
       readingPositionState.saveTimer = 0;
       var snapshot = collectReadingPositionSnapshot();
       persistReadingPositionSnapshot(snapshot, {
-        persistLastRead: hasMeaningfulReadingPosition(snapshot) && !readingPositionState.lastReadCommitted
+        persistLastRead: shouldPersistLastRead(snapshot, false)
       });
     }, delay);
   }
@@ -1062,6 +1102,7 @@
     for (var i = 0; i < delays.length; i++) {
       (function(delay) {
         window.setTimeout(function() {
+          suppressRestoredScrollEvents(700);
           scrollToReadingPosition(readingPositionTarget(snapshot));
         }, delay);
       })(delays[i]);
@@ -1070,6 +1111,7 @@
     if (document && document.readyState !== 'complete' && window && window.addEventListener) {
       window.addEventListener('load', function() {
         window.setTimeout(function() {
+          suppressRestoredScrollEvents(700);
           scrollToReadingPosition(readingPositionTarget(snapshot));
         }, 0);
       }, { once: true, passive: true });
@@ -1100,7 +1142,24 @@
     readingPositionState.installed = true;
 
     if (window && window.addEventListener) {
+      window.addEventListener('wheel', markReadingScrollInput, { passive: true });
+      window.addEventListener('touchmove', markReadingScrollInput, { passive: true });
+      window.addEventListener('keydown', function(event) {
+        var key = event && event.key ? event.key : '';
+        if (
+          key === 'ArrowDown' ||
+          key === 'ArrowUp' ||
+          key === 'PageDown' ||
+          key === 'PageUp' ||
+          key === 'Home' ||
+          key === 'End' ||
+          key === ' '
+        ) {
+          markReadingScrollInput();
+        }
+      }, { passive: true });
       window.addEventListener('scroll', function() {
+        if (isReadingScrollIntent()) readingPositionState.readingStarted = true;
         scheduleReadingPositionSave(700);
       }, { passive: true });
       window.addEventListener('pagehide', function() {
@@ -1109,7 +1168,7 @@
         persistReadingPositionSnapshot(snapshot, {
           keepalive: true,
           force: hasMeaningfulReadingPosition(snapshot),
-          persistLastRead: hasMeaningfulReadingPosition(snapshot)
+          persistLastRead: shouldPersistLastRead(snapshot, true)
         });
       });
     }
@@ -1120,9 +1179,7 @@
         cancelReadingPositionSaveTimer();
         var snapshot = collectReadingPositionSnapshot();
         persistReadingPositionSnapshot(snapshot, {
-          keepalive: true,
-          force: hasMeaningfulReadingPosition(snapshot),
-          persistLastRead: hasMeaningfulReadingPosition(snapshot)
+          keepalive: true
         });
       });
     }

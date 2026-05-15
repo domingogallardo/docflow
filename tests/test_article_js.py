@@ -25,6 +25,10 @@ def test_article_js_includes_highlights():
     assert 'focusHighlightById: focusHighlightById' in content
     assert 'restoreReadingPosition' in content
     assert 'installReadingPositionTracking' in content
+    assert 'shouldPersistLastRead' in content
+    assert 'lastReadMinWriteIntervalMs = 3000' in content
+    assert 'readingStarted' in content
+    assert 'suppressRestoredScrollEvents' in content
     assert "window.addEventListener('pagehide'" in content
     assert "hash.indexOf('hl=') === 0" in content
     assert 'articlejs:highlight-progress' in content
