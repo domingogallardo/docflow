@@ -871,6 +871,7 @@ def _preserve_paragraph_line_breaks(html_fragment: str) -> str:
     def _replace(match: re.Match[str]) -> str:
         open_tag, content, close_tag = match.groups()
         normalized = content.replace("\r\n", "\n").replace("\r", "\n")
+        normalized = U.normalize_x_handle_linebreaks(normalized)
         if "\n" not in normalized:
             return match.group(0)
         if "<br" in normalized.lower():

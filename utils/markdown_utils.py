@@ -853,9 +853,12 @@ def normalize_tiktok_fallbacks(text: str) -> str:
 
 
 _X_HANDLE_LINE_RE = re.compile(r"^@[A-Za-z0-9_]{1,20}$")
+_X_HANDLE_LINE_END_RE = re.compile(r"@[A-Za-z0-9_]{1,20}$")
+_X_HANDLE_CONTINUATION_RE = re.compile(r"^[,;:!?]\s*(?:and|or|y|e)$", re.IGNORECASE)
+_X_HANDLE_INLINE_CONTINUATION_RE = re.compile(r"^(?:and|or|y|e)\s+@[A-Za-z0-9_]{1,20}\b", re.IGNORECASE)
 
 
-def _join_x_handle_linebreaks(content: str) -> str:
+def normalize_x_handle_linebreaks(content: str) -> str:
     """Keep standalone X handles inline with their following text."""
     lines = content.split("\n")
     if len(lines) < 2:
@@ -866,7 +869,24 @@ def _join_x_handle_linebreaks(content: str) -> str:
     while idx < len(lines):
         line = lines[idx]
         stripped = line.strip()
-        if not _X_HANDLE_LINE_RE.fullmatch(stripped):
+        is_standalone_handle = bool(_X_HANDLE_LINE_RE.fullmatch(stripped))
+        if not is_standalone_handle:
+            next_text = lines[idx + 1].strip() if idx + 1 < len(lines) else ""
+            if not (
+                _X_HANDLE_LINE_END_RE.search(stripped)
+                and next_text
+                and (
+                    next_text[0] in ",.;:!?"
+                    or next_text[0] == "·"
+                    or _X_HANDLE_LINE_RE.fullmatch(next_text)
+                    or _X_HANDLE_INLINE_CONTINUATION_RE.match(next_text)
+                )
+            ):
+                output.append(line)
+                idx += 1
+                continue
+
+        if not stripped:
             output.append(line)
             idx += 1
             continue
@@ -885,17 +905,25 @@ def _join_x_handle_linebreaks(content: str) -> str:
             if first_char in ",.;:!?":
                 combined += next_text
                 idx += 1
+                if _X_HANDLE_CONTINUATION_RE.fullmatch(next_text):
+                    continue
                 if len(next_text) > 1:
                     break
                 continue
             if first_char == "·":
                 combined += " " + next_text
                 idx += 1
+                if len(next_text) > 1:
+                    break
                 continue
             if _X_HANDLE_LINE_RE.fullmatch(next_text):
                 combined += " " + next_text
                 idx += 1
                 continue
+            if _X_HANDLE_INLINE_CONTINUATION_RE.match(next_text):
+                combined += " " + next_text
+                idx += 1
+                break
 
             combined += " " + next_text
             idx += 1
@@ -918,7 +946,7 @@ def convert_newlines_to_br(html_text: str) -> str:
         if "docflow-embed" in tag_open:
             return match.group(0)
 
-        content = _join_x_handle_linebreaks(content)
+        content = normalize_x_handle_linebreaks(content)
         content_with_br = content.replace('\n', '<br>\n')
 
         return f"{tag_open}{content_with_br}{tag_close}"

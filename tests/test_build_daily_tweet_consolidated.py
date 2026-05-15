@@ -1038,6 +1038,42 @@ def test_markdown_to_html_fragment_preserves_paragraph_hard_breaks() -> None:
     assert "<a href=\"https://github.com/petergpt/bullshit-benchmark\">" in html_fragment
 
 
+def test_markdown_to_html_fragment_keeps_x_handles_inline_with_punctuation() -> None:
+    body = "\n".join(
+        [
+            "The work on TST was led by",
+            "@bloc97_",
+            ",",
+            "@gigant_theo",
+            ", and",
+            "@theemozilla",
+            ".",
+        ]
+    )
+
+    html_fragment = mod._markdown_to_html_fragment(body)
+
+    assert "@bloc97_<br>" not in html_fragment
+    assert "@gigant_theo<br>" not in html_fragment
+    assert "@theemozilla<br>" not in html_fragment
+    assert "@bloc97_, @gigant_theo, and @theemozilla." in html_fragment
+
+
+def test_markdown_to_html_fragment_joins_inline_x_handle_continuations() -> None:
+    body = "\n".join(
+        [
+            "Replying to @StuartHameroff",
+            "and @davidchalmers42",
+            "The dumbing down began in the 1990s.",
+        ]
+    )
+
+    html_fragment = mod._markdown_to_html_fragment(body)
+
+    assert "@StuartHameroff<br>" not in html_fragment
+    assert "Replying to @StuartHameroff and @davidchalmers42<br>" in html_fragment
+
+
 def test_markdown_to_html_fragment_keeps_tight_list_items_clean() -> None:
     body = "\n".join(
         [

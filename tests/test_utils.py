@@ -280,6 +280,26 @@ def test_convert_newlines_to_br_joins_x_handle_punctuation_lists():
     assert "@pablogguz_, @SantiCalvo_Eco, @jgjorrin. Si me dejo a alguien." in converted
 
 
+def test_convert_newlines_to_br_joins_inline_x_handle_continuations():
+    from utils import convert_newlines_to_br
+
+    html = "<p>Replying to @StuartHameroff\nand @davidchalmers42\nBody text.</p>"
+    converted = convert_newlines_to_br(html)
+
+    assert "@StuartHameroff<br>" not in converted
+    assert "Replying to @StuartHameroff and @davidchalmers42<br>\nBody text." in converted
+
+
+def test_convert_newlines_to_br_joins_inline_x_handle_metadata_lines():
+    from utils import convert_newlines_to_br
+
+    html = "<p>Quotevitrupo @vitrupo\n·Jan 1\nQuoted text.</p>"
+    converted = convert_newlines_to_br(html)
+
+    assert "@vitrupo<br>" not in converted
+    assert "Quotevitrupo @vitrupo ·Jan 1<br>\nQuoted text." in converted
+
+
 def test_markdown_to_html_avoids_list_item_br_artifacts():
     from bs4 import BeautifulSoup
     from utils import markdown_to_html
