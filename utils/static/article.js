@@ -792,8 +792,9 @@
     restorePromise: null,
     saveTimer: 0,
     saveInFlight: false,
-    pendingSnapshot: null,
-    lastSavedSignature: ''
+    pendingSave: null,
+    lastSavedSignature: '',
+    lastReadCommitted: false
   };
 
   function getScrollElement() {
@@ -920,12 +921,19 @@
     var localUrl = getLocalReadingPositionStoreUrl();
     if (!localUrl) return Promise.resolve(false);
     options = options || {};
+    var payload = {};
+    var key = '';
+    snapshot = snapshot || {};
+    for (key in snapshot) {
+      if (Object.prototype.hasOwnProperty.call(snapshot, key)) payload[key] = snapshot[key];
+    }
+    if (options.persistLastRead) payload.persist_last_read = true;
     return fetch(localUrl, {
       method: 'PUT',
       cache: 'no-store',
       keepalive: !!options.keepalive,
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(snapshot || {})
+      body: JSON.stringify(payload)
     }).then(function(res) {
       if (!res.ok) throw new Error('save failed');
       return true;
@@ -935,13 +943,21 @@
   function persistReadingPositionSnapshot(snapshot, options) {
     var signature = readingPositionSignature(snapshot);
     options = options || {};
+    var shouldPersistLastRead = !!options.persistLastRead;
 
-    if (!options.force && signature && signature === readingPositionState.lastSavedSignature) {
+    if (!options.force && !shouldPersistLastRead && signature && signature === readingPositionState.lastSavedSignature) {
       return Promise.resolve(true);
     }
 
     if (readingPositionState.saveInFlight) {
-      readingPositionState.pendingSnapshot = snapshot;
+      readingPositionState.pendingSave = {
+        snapshot: snapshot,
+        options: {
+          force: !!options.force,
+          keepalive: !!options.keepalive,
+          persistLastRead: shouldPersistLastRead
+        }
+      };
       return Promise.resolve(true);
     }
 
@@ -949,14 +965,17 @@
     return writeReadingPosition(snapshot, options)
       .then(function(ok) {
         if (ok) readingPositionState.lastSavedSignature = signature;
+        if (ok && shouldPersistLastRead && hasMeaningfulReadingPosition(snapshot)) {
+          readingPositionState.lastReadCommitted = true;
+        }
         return ok;
       })
       .catch(function() { return false; })
       .then(function(result) {
         readingPositionState.saveInFlight = false;
-        var pending = readingPositionState.pendingSnapshot;
-        readingPositionState.pendingSnapshot = null;
-        if (pending) return persistReadingPositionSnapshot(pending, options);
+        var pending = readingPositionState.pendingSave;
+        readingPositionState.pendingSave = null;
+        if (pending) return persistReadingPositionSnapshot(pending.snapshot, pending.options);
         return result;
       });
   }
@@ -974,7 +993,10 @@
     if (delay === null || delay < 0) delay = 0;
     readingPositionState.saveTimer = window.setTimeout(function() {
       readingPositionState.saveTimer = 0;
-      persistReadingPositionSnapshot(collectReadingPositionSnapshot(), {});
+      var snapshot = collectReadingPositionSnapshot();
+      persistReadingPositionSnapshot(snapshot, {
+        persistLastRead: hasMeaningfulReadingPosition(snapshot) && !readingPositionState.lastReadCommitted
+      });
     }, delay);
   }
 
@@ -1073,7 +1095,12 @@
       }, { passive: true });
       window.addEventListener('pagehide', function() {
         cancelReadingPositionSaveTimer();
-        persistReadingPositionSnapshot(collectReadingPositionSnapshot(), { keepalive: true });
+        var snapshot = collectReadingPositionSnapshot();
+        persistReadingPositionSnapshot(snapshot, {
+          keepalive: true,
+          force: hasMeaningfulReadingPosition(snapshot),
+          persistLastRead: hasMeaningfulReadingPosition(snapshot)
+        });
       });
     }
 
@@ -1081,7 +1108,12 @@
       document.addEventListener('visibilitychange', function() {
         if (document.visibilityState !== 'hidden') return;
         cancelReadingPositionSaveTimer();
-        persistReadingPositionSnapshot(collectReadingPositionSnapshot(), { keepalive: true });
+        var snapshot = collectReadingPositionSnapshot();
+        persistReadingPositionSnapshot(snapshot, {
+          keepalive: true,
+          force: hasMeaningfulReadingPosition(snapshot),
+          persistLastRead: hasMeaningfulReadingPosition(snapshot)
+        });
       });
     }
   }

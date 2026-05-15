@@ -120,6 +120,11 @@ def _has_meaningful_position(payload: dict[str, Any]) -> bool:
     return isinstance(progress, (int, float)) and progress > MEANINGFUL_PROGRESS
 
 
+def has_meaningful_reading_position(payload: dict[str, Any]) -> bool:
+    """Public wrapper for callers that need the same persistence threshold."""
+    return _has_meaningful_position(payload)
+
+
 def load_reading_position_for_path(base_dir: Path, rel_path: str) -> dict[str, Any]:
     normalized = normalize_rel_path(rel_path)
     canonical_path = reading_position_state_path(base_dir, normalized)

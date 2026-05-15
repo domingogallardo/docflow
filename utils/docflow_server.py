@@ -39,6 +39,7 @@ from utils import (
     build_done_index,
     build_reading_index,
     markdown_to_html,
+    update_markdown_last_read,
 )
 from utils.site_paths import (
     PathValidationError,
@@ -61,6 +62,7 @@ from utils.site_state import (
 from utils.highlight_store import load_highlights_for_path, save_highlights_for_path
 from utils.reading_position_store import (
     clear_reading_position_for_path,
+    has_meaningful_reading_position,
     load_reading_position_for_path,
     save_reading_position_for_path,
 )
@@ -504,8 +506,39 @@ class DocflowApp:
 
     def api_put_reading_position(self, rel_path: str, payload: dict[str, object]) -> dict[str, object]:
         normalized = self._normalize_rel_path_or_400(rel_path)
-        self._require_existing_library_file(normalized)
-        return save_reading_position_for_path(self.base_dir, normalized, payload)
+        abs_path = self._require_existing_library_file(normalized)
+        saved = save_reading_position_for_path(self.base_dir, normalized, payload)
+        if bool(payload.get("persist_last_read")) and has_meaningful_reading_position(saved):
+            self._update_markdown_last_read_for_library_path(abs_path, saved)
+        return saved
+
+    def _update_markdown_last_read_for_library_path(self, abs_path: Path, payload: dict[str, object]) -> None:
+        updated_at = str(payload.get("updated_at") or "").strip()
+        if not updated_at:
+            return
+
+        md_path, html_path = self._resolve_markdown_last_read_target(abs_path)
+        if md_path is None:
+            return
+
+        original_stat = md_path.stat()
+        changed = update_markdown_last_read(md_path, updated_at, html_path=html_path)
+        if changed:
+            os.utime(md_path, (original_stat.st_atime, original_stat.st_mtime))
+
+    def _resolve_markdown_last_read_target(self, abs_path: Path) -> tuple[Path | None, Path | None]:
+        suffix = abs_path.suffix.lower()
+        if suffix == ".md":
+            html_path = abs_path.with_suffix(".html")
+            return abs_path, html_path if html_path.is_file() else None
+
+        if suffix in {".html", ".htm"}:
+            md_path = abs_path.with_suffix(".md")
+            if md_path.is_file():
+                return md_path, abs_path
+            return None, None
+
+        return None, None
 
     def _resolve_markdown_source_target(self, rel_path: str) -> tuple[str, Path]:
         normalized = self._normalize_rel_path_or_400(rel_path)

@@ -1309,6 +1309,154 @@ def test_api_reading_position_roundtrip(tmp_path: Path):
         server.server_close()
 
 
+def test_api_reading_position_updates_last_read_in_associated_markdown(tmp_path: Path):
+    base = tmp_path / "base"
+    posts = base / "Posts" / "Posts 2026"
+    posts.mkdir(parents=True)
+    md = posts / "doc.md"
+    html = posts / "doc.html"
+    md.write_text("# Raw Doc\n\nHello world.\n", encoding="utf-8")
+    html.write_text("<html><head></head><body>Raw Doc</body></html>", encoding="utf-8")
+    original_mtime = md.stat().st_mtime
+
+    rel_path = "Posts/Posts 2026/doc.html"
+    encoded = quote(rel_path, safe="")
+
+    server, port = _start_server(base)
+    try:
+        status, payload = _put_json(
+            port,
+            f"/api/reading-position?path={encoded}",
+            {
+                "updated_at": "2026-05-15T09:30:00Z",
+                "persist_last_read": True,
+                "scroll_y": 420,
+                "max_scroll": 1200,
+                "progress": 0.35,
+                "viewport_height": 900,
+                "document_height": 2100,
+            },
+        )
+        assert status == 200
+        assert payload["path"] == rel_path
+
+        md_text = md.read_text(encoding="utf-8")
+        assert "last_read: 2026-05-15T09:30:00Z" in md_text
+        assert abs(md.stat().st_mtime - original_mtime) < 0.001
+
+        html_text = html.read_text(encoding="utf-8")
+        assert '<meta content="2026-05-15T09:30:00Z" name="docflow-last-read"/>' in html_text
+    finally:
+        server.shutdown()
+        server.server_close()
+
+
+def test_api_reading_position_does_not_require_associated_markdown(tmp_path: Path):
+    base = tmp_path / "base"
+    posts = base / "Posts" / "Posts 2026"
+    posts.mkdir(parents=True)
+    html = posts / "doc.html"
+    html.write_text("<html><body>Raw Doc</body></html>", encoding="utf-8")
+
+    rel_path = "Posts/Posts 2026/doc.html"
+    encoded = quote(rel_path, safe="")
+
+    server, port = _start_server(base)
+    try:
+        status, payload = _put_json(
+            port,
+            f"/api/reading-position?path={encoded}",
+            {
+                "updated_at": "2026-05-15T09:30:00Z",
+                "persist_last_read": True,
+                "scroll_y": 420,
+                "max_scroll": 1200,
+                "progress": 0.35,
+                "viewport_height": 900,
+                "document_height": 2100,
+            },
+        )
+        assert status == 200
+        assert payload["path"] == rel_path
+    finally:
+        server.shutdown()
+        server.server_close()
+
+
+def test_api_reading_position_ignores_non_meaningful_snapshot_for_last_read(tmp_path: Path):
+    base = tmp_path / "base"
+    posts = base / "Posts" / "Posts 2026"
+    posts.mkdir(parents=True)
+    md = posts / "doc.md"
+    html = posts / "doc.html"
+    md.write_text("# Raw Doc\n\nHello world.\n", encoding="utf-8")
+    html.write_text("<html><head></head><body>Raw Doc</body></html>", encoding="utf-8")
+
+    rel_path = "Posts/Posts 2026/doc.html"
+    encoded = quote(rel_path, safe="")
+
+    server, port = _start_server(base)
+    try:
+        status, payload = _put_json(
+            port,
+            f"/api/reading-position?path={encoded}",
+            {
+                "updated_at": "2026-05-15T09:31:00Z",
+                "persist_last_read": True,
+                "scroll_y": 0,
+                "max_scroll": 1200,
+                "progress": 0,
+                "viewport_height": 900,
+                "document_height": 2100,
+            },
+        )
+        assert status == 200
+        assert payload["scroll_y"] == 0
+
+        md_text = md.read_text(encoding="utf-8")
+        assert "last_read:" not in md_text
+        assert "docflow-last-read" not in html.read_text(encoding="utf-8")
+    finally:
+        server.shutdown()
+        server.server_close()
+
+
+def test_api_reading_position_does_not_update_last_read_without_explicit_flag(tmp_path: Path):
+    base = tmp_path / "base"
+    posts = base / "Posts" / "Posts 2026"
+    posts.mkdir(parents=True)
+    md = posts / "doc.md"
+    html = posts / "doc.html"
+    md.write_text("# Raw Doc\n\nHello world.\n", encoding="utf-8")
+    html.write_text("<html><head></head><body>Raw Doc</body></html>", encoding="utf-8")
+
+    rel_path = "Posts/Posts 2026/doc.html"
+    encoded = quote(rel_path, safe="")
+
+    server, port = _start_server(base)
+    try:
+        status, payload = _put_json(
+            port,
+            f"/api/reading-position?path={encoded}",
+            {
+                "updated_at": "2026-05-15T09:32:00Z",
+                "scroll_y": 420,
+                "max_scroll": 1200,
+                "progress": 0.35,
+                "viewport_height": 900,
+                "document_height": 2100,
+            },
+        )
+        assert status == 200
+        assert payload["path"] == rel_path
+
+        assert "last_read:" not in md.read_text(encoding="utf-8")
+        assert "docflow-last-read" not in html.read_text(encoding="utf-8")
+    finally:
+        server.shutdown()
+        server.server_close()
+
+
 def test_raw_pdf_route_has_no_overlay_injection(tmp_path: Path):
     base = tmp_path / "base"
     pdfs = base / "Pdfs" / "Pdfs 2026"

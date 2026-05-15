@@ -24,6 +24,7 @@ _FRONT_MATTER_KEYS = {
     "docflow_original_url": "docflow-original-url",
     "docflow_word_count": "docflow-word-count",
     "docflow_body_chars": "docflow-body-chars",
+    "last_read": "docflow-last-read",
     "docflow_removed_data_images": "docflow-removed-data-images",
     "instapaper_id": "docflow-instapaper-id",
     "podcast_show": "docflow-podcast-show",
@@ -369,6 +370,30 @@ def sync_markdown_only_metadata(
     updated_md = upsert_front_matter(md_text, markdown_meta)
     if updated_md != md_text:
         md_path.write_text(updated_md, encoding="utf-8")
+
+
+def update_markdown_last_read(
+    md_path: Path,
+    last_read: str,
+    *,
+    html_path: Path | None = None,
+) -> bool:
+    """Update last_read in Markdown and mirror it to associated HTML meta tags."""
+    if not md_path.exists() or not str(last_read).strip():
+        return False
+
+    md_text = md_path.read_text(encoding="utf-8", errors="replace")
+    updated_md = upsert_front_matter(md_text, {"last_read": last_read})
+    changed = updated_md != md_text
+    if changed:
+        md_path.write_text(updated_md, encoding="utf-8")
+
+    target_html = html_path if html_path is not None else md_path.with_suffix(".html")
+    if target_html.exists():
+        meta, _ = split_front_matter(updated_md if changed else md_text)
+        update_html_meta_tags(target_html, meta)
+
+    return changed
 
 
 def sync_markdown_html_pairs_metadata(
