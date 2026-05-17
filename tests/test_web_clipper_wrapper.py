@@ -148,6 +148,14 @@ def test_attempts_for_thenewthings_include_beehiiv_content_after_content():
     assert attempts[:2] == ["content", "beehiiv-content-blocks"]
 
 
+def test_attempts_include_body_as_last_generic_fallback():
+    attempts = attempts_for_url("https://michaelnotebook.com/projects.html")
+    names = [attempt.name for attempt in attempts]
+
+    assert names[-1] == "body"
+    assert attempts[-1].content_format == "{{selectorHtml:body|markdown}}"
+
+
 def test_default_output_path_uses_url_slug(tmp_path: Path):
     path = default_output_path(
         tmp_path,

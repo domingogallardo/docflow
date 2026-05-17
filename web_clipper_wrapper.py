@@ -146,6 +146,7 @@ GENERIC_SELECTOR_ATTEMPTS: tuple[ClipAttempt, ...] = (
     ClipAttempt("article-content", "{{selectorHtml:.article-content|markdown}}"),
     ClipAttempt("content-text", "{{selectorHtml:.contentText|markdown}}"),
     ClipAttempt("body-markup", "{{selectorHtml:.body.markup|markdown}}"),
+    ClipAttempt("body", "{{selectorHtml:body|markdown}}"),
 )
 
 
