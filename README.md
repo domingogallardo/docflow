@@ -15,6 +15,7 @@ Podcast snippets are typically captured in [Snipd](https://www.snipd.com) and th
 - Local workflow state under `BASE_DIR/state`.
 - Markdown and PDF ingestion reads files from `BASE_DIR/Incoming/`.
 - URL ingestion reads `BASE_DIR/Incoming/links.txt`, downloads articles as Markdown, and leaves failed URLs queued for retry.
+- Tweet ingestion also extracts the main external article link from each downloaded tweet/thread and queues it for the Web Clipper.
 - Image ingestion moves files into the yearly folder and, when `OPENAI_API_KEY` is configured, renames them with an AI-generated descriptive filename before rebuilding the gallery.
 
 ### Local services currently in use
@@ -130,6 +131,7 @@ External input files:
   - The `urls` step downloads each URL as Markdown into `Incoming/`.
   - Successful URLs are removed from `links.txt` and recorded in `processed_history.txt`.
   - Failed URLs stay queued and append timestamped diagnostics to `links_failed.txt`.
+  - The `tweets` step appends article links discovered in downloaded tweets so they can be clipped by the `urls` step.
 
 ### Markdown metadata
 
@@ -270,6 +272,10 @@ bash bin/docflow.sh urls
 Successful URLs are removed from `links.txt` and added to
 `Incoming/processed_history.txt`. Failed URLs stay in `links.txt` for retry,
 with timestamped error details appended to `Incoming/links_failed.txt`.
+The full `all` pipeline runs tweets before URLs, so article links discovered
+while downloading tweets are picked up by the Web Clipper in the same run.
+Explicit target order is still respected, so run `tweets urls` if you want this
+behavior in a selective command.
 
 You can also pass URLs directly:
 
@@ -372,6 +378,13 @@ Tweet queue from likes feed (and optionally your published tweets/reposts/replie
 ```bash
 python process_documents.py tweets
 ```
+
+When tweets are downloaded, docflow scans each captured tweet block for the
+first external article-like URL and appends it to `Incoming/links.txt`. It
+ignores X/Twitter URLs, `t.co`, tweet media, and quoted-tweet bodies, and skips
+URLs already queued or present in `processed_history.txt`. In the full `all`
+pipeline, those queued links are downloaded immediately because `tweets` runs
+before `urls`.
 
 One-time browser state creation:
 

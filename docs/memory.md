@@ -112,6 +112,7 @@ This file stores stable, reusable operational notes for future agent runs.
 - docflow reads source documents from `BASE_DIR/Incoming`.
 - Markdown files in `Incoming/` are converted/renamed/moved to `Posts/Posts <YEAR>/` by `MarkdownProcessor`.
 - PDFs in `Incoming/` are moved to `Pdfs/Pdfs <YEAR>/` by `PDFProcessor`.
+- Tweet ingestion queues the first external article-like URL from each downloaded tweet block into `Incoming/links.txt`. Keep `tweets` before `urls` in the full pipeline so tweet-discovered links are clipped in the same run.
 - Use `bash bin/docflow.sh md --year YYYY` or `bash bin/docflow.sh pdfs --year YYYY` for day-to-day runs so the intranet indexes are rebuilt after processing. `python process_documents.py ... --year YYYY` processes files but does not rebuild `_site`.
 
 ### Clipboard Cleaner Shortcut

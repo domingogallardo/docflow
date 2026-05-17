@@ -5,6 +5,7 @@ DocumentProcessor - main class for document processing.
 from pathlib import Path
 from typing import Callable, Iterable, List, Optional, Sequence, Tuple
 from datetime import datetime
+from urllib.parse import urlparse
 
 import utils as U
 import config as cfg
@@ -21,8 +22,8 @@ from web_clipper_wrapper import (
 )
 
 PIPELINE_STEPS = (
-    ("urls", "process_web_urls"),
     ("tweets", "process_tweets_pipeline"),
+    ("urls", "process_web_urls"),
     ("podcasts", "process_podcasts"),
     ("posts", "process_instapaper_posts"),
     ("pdfs", "process_pdfs"),
@@ -214,6 +215,10 @@ class DocumentProcessor:
             destination = self._unique_destination(self.incoming / filename)
             destination.write_text(markdown, encoding="utf-8")
             generated.append(destination)
+            article_links = self._extract_primary_article_links_from_tweet_markdown(markdown)
+            queued_links = self._append_links_to_queue(article_links, links_path=self.links_file)
+            if queued_links:
+                print(f"🔗 Queued {len(queued_links)} article link(s) from tweet")
             if item.url in fresh_url_set:
                 written_fresh_urls.append(item.url)
             else:
@@ -342,6 +347,99 @@ class DocumentProcessor:
             for url, reason in failures:
                 clean_reason = " ".join(str(reason).replace("\t", " ").split())
                 fh.write(f"{timestamp}\t{url}\t{clean_reason}\n")
+
+    @staticmethod
+    def _is_tweet_article_url(url: str) -> bool:
+        host = (urlparse(url).hostname or "").lower()
+        if host.startswith("www."):
+            host = host[4:]
+        ignored_hosts = {
+            "x.com",
+            "twitter.com",
+            "mobile.twitter.com",
+            "t.co",
+            "pic.x.com",
+        }
+        if host in ignored_hosts:
+            return False
+        if host.endswith(".twimg.com"):
+            return False
+        return True
+
+    @classmethod
+    def _extract_primary_article_links_from_tweet_markdown(cls, markdown: str) -> List[str]:
+        """Return the first external article-like link from each captured tweet block."""
+        links: List[str] = []
+        current_block: List[str] = []
+
+        def flush_block() -> None:
+            if not current_block:
+                return
+            link = cls._first_article_link_in_tweet_block(current_block)
+            if link:
+                links.append(link)
+            current_block.clear()
+
+        for line in markdown.splitlines():
+            if line.startswith("[View on X]("):
+                flush_block()
+                current_block.append(line)
+                continue
+            if line.strip() == "---":
+                flush_block()
+                continue
+            if current_block:
+                current_block.append(line)
+
+        flush_block()
+        return cls._dedupe_urls(links)
+
+    @classmethod
+    def _first_article_link_in_tweet_block(cls, lines: Sequence[str]) -> str | None:
+        for line in lines:
+            stripped = line.strip()
+            if stripped.startswith("[View quoted tweet](") or stripped == "Quote":
+                return None
+            if stripped.startswith("![") or stripped.startswith("[!["):
+                continue
+            for match in URL_RE.finditer(line):
+                url = match.group(0).rstrip(").,;:!\u2026")
+                if cls._is_tweet_article_url(url):
+                    return url
+        return None
+
+    def _append_links_to_queue(self, urls: Sequence[str], *, links_path: Path) -> List[str]:
+        """Append new URLs to links.txt without duplicating queued or processed URLs."""
+        candidates = self._dedupe_urls(urls)
+        if not candidates:
+            return []
+
+        existing_queued = set(read_urls_from_file(links_path))
+        processed_history = (
+            self.processed_history.read_text(encoding="utf-8", errors="replace")
+            if self.processed_history.exists()
+            else ""
+        )
+        new_urls = [
+            url
+            for url in candidates
+            if url not in existing_queued and url not in processed_history
+        ]
+        if not new_urls:
+            return []
+
+        links_path.parent.mkdir(parents=True, exist_ok=True)
+        prefix = ""
+        if links_path.exists():
+            current = links_path.read_text(encoding="utf-8", errors="replace")
+            if current:
+                prefix = "" if current.endswith("\n") else "\n"
+        with links_path.open("a", encoding="utf-8") as fh:
+            if prefix:
+                fh.write(prefix)
+            for url in new_urls:
+                fh.write(f"{url}\n")
+        return new_urls
 
     @staticmethod
     def _remove_urls_from_links_file(path: Path, processed_urls: Sequence[str]) -> None:

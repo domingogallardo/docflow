@@ -98,6 +98,106 @@ def test_process_tweet_urls_creates_files_from_likes(tmp_path, monkeypatch):
     assert (incoming / "Tweet - user-2.md").exists()
 
 
+def test_process_tweet_urls_queues_primary_article_link(tmp_path, monkeypatch):
+    processor, incoming = prepare_processor(tmp_path)
+    mock_likes(monkeypatch, ["https://x.com/user/status/1"])
+
+    markdown = (
+        "---\nsource: tweet\n---\n\n"
+        "# T1\n\n"
+        "[View on X](https://x.com/user/status/1)\n"
+        "Useful article:\n"
+        "https://example.com/article?utm_source=x\n"
+        "Original link: https://t.co/abc\n"
+    )
+
+    with patch(
+        "pipeline_manager.fetch_tweet_thread_markdown",
+        return_value=(markdown, "Tweet - user-1.md"),
+    ):
+        created = processor.process_tweet_urls()
+
+    assert created == [incoming / "Tweet - user-1.md"]
+    assert processor.links_file.read_text(encoding="utf-8") == (
+        "https://example.com/article?utm_source=x\n"
+    )
+
+
+def test_process_tweet_urls_queues_one_primary_article_per_thread_block(tmp_path, monkeypatch):
+    processor, _ = prepare_processor(tmp_path)
+    mock_likes(monkeypatch, ["https://x.com/user/status/1"])
+
+    markdown = (
+        "---\nsource: tweet\n---\n\n"
+        "# Thread\n"
+        "[View on X](https://x.com/user/status/1)\n"
+        "https://example.com/one\n"
+        "https://example.com/secondary\n"
+        "---\n"
+        "[View on X](https://x.com/user/status/2)\n"
+        "[![image](https://pbs.twimg.com/media/1.jpg)](https://pbs.twimg.com/media/1.jpg)\n"
+        "https://example.com/two\n"
+    )
+
+    with patch(
+        "pipeline_manager.fetch_tweet_thread_markdown",
+        return_value=(markdown, "Tweet - thread.md"),
+    ):
+        processor.process_tweet_urls()
+
+    assert processor.links_file.read_text(encoding="utf-8") == (
+        "https://example.com/one\n"
+        "https://example.com/two\n"
+    )
+
+
+def test_process_tweet_urls_ignores_quoted_tweet_links(tmp_path, monkeypatch):
+    processor, _ = prepare_processor(tmp_path)
+    mock_likes(monkeypatch, ["https://x.com/user/status/1"])
+
+    markdown = (
+        "---\nsource: tweet\n---\n\n"
+        "# T\n"
+        "[View on X](https://x.com/user/status/1)\n"
+        "Comment with no article.\n"
+        "[View quoted tweet](https://x.com/other/status/2)\n"
+        "Quote\n"
+        "Other User\n"
+        "https://quoted.example.com/article\n"
+    )
+
+    with patch(
+        "pipeline_manager.fetch_tweet_thread_markdown",
+        return_value=(markdown, "Tweet - user-1.md"),
+    ):
+        processor.process_tweet_urls()
+
+    assert not processor.links_file.exists()
+
+
+def test_process_tweet_urls_does_not_duplicate_existing_queued_link(tmp_path, monkeypatch):
+    processor, _ = prepare_processor(tmp_path)
+    mock_likes(monkeypatch, ["https://x.com/user/status/1"])
+    processor.links_file.write_text("# queue\nhttps://example.com/article\n", encoding="utf-8")
+
+    markdown = (
+        "---\nsource: tweet\n---\n\n"
+        "# T\n"
+        "[View on X](https://x.com/user/status/1)\n"
+        "https://example.com/article\n"
+    )
+
+    with patch(
+        "pipeline_manager.fetch_tweet_thread_markdown",
+        return_value=(markdown, "Tweet - user-1.md"),
+    ):
+        processor.process_tweet_urls()
+
+    assert processor.links_file.read_text(encoding="utf-8") == (
+        "# queue\nhttps://example.com/article\n"
+    )
+
+
 def test_process_tweet_urls_handles_fetch_error(tmp_path, monkeypatch):
     processor, _ = prepare_processor(tmp_path)
 

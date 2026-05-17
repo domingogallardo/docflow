@@ -4,7 +4,7 @@ Tests for DocumentProcessor
 """
 from pathlib import Path
 
-from pipeline_manager import DocumentProcessor
+from pipeline_manager import DocumentProcessor, PIPELINE_TARGETS
 
 
 class StubImageNamer:
@@ -81,6 +81,36 @@ def test_document_processor_integration(tmp_path):
     posts_dir = tmp_path / "Posts" / "Posts 2025"
     assert (posts_dir / "nota.md").exists()
     assert (posts_dir / "nota.html").exists()
+
+
+def test_process_all_runs_tweets_before_urls(tmp_path):
+    """Full pipeline should queue article links from tweets before URL download."""
+    incoming = tmp_path / "Incoming"
+    incoming.mkdir()
+    processor = DocumentProcessor(tmp_path, 2025)
+    calls: list[str] = []
+
+    for target in PIPELINE_TARGETS:
+        handler_name = {
+            "tweets": "process_tweets_pipeline",
+            "urls": "process_web_urls",
+            "podcasts": "process_podcasts",
+            "posts": "process_instapaper_posts",
+            "pdfs": "process_pdfs",
+            "images": "process_images",
+            "md": "process_markdown",
+        }[target]
+
+        def handler(*args, target=target, **kwargs):
+            calls.append(target)
+            return []
+
+        setattr(processor, handler_name, handler)
+
+    processor.register_all_files = lambda: None
+
+    assert processor.process_all() is True
+    assert calls[:2] == ["tweets", "urls"]
 
 
 def test_process_podcasts_only(tmp_path):

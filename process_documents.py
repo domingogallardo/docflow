@@ -3,7 +3,7 @@
 Process the documents pipeline.
 
 Usage:
-    python process_documents.py [--year YYYY] [urls|pdfs|podcasts|posts|images|md|all]
+    python process_documents.py [--year YYYY] [tweets|urls|pdfs|podcasts|posts|images|md|all]
 
 Notes:
 - Instapaper HTML articles are downloaded and processed without special
