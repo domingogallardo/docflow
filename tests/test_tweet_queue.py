@@ -198,6 +198,48 @@ def test_process_tweet_urls_does_not_duplicate_existing_queued_link(tmp_path, mo
     )
 
 
+def test_process_tweet_urls_skips_direct_pdf_links(tmp_path, monkeypatch):
+    processor, _ = prepare_processor(tmp_path)
+    mock_likes(monkeypatch, ["https://x.com/user/status/1"])
+
+    markdown = (
+        "---\nsource: tweet\n---\n\n"
+        "# T\n"
+        "[View on X](https://x.com/user/status/1)\n"
+        "https://example.com/paper.pdf\n"
+        "https://example.com/article\n"
+    )
+
+    with patch(
+        "pipeline_manager.fetch_tweet_thread_markdown",
+        return_value=(markdown, "Tweet - user-1.md"),
+    ):
+        processor.process_tweet_urls()
+
+    assert processor.links_file.read_text(encoding="utf-8") == "https://example.com/article\n"
+
+
+def test_process_tweet_urls_skips_arxiv_pdf_but_keeps_abs_page(tmp_path, monkeypatch):
+    processor, _ = prepare_processor(tmp_path)
+    mock_likes(monkeypatch, ["https://x.com/user/status/1"])
+
+    markdown = (
+        "---\nsource: tweet\n---\n\n"
+        "# T\n"
+        "[View on X](https://x.com/user/status/1)\n"
+        "https://arxiv.org/pdf/2605.01190\n"
+        "https://arxiv.org/abs/2605.01190\n"
+    )
+
+    with patch(
+        "pipeline_manager.fetch_tweet_thread_markdown",
+        return_value=(markdown, "Tweet - user-1.md"),
+    ):
+        processor.process_tweet_urls()
+
+    assert processor.links_file.read_text(encoding="utf-8") == "https://arxiv.org/abs/2605.01190\n"
+
+
 def test_process_tweet_urls_handles_fetch_error(tmp_path, monkeypatch):
     processor, _ = prepare_processor(tmp_path)
 

@@ -350,7 +350,8 @@ class DocumentProcessor:
 
     @staticmethod
     def _is_tweet_article_url(url: str) -> bool:
-        host = (urlparse(url).hostname or "").lower()
+        parsed = urlparse(url)
+        host = (parsed.hostname or "").lower()
         if host.startswith("www."):
             host = host[4:]
         ignored_hosts = {
@@ -363,6 +364,11 @@ class DocumentProcessor:
         if host in ignored_hosts:
             return False
         if host.endswith(".twimg.com"):
+            return False
+        path = parsed.path.lower()
+        if path.endswith(".pdf"):
+            return False
+        if host == "arxiv.org" and path.startswith("/pdf/"):
             return False
         return True
 
