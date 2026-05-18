@@ -25,6 +25,7 @@ import utils as U
 from title_ai import TitleAIUpdater, rename_markdown_pair
 from openai_client import build_openai_client
 from path_utils import unique_path
+from summary_ai import SummaryAIUpdater
 
 
 class InstapaperDownloadRegistry:
@@ -110,6 +111,7 @@ class InstapaperProcessor:
         self.session = None
         self.openai_client = build_openai_client(OPENAI_KEY)
         self.title_updater = TitleAIUpdater(self.openai_client)
+        self.summary_updater = SummaryAIUpdater(self.openai_client)
         self.download_registry = InstapaperDownloadRegistry(
             self.incoming_dir / ".instapaper_downloads.txt"
         )
@@ -404,6 +406,7 @@ class InstapaperProcessor:
                     title=title,
                     extra=extra,
                 )
+                markdown_content = self.summary_updater.add_summary_to_markdown(markdown_content)
 
                 md_file = html_file.with_suffix('.md')
                 md_file.write_text(markdown_content, encoding='utf-8')

@@ -203,6 +203,10 @@ def test_podcast_processor_markdown_to_html_conversion(tmp_path):
     
     # Create processor.
     processor = PodcastProcessor(incoming, destination)
+    processor.summary_updater.add_summary_to_markdown = lambda text: U.upsert_front_matter(
+        text,
+        {"docflow_summary": "Resumen del episodio."},
+    )
     
     # Execute.
     moved_podcasts = processor.process_podcasts()
@@ -231,6 +235,9 @@ def test_podcast_processor_markdown_to_html_conversion(tmp_path):
     assert "docflow_markdown_path:" in md_content
     assert "docflow_html_path:" in md_content
     assert "docflow_html_generated_at:" in md_content
+    assert "docflow_summary: Resumen del episodio." in md_content
+    assert 'name="docflow-summary"' in html_content
+    assert 'content="Resumen del episodio."' in html_content
 
 
 def test_podcast_processor_mixed_files(tmp_path):

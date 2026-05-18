@@ -9,6 +9,7 @@ import config as cfg
 import utils as U
 from title_ai import TitleAIUpdater, rename_markdown_pair
 from openai_client import build_openai_client
+from summary_ai import SummaryAIUpdater
 
 
 class MarkdownProcessor:
@@ -25,6 +26,7 @@ class MarkdownProcessor:
         self.destination_dir = destination_dir
         openai_client = build_openai_client(cfg.OPENAI_KEY)
         self.title_updater = TitleAIUpdater(openai_client)
+        self.summary_updater = SummaryAIUpdater(openai_client)
 
     def process_markdown(self) -> List[Path]:
         """Convert Markdown to HTML, apply margins, and move both files to the yearly destination."""
@@ -41,6 +43,7 @@ class MarkdownProcessor:
         return self._process_markdown_batch(
             markdown_files,
             context="📝 Processing Markdown files...",
+            include_summary=True,
         )
 
     def process_tweet_markdown_subset(self, markdown_files: Iterable[Path]) -> List[Path]:
@@ -58,6 +61,7 @@ class MarkdownProcessor:
         return self._process_markdown_batch(
             selected,
             context=f"📝 Processing {len(selected)} selected Markdown file(s)...",
+            include_summary=False,
         )
 
     def _process_markdown_batch(
@@ -65,10 +69,14 @@ class MarkdownProcessor:
         markdown_files: List[Path],
         *,
         context: str,
+        include_summary: bool,
     ) -> List[Path]:
         print(context)
 
-        markdown_files = self._ensure_docflow_metadata(markdown_files)
+        markdown_files = self._ensure_docflow_metadata(
+            markdown_files,
+            include_summary=include_summary,
+        )
 
         generated_html: List[Path] = []
         for md_file in markdown_files:
@@ -124,7 +132,12 @@ class MarkdownProcessor:
 
         return moved_files
 
-    def _ensure_docflow_metadata(self, markdown_files: Iterable[Path]) -> List[Path]:
+    def _ensure_docflow_metadata(
+        self,
+        markdown_files: Iterable[Path],
+        *,
+        include_summary: bool,
+    ) -> List[Path]:
         """Ensure Markdown files carry baseline docflow metadata before conversion."""
         updated_paths: List[Path] = []
         for md_file in markdown_files:
@@ -136,6 +149,8 @@ class MarkdownProcessor:
                 updated = U.enrich_markdown_metadata(original, title=title)
                 if updated != original:
                     md_file.write_text(updated, encoding="utf-8")
+                if include_summary:
+                    self.summary_updater.add_summary_to_file(md_file)
             except Exception as exc:
                 print(f"⚠️ Could not update metadata for {md_file.name}: {exc}")
             updated_paths.append(md_file)

@@ -5,6 +5,7 @@ Tests for InstapaperProcessor
 from unittest.mock import Mock, patch
 
 from instapaper_processor import InstapaperDownloadRegistry, InstapaperProcessor
+import utils as U
 
 
 def test_instapaper_download_writes_html_and_markdown(tmp_path):
@@ -30,6 +31,10 @@ def test_instapaper_download_writes_html_and_markdown(tmp_path):
     </html>"""
 
     processor = InstapaperProcessor(incoming, destination)
+    processor.summary_updater.add_summary_to_markdown = lambda text: U.upsert_front_matter(
+        text,
+        {"docflow_summary": "Resumen de Instapaper."},
+    )
 
     # Mock the HTTP session.
     mock_resp = Mock()
@@ -59,6 +64,7 @@ def test_instapaper_download_writes_html_and_markdown(tmp_path):
     assert "docflow_html_generated_at:" in md_text
     assert "instapaper_id: 12345" in md_text
     assert "source_name: Example.com" in md_text
+    assert "docflow_summary: Resumen de Instapaper." in md_text
     assert "instapaper_starred" not in md_text
 
 

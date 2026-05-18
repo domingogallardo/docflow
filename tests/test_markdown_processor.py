@@ -3,6 +3,7 @@
 from pathlib import Path
 
 from markdown_processor import MarkdownProcessor
+import utils as U
 
 
 def test_markdown_processor_converts_and_moves_files(tmp_path):
@@ -57,6 +58,52 @@ source: podcast
 
     # Ignored files should remain in Incoming.
     assert podcast_md.exists()
+
+
+def test_markdown_processor_adds_docflow_summary_before_html(tmp_path):
+    incoming = tmp_path / "Incoming"
+    incoming.mkdir()
+    destination = tmp_path / "Posts" / "Posts 2025"
+
+    generic_md = incoming / "nota.md"
+    generic_md.write_text("# Título\n\nContenido en Markdown.", encoding="utf-8")
+
+    processor = MarkdownProcessor(incoming, destination)
+    processor.title_updater.update_titles = lambda files, renamer: None
+
+    def fake_summary(path):
+        text = path.read_text(encoding="utf-8")
+        path.write_text(U.upsert_front_matter(text, {"docflow_summary": "Resumen breve."}), encoding="utf-8")
+        return True
+
+    processor.summary_updater.add_summary_to_file = fake_summary
+    processor.process_markdown()
+
+    md_content = (destination / "nota.md").read_text(encoding="utf-8")
+    html_content = (destination / "nota.html").read_text(encoding="utf-8")
+    assert "docflow_summary: Resumen breve." in md_content
+    assert 'name="docflow-summary"' in html_content
+    assert 'content="Resumen breve."' in html_content
+
+
+def test_markdown_processor_skips_docflow_summary_for_tweets(tmp_path):
+    incoming = tmp_path / "Incoming"
+    incoming.mkdir()
+    destination = tmp_path / "Tweets" / "Tweets 2025"
+
+    tweet_md = incoming / "tweet.md"
+    tweet_md.write_text("---\nsource: tweet\n---\n\n# Tweet\n\nTexto.", encoding="utf-8")
+
+    processor = MarkdownProcessor(incoming, destination)
+    processor.title_updater.update_titles = lambda files, renamer: None
+
+    calls = []
+    processor.summary_updater.add_summary_to_file = lambda path: calls.append(path) or True
+    processor.process_tweet_markdown_subset([tweet_md])
+
+    md_content = (destination / "tweet.md").read_text(encoding="utf-8")
+    assert "docflow_summary:" not in md_content
+    assert calls == []
 
 
 def test_markdown_processor_accepts_external_source_url(tmp_path):

@@ -26,6 +26,8 @@ from bs4 import BeautifulSoup
 import config as cfg
 import utils as U
 from path_utils import unique_path
+from openai_client import build_openai_client
+from summary_ai import SummaryAIUpdater
 
 
 DEFAULT_USER_AGENT = (
@@ -433,6 +435,9 @@ def download_url_to_markdown(
                     source_url=final_url,
                     extra=extra_metadata,
                 )
+                markdown = SummaryAIUpdater(
+                    build_openai_client(cfg.OPENAI_KEY)
+                ).add_summary_to_markdown(markdown)
                 destination.write_text(markdown, encoding="utf-8")
                 return ArticleDownloadResult(
                     url=url,

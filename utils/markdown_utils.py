@@ -25,6 +25,7 @@ _FRONT_MATTER_KEYS = {
     "docflow_original_url": "docflow-original-url",
     "docflow_word_count": "docflow-word-count",
     "docflow_body_chars": "docflow-body-chars",
+    "docflow_summary": "docflow-summary",
     "docflow_last_read": "docflow-last-read",
     "docflow_removed_data_images": "docflow-removed-data-images",
     "instapaper_id": "docflow-instapaper-id",

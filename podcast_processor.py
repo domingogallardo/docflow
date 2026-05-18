@@ -11,6 +11,8 @@ from typing import List, Iterable
 
 import config as cfg
 import utils as U
+from openai_client import build_openai_client
+from summary_ai import SummaryAIUpdater
 
 
 SNIP_INDEX_MARKER = "<!-- snip-index -->"
@@ -29,6 +31,7 @@ class PodcastProcessor:
         self.snip_link = re.compile(r"🎧\s*\[[^\]]*\]\((https://share\.snipd\.com/[^)]+)\)")
         # H1 headers for potential multiple episodes in a single file.
         self.h1_pattern = re.compile(r"^#\s+.+$", re.MULTILINE)
+        self.summary_updater = SummaryAIUpdater(build_openai_client(cfg.OPENAI_KEY))
     
     def process_podcasts(self) -> List[Path]:
         """Run the full podcasts processing pipeline."""
@@ -191,6 +194,7 @@ class PodcastProcessor:
                 extra = self._podcast_metadata_from_body(original)
                 title = U.extract_episode_title(md_file) or U.extract_markdown_title(original) or md_file.stem
                 updated = U.enrich_markdown_metadata(original, title=title, extra=extra)
+                updated = self.summary_updater.add_summary_to_markdown(updated)
                 if updated != original:
                     md_file.write_text(updated, encoding="utf-8")
             except Exception as e:

@@ -157,6 +157,9 @@ Common fields:
 - `docflow_html_generated_at`: UTC timestamp for when docflow generated the
   associated HTML.
 - `docflow_body_chars` and `docflow_word_count`: body-only Markdown statistics.
+- `docflow_summary`: AI-generated Spanish summary for processed Markdown
+  content, except tweets. Summaries aim for 3 to 5 sentences, are generated
+  from a bounded content sample, and are capped at 500 characters.
 
 Source-specific fields:
 

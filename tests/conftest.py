@@ -12,6 +12,7 @@ if repo_root_str not in sys.path:
 
 # Tests import modules that depend on config.BASE_DIR. Provide a stable default.
 os.environ.setdefault("DOCFLOW_BASE_DIR", repo_root_str)
+os.environ.pop("OPENAI_API_KEY", None)
 
 # Also add the 'utils' folder for direct utility imports in tests.
 UTILS_DIR = REPO_ROOT / "utils"

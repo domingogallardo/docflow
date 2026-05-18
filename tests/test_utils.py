@@ -701,6 +701,14 @@ def test_front_matter_meta_tags_exports_tweet_reply_fields():
     assert '<meta name="docflow-tweet-conversation-count" content="3">' in html
 
 
+def test_front_matter_meta_tags_exports_docflow_summary():
+    from utils import front_matter_meta_tags
+
+    html = front_matter_meta_tags({"docflow_summary": "Resumen breve."})
+
+    assert '<meta name="docflow-summary" content="Resumen breve.">' in html
+
+
 def test_front_matter_block_escapes_yaml_sensitive_values():
     from utils import front_matter_block
 
