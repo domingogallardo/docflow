@@ -7,6 +7,8 @@ from typing import Callable, Iterable, List, Optional, Sequence, Tuple
 from datetime import datetime
 from urllib.parse import urlparse
 
+import requests
+
 import utils as U
 import config as cfg
 from pdf_processor import PDFProcessor
@@ -215,7 +217,10 @@ class DocumentProcessor:
             destination = self._unique_destination(self.incoming / filename)
             destination.write_text(markdown, encoding="utf-8")
             generated.append(destination)
-            article_links = self._extract_primary_article_links_from_tweet_markdown(markdown)
+            article_links = self._extract_primary_article_links_from_tweet_markdown(
+                markdown,
+                resolve_short_url=self._resolve_tco_url,
+            )
             queued_links = self._append_links_to_queue(article_links, links_path=self.links_file)
             if queued_links:
                 print(f"🔗 Queued {len(queued_links)} article link(s) from tweet")
@@ -372,8 +377,33 @@ class DocumentProcessor:
             return False
         return True
 
+    @staticmethod
+    def _is_tco_url(url: str) -> bool:
+        host = (urlparse(url).hostname or "").lower()
+        return host == "t.co" or host.endswith(".t.co")
+
+    @staticmethod
+    def _resolve_tco_url(url: str, *, timeout: int = 15) -> str | None:
+        if not DocumentProcessor._is_tco_url(url):
+            return None
+        headers = {"User-Agent": "Mozilla/5.0"}
+        for method in (requests.head, requests.get):
+            try:
+                response = method(url, allow_redirects=True, timeout=timeout, headers=headers)
+                response.raise_for_status()
+            except requests.RequestException:
+                continue
+            if response.url and response.url != url:
+                return response.url
+        return None
+
     @classmethod
-    def _extract_primary_article_links_from_tweet_markdown(cls, markdown: str) -> List[str]:
+    def _extract_primary_article_links_from_tweet_markdown(
+        cls,
+        markdown: str,
+        *,
+        resolve_short_url: Callable[[str], str | None] | None = None,
+    ) -> List[str]:
         """Return the first external article-like link from each captured tweet block."""
         links: List[str] = []
         current_block: List[str] = []
@@ -381,7 +411,10 @@ class DocumentProcessor:
         def flush_block() -> None:
             if not current_block:
                 return
-            link = cls._first_article_link_in_tweet_block(current_block)
+            link = cls._first_article_link_in_tweet_block(
+                current_block,
+                resolve_short_url=resolve_short_url,
+            )
             if link:
                 links.append(link)
             current_block.clear()
@@ -401,7 +434,13 @@ class DocumentProcessor:
         return cls._dedupe_urls(links)
 
     @classmethod
-    def _first_article_link_in_tweet_block(cls, lines: Sequence[str]) -> str | None:
+    def _first_article_link_in_tweet_block(
+        cls,
+        lines: Sequence[str],
+        *,
+        resolve_short_url: Callable[[str], str | None] | None = None,
+    ) -> str | None:
+        short_urls: List[str] = []
         for line in lines:
             stripped = line.strip()
             if stripped.startswith("[View quoted tweet](") or stripped == "Quote":
@@ -412,6 +451,12 @@ class DocumentProcessor:
                 url = match.group(0).rstrip(").,;:!\u2026")
                 if cls._is_tweet_article_url(url):
                     return url
+                if resolve_short_url and cls._is_tco_url(url):
+                    short_urls.append(url)
+        for short_url in short_urls:
+            resolved_url = resolve_short_url(short_url)
+            if resolved_url and cls._is_tweet_article_url(resolved_url):
+                return resolved_url
         return None
 
     def _append_links_to_queue(self, urls: Sequence[str], *, links_path: Path) -> List[str]:

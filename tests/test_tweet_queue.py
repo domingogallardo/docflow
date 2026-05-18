@@ -240,6 +240,64 @@ def test_process_tweet_urls_skips_arxiv_pdf_but_keeps_abs_page(tmp_path, monkeyp
     assert processor.links_file.read_text(encoding="utf-8") == "https://arxiv.org/abs/2605.01190\n"
 
 
+def test_process_tweet_urls_resolves_tco_when_no_expanded_article_link(tmp_path, monkeypatch):
+    processor, _ = prepare_processor(tmp_path)
+    mock_likes(monkeypatch, ["https://x.com/user/status/1"])
+    monkeypatch.setattr(
+        "pipeline_manager.DocumentProcessor._resolve_tco_url",
+        staticmethod(lambda url: "https://example.com/article" if url == "https://t.co/abc" else None),
+    )
+
+    markdown = (
+        "---\nsource: tweet\n---\n\n"
+        "# T\n"
+        "[View on X](https://x.com/user/status/1)\n"
+        "Article card from example.com\n"
+        "Original link: https://t.co/abc\n"
+    )
+
+    with patch(
+        "pipeline_manager.fetch_tweet_thread_markdown",
+        return_value=(markdown, "Tweet - user-1.md"),
+    ):
+        processor.process_tweet_urls()
+
+    assert processor.links_file.read_text(encoding="utf-8") == "https://example.com/article\n"
+
+
+def test_process_tweet_urls_prefers_expanded_link_over_tco_resolution(tmp_path, monkeypatch):
+    processor, _ = prepare_processor(tmp_path)
+    mock_likes(monkeypatch, ["https://x.com/user/status/1"])
+    called = False
+
+    def fake_resolve(url):
+        nonlocal called
+        called = True
+        return "https://example.com/from-tco"
+
+    monkeypatch.setattr(
+        "pipeline_manager.DocumentProcessor._resolve_tco_url",
+        staticmethod(fake_resolve),
+    )
+
+    markdown = (
+        "---\nsource: tweet\n---\n\n"
+        "# T\n"
+        "[View on X](https://x.com/user/status/1)\n"
+        "https://example.com/expanded\n"
+        "Original link: https://t.co/abc\n"
+    )
+
+    with patch(
+        "pipeline_manager.fetch_tweet_thread_markdown",
+        return_value=(markdown, "Tweet - user-1.md"),
+    ):
+        processor.process_tweet_urls()
+
+    assert processor.links_file.read_text(encoding="utf-8") == "https://example.com/expanded\n"
+    assert not called
+
+
 def test_process_tweet_urls_handles_fetch_error(tmp_path, monkeypatch):
     processor, _ = prepare_processor(tmp_path)
 
