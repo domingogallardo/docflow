@@ -1,5 +1,6 @@
 import os
 import time
+from datetime import date, datetime, timezone
 from pathlib import Path
 
 from utils import build_browse_index
@@ -314,6 +315,71 @@ def test_tweets_root_is_sorted_by_year_desc(tmp_path: Path):
     assert content.find("Tweets 2026/") < content.find("Tweets 2025/")
     assert "Tweets 2026/</a> <span class='dg-count'>(1)</span>" in content
     assert "Tweets 2026/</a><span class='dg-date'>" not in content
+
+
+def test_current_year_browse_pages_group_articles_by_relative_time(tmp_path: Path, monkeypatch):
+    base = tmp_path / "base"
+    monkeypatch.setattr(build_browse_index, "_local_today", lambda: date(2026, 5, 18))
+
+    categories = [
+        ("posts", "Posts", "Posts 2026", "post"),
+        ("tweets", "Tweets", "Tweets 2026", "tweet"),
+        ("podcasts", "Podcasts", "Podcasts 2026", "podcast"),
+    ]
+    dated_files = [
+        ("today", datetime(2026, 5, 18, 12, tzinfo=timezone.utc)),
+        ("yesterday", datetime(2026, 5, 17, 12, tzinfo=timezone.utc)),
+        ("last-seven", datetime(2026, 5, 14, 12, tzinfo=timezone.utc)),
+        ("last-thirty", datetime(2026, 4, 25, 12, tzinfo=timezone.utc)),
+        ("april", datetime(2026, 4, 10, 12, tzinfo=timezone.utc)),
+        ("march", datetime(2026, 3, 20, 12, tzinfo=timezone.utc)),
+        ("february", datetime(2026, 2, 5, 12, tzinfo=timezone.utc)),
+    ]
+
+    for _, root_name, year_dir_name, prefix in categories:
+        year_dir = base / root_name / year_dir_name
+        year_dir.mkdir(parents=True)
+        for suffix, mtime in dated_files:
+            doc = year_dir / f"{prefix}-{suffix}.html"
+            doc.write_text(f"<html><body>{prefix} {suffix}</body></html>", encoding="utf-8")
+            epoch = mtime.timestamp()
+            os.utime(doc, (epoch, epoch))
+
+    build_browse_index.build_browse_site(base)
+
+    for category, _, year_dir_name, prefix in categories:
+        page = base / "_site" / "browse" / category / year_dir_name / "index.html"
+        content = page.read_text(encoding="utf-8")
+
+        assert "<h3 class='dg-time-heading'>Hoy</h3>" in content
+        assert "<h3 class='dg-time-heading'>Ayer</h3>" in content
+        assert "<h3 class='dg-time-heading'>Últimos 7 días</h3>" in content
+        assert "<h3 class='dg-time-heading'>Últimos 30 días</h3>" in content
+        assert "<h3 class='dg-time-heading'>Abril 2026</h3>" in content
+        assert "<h3 class='dg-time-heading'>Marzo 2026</h3>" in content
+        assert "<h3 class='dg-time-heading'>Febrero 2026</h3>" in content
+        assert content.find("Hoy") < content.find(f"{prefix}-today.html")
+        assert content.find("Ayer") < content.find(f"{prefix}-yesterday.html")
+        assert content.find("Últimos 7 días") < content.find(f"{prefix}-last-seven.html")
+        assert content.find("Últimos 30 días") < content.find(f"{prefix}-last-thirty.html")
+        assert content.find("Abril 2026") < content.find(f"{prefix}-april.html")
+        assert content.find("Marzo 2026") < content.find(f"{prefix}-march.html")
+        assert content.find("Febrero 2026") < content.find(f"{prefix}-february.html")
+
+
+def test_non_current_year_browse_pages_stay_flat(tmp_path: Path, monkeypatch):
+    base = tmp_path / "base"
+    monkeypatch.setattr(build_browse_index, "_local_today", lambda: date(2026, 5, 18))
+    posts = base / "Posts" / "Posts 2025"
+    posts.mkdir(parents=True)
+    (posts / "old.html").write_text("<html><body>Old</body></html>", encoding="utf-8")
+
+    build_browse_index.build_browse_site(base)
+
+    page = base / "_site" / "browse" / "posts" / "Posts 2025" / "index.html"
+    content = page.read_text(encoding="utf-8")
+    assert "<h3 class='dg-time-heading'>" not in content
+    assert "old.html" in content
 
 
 def test_rebuild_browse_for_path_updates_only_target_branch(tmp_path: Path):

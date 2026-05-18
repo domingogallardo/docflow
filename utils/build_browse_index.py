@@ -13,7 +13,7 @@ import os
 import re
 import shutil
 import time
-from datetime import datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from dataclasses import dataclass, replace
 from pathlib import Path
 import sys
@@ -49,6 +49,21 @@ SKIP_DIR_NAMES = {"highlights", "__pycache__"}
 YEAR_SUFFIX_RE = re.compile(r"(\d{4})$")
 YEAR_COUNT_CATEGORIES = {"posts", "tweets", "pdfs", "images"}
 YEAR_SORT_CATEGORIES = {"posts", "tweets", "pdfs", "images"}
+TEMPORAL_GROUP_CATEGORIES = {"posts", "tweets", "podcasts"}
+SPANISH_MONTH_NAMES = {
+    1: "Enero",
+    2: "Febrero",
+    3: "Marzo",
+    4: "Abril",
+    5: "Mayo",
+    6: "Junio",
+    7: "Julio",
+    8: "Agosto",
+    9: "Septiembre",
+    10: "Octubre",
+    11: "Noviembre",
+    12: "Diciembre",
+}
 
 
 @dataclass(frozen=True)
@@ -196,6 +211,10 @@ def _entry_sort_key(entry: BrowseEntry) -> tuple[float, str]:
     return (-_sort_mtime(entry), entry.name.lower())
 
 
+def _local_today() -> date:
+    return datetime.now().astimezone().date()
+
+
 def _base_head(title: str) -> str:
     return (
         f"<html><head><meta charset='utf-8'><meta name='viewport' content='width=device-width, initial-scale=1'><title>{html.escape(title)}</title>"
@@ -220,6 +239,9 @@ def _base_head(title: str) -> str:
         ".dg-search-hit a{color:#0a7;text-decoration:none}"
         ".dg-sort-toggle{padding:2px 8px;border:1px solid #ccc;border-radius:6px;background:#f7f7f7;color:#333;font:12px -apple-system,system-ui,Segoe UI,Roboto,Helvetica,Arial;cursor:pointer}"
         ".dg-sort-toggle.is-active{border-color:#c8a400;background:#fff6e5}"
+        ".dg-parent-index{list-style:none;padding-left:0;margin:0 0 8px}"
+        ".dg-time-heading{font-size:13px;margin:14px 0 4px;color:#555;font-weight:600}"
+        ".dg-time-section{margin-top:0;margin-bottom:8px}"
         "</style>"
         "<script src='/assets/actions.js' defer></script>"
         "<script src='/assets/browse-sort.js' defer></script>"
@@ -235,6 +257,7 @@ def _render_directory_page(
     parent_href: str | None,
     controls_html: str | None = None,
     pre_list_html: str = "",
+    entry_sections: list[tuple[str, list[BrowseEntry]]] | None = None,
 ) -> str:
     rows: list[str] = [_base_head(title)]
     rows.append("<div class='dg-nav'><a href='/'>Home</a> · <a href='/browse/'>Browse</a> · <a href='/reading/'>Reading</a> · <a href='/done/'>Done</a></div>")
@@ -253,10 +276,25 @@ def _render_directory_page(
     )
     if pre_list_html:
         rows.append(pre_list_html)
-    rows.append("<hr><ul class='dg-index'>")
 
     if parent_href:
-        rows.append(f'<li data-dg-parent="1"><a href="{parent_href}">../</a></li>')
+        rows.append(f'<hr><ul class="dg-parent-index"><li data-dg-parent="1"><a href="{parent_href}">../</a></li></ul>')
+    else:
+        rows.append("<hr>")
+
+    if entry_sections is not None:
+        for label, section_entries in entry_sections:
+            if not section_entries:
+                continue
+            rows.append(f"<h3 class='dg-time-heading'>{html.escape(label)}</h3>")
+            rows.append("<ul class='dg-index dg-time-section'>")
+            for entry in section_entries:
+                rows.append(_render_entry(entry))
+            rows.append("</ul>")
+        rows.append("<hr></body></html>")
+        return "\n".join(rows)
+
+    rows.append("<ul class='dg-index'>")
 
     for entry in entries:
         rows.append(_render_entry(entry))
@@ -646,11 +684,13 @@ def _write_category_directory_page(
         done_items=done_items,
     )
     display_path = _display_path_for_category_dir(category, rel_dir)
+    entry_sections = _temporal_sections_for_entries(entries) if _should_group_temporally(category, rel_dir) else None
     html_doc = _render_directory_page(
         title=f"Index of {display_path}",
         display_path=display_path,
         entries=entries,
         parent_href="../",
+        entry_sections=entry_sections,
     )
     (out_dir / "index.html").write_text(html_doc, encoding="utf-8")
     return child_dirs, direct_files
@@ -681,6 +721,62 @@ def _sort_root_year_entries(entries: list[BrowseEntry]) -> list[BrowseEntry]:
     year_dirs.sort(key=lambda item: item[0], reverse=True)
     others.sort(key=_entry_sort_key)
     return [entry for _, entry in year_dirs] + others
+
+
+def _year_from_name(name: str) -> int | None:
+    match = YEAR_SUFFIX_RE.search(name)
+    if not match:
+        return None
+    try:
+        return int(match.group(1))
+    except ValueError:
+        return None
+
+
+def _should_group_temporally(category: str, rel_dir: Path) -> bool:
+    if category not in TEMPORAL_GROUP_CATEGORIES or rel_dir == Path("."):
+        return False
+
+    return _year_from_name(rel_dir.name) == _local_today().year
+
+
+def _entry_local_date(entry: BrowseEntry) -> date:
+    return datetime.fromtimestamp(_sort_mtime(entry)).astimezone().date()
+
+
+def _temporal_sections_for_entries(entries: list[BrowseEntry]) -> list[tuple[str, list[BrowseEntry]]]:
+    today = _local_today()
+    yesterday = today - timedelta(days=1)
+    last_7_start = today - timedelta(days=7)
+    last_30_start = today - timedelta(days=30)
+
+    labels: list[str] = ["Hoy", "Ayer", "Últimos 7 días", "Últimos 30 días"]
+    for month in range(today.month - 1, 0, -1):
+        labels.append(f"{SPANISH_MONTH_NAMES[month]} {today.year}")
+
+    buckets: dict[str, list[BrowseEntry]] = {label: [] for label in labels}
+    extra_months: dict[tuple[int, int], list[BrowseEntry]] = {}
+
+    for entry in entries:
+        entry_date = _entry_local_date(entry)
+        if entry_date == today:
+            buckets["Hoy"].append(entry)
+        elif entry_date == yesterday:
+            buckets["Ayer"].append(entry)
+        elif entry_date >= last_7_start:
+            buckets["Últimos 7 días"].append(entry)
+        elif entry_date >= last_30_start:
+            buckets["Últimos 30 días"].append(entry)
+        elif entry_date.year == today.year and entry_date.month < today.month:
+            buckets[f"{SPANISH_MONTH_NAMES[entry_date.month]} {entry_date.year}"].append(entry)
+        else:
+            extra_months.setdefault((entry_date.year, entry_date.month), []).append(entry)
+
+    sections = [(label, buckets[label]) for label in labels if buckets[label]]
+    for year, month in sorted(extra_months, reverse=True):
+        month_name = SPANISH_MONTH_NAMES.get(month, f"{month:02d}")
+        sections.append((f"{month_name} {year}", extra_months[(year, month)]))
+    return sections
 
 
 def _write_category_tree(
