@@ -1,4 +1,5 @@
 from pathlib import Path
+from datetime import date
 
 from utils import build_done_index
 from utils import highlight_store
@@ -40,11 +41,14 @@ def test_write_site_done_index_uses_done_state(tmp_path: Path):
     assert "data-dg-sort-mtime=" in content
     assert "data-dg-working" not in content
     assert "data-dg-done" not in content
+    assert "#fff9e8" not in content
+    assert ".dg-done-list li.dg-hl{background" not in content
     assert "🟡" in content
 
 
 def test_done_items_order_by_done_time(tmp_path: Path, monkeypatch):
     base = tmp_path / "base"
+    monkeypatch.setattr(build_done_index, "_local_today", lambda: date(2026, 5, 18))
     posts = base / "Posts" / "Posts 2026"
     posts.mkdir(parents=True)
     (posts / "a.html").write_text("<html><body>A</body></html>", encoding="utf-8")
@@ -58,7 +62,7 @@ def test_done_items_order_by_done_time(tmp_path: Path, monkeypatch):
     out = build_done_index.write_site_done_index(base)
     content = out.read_text(encoding="utf-8")
 
-    assert '<h2 class="dg-year">2026</h2>' in content
+    assert '<h2 class="dg-year dg-time-heading">Febrero 2026</h2>' in content
     assert content.find("b.html") < content.find("a.html")
 
 
@@ -94,6 +98,7 @@ def test_done_index_shows_state_actions_for_pdfs(tmp_path: Path):
 
 def test_done_index_groups_items_by_done_year_headers(tmp_path: Path, monkeypatch):
     base = tmp_path / "base"
+    monkeypatch.setattr(build_done_index, "_local_today", lambda: date(2026, 5, 18))
     posts_2025 = base / "Posts" / "Posts 2025"
     posts_2026 = base / "Posts" / "Posts 2026"
     posts_2025.mkdir(parents=True)
@@ -109,9 +114,59 @@ def test_done_index_groups_items_by_done_year_headers(tmp_path: Path, monkeypatc
     out = build_done_index.write_site_done_index(base)
     content = out.read_text(encoding="utf-8")
 
-    assert '<h2 class="dg-year">2026</h2>' in content
-    assert '<h2 class="dg-year">2025</h2>' not in content
+    assert '<h2 class="dg-year dg-time-heading">Enero 2026</h2>' in content
+    assert '<h2 class="dg-year dg-time-heading">2025</h2>' not in content
     assert content.find("new.html") < content.find("old.html")
+
+
+def test_done_index_groups_current_year_by_relative_time(tmp_path: Path, monkeypatch):
+    base = tmp_path / "base"
+    monkeypatch.setattr(build_done_index, "_local_today", lambda: date(2026, 5, 18))
+    posts = base / "Posts" / "Posts 2026"
+    posts.mkdir(parents=True)
+
+    docs = [
+        ("today.html", "2026-05-18T12:00:00Z"),
+        ("yesterday.html", "2026-05-17T12:00:00Z"),
+        ("last-seven.html", "2026-05-14T12:00:00Z"),
+        ("last-thirty.html", "2026-04-25T12:00:00Z"),
+        ("april.html", "2026-04-10T12:00:00Z"),
+        ("march.html", "2026-03-20T12:00:00Z"),
+        ("february.html", "2026-02-05T12:00:00Z"),
+    ]
+    for filename, _ in docs:
+        (posts / filename).write_text(f"<html><body>{filename}</body></html>", encoding="utf-8")
+
+    site_state.save_done_state(
+        base,
+        {
+            "version": site_state.STATE_VERSION,
+            "items": {f"Posts/Posts 2026/{filename}": {"done_at": done_at} for filename, done_at in docs},
+        },
+    )
+
+    out = build_done_index.write_site_done_index(base)
+    content = out.read_text(encoding="utf-8")
+
+    headings = [
+        "Hoy",
+        "Ayer",
+        "Últimos 7 días",
+        "Últimos 30 días",
+        "Abril 2026",
+        "Marzo 2026",
+        "Febrero 2026",
+    ]
+    for heading in headings:
+        assert f'<h2 class="dg-year dg-time-heading">{heading}</h2>' in content
+
+    assert content.find("Hoy") < content.find("today.html")
+    assert content.find("Ayer") < content.find("yesterday.html")
+    assert content.find("Últimos 7 días") < content.find("last-seven.html")
+    assert content.find("Últimos 30 días") < content.find("last-thirty.html")
+    assert content.find("Abril 2026") < content.find("april.html")
+    assert content.find("Marzo 2026") < content.find("march.html")
+    assert content.find("Febrero 2026") < content.find("february.html")
 
 
 def test_done_index_falls_back_to_path_year_when_done_at_missing(tmp_path: Path):
@@ -128,12 +183,13 @@ def test_done_index_falls_back_to_path_year_when_done_at_missing(tmp_path: Path)
     out = build_done_index.write_site_done_index(base)
     content = out.read_text(encoding="utf-8")
 
-    assert '<h2 class="dg-year">2025</h2>' in content
+    assert '<h2 class="dg-year dg-time-heading">2025</h2>' in content
     assert "legacy.html" in content
 
 
-def test_done_highlight_view_promotes_old_item_to_highlight_year(tmp_path: Path):
+def test_done_highlight_view_promotes_old_item_to_highlight_year(tmp_path: Path, monkeypatch):
     base = tmp_path / "base"
+    monkeypatch.setattr(build_done_index, "_local_today", lambda: date(2026, 5, 18))
     posts_2024 = base / "Posts" / "Posts 2024"
     posts_2024.mkdir(parents=True)
     (posts_2024 / "legacy.html").write_text("<html><body>Legacy</body></html>", encoding="utf-8")
@@ -157,8 +213,8 @@ def test_done_highlight_view_promotes_old_item_to_highlight_year(tmp_path: Path)
     default_view = content.split('data-dg-highlight-view="default"', 1)[1].split('data-dg-highlight-view="highlight"', 1)[0]
     highlight_view = content.split('data-dg-highlight-view="highlight"', 1)[1]
 
-    assert '<h2 class="dg-year">2024</h2>' in default_view
+    assert '<h2 class="dg-year dg-time-heading">2024</h2>' in default_view
     assert "legacy.html" in default_view
     assert "data-dg-group-year='2024'" in highlight_view
-    assert '<h2 class="dg-year">2026</h2>' in highlight_view
-    assert highlight_view.find('<h2 class="dg-year">2026</h2>') < highlight_view.find("legacy.html")
+    assert '<h2 class="dg-year dg-time-heading">Marzo 2026</h2>' in highlight_view
+    assert highlight_view.find('<h2 class="dg-year dg-time-heading">Marzo 2026</h2>') < highlight_view.find("legacy.html")

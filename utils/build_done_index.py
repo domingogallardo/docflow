@@ -6,7 +6,7 @@ import argparse
 import html
 import re
 import sys
-from datetime import datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from typing import NamedTuple
 
@@ -29,8 +29,8 @@ DONE_BASE_STYLE = (
     "ul{margin-top:0}"
     ".dg-done-list{list-style:none;padding-left:0}"
     ".dg-done-list li{padding:2px 6px;border-radius:6px;margin:2px 0;display:flex;justify-content:space-between;gap:10px;align-items:center}"
-    ".dg-done-list li.dg-hl{background:#fff9e8}"
     ".dg-year{margin:14px 0 6px;font-size:1rem;font-weight:600;color:#555}"
+    ".dg-time-heading{margin:14px 0 6px;font-size:1rem;font-weight:600;color:#555}"
     ".dg-nav{color:#666;font:13px -apple-system,system-ui,Segoe UI,Roboto,Helvetica,Arial;margin-bottom:8px}"
     ".dg-nav a{text-decoration:none;color:#0a7}"
     ".dg-legendbar{display:flex;align-items:center;justify-content:flex-start;gap:6px;flex-wrap:wrap;margin-bottom:8px}"
@@ -43,6 +43,20 @@ DONE_BASE_STYLE = (
 )
 
 YEAR_RE = re.compile(r"(?:19|20)\d{2}")
+SPANISH_MONTH_NAMES = {
+    1: "Enero",
+    2: "Febrero",
+    3: "Marzo",
+    4: "Abril",
+    5: "Mayo",
+    6: "Junio",
+    7: "Julio",
+    8: "Agosto",
+    9: "Septiembre",
+    10: "Octubre",
+    11: "Noviembre",
+    12: "Diciembre",
+}
 
 
 class SiteDoneItem(NamedTuple):
@@ -111,23 +125,55 @@ def _year_for_item(rel_path: str) -> str:
     return "Unknown"
 
 
-def _sort_year_keys(years: list[str]) -> list[str]:
-    def _sort_key(year: str) -> tuple[int, int | str]:
-        if year.isdigit():
-            return (0, -int(year))
-        return (1, year.lower())
-
-    return sorted(years, key=_sort_key)
+def _local_today() -> date:
+    return datetime.now().astimezone().date()
 
 
 def _year_from_epoch(epoch: float) -> str:
     return str(datetime.fromtimestamp(epoch, tz=timezone.utc).year)
 
 
-def _highlight_group_year(item: SiteDoneItem) -> str:
+def _temporal_label_for_epoch(epoch: float, fallback_year: str) -> tuple[int, str]:
+    item_date = datetime.fromtimestamp(epoch).astimezone().date()
+    today = _local_today()
+
+    if item_date.year != today.year:
+        try:
+            return (100 + (9999 - int(fallback_year)), fallback_year)
+        except ValueError:
+            return (10000, fallback_year)
+
+    if item_date == today:
+        return (0, "Hoy")
+    if item_date == today - timedelta(days=1):
+        return (1, "Ayer")
+    if item_date >= today - timedelta(days=7):
+        return (2, "Últimos 7 días")
+    if item_date >= today - timedelta(days=30):
+        return (3, "Últimos 30 días")
+
+    month_name = SPANISH_MONTH_NAMES.get(item_date.month, f"{item_date.month:02d}")
+    return (20 - item_date.month, f"{month_name} {item_date.year}")
+
+
+def _year_label_order(year: str) -> tuple[int, str]:
+    try:
+        return (100 + (9999 - int(year)), year)
+    except ValueError:
+        return (10000, year)
+
+
+def _default_done_group(item: SiteDoneItem) -> tuple[int, str]:
+    if item.group_year.isdigit() and _year_from_epoch(item.sort_mtime) != item.group_year:
+        return _year_label_order(item.group_year)
+    return _temporal_label_for_epoch(item.sort_mtime, item.group_year)
+
+
+def _highlight_done_group(item: SiteDoneItem) -> tuple[int, str]:
     if item.highlighted and item.highlight_last_epoch is not None:
-        return _year_from_epoch(item.highlight_last_epoch)
-    return item.group_year
+        fallback_year = _year_from_epoch(item.highlight_last_epoch)
+        return _temporal_label_for_epoch(item.highlight_last_epoch, fallback_year)
+    return _default_done_group(item)
 
 
 def _render_done_sections(
@@ -140,14 +186,15 @@ def _render_done_sections(
         hidden_attr = " hidden" if hidden else ""
         return f'<div class="dg-done-sections" data-dg-highlight-view="{"highlight" if highlight_mode else "default"}"{hidden_attr}><ul class="dg-done-list"></ul></div>'
 
-    grouped: dict[str, list[SiteDoneItem]] = {}
+    grouped: dict[str, tuple[int, list[SiteDoneItem]]] = {}
     for item in items:
-        year = _highlight_group_year(item) if highlight_mode else item.group_year
-        grouped.setdefault(year, []).append(item)
+        group_order, label = _highlight_done_group(item) if highlight_mode else _default_done_group(item)
+        if label not in grouped:
+            grouped[label] = (group_order, [])
+        grouped[label][1].append(item)
 
     sections: list[str] = []
-    for year in _sort_year_keys(list(grouped.keys())):
-        year_items = grouped[year]
+    for label, (_, year_items) in sorted(grouped.items(), key=lambda item: (item[1][0], item[0].lower())):
         if highlight_mode:
             year_items = sorted(
                 year_items,
@@ -159,7 +206,10 @@ def _render_done_sections(
                 ),
             )
 
-        lines: list[str] = [f'<h2 class="dg-year">{html.escape(year)}</h2>', '<ul class="dg-done-list">']
+        lines: list[str] = [
+            f'<h2 class="dg-year dg-time-heading">{html.escape(label)}</h2>',
+            '<ul class="dg-done-list">',
+        ]
         for item in year_items:
             href = raw_url_for_rel_path(item.rel_path)
             icon = _icon_for(item.name)
