@@ -1,6 +1,7 @@
 from pathlib import Path
 
 from web_clipper_wrapper import (
+    _html_bridge_redirect_url,
     attempts_for_url,
     clean_html_for_markdown,
     default_output_path,
@@ -47,6 +48,20 @@ def test_clean_html_removes_data_images_but_keeps_remote_images():
     assert removed == 1
     assert "data:image" not in cleaned
     assert "https://example.com/image.png" in cleaned
+
+
+def test_html_bridge_redirect_url_reads_substack_title_bridge():
+    html = (
+        '<head><noscript><meta http-equiv="refresh" '
+        'content="0;URL=https://example.substack.com/p/post?x=1&amp;triedRedirect=true">'
+        "</noscript>"
+        "<title>https://example.substack.com/p/post?x=1&amp;triedRedirect=true</title>"
+        "</head>"
+    )
+
+    assert _html_bridge_redirect_url(html) == (
+        "https://example.substack.com/p/post?x=1&triedRedirect=true"
+    )
 
 
 def test_markdown_quality_rejects_frontmatter_only():

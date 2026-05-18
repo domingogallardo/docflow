@@ -204,6 +204,23 @@ def attempts_for_url(url: str) -> List[ClipAttempt]:
     return unique
 
 
+def _html_bridge_redirect_url(html: str) -> str | None:
+    """Return a client-side redirect URL from lightweight bridge pages."""
+    soup = BeautifulSoup(html, "html.parser")
+    title = soup.title.get_text(strip=True) if soup.title else ""
+    if title.startswith(("http://", "https://")):
+        return title
+
+    meta = soup.find("meta", attrs={"http-equiv": re.compile("^refresh$", re.I)})
+    content = meta.get("content", "") if meta else ""
+    match = re.search(r"url=([^;]+)$", content, flags=re.I)
+    if match:
+        target = unquote(match.group(1).strip().strip("'\""))
+        if target.startswith(("http://", "https://")):
+            return target
+    return None
+
+
 def fetch_html(url: str, *, timeout: int = 30) -> tuple[str, str]:
     """Download page HTML with browser-like headers and return (html, final_url)."""
     headers = {
@@ -211,10 +228,20 @@ def fetch_html(url: str, *, timeout: int = 30) -> tuple[str, str]:
         "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
         "Accept-Language": "es-ES,es;q=0.9,en;q=0.8",
     }
-    response = requests.get(url, headers=headers, timeout=timeout)
-    response.raise_for_status()
-    if not response.encoding:
-        response.encoding = response.apparent_encoding
+    current_url = url
+    seen_urls: set[str] = set()
+    for _ in range(3):
+        response = requests.get(current_url, headers=headers, timeout=timeout)
+        response.raise_for_status()
+        if not response.encoding:
+            response.encoding = response.apparent_encoding
+
+        bridge_url = _html_bridge_redirect_url(response.text)
+        if not bridge_url or bridge_url in seen_urls:
+            return response.text, response.url
+        seen_urls.add(current_url)
+        current_url = bridge_url
+
     return response.text, response.url
 
 
