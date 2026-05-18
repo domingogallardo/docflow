@@ -367,19 +367,48 @@ def test_current_year_browse_pages_group_articles_by_relative_time(tmp_path: Pat
         assert content.find("Febrero 2026") < content.find(f"{prefix}-february.html")
 
 
-def test_non_current_year_browse_pages_stay_flat(tmp_path: Path, monkeypatch):
+def test_non_current_year_browse_pages_group_by_month(tmp_path: Path, monkeypatch):
     base = tmp_path / "base"
     monkeypatch.setattr(build_browse_index, "_local_today", lambda: date(2026, 5, 18))
     posts = base / "Posts" / "Posts 2025"
     posts.mkdir(parents=True)
-    (posts / "old.html").write_text("<html><body>Old</body></html>", encoding="utf-8")
+    old = posts / "old.html"
+    old.write_text("<html><body>Old</body></html>", encoding="utf-8")
+    old_epoch = datetime(2025, 12, 20, 12, tzinfo=timezone.utc).timestamp()
+    os.utime(old, (old_epoch, old_epoch))
 
     build_browse_index.build_browse_site(base)
 
     page = base / "_site" / "browse" / "posts" / "Posts 2025" / "index.html"
     content = page.read_text(encoding="utf-8")
-    assert "<h3 class='dg-time-heading'>" not in content
+    assert "<h3 class='dg-time-heading'>Diciembre 2025</h3>" in content
     assert "old.html" in content
+
+
+def test_previous_year_browse_pages_group_by_month(tmp_path: Path, monkeypatch):
+    base = tmp_path / "base"
+    monkeypatch.setattr(build_browse_index, "_local_today", lambda: date(2026, 5, 18))
+    posts = base / "Posts" / "Posts 2025"
+    posts.mkdir(parents=True)
+
+    april = posts / "april.html"
+    march = posts / "march.html"
+    april.write_text("<html><body>April</body></html>", encoding="utf-8")
+    march.write_text("<html><body>March</body></html>", encoding="utf-8")
+    april_epoch = datetime(2025, 4, 10, 12, tzinfo=timezone.utc).timestamp()
+    march_epoch = datetime(2025, 3, 10, 12, tzinfo=timezone.utc).timestamp()
+    os.utime(april, (april_epoch, april_epoch))
+    os.utime(march, (march_epoch, march_epoch))
+
+    build_browse_index.build_browse_site(base)
+
+    page = base / "_site" / "browse" / "posts" / "Posts 2025" / "index.html"
+    content = page.read_text(encoding="utf-8")
+    assert "<h3 class='dg-time-heading'>Abril 2025</h3>" in content
+    assert "<h3 class='dg-time-heading'>Marzo 2025</h3>" in content
+    assert content.find("Abril 2025") < content.find("april.html")
+    assert content.find("Marzo 2025") < content.find("march.html")
+    assert content.find("Abril 2025") < content.find("Marzo 2025")
 
 
 def test_rebuild_browse_for_path_updates_only_target_branch(tmp_path: Path):

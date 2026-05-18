@@ -684,7 +684,11 @@ def _write_category_directory_page(
         done_items=done_items,
     )
     display_path = _display_path_for_category_dir(category, rel_dir)
-    entry_sections = _temporal_sections_for_entries(entries) if _should_group_temporally(category, rel_dir) else None
+    entry_sections = _temporal_sections_for_category_year(
+        category=category,
+        rel_dir=rel_dir,
+        entries=entries,
+    )
     html_doc = _render_directory_page(
         title=f"Index of {display_path}",
         display_path=display_path,
@@ -733,11 +737,11 @@ def _year_from_name(name: str) -> int | None:
         return None
 
 
-def _should_group_temporally(category: str, rel_dir: Path) -> bool:
+def _temporal_group_year(category: str, rel_dir: Path) -> int | None:
     if category not in TEMPORAL_GROUP_CATEGORIES or rel_dir == Path("."):
-        return False
+        return None
 
-    return _year_from_name(rel_dir.name) == _local_today().year
+    return _year_from_name(rel_dir.name)
 
 
 def _entry_local_date(entry: BrowseEntry) -> date:
@@ -746,6 +750,13 @@ def _entry_local_date(entry: BrowseEntry) -> date:
 
 def _temporal_sections_for_entries(entries: list[BrowseEntry]) -> list[tuple[str, list[BrowseEntry]]]:
     today = _local_today()
+    return _relative_temporal_sections_for_entries(entries, today)
+
+
+def _relative_temporal_sections_for_entries(
+    entries: list[BrowseEntry],
+    today: date,
+) -> list[tuple[str, list[BrowseEntry]]]:
     yesterday = today - timedelta(days=1)
     last_7_start = today - timedelta(days=7)
     last_30_start = today - timedelta(days=30)
@@ -777,6 +788,48 @@ def _temporal_sections_for_entries(entries: list[BrowseEntry]) -> list[tuple[str
         month_name = SPANISH_MONTH_NAMES.get(month, f"{month:02d}")
         sections.append((f"{month_name} {year}", extra_months[(year, month)]))
     return sections
+
+
+def _monthly_sections_for_entries(
+    entries: list[BrowseEntry],
+    year: int,
+) -> list[tuple[str, list[BrowseEntry]]]:
+    buckets: dict[int, list[BrowseEntry]] = {month: [] for month in range(12, 0, -1)}
+    extra_months: dict[tuple[int, int], list[BrowseEntry]] = {}
+
+    for entry in entries:
+        entry_date = _entry_local_date(entry)
+        if entry_date.year == year:
+            buckets[entry_date.month].append(entry)
+        else:
+            extra_months.setdefault((entry_date.year, entry_date.month), []).append(entry)
+
+    sections: list[tuple[str, list[BrowseEntry]]] = []
+    for month in range(12, 0, -1):
+        month_entries = buckets[month]
+        if month_entries:
+            sections.append((f"{SPANISH_MONTH_NAMES[month]} {year}", month_entries))
+
+    for extra_year, month in sorted(extra_months, reverse=True):
+        month_name = SPANISH_MONTH_NAMES.get(month, f"{month:02d}")
+        sections.append((f"{month_name} {extra_year}", extra_months[(extra_year, month)]))
+    return sections
+
+
+def _temporal_sections_for_category_year(
+    *,
+    category: str,
+    rel_dir: Path,
+    entries: list[BrowseEntry],
+) -> list[tuple[str, list[BrowseEntry]]] | None:
+    year = _temporal_group_year(category, rel_dir)
+    if year is None:
+        return None
+
+    today = _local_today()
+    if year == today.year:
+        return _relative_temporal_sections_for_entries(entries, today)
+    return _monthly_sections_for_entries(entries, year)
 
 
 def _write_category_tree(
