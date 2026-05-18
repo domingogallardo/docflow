@@ -7,6 +7,7 @@ from utils import split_front_matter
 
 def test_summary_ai_adds_spanish_docflow_summary(monkeypatch):
     updater = SummaryAIUpdater(object(), delay_seconds=0)
+    monkeypatch.setattr(updater._ai, "_detect_language", lambda snippet: "Spanish")
     monkeypatch.setattr(
         updater._ai,
         "_ai_text",
@@ -22,6 +23,27 @@ def test_summary_ai_adds_spanish_docflow_summary(monkeypatch):
     assert meta["docflow_summary"].startswith("El texto defiende")
     assert len(meta["docflow_summary"]) <= 500
     assert body.lstrip().startswith("# Título")
+
+
+def test_summary_ai_uses_detected_article_language(monkeypatch):
+    updater = SummaryAIUpdater(object(), delay_seconds=0)
+    calls = []
+
+    monkeypatch.setattr(updater._ai, "_detect_language", lambda snippet: "English")
+
+    def fake_ai_text(**kwargs):
+        calls.append(kwargs)
+        return "The article argues one central idea. It explains the evidence. It closes with practical implications."
+
+    monkeypatch.setattr(updater._ai, "_ai_text", fake_ai_text)
+
+    updated = updater.add_summary_to_markdown(
+        "# Title\n\nThis article explains how software teams can use AI tools well."
+    )
+
+    meta, _ = split_front_matter(updated)
+    assert meta["docflow_summary"].startswith("The article argues")
+    assert "Write it in English." in calls[0]["system"]
 
 
 def test_summary_ai_skips_tweets(monkeypatch):
@@ -60,6 +82,7 @@ def test_summary_ai_preserves_existing_summary(monkeypatch):
 
 def test_summary_ai_clips_summary_to_500_chars(monkeypatch):
     updater = SummaryAIUpdater(object(), delay_seconds=0)
+    monkeypatch.setattr(updater._ai, "_detect_language", lambda snippet: "Spanish")
     monkeypatch.setattr(updater._ai, "_ai_text", lambda **kwargs: "Palabra " * 120)
 
     updated = updater.add_summary_to_markdown("# Título\n\nContenido del artículo.")

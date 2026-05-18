@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Helpers to generate Spanish summaries for Markdown front matter."""
+"""Helpers to generate summaries for Markdown front matter."""
 from __future__ import annotations
 
 import re
@@ -11,7 +11,7 @@ from title_ai import TitleAIUpdater
 
 
 class SummaryAIUpdater:
-    """Generate concise Spanish summaries and store them in docflow_summary."""
+    """Generate concise summaries and store them in docflow_summary."""
 
     def __init__(
         self,
@@ -63,7 +63,8 @@ class SummaryAIUpdater:
         if not snippet:
             return md_text
 
-        summary = self._generate_summary(snippet)
+        lang = self._ai._detect_language(snippet)
+        summary = self._generate_summary(snippet, lang)
         if not summary:
             return md_text
 
@@ -92,15 +93,16 @@ class SummaryAIUpdater:
             "ignore",
         )
 
-    def _generate_summary(self, snippet: str) -> str:
+    def _generate_summary(self, snippet: str, lang: str) -> str:
         system = (
-            "Escribe SOLO un resumen en español, sin título ni viñetas. "
-            "Debe tener entre 3 y 5 frases, capturar la idea central del texto "
-            f"y no superar {self.max_summary_chars} caracteres."
+            "Return ONLY a summary, with no title and no bullets. "
+            f"Write it in {lang}. "
+            "Use 3 to 5 sentences, capture the central idea of the text, "
+            f"and do not exceed {self.max_summary_chars} characters."
         )
         prompt = (
-            "Resume este contenido para el frontmatter de un archivo Markdown. "
-            "Evita fórmulas como 'el artículo trata de' si puedes ser más directo.\n\n"
+            "Summarize this content for the front matter of a Markdown file. "
+            "Avoid generic formulas like 'the article is about' when you can be more direct.\n\n"
             f"{snippet}\n\nResumen:"
         )
         response = self._ai._ai_text(system=system, prompt=prompt, max_tokens=180)
