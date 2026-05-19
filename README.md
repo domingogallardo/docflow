@@ -49,6 +49,7 @@ Podcast snippets are typically captured in [Snipd](https://www.snipd.com) and th
 - Highlight navigation on article pages when highlights exist (`Jump to highlight`, previous/next controls).
 - Article pages remember the last reading position and resume it on reopen unless the URL already targets an explicit hash/deep link.
 - PDF files open in the intranet PDF viewer and resume on the last saved page.
+- PDF ingestion creates same-stem Markdown sidecars with `docflow_pdf_path`, so PDFs can carry reading metadata and participate in Reading order.
 
 ### Intranet API
 
@@ -143,9 +144,9 @@ Common fields:
 
 - `docflow_id`: stable UUID persisted in the Markdown front matter and mirrored
   into the generated HTML.
-- `docflow_markdown_path` and `docflow_html_path`: reciprocal paths, relative
-  to `BASE_DIR` when available, linking each Markdown file to its generated
-  HTML pair.
+- `docflow_markdown_path`, `docflow_html_path`, and `docflow_pdf_path`:
+  reciprocal paths, relative to `BASE_DIR` when available, linking each
+  Markdown file to its generated HTML or associated PDF pair.
 - `docflow_render_status`: whether the Markdown has a generated HTML pair
   (`paired_html`) or is intentionally stored as Markdown only (`markdown_only`).
 - `source`: logical source preserved from the pipeline (`tweet`, `podcast`,
@@ -153,7 +154,7 @@ Common fields:
 - `title`: detected, extracted, or generated title.
 - `source_url`: canonical source URL when the item has one.
 - `docflow_source_type`: normalized type (`markdown`, `web`, `tweet`,
-  `podcast`, or `instapaper`).
+  `podcast`, `instapaper`, or `pdf`).
 - `docflow_ingested_at`: UTC timestamp for when docflow incorporated the item.
 - `docflow_html_generated_at`: UTC timestamp for when docflow generated the
   associated HTML.
@@ -307,7 +308,14 @@ python utils/build_reading_index.py --base-dir "$DOCFLOW_BASE_DIR"
 python utils/build_done_index.py --base-dir "$DOCFLOW_BASE_DIR"
 ```
 
-4. Run the intranet server manually (mainly for troubleshooting):
+4. Backfill Markdown sidecars for existing PDFs:
+
+```bash
+python utils/backfill_pdf_sidecars.py --base-dir "$DOCFLOW_BASE_DIR" --dry-run
+python utils/backfill_pdf_sidecars.py --base-dir "$DOCFLOW_BASE_DIR"
+```
+
+5. Run the intranet server manually (mainly for troubleshooting):
 
 ```bash
 source ~/.docflow_env

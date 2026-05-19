@@ -6,6 +6,7 @@ import pytest
 from pathlib import Path
 
 from pdf_processor import PDFProcessor
+from utils import split_front_matter
 
 
 def test_pdf_processor_with_pdfs(tmp_path):
@@ -37,6 +38,19 @@ def test_pdf_processor_with_pdfs(tmp_path):
     # Verify content was preserved.
     assert (destination / "document1.pdf").read_bytes() == b"%PDF-1.4 content"
     assert (destination / "document2.pdf").read_bytes() == b"%PDF-1.5 content"
+
+    md1 = destination / "document1.md"
+    md2 = destination / "document2.md"
+    assert md1.exists()
+    assert md2.exists()
+    meta, body = split_front_matter(md1.read_text(encoding="utf-8"))
+    assert meta["title"] == "document1"
+    assert meta["source"] == "pdf"
+    assert meta["docflow_source_type"] == "pdf"
+    assert meta["docflow_pdf_path"] == "Pdfs/document1.pdf"
+    assert meta["docflow_markdown_path"] == "Pdfs/document1.md"
+    assert meta["docflow_render_status"] == "markdown_only"
+    assert "Associated PDF: `document1.pdf`" in body
 
 
 def test_pdf_processor_no_pdfs(tmp_path, capsys):
@@ -91,6 +105,7 @@ def test_pdf_processor_mixed_files(tmp_path):
     # Verify only the PDF was moved.
     assert len(moved_pdfs) == 1
     assert (destination / "document.pdf").exists()
+    assert (destination / "document.md").exists()
     
     # Verify the other files remain in incoming.
     assert (incoming / "article.html").exists()

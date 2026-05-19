@@ -11,6 +11,7 @@ _FRONT_MATTER_KEYS = {
     "docflow_id": "docflow-id",
     "docflow_markdown_path": "docflow-markdown-path",
     "docflow_html_path": "docflow-html-path",
+    "docflow_pdf_path": "docflow-pdf-path",
     "docflow_render_status": "docflow-render-status",
     "source": "docflow-source",
     "source_url": "docflow-source-url",
@@ -80,7 +81,15 @@ def _parse_front_matter(lines: list[str]) -> dict[str, str]:
         value = raw.strip()
         if not key:
             continue
-        if value.startswith(("\"", "'")) and value.endswith(("\"", "'")) and len(value) >= 2:
+        if value.startswith('"') and value.endswith('"') and len(value) >= 2:
+            value = (
+                value[1:-1]
+                .replace("\\r", "\r")
+                .replace("\\n", "\n")
+                .replace('\\"', '"')
+                .replace("\\\\", "\\")
+            )
+        elif value.startswith("'") and value.endswith("'") and len(value) >= 2:
             value = value[1:-1]
         if value:
             meta[key] = value
@@ -413,6 +422,40 @@ def sync_markdown_only_metadata(
     updated_md = upsert_front_matter(md_text, markdown_meta)
     if updated_md != md_text:
         md_path.write_text(updated_md, encoding="utf-8")
+
+
+def ensure_pdf_sidecar_markdown(
+    pdf_path: Path,
+    *,
+    base_dir: Path | None = None,
+) -> Path:
+    """Create or complete a same-stem Markdown sidecar for a PDF."""
+    pdf_path = Path(pdf_path)
+    md_path = pdf_path.with_suffix(".md")
+    existed = md_path.exists()
+    original_stat = md_path.stat() if existed else None
+    title = pdf_path.stem
+
+    if not existed:
+        md_path.write_text(f"# {title}\n\nAssociated PDF: `{pdf_path.name}`\n", encoding="utf-8")
+
+    md_text = md_path.read_text(encoding="utf-8", errors="replace")
+    updated_md = upsert_front_matter(
+        md_text,
+        {},
+        defaults={
+            "title": title,
+            "source": "pdf",
+            "docflow_source_type": "pdf",
+            "docflow_pdf_path": _relative_docflow_path(pdf_path, base_dir),
+        },
+    )
+    if updated_md != md_text:
+        md_path.write_text(updated_md, encoding="utf-8")
+    sync_markdown_only_metadata(md_path, base_dir=base_dir)
+    if original_stat is not None:
+        os.utime(md_path, (original_stat.st_atime, original_stat.st_mtime))
+    return md_path
 
 
 def update_markdown_docflow_last_read(

@@ -1500,6 +1500,86 @@ def test_api_reading_position_rebuilds_reading_when_last_read_changes(tmp_path: 
     assert md_meta["docflow_last_read"] == "2026-05-15T09:33:00Z"
 
 
+def test_api_reading_position_creates_pdf_sidecar_markdown_for_last_read(
+    tmp_path: Path, monkeypatch
+):
+    base = tmp_path / "base"
+    pdfs = base / "Pdfs" / "Pdfs 2026"
+    pdfs.mkdir(parents=True)
+    pdf = pdfs / "paper.pdf"
+    pdf.write_bytes(b"%PDF-1.4\n")
+
+    rel_path = "Pdfs/Pdfs 2026/paper.pdf"
+    docflow_server.set_reading_path(base, rel_path)
+    app = docflow_server.DocflowApp(base)
+    calls: list[Path] = []
+
+    def _reading(target_base: Path, *_args, **_kwargs):
+        calls.append(target_base)
+        return target_base / "_site" / "reading" / "index.html"
+
+    monkeypatch.setattr(docflow_server.build_reading_index, "write_site_reading_index", _reading)
+
+    payload = app.api_put_reading_position(
+        rel_path,
+        {
+            "updated_at": "2026-05-15T09:34:00Z",
+            "persist_docflow_last_read": True,
+            "page": 3,
+            "page_count": 10,
+        },
+    )
+
+    assert payload["path"] == rel_path
+    assert calls == [base]
+
+    sidecar = pdf.with_suffix(".md")
+    md_meta, md_body = split_front_matter(sidecar.read_text(encoding="utf-8"))
+    assert md_meta["title"] == "paper"
+    assert md_meta["source"] == "pdf"
+    assert md_meta["docflow_source_type"] == "pdf"
+    assert md_meta["docflow_pdf_path"] == "Pdfs/Pdfs 2026/paper.pdf"
+    assert md_meta["docflow_render_status"] == "markdown_only"
+    assert md_meta["docflow_markdown_path"] == "Pdfs/Pdfs 2026/paper.md"
+    assert md_meta["docflow_last_read"] == "2026-05-15T09:34:00Z"
+    assert "Associated PDF: `paper.pdf`" in md_body
+
+
+def test_api_reading_position_updates_pdf_last_read_on_first_page(tmp_path: Path, monkeypatch):
+    base = tmp_path / "base"
+    pdfs = base / "Pdfs" / "Pdfs 2026"
+    pdfs.mkdir(parents=True)
+    pdf = pdfs / "paper.pdf"
+    pdf.write_bytes(b"%PDF-1.4\n")
+
+    rel_path = "Pdfs/Pdfs 2026/paper.pdf"
+    docflow_server.set_reading_path(base, rel_path)
+    app = docflow_server.DocflowApp(base)
+    calls: list[Path] = []
+
+    def _reading(target_base: Path, *_args, **_kwargs):
+        calls.append(target_base)
+        return target_base / "_site" / "reading" / "index.html"
+
+    monkeypatch.setattr(docflow_server.build_reading_index, "write_site_reading_index", _reading)
+
+    payload = app.api_put_reading_position(
+        rel_path,
+        {
+            "updated_at": "2026-05-15T09:35:00Z",
+            "persist_docflow_last_read": True,
+            "page": 1,
+            "page_count": 10,
+            "progress": 0,
+        },
+    )
+
+    assert payload["path"] == rel_path
+    assert calls == [base]
+    md_meta, _ = split_front_matter(pdf.with_suffix(".md").read_text(encoding="utf-8"))
+    assert md_meta["docflow_last_read"] == "2026-05-15T09:35:00Z"
+
+
 def test_raw_pdf_route_has_no_overlay_injection(tmp_path: Path):
     base = tmp_path / "base"
     pdfs = base / "Pdfs" / "Pdfs 2026"
@@ -1546,6 +1626,8 @@ def test_pdf_view_route_serves_resume_viewer(tmp_path: Path, monkeypatch):
         assert "/api/reading-position?path=" in body
         assert "/api/pdf-page?path=" in body
         assert "/pdfs/raw/Pdfs%202026/doc.pdf" in body
+        assert "persist_docflow_last_read: true" in body
+        assert "showPage(saved || 1, {skipSave:false});" in body
     finally:
         server.shutdown()
         server.server_close()

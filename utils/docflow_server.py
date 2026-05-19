@@ -38,6 +38,7 @@ from utils import (
     build_browse_index,
     build_done_index,
     build_reading_index,
+    ensure_pdf_sidecar_markdown,
     markdown_to_html,
     update_markdown_docflow_last_read,
 )
@@ -510,7 +511,11 @@ class DocflowApp:
         normalized = self._normalize_rel_path_or_400(rel_path)
         abs_path = self._require_existing_library_file(normalized)
         saved = save_reading_position_for_path(self.base_dir, normalized, payload)
-        if bool(payload.get("persist_docflow_last_read")) and has_meaningful_reading_position(saved):
+        can_persist_last_read = (
+            has_meaningful_reading_position(saved)
+            or abs_path.suffix.lower() == ".pdf"
+        )
+        if bool(payload.get("persist_docflow_last_read")) and can_persist_last_read:
             self._update_markdown_docflow_last_read_for_library_path(abs_path, saved)
             if self.path_stage(normalized) == "reading":
                 build_reading_index.write_site_reading_index(self.base_dir)
@@ -540,7 +545,9 @@ class DocflowApp:
             md_path = abs_path.with_suffix(".md")
             if md_path.is_file():
                 return md_path, abs_path
-            return None, None
+
+        if suffix == ".pdf":
+            return ensure_pdf_sidecar_markdown(abs_path, base_dir=self.base_dir), None
 
         return None, None
 
@@ -997,7 +1004,8 @@ body > #dg-overlay{position:static;right:auto;top:auto;z-index:2;box-sizing:bord
         page: currentPage,
         page_count: pageCount,
         progress: progressForPage(currentPage),
-        title: document.title
+        title: document.title,
+        persist_docflow_last_read: true
       })
     }).catch(function(){});
   }
@@ -1031,7 +1039,7 @@ body > #dg-overlay{position:static;right:auto;top:auto;z-index:2;box-sizing:bord
       .then(function(payload){
         var saved = payload && Number(payload.page);
         restored = true;
-        showPage(saved || 1, {skipSave:true});
+        showPage(saved || 1, {skipSave:false});
       })
       .catch(function(){
         restored = true;

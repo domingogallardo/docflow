@@ -29,6 +29,8 @@ class PDFProcessor:
             return []
         
         moved_pdfs = U.move_files(pdfs, self.destination_dir)
+        for pdf_path in moved_pdfs:
+            U.ensure_pdf_sidecar_markdown(pdf_path, base_dir=self.destination_dir.parent)
         
         if moved_pdfs:
             print(f"📚 {len(moved_pdfs)} PDF(s) moved to {self.destination_dir}")
