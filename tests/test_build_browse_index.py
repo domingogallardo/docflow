@@ -157,6 +157,8 @@ def test_build_browse_site_generates_indexes_and_actions(tmp_path: Path):
     assert "dg-search-results" in site_home_content
     assert "docflow.home.search" in site_home_content
     assert "Math.random()" in site_home_content
+    assert "saveSearch(norm(input.value));render(null);input.focus();" in site_home_content
+    assert "input.value=suggestions[Math.floor(Math.random()*suggestions.length)];run();" not in site_home_content
     assert "window.addEventListener('pageshow',function(){if(input.value){run();}})" in site_home_content
     assert site_home_content.find("Rebuild browse + reading + done") < site_home_content.find("data-dg-search-input")
 
@@ -192,6 +194,7 @@ def test_browse_search_suggestions_are_derived_from_indexed_titles():
     assert "Alan Kay" in suggestions
     assert "Artificial intelligence" in suggestions
     assert len(suggestions) <= 20
+    assert build_browse_index.SEARCH_SUGGESTION_LIMIT == 400
 
 
 def test_collect_category_items_handles_missing_dirs(tmp_path: Path):

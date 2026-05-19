@@ -50,7 +50,7 @@ YEAR_SUFFIX_RE = re.compile(r"(\d{4})$")
 YEAR_COUNT_CATEGORIES = {"posts", "tweets", "pdfs", "images"}
 YEAR_SORT_CATEGORIES = {"posts", "tweets", "pdfs", "images"}
 TEMPORAL_GROUP_CATEGORIES = {"posts", "tweets", "podcasts"}
-SEARCH_SUGGESTION_LIMIT = 200
+SEARCH_SUGGESTION_LIMIT = 400
 SEARCH_SUGGESTION_STOPWORDS = {
     "a",
     "al",
@@ -494,7 +494,7 @@ def _search_script_html(search_entries: list[dict[str, str]]) -> str:
         + "render(entries.filter(function(e){return e&&String(e.stem||'').toLowerCase().indexOf(ql)!==-1;}));"
         + "}"
         + "form.addEventListener('submit',function(ev){ev.preventDefault();run();});"
-        + "if(randomButton){randomButton.addEventListener('click',function(){if(!suggestions.length)return;input.value=suggestions[Math.floor(Math.random()*suggestions.length)];run();input.focus();});}"
+        + "if(randomButton){randomButton.addEventListener('click',function(){if(!suggestions.length)return;input.value=suggestions[Math.floor(Math.random()*suggestions.length)];saveSearch(norm(input.value));render(null);input.focus();});}"
         + "window.addEventListener('pageshow',function(){if(input.value){run();}});"
         + "const savedSearch=loadSavedSearch();"
         + "if(savedSearch&&!input.value){input.value=savedSearch;run();}"
