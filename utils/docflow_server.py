@@ -1106,7 +1106,7 @@ body > #dg-overlay{position:static;right:auto;top:auto;z-index:2;box-sizing:bord
 <button type="button" id="next-page" class="dg-hl-btn" aria-label="Next page" title="Next page">↓</button>
 <button type="button" id="zoom-out" class="dg-hl-btn" aria-label="Zoom out" title="Zoom out">−</button>
 <button type="button" id="zoom-in" class="dg-hl-btn" aria-label="Zoom in" title="Zoom in">+</button>
-<a class="dg-link" href="{raw_attr}">Raw PDF</a>
+<a class="dg-link" href="{raw_attr}">Raw</a>
 </div>
 </div>
 <div id="dg-overlay-actions" class="dg-row dg-row-actions">

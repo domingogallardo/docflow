@@ -1535,7 +1535,7 @@ def test_pdf_view_route_serves_resume_viewer(tmp_path: Path, monkeypatch):
         assert 'id="dg-actions-toggle"' not in body
         assert 'id="dg-overlay-actions" class="dg-row dg-row-actions"' in body
         assert '<a class="dg-link" href="/browse/pdfs/Pdfs%202026/">Inside Browse</a>' in body
-        assert '<a class="dg-link" href="/pdfs/raw/Pdfs%202026/doc.pdf">Raw PDF</a>' in body
+        assert '<a class="dg-link" href="/pdfs/raw/Pdfs%202026/doc.pdf">Raw</a>' in body
         assert '<div class="bar">' not in body
         assert 'data-docflow-path="Pdfs/Pdfs 2026/doc.pdf"' in body
         assert 'data-page-count="2"' in body
