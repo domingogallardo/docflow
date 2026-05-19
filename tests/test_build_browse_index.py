@@ -74,6 +74,7 @@ def test_build_browse_site_generates_indexes_and_actions(tmp_path: Path):
     assets_content = assets_js.read_text(encoding="utf-8")
     assert "window.addEventListener('pageshow'" in assets_content
     assert "back_forward" in assets_content
+    assert "document.querySelector('[data-dg-search-form]')" in assets_content
 
     browse_sort_content = browse_sort_js.read_text(encoding="utf-8")
     assert "window.addEventListener('pageshow'" in browse_sort_content
@@ -146,8 +147,51 @@ def test_build_browse_site_generates_indexes_and_actions(tmp_path: Path):
     site_home_content = site_home.read_text(encoding="utf-8")
     assert "data-dg-search-input" in site_home_content
     assert "data-dg-search-button" in site_home_content
+    assert "data-dg-search-random" in site_home_content
     assert "dg-browse-search-data" in site_home_content
+    assert "dg-search-suggestions" in site_home_content
     assert '"stem": "doc"' in site_home_content
+    assert '"folder": "Posts 2026"' in site_home_content
+    assert "entries.filter" in site_home_content
+    assert "toLowerCase().indexOf(ql)!==-1" in site_home_content
+    assert "dg-search-results" in site_home_content
+    assert "docflow.home.search" in site_home_content
+    assert "Math.random()" in site_home_content
+    assert "window.addEventListener('pageshow',function(){if(input.value){run();}})" in site_home_content
+    assert site_home_content.find("Rebuild browse + reading + done") < site_home_content.find("data-dg-search-input")
+
+
+def test_browse_search_entries_include_full_name_folder_and_viewer_url(tmp_path: Path):
+    base = tmp_path / "base"
+    posts = base / "Posts" / "Posts 2026"
+    pdfs = base / "Pdfs" / "Pdfs 2025"
+    posts.mkdir(parents=True)
+    pdfs.mkdir(parents=True)
+    (posts / "Alan Kay on objects.html").write_text("<html><body>Article</body></html>", encoding="utf-8")
+    (pdfs / "Notes from Alan Kay.pdf").write_bytes(b"%PDF-1.4\n")
+
+    entries = build_browse_index._collect_browse_search_entries(base, build_browse_index._category_roots(base))
+
+    alan_entries = {entry["name"]: entry for entry in entries}
+    assert alan_entries["Alan Kay on objects.html"]["stem"] == "Alan Kay on objects"
+    assert alan_entries["Alan Kay on objects.html"]["folder"] == "Posts 2026"
+    assert alan_entries["Alan Kay on objects.html"]["href"] == "/posts/raw/Posts%202026/Alan%20Kay%20on%20objects.html"
+    assert alan_entries["Notes from Alan Kay.pdf"]["folder"] == "Pdfs 2025"
+    assert alan_entries["Notes from Alan Kay.pdf"]["href"] == "/pdfs/view/Pdfs%202025/Notes%20from%20Alan%20Kay.pdf"
+
+
+def test_browse_search_suggestions_are_derived_from_indexed_titles():
+    entries = [
+        {"stem": "Alan Kay on objects", "name": "Alan Kay on objects.html", "href": "#", "folder": "Posts 2026"},
+        {"stem": "Notes from Alan Kay", "name": "Notes from Alan Kay.pdf", "href": "#", "folder": "Pdfs 2025"},
+        {"stem": "Artificial intelligence and creativity", "name": "Artificial intelligence and creativity.html", "href": "#", "folder": "Posts 2026"},
+    ]
+
+    suggestions = build_browse_index._collect_browse_search_suggestions(entries, limit=20)
+
+    assert "Alan Kay" in suggestions
+    assert "Artificial intelligence" in suggestions
+    assert len(suggestions) <= 20
 
 
 def test_collect_category_items_handles_missing_dirs(tmp_path: Path):

@@ -50,6 +50,70 @@ YEAR_SUFFIX_RE = re.compile(r"(\d{4})$")
 YEAR_COUNT_CATEGORIES = {"posts", "tweets", "pdfs", "images"}
 YEAR_SORT_CATEGORIES = {"posts", "tweets", "pdfs", "images"}
 TEMPORAL_GROUP_CATEGORIES = {"posts", "tweets", "podcasts"}
+SEARCH_SUGGESTION_LIMIT = 200
+SEARCH_SUGGESTION_STOPWORDS = {
+    "a",
+    "al",
+    "an",
+    "and",
+    "are",
+    "as",
+    "at",
+    "by",
+    "con",
+    "de",
+    "del",
+    "el",
+    "en",
+    "for",
+    "from",
+    "how",
+    "in",
+    "into",
+    "is",
+    "it",
+    "la",
+    "las",
+    "le",
+    "lo",
+    "los",
+    "of",
+    "on",
+    "or",
+    "para",
+    "por",
+    "que",
+    "se",
+    "según",
+    "the",
+    "to",
+    "un",
+    "una",
+    "what",
+    "why",
+    "with",
+    "y",
+}
+SEARCH_SUGGESTION_GENERIC_WORDS = {
+    "complete",
+    "comprehensive",
+    "deep",
+    "dive",
+    "episode",
+    "explained",
+    "exploring",
+    "guide",
+    "insights",
+    "introduction",
+    "journey",
+    "notes",
+    "overview",
+    "part",
+    "review",
+    "ultimate",
+    "understanding",
+}
+SEARCH_SUGGESTION_WORD_RE = re.compile(r"[A-Za-zÀ-ÖØ-öø-ÿ0-9][A-Za-zÀ-ÖØ-öø-ÿ0-9'’.-]*")
 SPANISH_MONTH_NAMES = {
     1: "Enero",
     2: "Febrero",
@@ -213,6 +277,9 @@ def _base_head(title: str) -> str:
         ".dg-search button{padding:2px 8px;border:1px solid #ccc;border-radius:6px;background:#f7f7f7;color:#333;font:12px -apple-system,system-ui,Segoe UI,Roboto,Helvetica,Arial;cursor:pointer}"
         ".dg-search-hit{margin:6px 0 2px;font:13px -apple-system,system-ui,Segoe UI,Roboto,Helvetica,Arial;color:#444}"
         ".dg-search-hit a{color:#0a7;text-decoration:none}"
+        ".dg-search-results{list-style:none;padding-left:0;margin:6px 0 0}"
+        ".dg-search-results li{margin:3px 0}"
+        ".dg-search-folder{color:#666;margin-left:6px}"
         ".dg-sort-toggle{padding:2px 8px;border:1px solid #ccc;border-radius:6px;background:#f7f7f7;color:#333;font:12px -apple-system,system-ui,Segoe UI,Roboto,Helvetica,Arial;cursor:pointer}"
         ".dg-sort-toggle.is-active{border-color:#c8a400;background:#fff6e5}"
         ".dg-parent-index{list-style:none;padding-left:0;margin:0 0 8px}"
@@ -306,6 +373,7 @@ def _collect_browse_search_entries(base_dir: Path, category_roots: dict[str, Pat
                         "stem": path.stem,
                         "name": path.name,
                         "href": href,
+                        "folder": path.parent.name,
                     },
                 )
             )
@@ -313,13 +381,70 @@ def _collect_browse_search_entries(base_dir: Path, category_roots: dict[str, Pat
     return [entry for _, entry in scanned]
 
 
+def _search_suggestion_token_value(token: str) -> str:
+    return token.strip(" .,:;!?()[]{}\"'’-/–—").lower()
+
+
+def _search_suggestion_candidates(stem: str) -> list[str]:
+    text = re.sub(r"[_|]+", " ", stem)
+    words = [match.group(0).strip(" .,:;!?()[]{}\"'’-/–—") for match in SEARCH_SUGGESTION_WORD_RE.finditer(text)]
+    words = [word for word in words if word]
+    if not words:
+        return []
+
+    candidates: list[str] = []
+    seen: set[str] = set()
+    for size in (3, 2):
+        for index in range(0, len(words) - size + 1):
+            phrase_words = words[index : index + size]
+            normalized_words = [_search_suggestion_token_value(word) for word in phrase_words]
+            if any(not word or word.isdigit() for word in normalized_words):
+                continue
+            if normalized_words[0] in SEARCH_SUGGESTION_STOPWORDS or normalized_words[-1] in SEARCH_SUGGESTION_STOPWORDS:
+                continue
+            if normalized_words[0] in SEARCH_SUGGESTION_GENERIC_WORDS or normalized_words[-1] in SEARCH_SUGGESTION_GENERIC_WORDS:
+                continue
+            phrase = " ".join(phrase_words)
+            normalized_phrase = " ".join(normalized_words)
+            if len(normalized_phrase) < 4 or normalized_phrase in seen:
+                continue
+            seen.add(normalized_phrase)
+            candidates.append(phrase)
+    return candidates
+
+
+def _collect_browse_search_suggestions(search_entries: list[dict[str, str]], limit: int = SEARCH_SUGGESTION_LIMIT) -> list[str]:
+    ranked: dict[str, dict[str, object]] = {}
+    for recency_rank, entry in enumerate(search_entries):
+        stem = entry.get("stem", "")
+        for candidate in _search_suggestion_candidates(stem):
+            normalized = candidate.lower()
+            existing = ranked.get(normalized)
+            if existing is None:
+                ranked[normalized] = {
+                    "phrase": candidate,
+                    "count": 1,
+                    "first_rank": recency_rank,
+                    "word_count": len(candidate.split()),
+                }
+                continue
+            existing["count"] = int(existing["count"]) + 1
+
+    ordered = sorted(
+        ranked.values(),
+        key=lambda item: (-int(item["count"]), -int(item["word_count"]), int(item["first_rank"]), str(item["phrase"]).lower()),
+    )
+    return [str(item["phrase"]) for item in ordered[:limit]]
+
+
 def _search_controls_html() -> str:
     return (
         "<form class='dg-search' data-dg-search-form autocomplete='off'>"
         "<input type='text' data-dg-search-input "
-        "placeholder='Search exact filename (without extension)' "
-        "aria-label='Search exact filename'>"
+        "placeholder='Search title text' "
+        "aria-label='Search title text'>"
         "<button type='submit' data-dg-search-button aria-label='Search'>🔍</button>"
+        "<button type='button' data-dg-search-random aria-label='Random search suggestion' title='Random search suggestion'>🎲</button>"
         "</form>"
     )
 
@@ -330,34 +455,49 @@ def _search_result_html() -> str:
 
 def _search_script_html(search_entries: list[dict[str, str]]) -> str:
     search_payload = json.dumps(search_entries, ensure_ascii=False).replace("</", "<\\/")
+    suggestion_payload = json.dumps(_collect_browse_search_suggestions(search_entries), ensure_ascii=False).replace("</", "<\\/")
     return (
         "<script id='dg-browse-search-data' type='application/json'>"
         + search_payload
+        + "</script>"
+        + "<script id='dg-search-suggestions' type='application/json'>"
+        + suggestion_payload
         + "</script>"
         + "<script>"
         + "(function(){"
         + "function norm(v){return String(v||'').trim().replace(/\\.(html?|pdf)$/i,'');}"
         + "const form=document.querySelector('[data-dg-search-form]');"
         + "const input=document.querySelector('[data-dg-search-input]');"
+        + "const randomButton=document.querySelector('[data-dg-search-random]');"
         + "const hit=document.querySelector('[data-dg-search-hit]');"
         + "const dataEl=document.getElementById('dg-browse-search-data');"
+        + "const suggestionsEl=document.getElementById('dg-search-suggestions');"
         + "if(!form||!input||!hit||!dataEl)return;"
+        + "const searchStateKey='docflow.home.search';"
         + "let entries=[];"
+        + "let suggestions=[];"
         + "try{entries=JSON.parse(dataEl.textContent||'[]');}catch(_){entries=[];}"
-        + "function render(msg,href){"
-        + "if(!msg){hit.textContent='';return;}"
-        + "if(href){hit.innerHTML='Found: <a href=\"'+href+'\">'+msg+'</a>';return;}"
-        + "hit.textContent=msg;"
+        + "try{suggestions=JSON.parse((suggestionsEl&&suggestionsEl.textContent)||'[]');}catch(_){suggestions=[];}"
+        + "function loadSavedSearch(){try{return window.sessionStorage.getItem(searchStateKey)||'';}catch(_){return '';}}"
+        + "function saveSearch(q){try{if(q){window.sessionStorage.setItem(searchStateKey,q);}else{window.sessionStorage.removeItem(searchStateKey);}}catch(_){}}"
+        + "function esc(v){return String(v||'').replace(/[&<>\"']/g,function(ch){return {'&':'&amp;','<':'&lt;','>':'&gt;','\"':'&quot;',\"'\":'&#39;'}[ch];});}"
+        + "function render(matches){"
+        + "if(!matches){hit.textContent='';return;}"
+        + "if(!matches.length){hit.textContent='No matching titles found.';return;}"
+        + "hit.innerHTML='<div>'+matches.length+' result'+(matches.length===1?'':'s')+'</div><ul class=\"dg-search-results\">'+matches.map(function(e){return '<li><a href=\"'+esc(e.href)+'\">'+esc(e.name)+'</a> <span class=\"dg-search-folder\">'+esc(e.folder)+'</span></li>';}).join('')+'</ul>';"
         + "}"
         + "function run(){"
         + "const q=norm(input.value);"
-        + "if(!q){render('', '');return;}"
-        + "let match=entries.find(e=>e&&e.stem===q);"
-        + "if(!match){const ql=q.toLowerCase();match=entries.find(e=>e&&String(e.stem||'').toLowerCase()===ql);}"
-        + "if(match){render(match.name, match.href);return;}"
-        + "render('No exact match found.','');"
+        + "saveSearch(q);"
+        + "if(!q){render(null);return;}"
+        + "const ql=q.toLowerCase();"
+        + "render(entries.filter(function(e){return e&&String(e.stem||'').toLowerCase().indexOf(ql)!==-1;}));"
         + "}"
         + "form.addEventListener('submit',function(ev){ev.preventDefault();run();});"
+        + "if(randomButton){randomButton.addEventListener('click',function(){if(!suggestions.length)return;input.value=suggestions[Math.floor(Math.random()*suggestions.length)];run();input.focus();});}"
+        + "window.addEventListener('pageshow',function(){if(input.value){run();}});"
+        + "const savedSearch=loadSavedSearch();"
+        + "if(savedSearch&&!input.value){input.value=savedSearch;run();}"
         + "})();"
         + "</script>"
     )
@@ -901,13 +1041,16 @@ def write_site_home(base_dir: Path, category_roots: dict[str, Path] | None = Non
         ".dg-search button{padding:2px 8px;border:1px solid #ccc;border-radius:6px;background:#f7f7f7;color:#333;font:12px -apple-system,system-ui,Segoe UI,Roboto,Helvetica,Arial;cursor:pointer}"
         ".dg-search-hit{margin:6px 0 10px;font:13px -apple-system,system-ui,Segoe UI,Roboto,Helvetica,Arial;color:#444}"
         ".dg-search-hit a{color:#0a7;text-decoration:none}"
+        ".dg-search-results{list-style:none;padding-left:0;margin:6px 0 0}"
+        ".dg-search-results li{margin:3px 0}"
+        ".dg-search-folder{color:#666;margin-left:6px}"
         ".dg-actions button{padding:2px 6px;border:1px solid #ccc;border-radius:6px;background:#f7f7f7;color:#333;font:12px -apple-system,system-ui,Segoe UI,Roboto,Helvetica,Arial;cursor:pointer}"
         "</style><script src='/assets/actions.js' defer></script></head><body>"
         "<h1>Docflow Intranet</h1>"
         "<p><a href='/browse/'>Browse</a> · <a href='/reading/'>Reading</a> · <a href='/done/'>Done</a></p>"
+        "<p><button data-api-action='rebuild'>Rebuild browse + reading + done</button></p>"
         f"{search_controls}"
         f"{search_result}"
-        "<p><button data-api-action='rebuild'>Rebuild browse + reading + done</button></p>"
         f"{search_js}"
         "</body></html>"
     )
@@ -923,6 +1066,7 @@ def ensure_assets(base_dir: Path) -> None:
     js = """
 (function() {
   window.addEventListener('pageshow', (event) => {
+    if (document.querySelector('[data-dg-search-form]')) return;
     let navType = '';
     try {
       const entries = performance.getEntriesByType('navigation');
