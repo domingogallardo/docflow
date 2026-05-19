@@ -37,7 +37,7 @@ def test_write_site_reading_index_uses_reading_state(tmp_path: Path):
     assert "<h1>Reading (1)</h1>" in content
     assert "🟡 highlight" in content
     assert "data-dg-sort-toggle" in content
-    assert 'data-dg-sort-direction="asc"' in content
+    assert 'data-dg-sort-direction="desc"' in content
     assert "Highlight: off" in content
     assert "data-dg-sortable='1'" in content
     assert "data-dg-highlighted='1'" in content
@@ -70,7 +70,7 @@ def test_site_reading_orders_by_reading_time(tmp_path: Path, monkeypatch):
     out = build_reading_index.write_site_reading_index(base)
     content = out.read_text(encoding="utf-8")
 
-    assert content.find("older.html") < content.find("newer.html")
+    assert content.find("newer.html") < content.find("older.html")
 
 
 def test_build_reading_index_cli_generates_site_index(tmp_path: Path):

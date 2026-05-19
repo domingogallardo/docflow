@@ -128,7 +128,7 @@ This file stores stable, reusable operational notes for future agent runs.
 
 - List pages using `assets/browse-sort.js` are reordered client-side on `DOMContentLoaded` using `data-dg-sort-mtime`.
 - Default direction is descending (`newest first`) unless the page sets `data-dg-sort-direction="asc"` on the `data-dg-sort-toggle` element.
-- For `Reading` (`oldest first`), server-side ordering alone is not enough; the page must explicitly set `data-dg-sort-direction="asc"` or the browser will show newest first.
+- For `Reading` (`newest first`), server-side ordering and `data-dg-sort-direction` must both remain descending so the newest additions stay at the top.
 - After changing sort behavior in `utils/build_browse_index.py`, regenerate browse assets (`python utils/build_browse_index.py --base-dir "<BASE_DIR>"`) so `_site/assets/browse-sort.js` is updated.
 
 ### Daily Tweet Consolidation Rendering
@@ -145,10 +145,10 @@ This file stores stable, reusable operational notes for future agent runs.
 ### 2026-02-26
 
 - Moved exact filename search from `/browse/` to home (`/`) and updated tests.
-- Changed Reading ordering to `reading_at` oldest first (inverse of previous behavior) in generator + docs + tests.
+- Changed Reading ordering to `reading_at` newest first in generator + docs + tests.
 - Found and fixed a client-side override: `assets/browse-sort.js` was forcing descending order on load.
-- Added support for per-page sort direction in `browse-sort.js` and set `Reading` toggle to `data-dg-sort-direction="asc"`.
-- Rebuilt indexes/assets, restarted `docflow_server`, and verified in browser (`/reading/?_r=...`) that oldest appears first.
+- Added support for per-page sort direction in `browse-sort.js`; `Reading` now uses descending order.
+- Rebuilt indexes/assets, restarted `docflow_server`, and verified in browser (`/reading/?_r=...`) that newest appears first.
 
 ### 2026-03-04
 

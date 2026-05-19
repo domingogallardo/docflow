@@ -120,7 +120,7 @@ def collect_site_reading_items(base_dir: Path) -> list[SiteReadingItem]:
             )
         )
 
-    items.sort(key=lambda item: item.sort_mtime)
+    items.sort(key=lambda item: item.sort_mtime, reverse=True)
     return items
 
 
@@ -157,7 +157,7 @@ def build_site_reading_html(items: list[SiteReadingItem]) -> str:
         f"<title>{title}</title></head><body>"
         '<div class="dg-nav"><a href="/">Home</a> · <a href="/browse/">Browse</a> · <a href="/reading/">Reading</a> · <a href="/done/">Done</a></div>'
         f"<h1>{title}</h1>"
-        '<div class="dg-legendbar"><div class="dg-legend">🟡 highlight</div><button type="button" class="dg-sort-toggle" data-dg-sort-toggle data-dg-sort-direction="asc" aria-pressed="false">Highlight: off</button></div><hr>'
+        '<div class="dg-legendbar"><div class="dg-legend">🟡 highlight</div><button type="button" class="dg-sort-toggle" data-dg-sort-toggle data-dg-sort-direction="desc" aria-pressed="false">Highlight: off</button></div><hr>'
         + list_html
         + "</body></html>"
     )
