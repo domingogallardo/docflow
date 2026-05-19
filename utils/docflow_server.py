@@ -43,6 +43,7 @@ from utils import (
 )
 from utils.site_paths import (
     PathValidationError,
+    library_roots,
     normalize_rel_path,
     raw_url_for_rel_path,
     rel_path_from_abs,
@@ -798,6 +799,303 @@ def _send_file(handler: BaseHTTPRequestHandler, path: Path) -> None:
     handler.send_header("Content-Length", str(len(data)))
     handler.end_headers()
     handler.wfile.write(data)
+
+
+def _send_bytes(handler: BaseHTTPRequestHandler, data: bytes, content_type: str) -> None:
+    handler.send_response(HTTPStatus.OK)
+    handler.send_header("Content-Type", content_type)
+    handler.send_header("Content-Length", str(len(data)))
+    handler.end_headers()
+    handler.wfile.write(data)
+
+
+def _resolve_pdf_view_path(app: DocflowApp, request_path: str) -> tuple[str, Path] | None:
+    prefix = "/pdfs/view/"
+    if not request_path.startswith(prefix):
+        return None
+
+    tail = normalize_rel_path(unquote(request_path[len(prefix) :]))
+    root = library_roots(app.base_dir)["pdfs"].resolve()
+    target = (root / Path(tail)).resolve()
+    if target != root and str(target).startswith(str(root) + os.sep) and target.suffix.lower() == ".pdf":
+        return rel_path_from_abs(app.base_dir, target), target
+    return None
+
+
+def _pdf_page_count(pdf_path: Path) -> int:
+    try:
+        import fitz  # type: ignore
+
+        with fitz.open(pdf_path) as doc:
+            return max(1, int(doc.page_count))
+    except Exception:
+        pass
+
+    pdfinfo = shutil.which("pdfinfo")
+    if pdfinfo:
+        try:
+            result = subprocess.run(
+                [pdfinfo, str(pdf_path)],
+                check=True,
+                capture_output=True,
+                text=True,
+                timeout=10,
+            )
+            match = re.search(r"^Pages:\s*(\d+)\s*$", result.stdout, flags=re.MULTILINE)
+            if match:
+                return max(1, int(match.group(1)))
+        except Exception:
+            pass
+
+    data = pdf_path.read_bytes()
+    matches = re.findall(rb"/Type\s*/Page\b", data)
+    return max(1, len(matches))
+
+
+def _render_pdf_page_png(pdf_path: Path, page_number: int, *, scale: float = 1.6) -> bytes:
+    page_count = _pdf_page_count(pdf_path)
+    page = max(1, min(page_number, page_count))
+
+    try:
+        import fitz  # type: ignore
+
+        with fitz.open(pdf_path) as doc:
+            pix = doc.load_page(page - 1).get_pixmap(matrix=fitz.Matrix(scale, scale), alpha=False)
+            return pix.tobytes("png")
+    except Exception:
+        pass
+
+    pdftoppm = shutil.which("pdftoppm")
+    if not pdftoppm:
+        raise ApiError(500, "PDF rendering requires PyMuPDF or pdftoppm")
+
+    with tempfile.TemporaryDirectory(prefix="docflow-pdf-page-") as tmp:
+        out_prefix = Path(tmp) / "page"
+        subprocess.run(
+            [
+                pdftoppm,
+                "-f",
+                str(page),
+                "-singlefile",
+                "-png",
+                "-r",
+                str(int(72 * scale)),
+                str(pdf_path),
+                str(out_prefix),
+            ],
+            check=True,
+            capture_output=True,
+            timeout=30,
+        )
+        return out_prefix.with_suffix(".png").read_bytes()
+
+
+def _pdf_viewer_html(*, rel_path: str, pdf_path: Path, stage: str, page_count: int) -> bytes:
+    title = pdf_path.name
+    raw_url = raw_url_for_rel_path(rel_path)
+    context_url = _browse_parent_url_for_rel_path(rel_path)
+    context_label = "Inside Browse"
+    if stage == "reading":
+        context_label = "Inside Reading"
+        context_url = "/reading/"
+        action_buttons = (
+            '<button type="button" data-api-action="to-browse">Back to Browse</button>'
+            '<button type="button" data-api-action="to-done">Move to Done</button>'
+        )
+    elif stage == "done":
+        context_label = "Inside Done"
+        context_url = "/done/"
+        action_buttons = '<button type="button" data-api-action="reopen">Reopen to Reading</button>'
+    else:
+        action_buttons = (
+            '<button type="button" data-api-action="to-reading">Move to Reading</button>'
+            '<button type="button" data-api-action="to-done">Move to Done</button>'
+        )
+
+    esc_title = html.escape(title)
+    rel_attr = html.escape(rel_path, quote=True)
+    raw_attr = html.escape(raw_url, quote=True)
+    context_attr = html.escape(context_url, quote=True)
+    context_label_attr = html.escape(context_label, quote=True)
+    css = (OVERLAY_CSS + "\n" + """
+body{margin:0;font:14px -apple-system,system-ui,Segoe UI,Roboto,Helvetica,Arial;color:#222;background:#f3f3f3}
+.viewer{display:flex;justify-content:center;padding:18px}
+.page{max-width:min(100%,1100px);box-shadow:0 2px 18px rgba(0,0,0,.2);background:#fff}
+.page img{display:block;max-width:100%;height:auto}
+.status{padding:40px;color:#666;text-align:center}
+body > #dg-overlay{position:static;right:auto;top:auto;z-index:2;box-sizing:border-box;width:100%;align-items:stretch;gap:7px;padding:8px 10px;border:0;border-bottom:1px solid #ccc;border-radius:0;background:#fff;box-shadow:none}
+#dg-overlay .dg-pdf-title{font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#dg-overlay .dg-row{gap:8px}
+#dg-overlay .dg-row-status,#dg-overlay .dg-row-actions,#dg-overlay .dg-row-page{justify-content:flex-start}
+#dg-overlay .dg-row-actions{width:100%}
+#dg-overlay .dg-page-input{width:44px;padding:3px 5px;border:0;border-radius:5px;background:#fff;color:#222;font:12px -apple-system,system-ui,Segoe UI,Roboto,Helvetica,Arial;text-align:right;font-variant-numeric:tabular-nums}
+#dg-overlay .dg-page-label{white-space:nowrap}
+""".strip()
+    )
+    js = """
+(function(){
+  var relPath = document.documentElement.getAttribute('data-docflow-path') || '';
+  var pageCount = Number(document.documentElement.getAttribute('data-page-count') || '1') || 1;
+  var currentPage = 1;
+  var restored = false;
+  var busy = false;
+  var image = document.getElementById('pdf-page-image');
+  var status = document.getElementById('pdf-status');
+  var input = document.getElementById('page-input');
+  var label = document.getElementById('page-label');
+  var prev = document.getElementById('prev-page');
+  var next = document.getElementById('next-page');
+  function nowIso(){
+    var d = new Date();
+    var offset = -d.getTimezoneOffset();
+    var sign = offset >= 0 ? '+' : '-';
+    var abs = Math.abs(offset);
+    var local = new Date(d.getTime() + offset * 60000).toISOString().slice(0, -1);
+    return local + sign + String(Math.floor(abs / 60)).padStart(2, '0') + ':' + String(abs % 60).padStart(2, '0');
+  }
+  function positionUrl(){ return '/api/reading-position?path=' + encodeURIComponent(relPath); }
+  function pageImageUrl(page){
+    return '/api/pdf-page?path=' + encodeURIComponent(relPath) + '&page=' + encodeURIComponent(String(page));
+  }
+  function progressForPage(page){
+    if (pageCount <= 1) return 0;
+    return Math.max(0, Math.min(1, (page - 1) / (pageCount - 1)));
+  }
+  function updateControls(){
+    input.value = String(currentPage);
+    label.textContent = '/ ' + pageCount;
+    prev.disabled = currentPage <= 1;
+    next.disabled = currentPage >= pageCount;
+  }
+  function updateActions(){
+    document.querySelectorAll('#dg-overlay button').forEach(function(button){
+      if (button.id === 'prev-page' || button.id === 'next-page') return;
+      if (busy) button.setAttribute('disabled', '');
+      else button.removeAttribute('disabled');
+    });
+  }
+  function savePosition(){
+    if (!window.fetch || !relPath || !restored) return;
+    fetch(positionUrl(), {
+      method: 'PUT',
+      cache: 'no-store',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({
+        updated_at: nowIso(),
+        page: currentPage,
+        page_count: pageCount,
+        progress: progressForPage(currentPage),
+        title: document.title
+      })
+    }).catch(function(){});
+  }
+  function showPage(page, options){
+    page = Math.max(1, Math.min(pageCount, Number(page) || 1));
+    currentPage = page;
+    updateControls();
+    status.hidden = false;
+    status.textContent = 'Loading page ' + page + '...';
+    image.hidden = true;
+    image.onload = function(){
+      status.hidden = true;
+      image.hidden = false;
+      if (!options || !options.skipSave) savePosition();
+    };
+    image.onerror = function(){
+      status.hidden = false;
+      status.textContent = 'Could not render page ' + page + '.';
+    };
+    image.src = pageImageUrl(page) + '&_r=' + Date.now();
+  }
+  function restore(){
+    var explicit = new URLSearchParams(location.search).get('page');
+    if (explicit) {
+      restored = true;
+      showPage(explicit, {skipSave:false});
+      return;
+    }
+    fetch(positionUrl(), {method:'GET', cache:'no-store'})
+      .then(function(res){ return res.ok ? res.json() : null; })
+      .then(function(payload){
+        var saved = payload && Number(payload.page);
+        restored = true;
+        showPage(saved || 1, {skipSave:true});
+      })
+      .catch(function(){
+        restored = true;
+        showPage(1, {skipSave:true});
+      });
+  }
+  prev.addEventListener('click', function(){ showPage(currentPage - 1); });
+  next.addEventListener('click', function(){ showPage(currentPage + 1); });
+  input.addEventListener('change', function(){ showPage(input.value); });
+  document.addEventListener('keydown', function(event){
+    if (event.target && event.target.tagName === 'INPUT') return;
+    if (event.key === 'ArrowLeft' || event.key === 'PageUp') showPage(currentPage - 1);
+    if (event.key === 'ArrowRight' || event.key === 'PageDown' || event.key === ' ') showPage(currentPage + 1);
+  });
+  document.querySelectorAll('[data-api-action]').forEach(function(button){
+    button.addEventListener('click', function(){
+      if (busy) return;
+      var action = button.getAttribute('data-api-action') || '';
+      busy = true;
+      updateActions();
+      fetch('/api/' + action, {
+        method:'POST',
+        cache:'no-store',
+        headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({path:relPath})
+      }).then(function(res){ return res.ok ? res.json() : null; })
+        .then(function(){
+          if (action === 'to-browse') location.href = '/browse/';
+          else if (action === 'to-done') location.href = '/done/';
+          else location.href = '/reading/';
+        })
+        .catch(function(){
+          busy = false;
+          updateActions();
+        });
+    });
+  });
+  updateActions();
+  restore();
+})();
+""".strip()
+    body = f"""<!DOCTYPE html>
+<html data-docflow-path="{rel_attr}" data-page-count="{page_count}">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{esc_title}</title>
+<style>{css}</style>
+</head>
+<body>
+<div id="dg-overlay">
+<div class="dg-pdf-title" title="{esc_title}">📕 {esc_title}</div>
+<div class="dg-row dg-row-page">
+<div class="dg-hl-nav is-visible" aria-hidden="false">
+<span class="dg-hl-label">Page:</span>
+<span class="dg-hl-count"><input id="page-input" class="dg-page-input" type="number" min="1" max="{page_count}" value="1" aria-label="Page"><span id="page-label" class="dg-page-label">/ {page_count}</span></span>
+<button type="button" id="prev-page" class="dg-hl-btn" aria-label="Previous page" title="Previous page">↑</button>
+<button type="button" id="next-page" class="dg-hl-btn" aria-label="Next page" title="Next page">↓</button>
+<a class="dg-link" href="{raw_attr}">Raw PDF</a>
+</div>
+</div>
+<div id="dg-overlay-actions" class="dg-row dg-row-actions">
+<a class="dg-link" href="{context_attr}">{context_label_attr}</a>
+{action_buttons}
+</div>
+</div>
+<main class="viewer">
+<div class="page">
+<div id="pdf-status" class="status">Loading...</div>
+<img id="pdf-page-image" alt="PDF page" hidden>
+</div>
+</main>
+<script>{js}</script>
+</body>
+</html>"""
+    return body.encode("utf-8")
 
 
 def _normalized_download_filename(filename: str, *, default_filename: str) -> str:
@@ -1688,6 +1986,27 @@ def make_handler(app: DocflowApp):
                     _send_json(self, 500, {"ok": False, "error": str(exc)})
                 return
 
+            if path == "/api/pdf-page":
+                try:
+                    rel_path = _get_query_path(parsed)
+                    normalized = app._normalize_rel_path_or_400(rel_path)
+                    abs_path = app._require_existing_library_file(normalized)
+                    if abs_path.suffix.lower() != ".pdf":
+                        raise ApiError(400, "Path must be a PDF")
+                    query = parse_qs(parsed.query)
+                    page_value = query.get("page", ["1"])[0]
+                    try:
+                        page_number = int(page_value)
+                    except (TypeError, ValueError):
+                        raise ApiError(400, "Query parameter 'page' must be an integer")
+                    data = _render_pdf_page_png(abs_path, page_number)
+                    _send_bytes(self, data, "image/png")
+                except ApiError as exc:
+                    _send_json(self, exc.status, {"ok": False, "error": exc.message})
+                except Exception as exc:
+                    _send_json(self, 500, {"ok": False, "error": str(exc)})
+                return
+
             if path.startswith("/api/"):
                 _send_json(
                     self,
@@ -1701,6 +2020,21 @@ def make_handler(app: DocflowApp):
                         ),
                     },
                 )
+                return
+
+            pdf_view_target = _resolve_pdf_view_path(app, path)
+            if pdf_view_target is not None:
+                rel_path, abs_path = pdf_view_target
+                if not abs_path.is_file():
+                    _send_json(self, 404, {"ok": False, "error": "PDF not found"})
+                    return
+                payload = _pdf_viewer_html(
+                    rel_path=rel_path,
+                    pdf_path=abs_path,
+                    stage=app.path_stage(rel_path),
+                    page_count=_pdf_page_count(abs_path),
+                )
+                _send_bytes(self, payload, "text/html; charset=utf-8")
                 return
 
             raw_target = resolve_raw_path(app.base_dir, path)

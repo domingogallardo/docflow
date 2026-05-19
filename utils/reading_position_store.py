@@ -69,6 +69,15 @@ def _coerce_payload(normalized_path: str, payload: dict[str, Any] | None) -> dic
     if payload and not updated_at:
         updated_at = _utc_now_iso()
 
+    page = _coerce_number(payload.get("page"), min_value=1.0)
+    page_count = _coerce_number(payload.get("page_count"), min_value=1.0)
+    if page is not None:
+        page = float(int(page))
+    if page_count is not None:
+        page_count = float(int(page_count))
+    if page is not None and page_count is not None:
+        page = min(page, page_count)
+
     return {
         "version": 1,
         "path": normalized_path,
@@ -80,6 +89,8 @@ def _coerce_payload(normalized_path: str, payload: dict[str, Any] | None) -> dic
         "progress": _coerce_number(payload.get("progress"), min_value=0.0, max_value=1.0),
         "viewport_height": _coerce_number(payload.get("viewport_height"), min_value=0.0),
         "document_height": _coerce_number(payload.get("document_height"), min_value=0.0),
+        "page": int(page) if page is not None else None,
+        "page_count": int(page_count) if page_count is not None else None,
     }
 
 
@@ -112,6 +123,10 @@ def _remove_dir_if_empty(path: Path) -> None:
 
 
 def _has_meaningful_position(payload: dict[str, Any]) -> bool:
+    page = payload.get("page")
+    if isinstance(page, (int, float)) and page > 1:
+        return True
+
     scroll_y = payload.get("scroll_y")
     if isinstance(scroll_y, (int, float)) and scroll_y > MEANINGFUL_SCROLL_Y:
         return True

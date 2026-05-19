@@ -48,6 +48,7 @@ Podcast snippets are typically captured in [Snipd](https://www.snipd.com) and th
   - `Delete`
 - Highlight navigation on article pages when highlights exist (`Jump to highlight`, previous/next controls).
 - Article pages remember the last reading position and resume it on reopen unless the URL already targets an explicit hash/deep link.
+- PDF files open in the intranet PDF viewer and resume on the last saved page.
 
 ### Intranet API
 
@@ -79,7 +80,7 @@ All state is stored under `BASE_DIR/state/`:
 - `done.json`: per-path `done_at` timestamp and optional transition metadata copied on `to-done`:
   - `reading_started_at` (from `reading_at` when moving from Reading to Done)
 - `highlights/<sha256-prefix>/<sha256>.json`: canonical per-document highlight payloads, including per-highlight `created_at` timestamps and document `updated_at`.
-- `reading_positions/<sha256-prefix>/<sha256>.json`: canonical per-document reading-position payloads (`scroll_y`, `max_scroll`, `progress`, viewport/document height metadata).
+- `reading_positions/<sha256-prefix>/<sha256>.json`: canonical per-document reading-position payloads (`scroll_y`, `max_scroll`, `progress`, viewport/document height metadata, and PDF `page` / `page_count` metadata).
 
 ### Background automations currently in use
 
@@ -208,6 +209,14 @@ export DONE_LINKS_FILE="/path/to/Obsidian/Leidos.md"
 ```bash
 pip install requests beautifulsoup4 markdownify openai pillow pytest markdown
 ```
+
+Optional for intranet PDF page rendering:
+
+```bash
+pip install pymupdf
+```
+
+Alternatively, install Poppler tools so `pdfinfo` and `pdftoppm` are available.
 
 Optional for X likes queue:
 

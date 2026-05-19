@@ -28,10 +28,10 @@ if __package__ in (None, ""):
 from utils.site_paths import (
     library_roots,
     normalize_rel_path,
-    raw_url_for_rel_path,
     rel_path_from_abs,
     resolve_base_dir,
     site_root,
+    viewer_url_for_rel_path,
 )
 from utils.highlight_store import highlight_status_for_path
 from utils.site_state import load_done_state, load_reading_state
@@ -319,7 +319,7 @@ def _collect_browse_search_entries(base_dir: Path, category_roots: dict[str, Pat
                 continue
             try:
                 rel = rel_path_from_abs(base_dir, path)
-                href = raw_url_for_rel_path(rel)
+                href = viewer_url_for_rel_path(rel)
                 mtime = path.stat().st_mtime
             except Exception:
                 continue
@@ -630,7 +630,7 @@ def _scan_directory(
                 entries.append(
                     BrowseEntry(
                         name=name,
-                        href=raw_url_for_rel_path(rel),
+                        href=viewer_url_for_rel_path(rel),
                         mtime=display_mtime,
                         sort_mtime=effective_mtime,
                         is_dir=False,

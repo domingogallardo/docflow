@@ -32,10 +32,12 @@ This file stores stable, reusable operational notes for future agent runs.
 - Highlight payload normalization in `utils/highlight_store.py` must keep stable `id` values; when a highlight arrives without `id`, generate one deterministically to support legacy data and navigation state.
 - Reading-position resume state is stored separately in `BASE_DIR/state/reading_positions/<sha256-prefix>/<sha256>.json`.
 - Canonical read/write helpers for that state live in `utils/reading_position_store.py`.
+- PDF resume uses the same store with `page` and `page_count`; list links should point to `/pdfs/view/...`, while `/pdfs/raw/...` remains the raw file route.
 - API surface for resume state:
   - `GET /api/reading-position?path=<rel_path>`
   - `PUT /api/reading-position?path=<rel_path>`
 - `utils/static/article.js` restores the saved reading position only when the URL has no explicit hash target; highlight hashes must win over scroll resume.
+- `utils/docflow_server.py` serves the PDF viewer and `/api/pdf-page`; rendering prefers PyMuPDF and falls back to Poppler `pdftoppm`.
 
 ### Highlight-First List Behavior
 

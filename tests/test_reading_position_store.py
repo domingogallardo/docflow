@@ -30,6 +30,26 @@ def test_save_and_load_canonical_reading_position(tmp_path: Path):
     assert loaded["progress"] == 0.35
 
 
+def test_save_and_load_pdf_page_position(tmp_path: Path):
+    base = tmp_path / "base"
+    base.mkdir()
+    rel = "Pdfs/Pdfs 2026/paper.pdf"
+
+    saved = reading_position_store.save_reading_position_for_path(
+        base,
+        rel,
+        {"updated_at": "2026-05-18T12:00:00Z", "page": 4, "page_count": 10, "progress": 0.333},
+    )
+
+    assert saved["path"] == rel
+    assert saved["page"] == 4
+    assert saved["page_count"] == 10
+
+    loaded = reading_position_store.load_reading_position_for_path(base, rel)
+    assert loaded["page"] == 4
+    assert loaded["page_count"] == 10
+
+
 def test_top_position_removes_canonical_reading_position_file(tmp_path: Path):
     base = tmp_path / "base"
     base.mkdir()

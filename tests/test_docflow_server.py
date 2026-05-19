@@ -1480,6 +1480,84 @@ def test_raw_pdf_route_has_no_overlay_injection(tmp_path: Path):
         server.server_close()
 
 
+def test_pdf_view_route_serves_resume_viewer(tmp_path: Path, monkeypatch):
+    base = tmp_path / "base"
+    pdfs = base / "Pdfs" / "Pdfs 2026"
+    pdfs.mkdir(parents=True)
+    pdf = pdfs / "doc.pdf"
+    pdf.write_bytes(b"%PDF-1.4\n1 0 obj << /Type /Page >>\n2 0 obj << /Type /Page >>\n")
+    monkeypatch.setattr(docflow_server, "_pdf_page_count", lambda _path: 2)
+
+    server, port = _start_server(base)
+    try:
+        status, body = _get(port, "/pdfs/view/Pdfs%202026/doc.pdf")
+        assert status == 200
+        assert 'id="dg-overlay"' in body
+        assert "body > #dg-overlay{position:static" in body
+        assert 'class="dg-pdf-title"' in body
+        assert 'id="dg-actions-toggle"' not in body
+        assert 'id="dg-overlay-actions" class="dg-row dg-row-actions"' in body
+        assert '<a class="dg-link" href="/browse/pdfs/Pdfs%202026/">Inside Browse</a>' in body
+        assert '<a class="dg-link" href="/pdfs/raw/Pdfs%202026/doc.pdf">Raw PDF</a>' in body
+        assert '<div class="bar">' not in body
+        assert 'data-docflow-path="Pdfs/Pdfs 2026/doc.pdf"' in body
+        assert 'data-page-count="2"' in body
+        assert "/api/reading-position?path=" in body
+        assert "/api/pdf-page?path=" in body
+        assert "/pdfs/raw/Pdfs%202026/doc.pdf" in body
+    finally:
+        server.shutdown()
+        server.server_close()
+
+
+def test_pdf_view_context_link_follows_reading_stage(tmp_path: Path, monkeypatch):
+    base = tmp_path / "base"
+    pdfs = base / "Pdfs" / "Pdfs 2026"
+    pdfs.mkdir(parents=True)
+    pdf = pdfs / "doc.pdf"
+    pdf.write_bytes(b"%PDF-1.4\n1 0 obj << /Type /Page >>\n")
+    monkeypatch.setattr(docflow_server, "_pdf_page_count", lambda _path: 1)
+
+    server, port = _start_server(base)
+    try:
+        status, payload = _post_json(port, "/api/to-reading", {"path": "Pdfs/Pdfs 2026/doc.pdf"})
+        assert status == 200
+        assert payload["ok"] is True
+
+        status, body = _get(port, "/pdfs/view/Pdfs%202026/doc.pdf")
+        assert status == 200
+        assert '<a class="dg-link" href="/reading/">Inside Reading</a>' in body
+        assert "Back to Browse" in body
+        assert "Move to Done" in body
+        assert "/browse/pdfs/Pdfs%202026/" not in body
+    finally:
+        server.shutdown()
+        server.server_close()
+
+
+def test_api_pdf_page_renders_png(tmp_path: Path):
+    fitz = pytest.importorskip("fitz")
+    base = tmp_path / "base"
+    pdfs = base / "Pdfs" / "Pdfs 2026"
+    pdfs.mkdir(parents=True)
+    pdf = pdfs / "doc.pdf"
+    doc = fitz.open()
+    doc.new_page(width=120, height=120)
+    doc.save(pdf)
+    doc.close()
+
+    server, port = _start_server(base)
+    try:
+        encoded = quote("Pdfs/Pdfs 2026/doc.pdf", safe="")
+        status, body, headers = _get_bytes_with_headers(port, f"/api/pdf-page?path={encoded}&page=1")
+        assert status == 200
+        assert headers["content-type"] == "image/png"
+        assert body.startswith(b"\x89PNG")
+    finally:
+        server.shutdown()
+        server.server_close()
+
+
 def test_raw_directory_route_redirects_to_browse(tmp_path: Path):
     base = tmp_path / "base"
     tweets = base / "Tweets" / "Tweets 2026"

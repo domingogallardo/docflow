@@ -6,7 +6,7 @@ import importlib.util
 import os
 import posixpath
 from pathlib import Path
-from urllib.parse import unquote
+from urllib.parse import quote, unquote
 
 BASE_DIR_ENV = "DOCFLOW_BASE_DIR"
 
@@ -174,8 +174,17 @@ def raw_url_for_rel_path(rel_path: str) -> str:
     }
     bucket = bucket_map.get(head, "files")
 
-    from urllib.parse import quote
-
     payload = tail if tail else head
     safe_chars = "~!*()'/-"
     return f"/{bucket}/raw/{quote(payload, safe=safe_chars)}"
+
+
+def viewer_url_for_rel_path(rel_path: str) -> str:
+    """Build the preferred intranet URL for opening a library file."""
+    rel = normalize_rel_path(rel_path)
+    if rel.lower().endswith(".pdf"):
+        head, _, tail = rel.partition("/")
+        if head in {"Pdfs", "PDFs"} and tail:
+            safe_chars = "~!*()'/-"
+            return f"/pdfs/view/{quote(tail, safe=safe_chars)}"
+    return raw_url_for_rel_path(rel)

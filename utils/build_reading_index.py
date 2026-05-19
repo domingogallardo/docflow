@@ -17,7 +17,7 @@ if __package__ in (None, ""):
         sys.path.insert(0, str(_REPO_ROOT))
 
 from utils.highlight_store import highlight_status_for_path
-from utils.site_paths import raw_url_for_rel_path, resolve_base_dir, resolve_library_path, site_root
+from utils.site_paths import viewer_url_for_rel_path, resolve_base_dir, resolve_library_path, site_root
 from utils.site_state import load_reading_state
 
 READING_VIEWPORT = "width=device-width, initial-scale=1"
@@ -143,7 +143,7 @@ def build_site_reading_html(items: list[SiteReadingItem]) -> str:
     else:
         lines: list[str] = ['<ul class="dg-reading-list">']
         for item in items:
-            href = raw_url_for_rel_path(item.rel_path)
+            href = viewer_url_for_rel_path(item.rel_path)
             icon = _icon_for(item.name)
             hl_icon = '<span class="file-icon hl-icon" aria-hidden="true">🟡</span> ' if item.highlighted else ""
             esc_name = html.escape(item.name)

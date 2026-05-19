@@ -39,6 +39,11 @@ def test_raw_url_for_rel_path_uses_bucket_prefixes():
     assert site_paths.raw_url_for_rel_path("Posts/Posts 2026/a.html").startswith("/posts/raw/")
 
 
+def test_viewer_url_for_rel_path_uses_pdf_viewer_only_for_pdfs():
+    assert site_paths.viewer_url_for_rel_path("Pdfs/Pdfs 2026/a.pdf") == "/pdfs/view/Pdfs%202026/a.pdf"
+    assert site_paths.viewer_url_for_rel_path("Posts/Posts 2026/a.html") == "/posts/raw/Posts%202026/a.html"
+
+
 def test_resolve_base_dir_prefers_env(monkeypatch, tmp_path: Path):
     monkeypatch.setenv(site_paths.BASE_DIR_ENV, str(tmp_path))
     assert site_paths.resolve_base_dir() == tmp_path

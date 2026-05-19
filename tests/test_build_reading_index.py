@@ -97,7 +97,7 @@ def test_reading_index_shows_state_actions_for_pdfs(tmp_path: Path):
     out = build_reading_index.write_site_reading_index(base)
     content = out.read_text(encoding="utf-8")
 
-    assert "/pdfs/raw/Pdfs%202026/paper.pdf" in content
+    assert "/pdfs/view/Pdfs%202026/paper.pdf" in content
     assert 'data-api-action="to-done"' in content
     assert 'data-api-action="to-browse"' in content
     assert 'data-docflow-path="Pdfs/Pdfs 2026/paper.pdf"' in content
