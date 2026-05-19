@@ -154,7 +154,7 @@ def test_instapaper_processor_with_existing_html(tmp_path):
     
     processor.title_updater.client = object()
     # Mock download and title generation to avoid external dependencies.
-    with patch.object(processor, "_download_from_instapaper", return_value=False), \
+    with patch.object(processor, "_download_from_instapaper", side_effect=AssertionError("download should not run")), \
          patch.object(processor.title_updater, '_ai_text', side_effect=["inglés", "Amazing Test Article"]):
         moved_posts = processor.process_instapaper_posts()
     

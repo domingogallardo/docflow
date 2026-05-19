@@ -122,9 +122,8 @@ class InstapaperProcessor:
         print("📄 Processing Instapaper posts...")
         
         try:
-            # 1. Download Instapaper articles
-            if not self._download_from_instapaper():
-                print("⚠️ No Instapaper articles downloaded; continuing with existing files...")
+            # 1. Instapaper downloads are disabled here; process existing files only.
+            print("ℹ️ Instapaper download skipped; processing existing files only")
             
             # 2. Convert HTML to Markdown
             self._convert_html_to_markdown()
