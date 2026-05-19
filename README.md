@@ -37,7 +37,7 @@ Podcast snippets are typically captured in [Snipd](https://www.snipd.com) and th
 - Highlight toggle on list pages, with browser-persistent state until switched back off.
 - With `Highlight: on`, highlighted items move first and are ordered by most recent highlight.
 - In `Done`, `Highlight: on` regroups items by the year of the latest highlight, so re-highlighted older items surface under the current highlight year.
-- Reading ordered by `reading_at` (newest first).
+- Reading ordered by latest reading activity: `docflow_last_read` when present, otherwise `reading_at` (newest first).
 - Done ordered by `done_at` (newest first).
 - Stage transitions from the UI (`Move to Reading`, `Move to Done`, `Back to Browse`, `Reopen to Reading`).
 - Per-article actions in the overlay:

@@ -128,7 +128,7 @@ This file stores stable, reusable operational notes for future agent runs.
 
 - List pages using `assets/browse-sort.js` are reordered client-side on `DOMContentLoaded` using `data-dg-sort-mtime`.
 - Default direction is descending (`newest first`) unless the page sets `data-dg-sort-direction="asc"` on the `data-dg-sort-toggle` element.
-- For `Reading` (`newest first`), server-side ordering and `data-dg-sort-direction` must both remain descending so the newest additions stay at the top.
+- For `Reading` (`newest first`), server-side ordering and `data-dg-sort-direction` must both remain descending. Reading activity uses `docflow_last_read` from the paired Markdown front matter when present, otherwise `reading_at`.
 - After changing sort behavior in `utils/build_browse_index.py`, regenerate browse assets (`python utils/build_browse_index.py --base-dir "<BASE_DIR>"`) so `_site/assets/browse-sort.js` is updated.
 
 ### Daily Tweet Consolidation Rendering
@@ -155,6 +155,11 @@ This file stores stable, reusable operational notes for future agent runs.
 - Fixed consolidated tweet rendering to preserve hard line breaks inside paragraph blocks (for cases like `TL;DR`/`Links`) while avoiding regressions in lists.
 - Added regression tests in `tests/test_build_daily_tweet_consolidated.py` for both paragraph line breaks and clean list markup.
 - Regenerated `Tweets 2026-03-03` consolidated output and validated `TL;DR`/`Links` formatting in HTML.
+
+### 2026-05-19
+
+- Reading order now uses latest reading activity: `docflow_last_read` from paired Markdown front matter when present, otherwise `reading_at`.
+- Saving a meaningful reading position for an item currently in Reading rebuilds `/reading/` so the last-read item can move to the top immediately.
 
 ### 2026-03-17
 

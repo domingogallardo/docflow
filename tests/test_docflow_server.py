@@ -1463,6 +1463,43 @@ def test_api_reading_position_does_not_update_docflow_field_without_explicit_fla
         server.server_close()
 
 
+def test_api_reading_position_rebuilds_reading_when_last_read_changes(tmp_path: Path, monkeypatch):
+    base = tmp_path / "base"
+    posts = base / "Posts" / "Posts 2026"
+    posts.mkdir(parents=True)
+    md = posts / "doc.md"
+    html = posts / "doc.html"
+    md.write_text("# Raw Doc\n\nHello world.\n", encoding="utf-8")
+    html.write_text("<html><head></head><body>Raw Doc</body></html>", encoding="utf-8")
+
+    rel_path = "Posts/Posts 2026/doc.html"
+    docflow_server.set_reading_path(base, rel_path)
+    app = docflow_server.DocflowApp(base)
+    calls: list[Path] = []
+
+    def _reading(target_base: Path, *_args, **_kwargs):
+        calls.append(target_base)
+        return target_base / "_site" / "reading" / "index.html"
+
+    monkeypatch.setattr(docflow_server.build_reading_index, "write_site_reading_index", _reading)
+
+    payload = app.api_put_reading_position(
+        rel_path,
+        {
+            "updated_at": "2026-05-15T09:33:00Z",
+            "persist_docflow_last_read": True,
+            "scroll_y": 420,
+            "max_scroll": 1200,
+            "progress": 0.35,
+        },
+    )
+
+    assert payload["path"] == rel_path
+    assert calls == [base]
+    md_meta, _ = split_front_matter(md.read_text(encoding="utf-8"))
+    assert md_meta["docflow_last_read"] == "2026-05-15T09:33:00Z"
+
+
 def test_raw_pdf_route_has_no_overlay_injection(tmp_path: Path):
     base = tmp_path / "base"
     pdfs = base / "Pdfs" / "Pdfs 2026"

@@ -512,6 +512,8 @@ class DocflowApp:
         saved = save_reading_position_for_path(self.base_dir, normalized, payload)
         if bool(payload.get("persist_docflow_last_read")) and has_meaningful_reading_position(saved):
             self._update_markdown_docflow_last_read_for_library_path(abs_path, saved)
+            if self.path_stage(normalized) == "reading":
+                build_reading_index.write_site_reading_index(self.base_dir)
         return saved
 
     def _update_markdown_docflow_last_read_for_library_path(self, abs_path: Path, payload: dict[str, object]) -> None:

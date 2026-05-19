@@ -73,6 +73,36 @@ def test_site_reading_orders_by_reading_time(tmp_path: Path, monkeypatch):
     assert content.find("newer.html") < content.find("older.html")
 
 
+def test_site_reading_orders_by_last_read_activity(tmp_path: Path, monkeypatch):
+    base = tmp_path / "base"
+    posts = base / "Posts" / "Posts 2026"
+    posts.mkdir(parents=True)
+
+    added_older = posts / "added-older.html"
+    added_newer = posts / "added-newer.html"
+    added_older.write_text("<html><body>Added older</body></html>", encoding="utf-8")
+    added_newer.write_text("<html><body>Added newer</body></html>", encoding="utf-8")
+    added_older.with_suffix(".md").write_text(
+        "---\ndocflow_last_read: 2026-02-02T10:00:00Z\n---\n\n# Added older\n",
+        encoding="utf-8",
+    )
+    added_newer.with_suffix(".md").write_text(
+        "---\ndocflow_last_read: 2026-02-01T10:00:00Z\n---\n\n# Added newer\n",
+        encoding="utf-8",
+    )
+
+    reading_times = iter(["2026-02-01T10:00:00Z", "2026-02-01T10:00:05Z"])
+    monkeypatch.setattr(site_state, "_utc_now_iso", lambda: next(reading_times))
+
+    site_state.set_reading_path(base, "Posts/Posts 2026/added-older.html")
+    site_state.set_reading_path(base, "Posts/Posts 2026/added-newer.html")
+
+    out = build_reading_index.write_site_reading_index(base)
+    content = out.read_text(encoding="utf-8")
+
+    assert content.find("added-older.html") < content.find("added-newer.html")
+
+
 def test_build_reading_index_cli_generates_site_index(tmp_path: Path):
     base = tmp_path / "base"
     posts = base / "Posts" / "Posts 2026"

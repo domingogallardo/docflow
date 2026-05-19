@@ -17,6 +17,7 @@ if __package__ in (None, ""):
         sys.path.insert(0, str(_REPO_ROOT))
 
 from utils.highlight_store import highlight_status_for_path
+from utils.markdown_utils import split_front_matter
 from utils.site_paths import viewer_url_for_rel_path, resolve_base_dir, resolve_library_path, site_root
 from utils.site_state import load_reading_state
 
@@ -87,6 +88,19 @@ def _iso_to_epoch(value: object) -> float | None:
     return parsed.timestamp()
 
 
+def _docflow_last_read_epoch_for_path(abs_path: Path) -> float | None:
+    suffix = abs_path.suffix.lower()
+    md_path = abs_path if suffix == ".md" else abs_path.with_suffix(".md")
+    if not md_path.is_file():
+        return None
+
+    try:
+        meta, _ = split_front_matter(md_path.read_text(encoding="utf-8", errors="replace"))
+    except OSError:
+        return None
+    return _iso_to_epoch(meta.get("docflow_last_read"))
+
+
 def collect_site_reading_items(base_dir: Path) -> list[SiteReadingItem]:
     reading_state = load_reading_state(base_dir)
     state_items = reading_state.get("items", {})
@@ -106,8 +120,10 @@ def collect_site_reading_items(base_dir: Path) -> list[SiteReadingItem]:
         reading_mtime: float | None = None
         if isinstance(reading_entry, dict):
             reading_mtime = _iso_to_epoch(reading_entry.get("reading_at"))
+        last_read_mtime = _docflow_last_read_epoch_for_path(abs_path)
         display_mtime = st.st_mtime
-        effective_mtime = reading_mtime if reading_mtime is not None else display_mtime
+        activity_times = [value for value in (reading_mtime, last_read_mtime) if value is not None]
+        effective_mtime = max(activity_times) if activity_times else display_mtime
         highlighted, highlight_last_epoch = _site_highlight_status(base_dir, rel)
         items.append(
             SiteReadingItem(
