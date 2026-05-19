@@ -88,6 +88,7 @@ _PDF_RSVG_CONVERT_CANDIDATES = (
 )
 _PDF_LATEX_MARGIN = "2.5cm"
 _PDF_IMAGE_MAX_HEIGHT = "7cm"
+_PDF_PAGE_RENDER_SCALE = 2.5
 
 
 class ApiError(Exception):
@@ -852,7 +853,7 @@ def _pdf_page_count(pdf_path: Path) -> int:
     return max(1, len(matches))
 
 
-def _render_pdf_page_png(pdf_path: Path, page_number: int, *, scale: float = 1.6) -> bytes:
+def _render_pdf_page_png(pdf_path: Path, page_number: int, *, scale: float = _PDF_PAGE_RENDER_SCALE) -> bytes:
     page_count = _pdf_page_count(pdf_path)
     page = max(1, min(page_number, page_count))
 
@@ -914,14 +915,15 @@ def _pdf_viewer_html(*, rel_path: str, pdf_path: Path, stage: str, page_count: i
 
     esc_title = html.escape(title)
     rel_attr = html.escape(rel_path, quote=True)
+    render_scale_attr = f"{_PDF_PAGE_RENDER_SCALE:.2f}"
     raw_attr = html.escape(raw_url, quote=True)
     context_attr = html.escape(context_url, quote=True)
     context_label_attr = html.escape(context_label, quote=True)
     css = (OVERLAY_CSS + "\n" + """
 body{margin:0;font:14px -apple-system,system-ui,Segoe UI,Roboto,Helvetica,Arial;color:#222;background:#f3f3f3}
-.viewer{display:flex;justify-content:center;padding:18px}
-.page{max-width:min(100%,1100px);box-shadow:0 2px 18px rgba(0,0,0,.2);background:#fff}
-.page img{display:block;max-width:100%;height:auto}
+.viewer{display:block;padding:18px;overflow:auto}
+.page{width:min(calc((100vw - 36px) * var(--pdf-zoom, 1)), calc(1100px * var(--pdf-zoom, 1)));max-width:none;margin:0 auto;box-shadow:0 2px 18px rgba(0,0,0,.2);background:#fff}
+.page img{display:block;width:100%;max-width:none;height:auto}
 .status{padding:40px;color:#666;text-align:center}
 body > #dg-overlay{position:static;right:auto;top:auto;z-index:2;box-sizing:border-box;width:100%;align-items:stretch;gap:7px;padding:8px 10px;border:0;border-bottom:1px solid #ccc;border-radius:0;background:#fff;box-shadow:none}
 #dg-overlay .dg-pdf-title{font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
@@ -937,6 +939,8 @@ body > #dg-overlay{position:static;right:auto;top:auto;z-index:2;box-sizing:bord
   var relPath = document.documentElement.getAttribute('data-docflow-path') || '';
   var pageCount = Number(document.documentElement.getAttribute('data-page-count') || '1') || 1;
   var currentPage = 1;
+  var zoomLevels = [0.75, 1, 1.25, 1.5, 2];
+  var zoomIndex = 1;
   var restored = false;
   var busy = false;
   var image = document.getElementById('pdf-page-image');
@@ -945,6 +949,9 @@ body > #dg-overlay{position:static;right:auto;top:auto;z-index:2;box-sizing:bord
   var label = document.getElementById('page-label');
   var prev = document.getElementById('prev-page');
   var next = document.getElementById('next-page');
+  var zoomOut = document.getElementById('zoom-out');
+  var zoomIn = document.getElementById('zoom-in');
+  var pageBox = document.getElementById('pdf-page-box');
   function nowIso(){
     var d = new Date();
     var offset = -d.getTimezoneOffset();
@@ -966,6 +973,9 @@ body > #dg-overlay{position:static;right:auto;top:auto;z-index:2;box-sizing:bord
     label.textContent = '/ ' + pageCount;
     prev.disabled = currentPage <= 1;
     next.disabled = currentPage >= pageCount;
+    if (zoomOut) zoomOut.disabled = zoomIndex <= 0;
+    if (zoomIn) zoomIn.disabled = zoomIndex >= zoomLevels.length - 1;
+    if (pageBox) pageBox.style.setProperty('--pdf-zoom', String(zoomLevels[zoomIndex]));
   }
   function updateActions(){
     document.querySelectorAll('#dg-overlay button').forEach(function(button){
@@ -1028,6 +1038,20 @@ body > #dg-overlay{position:static;right:auto;top:auto;z-index:2;box-sizing:bord
   }
   prev.addEventListener('click', function(){ showPage(currentPage - 1); });
   next.addEventListener('click', function(){ showPage(currentPage + 1); });
+  if (zoomOut) {
+    zoomOut.addEventListener('click', function(){
+      if (zoomIndex <= 0) return;
+      zoomIndex -= 1;
+      updateControls();
+    });
+  }
+  if (zoomIn) {
+    zoomIn.addEventListener('click', function(){
+      if (zoomIndex >= zoomLevels.length - 1) return;
+      zoomIndex += 1;
+      updateControls();
+    });
+  }
   input.addEventListener('change', function(){ showPage(input.value); });
   document.addEventListener('keydown', function(event){
     if (event.target && event.target.tagName === 'INPUT') return;
@@ -1062,7 +1086,7 @@ body > #dg-overlay{position:static;right:auto;top:auto;z-index:2;box-sizing:bord
 })();
 """.strip()
     body = f"""<!DOCTYPE html>
-<html data-docflow-path="{rel_attr}" data-page-count="{page_count}">
+<html data-docflow-path="{rel_attr}" data-page-count="{page_count}" data-render-scale="{render_scale_attr}">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -1078,6 +1102,8 @@ body > #dg-overlay{position:static;right:auto;top:auto;z-index:2;box-sizing:bord
 <span class="dg-hl-count"><input id="page-input" class="dg-page-input" type="number" min="1" max="{page_count}" value="1" aria-label="Page"><span id="page-label" class="dg-page-label">/ {page_count}</span></span>
 <button type="button" id="prev-page" class="dg-hl-btn" aria-label="Previous page" title="Previous page">↑</button>
 <button type="button" id="next-page" class="dg-hl-btn" aria-label="Next page" title="Next page">↓</button>
+<button type="button" id="zoom-out" class="dg-hl-btn" aria-label="Zoom out" title="Zoom out">−</button>
+<button type="button" id="zoom-in" class="dg-hl-btn" aria-label="Zoom in" title="Zoom in">+</button>
 <a class="dg-link" href="{raw_attr}">Raw PDF</a>
 </div>
 </div>
@@ -1087,7 +1113,7 @@ body > #dg-overlay{position:static;right:auto;top:auto;z-index:2;box-sizing:bord
 </div>
 </div>
 <main class="viewer">
-<div class="page">
+<div id="pdf-page-box" class="page">
 <div id="pdf-status" class="status">Loading...</div>
 <img id="pdf-page-image" alt="PDF page" hidden>
 </div>
