@@ -1505,7 +1505,7 @@ def test_pdf_view_route_serves_resume_viewer(tmp_path: Path, monkeypatch):
         assert 'data-render-scale="2.50"' in body
         assert 'id="zoom-out"' in body
         assert 'id="zoom-in"' in body
-        assert "zoomLevels = [0.75, 1, 1.25, 1.5, 2]" in body
+        assert "zoomLevels = [0.35, 0.5, 0.75, 1, 1.25, 1.5, 2]" in body
         assert "/api/reading-position?path=" in body
         assert "/api/pdf-page?path=" in body
         assert "/pdfs/raw/Pdfs%202026/doc.pdf" in body

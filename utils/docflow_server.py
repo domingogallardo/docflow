@@ -939,8 +939,8 @@ body > #dg-overlay{position:static;right:auto;top:auto;z-index:2;box-sizing:bord
   var relPath = document.documentElement.getAttribute('data-docflow-path') || '';
   var pageCount = Number(document.documentElement.getAttribute('data-page-count') || '1') || 1;
   var currentPage = 1;
-  var zoomLevels = [0.75, 1, 1.25, 1.5, 2];
-  var zoomIndex = 1;
+  var zoomLevels = [0.35, 0.5, 0.75, 1, 1.25, 1.5, 2];
+  var zoomIndex = 3;
   var restored = false;
   var busy = false;
   var image = document.getElementById('pdf-page-image');
