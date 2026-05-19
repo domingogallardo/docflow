@@ -153,7 +153,10 @@ def test_build_browse_site_generates_indexes_and_actions(tmp_path: Path):
     assert '"stem": "doc"' in site_home_content
     assert '"folder": "Posts 2026"' in site_home_content
     assert "entries.filter" in site_home_content
-    assert "toLowerCase().indexOf(ql)!==-1" in site_home_content
+    assert "Search title text or term + term" in site_home_content
+    assert "function queryTerms(v)" in site_home_content
+    assert "split(/\\s+\\+\\s+/)" in site_home_content
+    assert "terms.every(function(term){return title.indexOf(term)!==-1;})" in site_home_content
     assert "dg-search-results" in site_home_content
     assert "docflow.home.search" in site_home_content
     assert "Math.random()" in site_home_content
