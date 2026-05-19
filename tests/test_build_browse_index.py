@@ -119,8 +119,9 @@ def test_build_browse_site_generates_indexes_and_actions(tmp_path: Path):
     assert '/posts/raw/Posts%202026/doc.html' in content
 
     pdf_content = pdfs_year_page.read_text(encoding="utf-8")
-    assert 'data-api-action="to-reading"' in pdf_content
-    assert 'data-api-action="to-done"' in pdf_content
+    assert "/pdfs/view/Pdfs%202026/paper.pdf" in pdf_content
+    assert 'data-api-action="to-reading"' not in pdf_content
+    assert 'data-api-action="to-done"' not in pdf_content
 
     browse_home_content = browse_home.read_text(encoding="utf-8")
     assert "Incoming" not in browse_home_content

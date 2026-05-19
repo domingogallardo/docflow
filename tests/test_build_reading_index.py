@@ -86,7 +86,7 @@ def test_build_reading_index_cli_generates_site_index(tmp_path: Path):
     assert (base / "_site" / "reading" / "index.html").exists()
 
 
-def test_reading_index_shows_state_actions_for_pdfs(tmp_path: Path):
+def test_reading_index_links_pdfs_without_list_actions(tmp_path: Path):
     base = tmp_path / "base"
     pdfs = base / "Pdfs" / "Pdfs 2026"
     pdfs.mkdir(parents=True)
@@ -98,6 +98,6 @@ def test_reading_index_shows_state_actions_for_pdfs(tmp_path: Path):
     content = out.read_text(encoding="utf-8")
 
     assert "/pdfs/view/Pdfs%202026/paper.pdf" in content
-    assert 'data-api-action="to-done"' in content
-    assert 'data-api-action="to-browse"' in content
-    assert 'data-docflow-path="Pdfs/Pdfs 2026/paper.pdf"' in content
+    assert 'data-api-action="to-done"' not in content
+    assert 'data-api-action="to-browse"' not in content
+    assert 'data-docflow-path="Pdfs/Pdfs 2026/paper.pdf"' not in content

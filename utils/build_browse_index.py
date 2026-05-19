@@ -133,29 +133,6 @@ def _entry_classes(entry: BrowseEntry) -> str:
     return f' class="{" ".join(classes)}"' if classes else ""
 
 
-def _actions_html(entry: BrowseEntry) -> str:
-    if entry.is_dir or not entry.rel_path:
-        return ""
-    if not entry.name.lower().endswith(".pdf"):
-        return ""
-
-    stage_buttons = [
-        ("to-reading", "Move to Reading"),
-        ("to-done", "Move to Done"),
-    ]
-
-    path_attr = html.escape(entry.rel_path, quote=True)
-    button_html = "".join(
-        f"<button class='dg-act' data-api-action=\"{action}\" data-docflow-path=\"{path_attr}\">{label}</button>"
-        for action, label in stage_buttons
-    )
-    return (
-        "<span class='dg-actions'>"
-        + button_html
-        + "</span>"
-    )
-
-
 def _render_entry(entry: BrowseEntry) -> str:
     display_name = entry.name + ("/" if entry.is_dir else "")
     esc_name = html.escape(display_name)
@@ -174,9 +151,8 @@ def _render_entry(entry: BrowseEntry) -> str:
         f"data-dg-name='{html.escape(entry.name.lower(), quote=True)}'",
     ]
     attrs = f"{cls_attr} " + " ".join(attr_bits) if cls_attr else " " + " ".join(attr_bits)
-    actions = _actions_html(entry)
     return (
-        f"<li{attrs}><span>{prefix}<a href=\"{entry.href}\">{esc_name}</a>{count_html}</span>{actions}</li>"
+        f"<li{attrs}><span>{prefix}<a href=\"{entry.href}\">{esc_name}</a>{count_html}</span></li>"
     )
 
 

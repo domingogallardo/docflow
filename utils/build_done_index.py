@@ -84,18 +84,6 @@ def _site_highlight_status(base_dir: Path, rel_path: str) -> tuple[bool, float |
     return highlight_status_for_path(base_dir, rel_path)
 
 
-def _actions_html(item: SiteDoneItem) -> str:
-    if not item.name.lower().endswith(".pdf"):
-        return ""
-    path_attr = html.escape(item.rel_path, quote=True)
-    return (
-        "<span class='dg-actions'>"
-        f"<button data-api-action=\"reopen\" data-docflow-path=\"{path_attr}\">Reopen to Reading</button>"
-        f"<button data-api-action=\"to-browse\" data-docflow-path=\"{path_attr}\">Back to Browse</button>"
-        "</span>"
-    )
-
-
 def _done_at_to_epoch(value: object) -> float | None:
     if not isinstance(value, str):
         return None
@@ -224,9 +212,8 @@ def _render_done_sections(
                 f"data-dg-sort-mtime='{item.sort_mtime:.6f}' "
                 f"data-dg-name='{html.escape(item.name.lower(), quote=True)}'"
             )
-            actions = _actions_html(item)
             lines.append(
-                f'<li{row_class} {row_attrs}><span>{hl_icon}{icon}<a href="{href}" title="{esc_name}">{esc_name}</a></span>{actions}</li>'
+                f'<li{row_class} {row_attrs}><span>{hl_icon}{icon}<a href="{href}" title="{esc_name}">{esc_name}</a></span></li>'
             )
         lines.append("</ul>")
         sections.append("\n".join(lines))

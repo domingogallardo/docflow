@@ -66,18 +66,6 @@ def _site_highlight_status(base_dir: Path, rel_path: str) -> tuple[bool, float |
     return highlight_status_for_path(base_dir, rel_path)
 
 
-def _actions_html(item: SiteReadingItem) -> str:
-    if not item.name.lower().endswith(".pdf"):
-        return ""
-    path_attr = html.escape(item.rel_path, quote=True)
-    return (
-        "<span class='dg-actions'>"
-        f"<button data-api-action=\"to-browse\" data-docflow-path=\"{path_attr}\">Back to Browse</button>"
-        f"<button data-api-action=\"to-done\" data-docflow-path=\"{path_attr}\">Move to Done</button>"
-        "</span>"
-    )
-
-
 def _iso_to_epoch(value: object) -> float | None:
     if not isinstance(value, str):
         return None
@@ -147,7 +135,6 @@ def build_site_reading_html(items: list[SiteReadingItem]) -> str:
             icon = _icon_for(item.name)
             hl_icon = '<span class="file-icon hl-icon" aria-hidden="true">🟡</span> ' if item.highlighted else ""
             esc_name = html.escape(item.name)
-            actions = _actions_html(item)
             row_attrs = (
                 "data-dg-sortable='1' "
                 f"data-dg-highlighted='{'1' if item.highlighted else '0'}' "
@@ -156,7 +143,7 @@ def build_site_reading_html(items: list[SiteReadingItem]) -> str:
                 f"data-dg-name='{html.escape(item.name.lower(), quote=True)}'"
             )
             lines.append(
-                f'<li {row_attrs}><span>{hl_icon}{icon}<a href="{href}" title="{esc_name}">{esc_name}</a></span>{actions}</li>'
+                f'<li {row_attrs}><span>{hl_icon}{icon}<a href="{href}" title="{esc_name}">{esc_name}</a></span></li>'
             )
         lines.append("</ul>")
         list_html = "\n".join(lines)
