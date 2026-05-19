@@ -242,6 +242,10 @@ def _matches_capture_source(meta: dict[str, str], capture_source: str) -> bool:
     return _tweet_capture_source(meta) == normalized
 
 
+def _is_tweet_article(meta: dict[str, str]) -> bool:
+    return meta.get("tweet_content_type", "").strip().lower() == "article"
+
+
 def _collect_daily_source_markdown(
     tweets_dir: Path,
     day: str,
@@ -257,6 +261,8 @@ def _collect_daily_source_markdown(
             continue
         meta, _ = U.split_front_matter(path.read_text(encoding="utf-8", errors="ignore"))
         if not _matches_capture_source(meta, normalized_source):
+            continue
+        if _is_tweet_article(meta):
             continue
         local_day = _tweet_operational_day_from_mtime(path.stat().st_mtime)
         if local_day == day:

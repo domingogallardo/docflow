@@ -38,6 +38,7 @@ _FRONT_MATTER_KEYS = {
     "tweet_author": "docflow-tweet-author",
     "tweet_author_name": "docflow-tweet-author-name",
     "tweet_capture_source": "docflow-tweet-capture-source",
+    "tweet_content_type": "docflow-tweet-content-type",
     "tweet_posted_kind": "docflow-tweet-posted-kind",
     "tweet_thread": "docflow-tweet-thread",
     "tweet_thread_count": "docflow-tweet-thread-count",

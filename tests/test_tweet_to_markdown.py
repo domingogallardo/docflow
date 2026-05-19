@@ -31,6 +31,7 @@ from utils.tweet_to_markdown import (
     ReplyParentContext,
     _reply_parent_url_from_payload,
     _is_self_thread_parent,
+    _extract_x_article_markdown_from_html,
 )
 
 
@@ -322,6 +323,69 @@ def test_strip_platform_inline_prompts_removes_x_article_premium_prompt():
     )
 
     assert strip_platform_inline_prompts(raw) == "Actual article ending."
+
+
+def test_extract_x_article_markdown_preserves_html_semantics():
+    html = """
+    <article>
+      <div data-testid="tweetPhoto"><img src="https://pbs.twimg.com/media/cover?format=jpg&amp;name=900x900"></div>
+      <div data-testid="twitter-article-title">Article Title</div>
+      <div data-testid="twitterArticleRichTextView">
+        <div class="longform-unstyled-narrow">
+          <span style="font-style: italic;"><span data-text="true">Intro </span></span>
+          <a href="https://example.com/ref"><span style="font-style: italic;"><span data-text="true">link</span></span></a>
+          <span style="font-style: italic;"><span data-text="true">.</span></span>
+        </div>
+        <h2 class="longform-header-two-narrow">Real Heading</h2>
+        <li class="longform-unordered-list-item-narrow"><span>Item with </span><span style="font-weight: bold;">bold</span></li>
+        <blockquote class="longform-blockquote-narrow">Quoted text</blockquote>
+        <div data-testid="tex-block"><annotation encoding="application/x-tex">L_{env}</annotation></div>
+        <div data-testid="tweetPhoto"><img src="https://pbs.twimg.com/media/body?format=png&amp;name=900x900"></div>
+      </div>
+    </article>
+    """
+
+    result = _extract_x_article_markdown_from_html(html)
+
+    assert result == "\n".join(
+        [
+            "[![image 1](https://pbs.twimg.com/media/cover?format=jpg)](https://pbs.twimg.com/media/cover?format=jpg)",
+            "",
+            "## Article Title",
+            "",
+            "*Intro *[*link*](https://example.com/ref)*.*",
+            "",
+            "## Real Heading",
+            "",
+            "- Item with **bold**",
+            "",
+            "> Quoted text",
+            "",
+            "$$",
+            "L_{env}",
+            "$$",
+            "",
+            "[![image 2](https://pbs.twimg.com/media/body?format=png)](https://pbs.twimg.com/media/body?format=png)",
+        ]
+    )
+
+
+def test_build_single_tweet_markdown_marks_article_content_type():
+    markdown = _build_single_tweet_markdown(
+        TweetParts(
+            author_name="Author",
+            author_handle="@author",
+            body_text="## Article title\n\nArticle body",
+            avatar_url=None,
+            trailing_media_lines=[],
+            media_present=False,
+            external_link=None,
+            is_article=True,
+        ),
+        "https://x.com/author/status/1",
+    )
+
+    assert "tweet_content_type: article" in markdown
 
 
 def test_strip_platform_inline_prompts_removes_glued_x_article_prompt_tail():

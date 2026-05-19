@@ -25,6 +25,7 @@ def _write_tweet_pair(
     hour: int,
     body: str = "Tweet body.",
     capture_source: str = "liked",
+    extra_front_matter: str = "",
 ) -> tuple[Path, Path]:
     md_path = tweets_dir / f"{stem}.md"
     html_path = tweets_dir / f"{stem}.html"
@@ -33,6 +34,7 @@ def _write_tweet_pair(
         "source: tweet\n"
         f"tweet_url: https://x.com/{stem.replace(' ', '_')}\n"
         f"tweet_capture_source: {capture_source}\n"
+        f"{extra_front_matter}"
         "---\n\n"
         f"# {stem}\n\n"
         f"{body}\n",
@@ -65,6 +67,65 @@ def test_collect_daily_source_markdown_uses_rollover_hour_for_early_next_day(
     assert same_day_md in selected_set
     assert early_next_day_md in selected_set
     assert boundary_next_day_md not in selected_set
+
+
+def test_collect_daily_source_markdown_excludes_tweet_articles(tmp_path: Path) -> None:
+    day = "2026-02-13"
+    tweets_dir = tmp_path / "Tweets 2026"
+    tweets_dir.mkdir(parents=True)
+
+    normal_md, _ = _write_tweet_pair(tweets_dir, "Tweet - normal", day, hour=10)
+    article_md, _ = _write_tweet_pair(
+        tweets_dir,
+        "Tweet - article",
+        day,
+        hour=11,
+        extra_front_matter="tweet_content_type: article\n",
+    )
+
+    selected = mod._collect_daily_source_markdown(tweets_dir, day)
+
+    assert selected == [normal_md]
+    assert article_md not in selected
+
+
+def test_main_excludes_tweet_articles_and_keeps_their_html(tmp_path: Path, monkeypatch) -> None:
+    day = "2026-02-13"
+    tweets_dir = tmp_path / "Tweets 2026"
+    tweets_dir.mkdir(parents=True)
+
+    normal_md, normal_html = _write_tweet_pair(tweets_dir, "Tweet - normal", day, hour=10)
+    article_md, article_html = _write_tweet_pair(
+        tweets_dir,
+        "Tweet - article",
+        day,
+        hour=11,
+        body="Article body should stay out.",
+        extra_front_matter="tweet_content_type: article\n",
+    )
+
+    args = argparse.Namespace(
+        day=day,
+        year=2026,
+        tweets_dir=tweets_dir,
+        output_base=None,
+        capture_source="liked",
+        cleanup_if_consolidated=False,
+    )
+    monkeypatch.setattr(mod, "parse_args", lambda: args)
+
+    exit_code = mod.main()
+
+    assert exit_code == 0
+    consolidated_md = tweets_dir / f"Tweets {day}.md"
+    consolidated_text = consolidated_md.read_text(encoding="utf-8")
+    assert "Total de ficheros: **1**" in consolidated_text
+    assert "## normal" in consolidated_text
+    assert "Article body should stay out." not in consolidated_text
+    assert normal_md.is_file()
+    assert not normal_html.exists()
+    assert article_md.is_file()
+    assert article_html.is_file()
 
 
 def test_main_includes_early_next_day_files_in_previous_day_consolidation(

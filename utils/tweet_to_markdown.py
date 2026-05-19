@@ -363,6 +363,7 @@ class TweetParts:
     trailing_media_lines: List[str]
     media_present: bool
     external_link: str | None
+    is_article: bool = False
 
 
 @dataclass(frozen=True)
@@ -1873,6 +1874,224 @@ def _media_markdown_lines(media_urls: List[str]) -> List[str]:
     return lines
 
 
+def _markdown_escape_text(text: str) -> str:
+    return (
+        text.replace("\\", "\\\\")
+        .replace("*", "\\*")
+        .replace("_", "\\_")
+        .replace("[", "\\[")
+        .replace("]", "\\]")
+    )
+
+
+def _x_article_classes(tag) -> set[str]:
+    classes = tag.get("class") or []
+    return {str(value) for value in classes}
+
+
+def _has_x_article_class(classes: set[str], name: str) -> bool:
+    return any(class_name == name or class_name.startswith(f"{name}-") for class_name in classes)
+
+
+def _is_x_article_block(tag) -> bool:
+    if getattr(tag, "name", None) is None:
+        return False
+    if tag.get("data-testid") in {"tex-block", "tweetPhoto", "videoComponent"}:
+        return True
+    classes = _x_article_classes(tag)
+    return any(
+        _has_x_article_class(classes, class_name)
+        for class_name in (
+            "longform-unstyled",
+            "longform-header-two",
+            "longform-blockquote",
+            "longform-unordered-list-item",
+        )
+    )
+
+
+def _has_x_article_block_ancestor(tag, *, root) -> bool:
+    parent = tag.parent
+    while parent is not None and parent is not root:
+        if _is_x_article_block(parent):
+            return True
+        parent = getattr(parent, "parent", None)
+    return False
+
+
+def _x_article_inline_markdown(node) -> str:
+    from bs4 import NavigableString
+
+    if isinstance(node, NavigableString):
+        text = str(node).replace("\xa0", " ")
+        if not text.strip():
+            return ""
+        return _markdown_escape_text(text)
+    if getattr(node, "name", None) is None:
+        return ""
+    if node.name == "br":
+        return "\n"
+    if node.get("aria-hidden") == "true":
+        return ""
+    if node.name in {"script", "style", "svg", "math"}:
+        return ""
+
+    content = "".join(_x_article_inline_markdown(child) for child in node.children)
+    if not content:
+        return ""
+
+    href = (node.get("href") or "").strip()
+    style = (node.get("style") or "").lower()
+    if "font-weight: bold" in style:
+        content = f"**{content}**"
+    if "font-style: italic" in style:
+        content = f"*{content}*"
+    if node.name == "a" and href:
+        content = f"[{content.strip()}]({href})"
+    return content
+
+
+def _clean_x_article_inline(text: str) -> str:
+    text = text.replace("\xa0", " ")
+    text = re.sub(r"[ \t]+\n", "\n", text)
+    text = re.sub(r"\n[ \t]+", "\n", text)
+    return text.strip()
+
+
+def _x_article_media_url(block) -> str | None:
+    image = block.find("img", src=True)
+    if image is None:
+        return None
+    src = str(image.get("src") or "").strip()
+    if not src or "profile_images" in src:
+        return None
+    if "twimg.com" not in src:
+        return None
+    return _strip_media_params(src)
+
+
+def _x_article_media_markdown(block, image_index: int) -> str | None:
+    media_url = _x_article_media_url(block)
+    if not media_url:
+        return None
+    return f"[![image {image_index}]({media_url})]({media_url})"
+
+
+def _x_article_tex_markdown(block) -> str:
+    annotation = block.find("annotation", attrs={"encoding": "application/x-tex"})
+    if annotation is not None:
+        tex = annotation.get_text("", strip=True)
+        if tex:
+            return f"$$\n{tex}\n$$"
+    return _clean_x_article_inline(block.get_text(" ", strip=True))
+
+
+def _append_x_article_block(lines: List[str], block_text: str) -> None:
+    if not block_text:
+        return
+    if lines and lines[-1] != "":
+        lines.append("")
+    lines.append(block_text)
+
+
+def _extract_x_article_markdown_from_html(html_text: str) -> str | None:
+    """Extract Markdown only from X posts rendered as long-form Articles."""
+    if not html_text or "twitterArticleRichTextView" not in html_text:
+        return None
+
+    try:
+        from bs4 import BeautifulSoup
+    except ImportError:
+        return None
+
+    soup = BeautifulSoup(html_text, "html.parser")
+    rich_root = soup.select_one('[data-testid="twitterArticleRichTextView"]')
+    title_el = soup.select_one('[data-testid="twitter-article-title"]')
+    if rich_root is None or title_el is None:
+        return None
+
+    title = _clean_x_article_inline(title_el.get_text(" ", strip=True))
+    lines: List[str] = []
+    image_index = 1
+
+    for media_block in soup.select('[data-testid="tweetPhoto"], [data-testid="videoComponent"]'):
+        if media_block.find_parent(attrs={"data-testid": "twitterArticleRichTextView"}):
+            continue
+        media_markdown = _x_article_media_markdown(media_block, image_index)
+        if media_markdown:
+            lines.extend([media_markdown, ""])
+            image_index += 1
+            break
+
+    if title:
+        lines.extend([f"## {title}", ""])
+
+    blocks = [
+        tag
+        for tag in rich_root.find_all(_is_x_article_block)
+        if not _has_x_article_block_ancestor(tag, root=rich_root)
+    ]
+    previous_was_list = False
+    seen_media_urls: set[str] = set()
+    content_text_chars = 0
+
+    for block in blocks:
+        classes = _x_article_classes(block)
+        data_testid = block.get("data-testid")
+        block_text = ""
+        current_is_list = False
+
+        if data_testid in {"tweetPhoto", "videoComponent"}:
+            media_url = _x_article_media_url(block)
+            if not media_url or media_url in seen_media_urls:
+                continue
+            seen_media_urls.add(media_url)
+            block_text = f"[![image {image_index}]({media_url})]({media_url})"
+            image_index += 1
+        elif data_testid == "tex-block":
+            block_text = _x_article_tex_markdown(block)
+        elif _has_x_article_class(classes, "longform-header-two"):
+            text = _clean_x_article_inline(_x_article_inline_markdown(block))
+            if not text:
+                continue
+            content_text_chars += len(text)
+            block_text = f"## {text}"
+        elif _has_x_article_class(classes, "longform-blockquote"):
+            text = _clean_x_article_inline(_x_article_inline_markdown(block))
+            if not text:
+                continue
+            content_text_chars += len(text)
+            block_text = "\n".join(f"> {line}" for line in text.splitlines())
+        elif _has_x_article_class(classes, "longform-unordered-list-item"):
+            text = _clean_x_article_inline(_x_article_inline_markdown(block))
+            if not text:
+                continue
+            content_text_chars += len(text)
+            block_text = f"- {text}"
+            current_is_list = True
+        else:
+            block_text = _clean_x_article_inline(_x_article_inline_markdown(block))
+            content_text_chars += len(block_text)
+
+        if not block_text:
+            continue
+        if current_is_list:
+            if lines and lines[-1] != "" and not previous_was_list:
+                lines.append("")
+            lines.append(block_text)
+        else:
+            _append_x_article_block(lines, block_text)
+            lines.append("")
+        previous_was_list = current_is_list
+
+    while lines and lines[-1] == "":
+        lines.pop()
+    if content_text_chars < 40:
+        return None
+    markdown = "\n".join(lines).strip()
+    return markdown or None
+
+
 def _resolve_storage_state(storage_state: Path | None) -> Path | None:
     # The storage_state avoids X's login wall when opening the tweet.
     if storage_state is None:
@@ -1990,22 +2209,32 @@ def _extract_tweet_parts(
     if page is not None:
         _expand_show_more(article, page)
 
-    raw_text = _read_article_text(
-        article,
-        tweet_url,
-        page=page,
-        anchor_handle=anchor_handle,
-    )
-    body_text = strip_tweet_stats(
-        strip_article_metric_preamble(
-            strip_platform_inline_prompts(
-                normalize_inline_mention_breaks(rebuild_urls_from_lines(raw_text).strip()),
-                author_name=author_name,
-                author_handle=author_handle,
-            ),
-            author_handle=author_handle,
+    article_markdown = None
+    try:
+        article_html = article.evaluate("el => el.outerHTML")
+        article_markdown = _extract_x_article_markdown_from_html(article_html)
+    except Exception:
+        article_markdown = None
+
+    if article_markdown:
+        body_text = article_markdown
+    else:
+        raw_text = _read_article_text(
+            article,
+            tweet_url,
+            page=page,
+            anchor_handle=anchor_handle,
         )
-    )
+        body_text = strip_tweet_stats(
+            strip_article_metric_preamble(
+                strip_platform_inline_prompts(
+                    normalize_inline_mention_breaks(rebuild_urls_from_lines(raw_text).strip()),
+                    author_name=author_name,
+                    author_handle=author_handle,
+                ),
+                author_handle=author_handle,
+            )
+        )
 
     has_quote_marker = _has_quote_marker(body_text)
     body_text = _insert_quote_separator(
@@ -2030,7 +2259,11 @@ def _extract_tweet_parts(
         main_media_lines = []
 
     media_present = bool(media_urls or quoted_media_urls)
-    trailing_media_lines = quoted_media_lines if has_quote_marker else main_media_lines
+    if article_markdown:
+        trailing_media_lines = []
+        media_present = media_present or "[![image " in article_markdown
+    else:
+        trailing_media_lines = quoted_media_lines if has_quote_marker else main_media_lines
 
     return TweetParts(
         author_name=author_name,
@@ -2040,6 +2273,7 @@ def _extract_tweet_parts(
         trailing_media_lines=trailing_media_lines,
         media_present=media_present,
         external_link=external_link,
+        is_article=bool(article_markdown),
     )
 
 
@@ -2308,6 +2542,8 @@ def _build_single_tweet_markdown(
         front_matter["tweet_author"] = parts.author_handle
     if parts.author_name:
         front_matter["tweet_author_name"] = parts.author_name
+    if parts.is_article:
+        front_matter["tweet_content_type"] = "article"
 
     md_lines = [
         *front_matter_block(front_matter).splitlines(),
@@ -2362,6 +2598,8 @@ def _build_thread_markdown(
         front_matter["tweet_author"] = author_handle
     if target_parts.author_name:
         front_matter["tweet_author_name"] = target_parts.author_name
+    if target_parts.is_article:
+        front_matter["tweet_content_type"] = "article"
 
     md_lines = [*front_matter_block(front_matter).splitlines(), f"# {title}"]
     if target_parts.avatar_url:
