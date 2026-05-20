@@ -247,15 +247,20 @@ def test_browse_search_entries_skip_tweet_markdown_without_consolidated_anchor(t
 
 def test_browse_search_suggestions_are_derived_from_indexed_titles():
     entries = [
-        {"stem": "Alan Kay on objects", "name": "Alan Kay on objects.html", "href": "#", "folder": "Posts 2026"},
-        {"stem": "Notes from Alan Kay", "name": "Notes from Alan Kay.pdf", "href": "#", "folder": "Pdfs 2025"},
-        {"stem": "Artificial intelligence and creativity", "name": "Artificial intelligence and creativity.html", "href": "#", "folder": "Posts 2026"},
+        {"stem": "Alan Kay on objects", "name": "Alan Kay on objects.html", "href": "#", "folder": "Posts 2026", "category": "posts"},
+        {"stem": "Notes from Alan Kay", "name": "Notes from Alan Kay.pdf", "href": "#", "folder": "Pdfs 2025", "category": "pdfs"},
+        {"stem": "Artificial intelligence and creativity", "name": "Artificial intelligence and creativity.html", "href": "#", "folder": "Posts 2026", "category": "posts"},
+        {"stem": "Podcast title should not suggest", "name": "Podcast title should not suggest.html", "href": "#", "folder": "Podcasts 2026", "category": "podcasts"},
+        {"stem": "Tweet title should not suggest", "name": "Tweet title should not suggest", "href": "#", "folder": "Tweets 2026 / Tweet", "category": "tweets"},
     ]
 
     suggestions = build_browse_index._collect_browse_search_suggestions(entries, limit=20)
 
     assert "Alan Kay" in suggestions
     assert "Artificial intelligence" in suggestions
+    assert "Notes from Alan" not in suggestions
+    assert "Podcast title" not in suggestions
+    assert "Tweet title" not in suggestions
     assert len(suggestions) <= 20
     assert build_browse_index.SEARCH_SUGGESTION_LIMIT == 400
 

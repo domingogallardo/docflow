@@ -471,6 +471,8 @@ def _search_suggestion_candidates(stem: str) -> list[str]:
 def _collect_browse_search_suggestions(search_entries: list[dict[str, str]], limit: int = SEARCH_SUGGESTION_LIMIT) -> list[str]:
     ranked: dict[str, dict[str, object]] = {}
     for recency_rank, entry in enumerate(search_entries):
+        if entry.get("category") != "posts":
+            continue
         stem = entry.get("stem", "")
         for candidate in _search_suggestion_candidates(stem):
             normalized = candidate.lower()
