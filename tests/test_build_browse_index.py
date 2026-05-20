@@ -160,7 +160,10 @@ def test_build_browse_site_generates_indexes_and_actions(tmp_path: Path):
     assert "split(/\\s+\\+\\s+/)" in site_home_content
     assert "const includeTweets=!tweetsToggle||tweetsToggle.checked;" in site_home_content
     assert "if(!includeTweets&&e&&e.category==='tweets')return false;" in site_home_content
-    assert "terms.every(function(term){return title.indexOf(term)!==-1;})" in site_home_content
+    assert "function wholeTermMatch(title,term)" in site_home_content
+    assert "'iu').test(title)" in site_home_content
+    assert "terms.every(function(term){return wholeTermMatch(title,term);})" in site_home_content
+    assert "title.indexOf(term)" not in site_home_content
     assert "dg-search-results" in site_home_content
     assert "docflow.home.search" in site_home_content
     assert "docflow.home.search.tweets" in site_home_content
