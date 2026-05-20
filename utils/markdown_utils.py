@@ -411,6 +411,7 @@ def sync_markdown_only_metadata(
         return
 
     md_text = md_path.read_text(encoding="utf-8", errors="replace")
+    md_text = remove_front_matter_keys(md_text, {"docflow_html_path"})
     meta, _ = split_front_matter(md_text)
     docflow_id = (meta.get("docflow_id") or "").strip() or str(uuid4())
     markdown_meta = {

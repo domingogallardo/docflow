@@ -40,6 +40,8 @@ from utils import (
     build_reading_index,
     ensure_pdf_sidecar_markdown,
     markdown_to_html,
+    split_front_matter,
+    sync_markdown_only_metadata,
     update_markdown_docflow_last_read,
 )
 from utils.site_paths import (
@@ -381,6 +383,16 @@ class DocflowApp:
         result["transition"] = "reopen"
         return result
 
+    @staticmethod
+    def _is_tweet_markdown(path: Path) -> bool:
+        if not path.is_file():
+            return False
+        try:
+            meta, _ = split_front_matter(path.read_text(encoding="utf-8", errors="replace"))
+        except Exception:
+            return False
+        return meta.get("source", "").strip().lower() == "tweet"
+
     def api_delete(self, rel_path: str) -> dict[str, object]:
         normalized = self._normalize_rel_path_or_400(rel_path)
         abs_path = self._require_existing_library_file(normalized)
@@ -402,11 +414,19 @@ class DocflowApp:
 
         deleted_md = False
         if sibling_md != abs_path and sibling_md.is_file():
-            try:
-                sibling_md.unlink()
-                deleted_md = True
-            except OSError as exc:
-                raise ApiError(500, f"Could not delete associated Markdown: {exc}") from exc
+            if abs_path.suffix.lower() in {".html", ".htm"} and self._is_tweet_markdown(sibling_md):
+                try:
+                    original_stat = sibling_md.stat()
+                    sync_markdown_only_metadata(sibling_md, base_dir=self.base_dir)
+                    os.utime(sibling_md, (original_stat.st_atime, original_stat.st_mtime))
+                except OSError as exc:
+                    raise ApiError(500, f"Could not update associated tweet Markdown: {exc}") from exc
+            else:
+                try:
+                    sibling_md.unlink()
+                    deleted_md = True
+                except OSError as exc:
+                    raise ApiError(500, f"Could not delete associated Markdown: {exc}") from exc
 
         removed_done = clear_done_path(self.base_dir, normalized)
         removed_reading = pop_reading_path(self.base_dir, normalized) is not None

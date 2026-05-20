@@ -46,6 +46,10 @@ Podcast snippets are typically captured in [Snipd](https://www.snipd.com) and th
   - `MD` export
   - `Rebuild`
   - `Delete`
+- `Delete` normally removes both the opened HTML file and its same-stem
+  Markdown source. Tweet HTML is special: if its Markdown sibling has
+  `source: tweet`, only the HTML is removed; the Markdown is kept as
+  `markdown_only`.
 - Highlight navigation on article pages when highlights exist (`Jump to highlight`, previous/next controls).
 - Article pages remember the last reading position and resume it on reopen unless the URL already targets an explicit hash/deep link.
 - PDF files open in the intranet PDF viewer and resume on the last saved page.
@@ -173,8 +177,9 @@ Source-specific fields:
   `podcast_publish_date`, and `podcast_export_date`.
 - Tweets: `tweet_url`, `tweet_id`, `tweet_author`, `tweet_author_name`,
   `tweet_capture_source`, `tweet_posted_kind`, `tweet_thread`,
-  `tweet_thread_count`, `tweet_reply_to_url`, `tweet_reply_context_included`,
-  and `tweet_conversation_count`.
+  `tweet_thread_count`, `tweet_reply_to_url`,
+  `tweet_reply_context_included`, `tweet_conversation_count`,
+  `tweet_consolidated_url`, and `tweet_consolidated_anchor`.
 
 Supported fields are also exported to generated HTML as `docflow-*` meta tags
 where relevant, for example `docflow-source-url`, `docflow-html-generated-at`,
@@ -433,10 +438,17 @@ By default, daily grouping for tweet source files uses a local rollover hour at 
 to include just-after-midnight downloads in the previous day. Override with
 `DOCFLOW_TWEET_DAY_ROLLOVER_HOUR` (`0`-`23`) when needed.
 
+Each entry in a daily consolidated tweet HTML has a stable anchor, preferably
+`tweet-<tweet_id>`. Source tweet Markdown gets `tweet_consolidated_url` pointing
+to `/tweets/raw/.../<consolidated>.html#<anchor>` and
+`tweet_consolidated_anchor` with the anchor id. These fields are kept in the
+Markdown source so future search/index features can surface tweet Markdown and
+open the reader at the consolidated entry.
+
 `--cleanup-existing` removes source tweet `.html` files for consolidated days and keeps source `.md`.
 Markdown sources whose HTML is removed are marked as `docflow_render_status: markdown_only`
-without changing their `mtime`. Tweet HTML files already in Reading or Done are kept with
-their existing state and highlights.
+and have stale `docflow_html_path` removed without changing their `mtime`. Tweet HTML files
+already in Reading or Done are kept with their existing state and highlights.
 
 Daily highlights report helper:
 

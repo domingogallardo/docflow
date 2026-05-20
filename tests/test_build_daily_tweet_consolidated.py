@@ -166,7 +166,13 @@ def test_main_keeps_source_markdown_and_removes_source_html_after_consolidation(
     tweets_dir = tmp_path / "Tweets 2026"
     tweets_dir.mkdir(parents=True)
 
-    md1, html1 = _write_tweet_pair(tweets_dir, "Tweet - user-1", day, hour=10)
+    md1, html1 = _write_tweet_pair(
+        tweets_dir,
+        "Tweet - user-1",
+        day,
+        hour=10,
+        extra_front_matter="docflow_html_path: Tweets/Tweets 2026/Tweet - user-1.html\n",
+    )
     md2, html2 = _write_tweet_pair(tweets_dir, "Tweet - user-2", day, hour=11)
     original_md1_mtime = md1.stat().st_mtime
     original_md2_mtime = md2.stat().st_mtime
@@ -204,6 +210,51 @@ def test_main_keeps_source_markdown_and_removes_source_html_after_consolidation(
     assert meta2["docflow_render_status"] == "markdown_only"
     assert "docflow_html_path" not in meta1
     assert consolidated_meta["docflow_render_status"] == "paired_html"
+
+
+def test_main_links_source_markdown_to_consolidated_anchor(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    day = "2026-02-13"
+    base_dir = tmp_path
+    tweets_dir = base_dir / "Tweets" / "Tweets 2026"
+    tweets_dir.mkdir(parents=True)
+
+    src_md, _ = _write_tweet_pair(
+        tweets_dir,
+        "Tweet - anchored-source",
+        day,
+        hour=10,
+        extra_front_matter="tweet_id: 1234567890\n",
+    )
+    original_mtime = src_md.stat().st_mtime
+
+    args = argparse.Namespace(
+        day=day,
+        year=2026,
+        tweets_dir=tweets_dir,
+        output_base=None,
+        capture_source="liked",
+        cleanup_if_consolidated=False,
+    )
+    monkeypatch.setattr(mod, "parse_args", lambda: args)
+    monkeypatch.setattr(mod.cfg, "BASE_DIR", base_dir)
+
+    exit_code = mod.main()
+    assert exit_code == 0
+
+    consolidated_html = tweets_dir / f"Tweets {day}.html"
+    html_text = consolidated_html.read_text(encoding="utf-8")
+    assert '<article class="dg-entry" id="tweet-1234567890">' in html_text
+
+    meta, _ = mod.U.split_front_matter(src_md.read_text(encoding="utf-8"))
+    assert meta["tweet_consolidated_anchor"] == "tweet-1234567890"
+    assert (
+        meta["tweet_consolidated_url"]
+        == "/tweets/raw/Tweets%202026/Tweets%202026-02-13.html#tweet-1234567890"
+    )
+    assert src_md.stat().st_mtime == original_mtime
 
 
 def test_main_writes_plain_markdown_but_keeps_styled_html(tmp_path: Path, monkeypatch) -> None:
@@ -245,7 +296,7 @@ def test_main_writes_plain_markdown_but_keeps_styled_html(tmp_path: Path, monkey
     assert "[![image 1](https://example.com/image.jpg)](https://example.com/image.jpg)" in md_text
 
     assert "<style>" in html_text
-    assert '<article class="dg-entry">' in html_text
+    assert '<article class="dg-entry" id=' in html_text
     assert '<div class="dg-entry-body">' in html_text
     assert '<img alt="image 1" src="https://example.com/image.jpg"' in html_text
 

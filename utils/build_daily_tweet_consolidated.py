@@ -10,6 +10,7 @@ Style:
 from __future__ import annotations
 
 import argparse
+import hashlib
 import html
 import os
 import re
@@ -22,7 +23,7 @@ import config as cfg
 import markdown
 import utils as U
 from utils.highlight_store import load_highlights_for_path, save_highlights_for_path
-from utils.site_paths import rel_path_from_abs
+from utils.site_paths import raw_url_for_rel_path, rel_path_from_abs
 from utils.site_state import (
     load_done_state,
     load_reading_state,
@@ -54,6 +55,7 @@ GENERIC_H1_RE = re.compile(r"^#\s*(tweet|thread)\b", re.IGNORECASE)
 H1_AUTHOR_HANDLE_RE = re.compile(r"\((@[A-Za-z0-9_]{1,20})\)")
 MARKDOWN_HEADING_LINE_RE = re.compile(r"^(?P<indent>[ \t]{0,3})(?P<heading>#{1,6})(?=\s)")
 X_URL_RE = re.compile(r"https?://x\.com/[^\s)]+")
+STATUS_ID_RE = re.compile(r"/status/(\d+)")
 VIEW_QUOTED_RE = re.compile(r"^\[view quoted tweet\]\(", re.IGNORECASE)
 QUOTED_TWEET_HEADING_RE = re.compile(r"^#{1,6}\s+Tweet citado\s*$", re.IGNORECASE)
 INLINE_QUOTED_TWEET_RE = re.compile(
@@ -140,6 +142,7 @@ class TweetEntry:
     author_label: str
     kind: str
     tweet_url: str
+    anchor_id: str
     body: str
     mtime: float
 
@@ -940,6 +943,26 @@ def _render_full_html(body_html: str, title: str) -> str:
     )
 
 
+def _extract_status_id(url: str) -> str:
+    match = STATUS_ID_RE.search(url or "")
+    return match.group(1) if match else ""
+
+
+def _anchor_slug(value: str) -> str:
+    slug = re.sub(r"[^A-Za-z0-9_-]+", "-", value.strip().lower())
+    slug = re.sub(r"-{2,}", "-", slug).strip("-_")
+    return slug or "tweet"
+
+
+def _entry_anchor_id(path: Path, meta: dict[str, str], tweet_url: str) -> str:
+    tweet_id = meta.get("tweet_id", "").strip() or _extract_status_id(tweet_url)
+    if tweet_id:
+        return f"tweet-{_anchor_slug(tweet_id)}"
+
+    digest = hashlib.sha1(path.name.encode("utf-8")).hexdigest()[:10]
+    return f"tweet-{_anchor_slug(path.stem)}-{digest}"
+
+
 def _build_entry(path: Path) -> TweetEntry:
     raw = path.read_text(encoding="utf-8", errors="ignore")
     meta, body = U.split_front_matter(raw)
@@ -955,6 +978,7 @@ def _build_entry(path: Path) -> TweetEntry:
         author_label=_author_label(meta),
         kind=_entry_kind(meta),
         tweet_url=tweet_url,
+        anchor_id=_entry_anchor_id(path, meta, tweet_url),
         body=cleaned_body,
         mtime=path.stat().st_mtime,
     )
@@ -1189,6 +1213,50 @@ def _sync_markdown_only_source_metadata(
     return updated
 
 
+def _consolidated_raw_url(tweets_dir: Path, html_path: Path) -> str:
+    base_dir = _state_base_dir_for_tweets_dir(tweets_dir)
+    if base_dir is None:
+        return ""
+
+    try:
+        rel_path = rel_path_from_abs(base_dir, html_path)
+        return raw_url_for_rel_path(rel_path)
+    except Exception:
+        return ""
+
+
+def _sync_source_consolidated_links(
+    tweets_dir: Path,
+    entries: Iterable[TweetEntry],
+    *,
+    html_path: Path,
+) -> int:
+    consolidated_url = _consolidated_raw_url(tweets_dir, html_path)
+    if not consolidated_url:
+        return 0
+
+    updated = 0
+    for entry in entries:
+        if not entry.path.is_file():
+            continue
+
+        original_stat = entry.path.stat()
+        original = entry.path.read_text(encoding="utf-8", errors="replace")
+        updated_text = U.upsert_front_matter(
+            original,
+            {
+                "tweet_consolidated_url": f"{consolidated_url}#{entry.anchor_id}",
+                "tweet_consolidated_anchor": entry.anchor_id,
+            },
+        )
+        if updated_text != original:
+            entry.path.write_text(updated_text, encoding="utf-8")
+            os.utime(entry.path, (original_stat.st_atime, original_stat.st_mtime))
+            updated += 1
+
+    return updated
+
+
 def _cleanup_after_daily_consolidation(
     tweets_dir: Path,
     source_markdown: Iterable[Path],
@@ -1304,7 +1372,8 @@ def _render_entries_html(entries: Iterable[TweetEntry]) -> str:
         author = html.escape(entry.author_label)
         title = html.escape(entry.title)
         kind = html.escape(entry.kind)
-        lines.append('<article class="dg-entry">')
+        anchor_id = html.escape(entry.anchor_id, quote=True)
+        lines.append(f'<article class="dg-entry" id="{anchor_id}">')
         lines.append(f'<h4 class="dg-entry-title">{title}</h4>')
 
         meta = f"<strong>Autor:</strong> {author} · <strong>Tipo:</strong> {kind}"
@@ -1435,6 +1504,11 @@ def _build_daily_consolidated_from_markdown(
         html_path,
         base_dir=_state_base_dir_for_tweets_dir(tweets_dir),
     )
+    linked_markdown = _sync_source_consolidated_links(
+        tweets_dir,
+        entries,
+        html_path=html_path,
+    )
 
     # Keep consolidated files interleaved with tweets when listing by mtime.
     _set_mtime(md_path, consolidated_mtime)
@@ -1456,6 +1530,8 @@ def _build_daily_consolidated_from_markdown(
     print(f"✅ Consolidated Markdown generated: {md_path}")
     print(f"✅ Consolidated HTML generated: {html_path}")
     print(f"🧾 Entries included: {len(entries)}")
+    if linked_markdown:
+        print(f"🔗 Linked {linked_markdown} source tweet Markdown file(s) to the consolidated HTML")
     print(f"🧹 Source tweet cleanup: removed {deleted_html} HTML (source Markdown kept)")
     if migrated_docs:
         print(

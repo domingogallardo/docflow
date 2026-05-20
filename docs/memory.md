@@ -136,6 +136,8 @@ This file stores stable, reusable operational notes for future agent runs.
 - `utils/build_daily_tweet_consolidated.py` has its own Markdown-to-HTML path for entry bodies (`_markdown_to_html_fragment`) and does not use `utils.markdown_to_html`.
 - To preserve tweet hard line breaks without breaking list markup, keep line-break conversion scoped to plain paragraph content only (current helper: `_preserve_paragraph_line_breaks`).
 - Do not apply global newline-to-`<br>` transforms on container tags (`div/ul/li/...`) in consolidated tweet output; that can reintroduce artifacts like `<li><br>` and malformed list spacing.
+- Consolidated tweet HTML entries must expose stable anchors on each `<article>` using `tweet-<tweet_id>` when possible. Source tweet Markdown stores `tweet_consolidated_url` and `tweet_consolidated_anchor`; keep these fields because Markdown-only tweet sources are intended to be searchable in future intranet search features.
+- When consolidation or overlay Delete removes a tweet's individual HTML, keep the tweet `.md`, mark it as `docflow_render_status: markdown_only`, remove stale `docflow_html_path`, and preserve the Markdown file `mtime`. Non-tweet overlay Delete still removes the same-stem Markdown file.
 - Preferred execution from repo root is module mode:
   - `python -m utils.build_daily_tweet_consolidated --day YYYY-MM-DD`
   This avoids import-path issues seen when running the script file directly in some environments.

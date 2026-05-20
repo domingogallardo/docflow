@@ -354,6 +354,47 @@ def test_api_delete_removes_local_markdown_and_state_entries(tmp_path: Path):
         server.server_close()
 
 
+def test_api_delete_keeps_tweet_markdown_as_markdown_only(tmp_path: Path):
+    base = tmp_path / "base"
+    tweets = base / "Tweets" / "Tweets 2026"
+    tweets.mkdir(parents=True)
+    html = tweets / "tweet.html"
+    html.write_text("<html><body>Tweet</body></html>", encoding="utf-8")
+    md = tweets / "tweet.md"
+    md.write_text(
+        "---\n"
+        "source: tweet\n"
+        "tweet_url: https://x.com/example/status/123\n"
+        "docflow_html_path: Tweets/Tweets 2026/tweet.html\n"
+        "docflow_render_status: paired_html\n"
+        "---\n\n"
+        "# Tweet\n",
+        encoding="utf-8",
+    )
+    original_mtime = md.stat().st_mtime
+
+    rel_path = "Tweets/Tweets 2026/tweet.html"
+    server, port = _start_server(base)
+    try:
+        status, payload = _post_json(port, "/api/delete", {"path": rel_path})
+        assert status == 200
+        assert payload["ok"] is True
+        assert payload["data"]["deleted_md"] is False
+
+        assert not html.exists()
+        assert md.exists()
+        assert md.stat().st_mtime == original_mtime
+
+        meta, body = split_front_matter(md.read_text(encoding="utf-8"))
+        assert meta["source"] == "tweet"
+        assert meta["docflow_render_status"] == "markdown_only"
+        assert "docflow_html_path" not in meta
+        assert body.lstrip().startswith("# Tweet")
+    finally:
+        server.shutdown()
+        server.server_close()
+
+
 def test_raw_route_serves_library_file(tmp_path: Path):
     base = tmp_path / "base"
     posts = base / "Posts" / "Posts 2026"

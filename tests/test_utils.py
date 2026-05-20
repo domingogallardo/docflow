@@ -787,4 +787,30 @@ def test_sync_markdown_only_metadata_adds_minimal_front_matter(tmp_path):
     assert body.lstrip().startswith("# Daily tweets")
 
 
+def test_sync_markdown_only_metadata_removes_stale_html_path(tmp_path):
+    from utils import split_front_matter, sync_markdown_only_metadata
+
+    md = tmp_path / "Tweets" / "tweet.md"
+    md.parent.mkdir()
+    md.write_text(
+        "---\n"
+        "docflow_id: existing-id\n"
+        "docflow_markdown_path: Tweets/tweet.md\n"
+        "docflow_html_path: Tweets/tweet.html\n"
+        "docflow_render_status: paired_html\n"
+        "---\n\n"
+        "# Tweet\n",
+        encoding="utf-8",
+    )
+
+    sync_markdown_only_metadata(md, base_dir=tmp_path)
+
+    meta, body = split_front_matter(md.read_text(encoding="utf-8"))
+    assert meta["docflow_id"] == "existing-id"
+    assert meta["docflow_markdown_path"] == "Tweets/tweet.md"
+    assert meta["docflow_render_status"] == "markdown_only"
+    assert "docflow_html_path" not in meta
+    assert body.lstrip().startswith("# Tweet")
+
+
 # (tests for Instapaper-starred utils were removed)
