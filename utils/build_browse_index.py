@@ -34,7 +34,7 @@ from utils.site_paths import (
     viewer_url_for_rel_path,
 )
 from utils.highlight_store import highlight_status_for_path
-from utils.markdown_utils import extract_markdown_title, split_front_matter
+from utils.markdown_utils import split_front_matter
 from utils.site_state import load_done_state, load_reading_state
 
 CATEGORY_KEYS = ("posts", "tweets", "podcasts", "pdfs", "images")
@@ -419,11 +419,11 @@ def _tweet_markdown_search_entry(path: Path) -> dict[str, str] | None:
     parsed = _read_tweet_markdown_meta(path)
     if parsed is None:
         return None
-    meta, text = parsed
+    meta, _ = parsed
     href = meta.get("tweet_consolidated_url", "").strip()
     if not href:
         return None
-    title = (meta.get("title") or extract_markdown_title(text) or path.stem).strip()
+    title = path.stem.strip()
     return {
         "stem": title,
         "name": title,

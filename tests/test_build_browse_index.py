@@ -189,17 +189,17 @@ def test_browse_search_entries_include_tweet_titles_with_consolidated_anchor(tmp
     base = tmp_path / "base"
     tweets = base / "Tweets" / "Tweets 2026"
     tweets.mkdir(parents=True)
-    (tweets / "tweet-example.md").write_text(
+    (tweets / "Tweet - Example Author - File Title With Apple Inside.md").write_text(
         "\n".join(
             [
                 "---",
                 "source: tweet",
-                "title: A useful tweet title",
+                "title: Tweet by Example Author (@example)",
                 "tweet_consolidated_url: /tweets/raw/Tweets%202026/Tweets%202026-05-19.html#tweet-example",
                 "tweet_consolidated_anchor: tweet-example",
                 "---",
                 "",
-                "# Fallback title",
+                "# Tweet by Example Author (@example)",
                 "",
                 "Tweet body.",
                 "",
@@ -207,20 +207,20 @@ def test_browse_search_entries_include_tweet_titles_with_consolidated_anchor(tmp
         ),
         encoding="utf-8",
     )
-    (tweets / "tweet-example.html").write_text("<html><body>Tweet</body></html>", encoding="utf-8")
+    (tweets / "Tweet - Example Author - File Title With Apple Inside.html").write_text("<html><body>Tweet</body></html>", encoding="utf-8")
 
     entries = build_browse_index._collect_browse_search_entries(base, build_browse_index._category_roots(base))
 
-    title_entries = [entry for entry in entries if entry["stem"] == "A useful tweet title"]
+    title_entries = [entry for entry in entries if entry["stem"] == "Tweet - Example Author - File Title With Apple Inside"]
     assert title_entries == [
         {
-            "stem": "A useful tweet title",
-            "name": "A useful tweet title",
+            "stem": "Tweet - Example Author - File Title With Apple Inside",
+            "name": "Tweet - Example Author - File Title With Apple Inside",
             "href": "/tweets/raw/Tweets%202026/Tweets%202026-05-19.html#tweet-example",
             "folder": "Tweets 2026 / Tweet",
         }
     ]
-    assert all(entry["href"] != "/tweets/raw/Tweets%202026/tweet-example.html" for entry in entries)
+    assert all(entry["href"] != "/tweets/raw/Tweets%202026/Tweet%20-%20Example%20Author%20-%20File%20Title%20With%20Apple%20Inside.html" for entry in entries)
 
 
 def test_browse_search_entries_skip_tweet_markdown_without_consolidated_anchor(tmp_path: Path):
