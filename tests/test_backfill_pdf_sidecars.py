@@ -23,6 +23,7 @@ def test_backfill_pdf_sidecars_creates_missing_sidecars(tmp_path: Path):
     assert meta["docflow_markdown_path"] == "Pdfs/Pdfs 2026/paper.md"
     assert meta["docflow_render_status"] == "markdown_only"
     assert meta["docflow_source_type"] == "pdf"
+    assert meta["docflow_ingested_at"].endswith("Z")
     assert "Associated PDF: `paper.pdf`" in body
 
 
@@ -58,4 +59,5 @@ def test_backfill_pdf_sidecars_completes_existing_sidecar_without_mtime_change(t
     meta, body = split_front_matter(md.read_text(encoding="utf-8"))
     assert meta["title"] == "Existing"
     assert meta["docflow_pdf_path"] == "Pdfs/Pdfs 2026/paper.pdf"
+    assert meta["docflow_ingested_at"].endswith("Z")
     assert body.lstrip().startswith("# Existing")

@@ -1488,12 +1488,24 @@ def _build_daily_consolidated_from_markdown(
     entries.sort(key=lambda item: (item.mtime, item.title.lower()))
     latest_tweet_mtime = max(entry.mtime for entry in entries)
     consolidated_mtime = latest_tweet_mtime + 60
+    consolidated_at = U.utc_now_iso()
 
     output_name = output_base or _default_output_base(day, capture_source)
     md_path = tweets_dir / f"{output_name}.md"
     html_path = tweets_dir / f"{output_name}.html"
 
     markdown_text = _render_markdown(day, entries, capture_source=capture_source)
+    markdown_text = U.upsert_front_matter(
+        markdown_text,
+        {
+            "docflow_ingested_at": consolidated_at,
+        },
+        defaults={
+            "source": "tweet",
+            "docflow_source_type": "tweet",
+            "title": md_path.stem,
+        },
+    )
     md_path.write_text(markdown_text, encoding="utf-8")
 
     html_text = _render_html_document(day, entries, title=md_path.stem, capture_source=capture_source)

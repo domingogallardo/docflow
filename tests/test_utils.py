@@ -813,4 +813,23 @@ def test_sync_markdown_only_metadata_removes_stale_html_path(tmp_path):
     assert body.lstrip().startswith("# Tweet")
 
 
+def test_ensure_pdf_sidecar_markdown_sets_docflow_ingested_at(tmp_path):
+    from utils import ensure_pdf_sidecar_markdown, split_front_matter
+
+    pdf = tmp_path / "Pdfs" / "paper.pdf"
+    pdf.parent.mkdir()
+    pdf.write_bytes(b"%PDF-1.4\n")
+
+    md = ensure_pdf_sidecar_markdown(
+        pdf,
+        base_dir=tmp_path,
+        now="2026-01-02T03:04:05Z",
+    )
+
+    meta, body = split_front_matter(md.read_text(encoding="utf-8"))
+    assert meta["docflow_ingested_at"] == "2026-01-02T03:04:05Z"
+    assert meta["docflow_pdf_path"] == "Pdfs/paper.pdf"
+    assert body.lstrip().startswith("# paper")
+
+
 # (tests for Instapaper-starred utils were removed)

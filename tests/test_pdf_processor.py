@@ -50,6 +50,7 @@ def test_pdf_processor_with_pdfs(tmp_path):
     assert meta["docflow_pdf_path"] == "Pdfs/document1.pdf"
     assert meta["docflow_markdown_path"] == "Pdfs/document1.md"
     assert meta["docflow_render_status"] == "markdown_only"
+    assert meta["docflow_ingested_at"].endswith("Z")
     assert "Associated PDF: `document1.pdf`" in body
 
 

@@ -429,6 +429,7 @@ def ensure_pdf_sidecar_markdown(
     pdf_path: Path,
     *,
     base_dir: Path | None = None,
+    now: str | None = None,
 ) -> Path:
     """Create or complete a same-stem Markdown sidecar for a PDF."""
     pdf_path = Path(pdf_path)
@@ -449,6 +450,7 @@ def ensure_pdf_sidecar_markdown(
             "source": "pdf",
             "docflow_source_type": "pdf",
             "docflow_pdf_path": _relative_docflow_path(pdf_path, base_dir),
+            "docflow_ingested_at": now or utc_now_iso(),
         },
     )
     if updated_md != md_text:

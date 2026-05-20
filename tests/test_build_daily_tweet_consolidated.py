@@ -209,7 +209,37 @@ def test_main_keeps_source_markdown_and_removes_source_html_after_consolidation(
     assert meta1["docflow_render_status"] == "markdown_only"
     assert meta2["docflow_render_status"] == "markdown_only"
     assert "docflow_html_path" not in meta1
+    assert consolidated_meta["source"] == "tweet"
+    assert consolidated_meta["docflow_source_type"] == "tweet"
     assert consolidated_meta["docflow_render_status"] == "paired_html"
+
+
+def test_main_sets_docflow_ingested_at_on_consolidated_markdown(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    day = "2026-02-13"
+    tweets_dir = tmp_path / "Tweets 2026"
+    tweets_dir.mkdir(parents=True)
+    _write_tweet_pair(tweets_dir, "Tweet - one", day, hour=10)
+
+    args = argparse.Namespace(
+        day=day,
+        year=2026,
+        tweets_dir=tweets_dir,
+        output_base=None,
+        capture_source="liked",
+        cleanup_if_consolidated=False,
+    )
+    monkeypatch.setattr(mod, "parse_args", lambda: args)
+    monkeypatch.setattr(mod.U, "utc_now_iso", lambda: "2026-02-14T09:08:07Z")
+
+    exit_code = mod.main()
+    assert exit_code == 0
+
+    consolidated_md = tweets_dir / f"Tweets {day}.md"
+    consolidated_meta, _ = mod.U.split_front_matter(consolidated_md.read_text(encoding="utf-8"))
+    assert consolidated_meta["docflow_ingested_at"] == "2026-02-14T09:08:07Z"
 
 
 def test_main_links_source_markdown_to_consolidated_anchor(
