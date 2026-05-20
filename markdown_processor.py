@@ -179,6 +179,18 @@ class MarkdownProcessor:
         return MarkdownProcessor._front_matter_source(path) == "tweet"
 
     @staticmethod
+    def is_tweet_article_markdown(path: Path) -> bool:
+        try:
+            text = path.read_text(encoding="utf-8", errors="ignore")
+        except Exception:
+            return False
+        meta, _ = U.split_front_matter(text)
+        return (
+            meta.get("source", "").strip().lower() == "tweet"
+            and meta.get("tweet_content_type", "").strip().lower() == "article"
+        )
+
+    @staticmethod
     def _front_matter_source(path: Path) -> str:
         try:
             with open(path, "r", encoding="utf-8", errors="ignore") as fh:

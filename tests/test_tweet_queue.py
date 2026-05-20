@@ -413,6 +413,34 @@ def test_process_tweets_pipeline_runs_markdown_subset(tmp_path, monkeypatch):
     assert moved == [processor.tweets_dest / "Tweet - processed.md"]
 
 
+def test_process_tweets_pipeline_moves_tweet_articles_to_posts(tmp_path, monkeypatch):
+    processor, incoming = prepare_processor(tmp_path)
+    mock_likes(monkeypatch, [])
+
+    regular_md = incoming / "Tweet - regular.md"
+    regular_md.write_text(
+        "---\nsource: tweet\n---\n\n# Regular tweet\n\nShort text.",
+        encoding="utf-8",
+    )
+    article_md = incoming / "Tweet - article.md"
+    article_md.write_text(
+        "---\nsource: tweet\ntweet_content_type: article\n---\n\n# Article tweet\n\nLong article text.",
+        encoding="utf-8",
+    )
+
+    processor.tweet_processor.title_updater.update_titles = lambda files, renamer: None
+    processor.markdown_processor.title_updater.update_titles = lambda files, renamer: None
+
+    moved = processor.process_tweets_pipeline()
+
+    moved_set = {path.relative_to(tmp_path) for path in moved}
+    assert Path("Tweets/Tweets 2025/Tweet - regular.md") in moved_set
+    assert Path("Tweets/Tweets 2025/Tweet - regular.html") in moved_set
+    assert Path("Posts/Posts 2025/Tweet - article.md") in moved_set
+    assert Path("Posts/Posts 2025/Tweet - article.html") in moved_set
+    assert not (tmp_path / "Tweets" / "Tweets 2025" / "Tweet - article.md").exists()
+
+
 def test_process_tweets_pipeline_skips_when_likes_empty(tmp_path, monkeypatch):
     processor, _ = prepare_processor(tmp_path)
     mock_likes(monkeypatch, [])

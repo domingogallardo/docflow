@@ -629,7 +629,7 @@ class DocumentProcessor:
         return generated
     
     def process_tweets_pipeline(self, *, log_empty_conversion: bool = True) -> List[Path]:
-        """Process the tweet queue and move results to the yearly Tweets folder."""
+        """Process the tweet queue and move results to the appropriate yearly folder."""
         generated = self.process_tweet_urls()
         tweet_markdown = self._merge_paths(self._list_tweet_markdown(), generated)
         return self._process_tweet_markdown_subset(tweet_markdown, log_empty=log_empty_conversion)
@@ -662,7 +662,27 @@ class DocumentProcessor:
             if log_empty:
                 print("🐦 No new tweets to convert to HTML")
             return []
-        return self._run_and_remember(lambda: self.tweet_processor.process_tweet_markdown_subset(files))
+        article_files = [
+            path for path in files
+            if self.tweet_processor.is_tweet_article_markdown(path)
+        ]
+        article_file_set = set(article_files)
+        regular_files = [path for path in files if path not in article_file_set]
+
+        moved: List[Path] = []
+        if regular_files:
+            moved.extend(
+                self._run_and_remember(
+                    lambda: self.tweet_processor.process_tweet_markdown_subset(regular_files)
+                )
+            )
+        if article_files:
+            moved.extend(
+                self._run_and_remember(
+                    lambda: self.markdown_processor.process_tweet_markdown_subset(article_files)
+                )
+            )
+        return moved
     
     def register_all_files(self) -> None:
         """Register all processed files in history."""
