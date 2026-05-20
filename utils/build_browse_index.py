@@ -369,7 +369,7 @@ def _collect_browse_search_entries(base_dir: Path, category_roots: dict[str, Pat
                     mtime = path.stat().st_mtime
                 except Exception:
                     continue
-                scanned.append((mtime, tweet_entry))
+                scanned.append((_search_entry_sort_epoch(path, mtime), tweet_entry))
                 continue
             if not _is_visible_file_name(path.name):
                 continue
@@ -383,7 +383,7 @@ def _collect_browse_search_entries(base_dir: Path, category_roots: dict[str, Pat
                 continue
             scanned.append(
                 (
-                    mtime,
+                    _search_entry_sort_epoch(path, mtime),
                     {
                         "stem": path.stem,
                         "name": path.name,
@@ -395,6 +395,23 @@ def _collect_browse_search_entries(base_dir: Path, category_roots: dict[str, Pat
             )
     scanned.sort(key=lambda item: item[0], reverse=True)
     return [entry for _, entry in scanned]
+
+
+def _search_entry_sort_epoch(path: Path, fallback_epoch: float) -> float:
+    """Prefer docflow ingest time from the sibling Markdown sidecar."""
+    ingested_epoch = _markdown_docflow_ingested_epoch(path if path.suffix.lower() == ".md" else path.with_suffix(".md"))
+    return ingested_epoch if ingested_epoch is not None else fallback_epoch
+
+
+def _markdown_docflow_ingested_epoch(path: Path) -> float | None:
+    if path.suffix.lower() != ".md" or not path.is_file():
+        return None
+    try:
+        text = path.read_text(encoding="utf-8")
+    except Exception:
+        return None
+    meta, _ = split_front_matter(text)
+    return _iso_to_epoch(meta.get("docflow_ingested_at"))
 
 
 def _read_tweet_markdown_meta(path: Path) -> tuple[dict[str, str], str] | None:

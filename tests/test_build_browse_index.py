@@ -192,6 +192,31 @@ def test_browse_search_entries_include_full_name_folder_and_viewer_url(tmp_path:
     assert alan_entries["Notes from Alan Kay.pdf"]["href"] == "/pdfs/view/Pdfs%202025/Notes%20from%20Alan%20Kay.pdf"
 
 
+def test_browse_search_entries_sort_by_markdown_docflow_ingested_at(tmp_path: Path):
+    base = tmp_path / "base"
+    posts = base / "Posts" / "Posts 2026"
+    posts.mkdir(parents=True)
+    older_html = posts / "Older mtime but newer ingest.html"
+    older_html.write_text("<html><body>Newer ingest</body></html>", encoding="utf-8")
+    older_html.with_suffix(".md").write_text(
+        "---\ndocflow_ingested_at: 2026-05-20T10:00:00Z\n---\n\n# Newer ingest\n",
+        encoding="utf-8",
+    )
+    newer_html = posts / "Newer mtime but older ingest.html"
+    newer_html.write_text("<html><body>Older ingest</body></html>", encoding="utf-8")
+    newer_html.with_suffix(".md").write_text(
+        "---\ndocflow_ingested_at: 2026-05-19T10:00:00Z\n---\n\n# Older ingest\n",
+        encoding="utf-8",
+    )
+    os.utime(older_html, (1_700_000_000, 1_700_000_000))
+    os.utime(newer_html, (1_800_000_000, 1_800_000_000))
+
+    entries = build_browse_index._collect_browse_search_entries(base, build_browse_index._category_roots(base))
+
+    names = [entry["name"] for entry in entries]
+    assert names.index("Older mtime but newer ingest.html") < names.index("Newer mtime but older ingest.html")
+
+
 def test_browse_search_entries_include_tweet_titles_with_consolidated_anchor(tmp_path: Path):
     base = tmp_path / "base"
     tweets = base / "Tweets" / "Tweets 2026"
