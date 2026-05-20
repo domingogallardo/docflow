@@ -30,10 +30,6 @@ def run_main(monkeypatch, tmp_path, args):
             calls.append("urls")
             return []
 
-        def process_instapaper_posts(self):
-            calls.append("posts")
-            return []
-
         def process_pdfs(self):
             calls.append("pdfs")
             return []

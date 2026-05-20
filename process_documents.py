@@ -3,11 +3,7 @@
 Process the documents pipeline.
 
 Usage:
-    python process_documents.py [--year YYYY] [tweets|urls|pdfs|podcasts|posts|images|md|all]
-
-Notes:
-- Instapaper HTML articles are downloaded and processed without special
-  starring rules.
+    python process_documents.py [--year YYYY] [tweets|urls|pdfs|podcasts|images|md|all]
 """
 import argparse
 
@@ -18,7 +14,7 @@ import config as cfg
 def parse_args():
     p = argparse.ArgumentParser(
         description=(
-            "Document pipeline: URLs, podcasts, Instapaper, PDFs, images, and Markdown."
+            "Document pipeline: URLs, tweets, podcasts, PDFs, images, and Markdown."
         ),
         epilog=None,
     )

@@ -38,8 +38,6 @@ INCOMING = BASE_DIR / "Incoming"
 PROCESSED_HISTORY = INCOMING / "processed_history.txt"
 
 OPENAI_KEY = os.getenv("OPENAI_API_KEY")
-INSTAPAPER_USERNAME = os.environ.get("INSTAPAPER_USERNAME")
-INSTAPAPER_PASSWORD = os.environ.get("INSTAPAPER_PASSWORD")
 
 TWEET_LIKES_STATE = Path(os.getenv("TWEET_LIKES_STATE", "x_state.json")).expanduser()
 TWEET_LIKES_URL = os.getenv("TWEET_LIKES_URL", "https://x.com/domingogallardo/likes")

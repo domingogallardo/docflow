@@ -1,6 +1,6 @@
 # docflow (Local Intranet)
 
-docflow automates your personal document pipeline (web URLs, Instapaper posts, podcasts, Markdown notes, PDFs, images, and tweets) and serves everything locally from `BASE_DIR`.
+docflow automates your personal document pipeline (web URLs, podcasts, Markdown notes, PDFs, images, and tweets) and serves everything locally from `BASE_DIR`.
 
 Podcast snippets are typically captured in [Snipd](https://www.snipd.com) and then exported into this pipeline.
 
@@ -154,11 +154,11 @@ Common fields:
 - `docflow_render_status`: whether the Markdown has a generated HTML pair
   (`paired_html`) or is intentionally stored as Markdown only (`markdown_only`).
 - `source`: logical source preserved from the pipeline (`tweet`, `podcast`,
-  `instapaper`, a URL, etc.).
+  a URL, etc.).
 - `title`: detected, extracted, or generated title.
 - `source_url`: canonical source URL when the item has one.
 - `docflow_source_type`: normalized type (`markdown`, `web`, `tweet`,
-  `podcast`, `instapaper`, or `pdf`).
+  `podcast`, or `pdf`).
 - `docflow_ingested_at`: UTC timestamp for when docflow incorporated the item.
 - `docflow_html_generated_at`: UTC timestamp for when docflow generated the
   associated HTML.
@@ -172,7 +172,6 @@ Source-specific fields:
 - URL clipping: `docflow_extractor`, `docflow_extraction_attempt`,
   `docflow_final_url`, `docflow_original_url`, and
   `docflow_removed_data_images`.
-- Instapaper: `instapaper_id` and `source_name`.
 - Podcasts: `podcast_show`, `podcast_episode_title`,
   `podcast_publish_date`, and `podcast_export_date`.
 - Tweets: `tweet_url`, `tweet_id`, `tweet_author`, `tweet_author_name`,
@@ -244,8 +243,6 @@ export DOCFLOW_OBSIDIAN_CLIPPER_CLI="$HOME/Repos-Github/obsidian-clipper/dist/cl
 
 ```bash
 export OPENAI_API_KEY=...
-export INSTAPAPER_USERNAME=...
-export INSTAPAPER_PASSWORD=...
 export DOCFLOW_BASE_DIR="/path/to/BASE_DIR"
 export TWEET_LIKES_STATE="$HOME/.secrets/docflow/x_state.json"
 export TWEET_LIKES_URL=https://x.com/<user>/likes

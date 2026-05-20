@@ -29,7 +29,6 @@ _FRONT_MATTER_KEYS = {
     "docflow_summary": "docflow-summary",
     "docflow_last_read": "docflow-last-read",
     "docflow_removed_data_images": "docflow-removed-data-images",
-    "instapaper_id": "docflow-instapaper-id",
     "podcast_show": "docflow-podcast-show",
     "podcast_episode_title": "docflow-podcast-episode-title",
     "podcast_publish_date": "docflow-podcast-publish-date",
@@ -279,7 +278,7 @@ def utc_now_iso() -> str:
 
 def infer_source_type(meta: Mapping[str, str], source_url: str | None = None) -> str:
     source = str(meta.get("source", "")).strip().lower()
-    if source in {"tweet", "podcast", "instapaper"}:
+    if source in {"tweet", "podcast"}:
         return source
     candidate = source_url or str(meta.get("source_url", "")).strip() or source
     if candidate.startswith(("http://", "https://")):

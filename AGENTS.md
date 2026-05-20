@@ -1,6 +1,6 @@
 # Repository Guidelines
 
-This repository automates collecting and organizing personal documents (Instapaper posts, Snipd podcasts, Markdown notes, PDFs, images, tweets) in a local intranet workflow. Keep changes small, tested, and aligned with the current modular design.
+This repository automates collecting and organizing personal documents (web articles, Snipd podcasts, Markdown notes, PDFs, images, tweets) in a local intranet workflow. Keep changes small, tested, and aligned with the current modular design.
 
 ## Project Structure & Modules
 
@@ -92,7 +92,7 @@ Useful setup (new environment):
 ## Security & Config Tips
 
 - Do not commit secrets.
-- Use env vars for credentials: `OPENAI_API_KEY`, `INSTAPAPER_USERNAME`, `INSTAPAPER_PASSWORD`.
+- Use env vars for credentials: `OPENAI_API_KEY`.
 - Optional year override: `DOCPIPE_YEAR`.
 - Keep `TWEET_LIKES_STATE` outside the repo (for example `"$HOME/.secrets/docflow/x_state.json"`) to avoid losing session state during repo cleanup.
 - Keep `DOCFLOW_BASE_DIR` in `~/.docflow_env` aligned with your local environment.

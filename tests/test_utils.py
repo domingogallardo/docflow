@@ -672,11 +672,11 @@ Body with words.
 def test_upsert_front_matter_preserves_unrelated_lines():
     from utils import upsert_front_matter
 
-    md = "---\n# keep this comment\nsource: instapaper\n---\n\n# Demo\n"
+    md = "---\n# keep this comment\nsource: manual\n---\n\n# Demo\n"
     updated = upsert_front_matter(md, {"title": "Demo"})
 
     assert "# keep this comment" in updated
-    assert "source: instapaper" in updated
+    assert "source: manual" in updated
     assert "title: Demo" in updated
 
 
@@ -831,5 +831,3 @@ def test_ensure_pdf_sidecar_markdown_sets_docflow_ingested_at(tmp_path):
     assert meta["docflow_pdf_path"] == "Pdfs/paper.pdf"
     assert body.lstrip().startswith("# paper")
 
-
-# (tests for Instapaper-starred utils were removed)

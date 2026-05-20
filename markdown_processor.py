@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""MarkdownProcessor - convert generic Markdown to HTML and archive alongside Instapaper."""
+"""MarkdownProcessor - convert generic Markdown to HTML and archive it."""
 from __future__ import annotations
 
 from pathlib import Path
@@ -15,7 +15,7 @@ from summary_ai import SummaryAIUpdater
 class MarkdownProcessor:
     """Process Markdown files in Incoming/ that do not belong to other pipelines."""
 
-    RESERVED_SOURCES = {"instapaper", "podcast", "tweet"}
+    RESERVED_SOURCES = {"podcast", "tweet"}
 
     def __init__(
         self,

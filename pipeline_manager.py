@@ -12,7 +12,6 @@ import requests
 import utils as U
 import config as cfg
 from pdf_processor import PDFProcessor
-from instapaper_processor import InstapaperProcessor
 from podcast_processor import PodcastProcessor
 from image_processor import ImageProcessor
 from markdown_processor import MarkdownProcessor
@@ -27,7 +26,6 @@ PIPELINE_STEPS = (
     ("tweets", "process_tweets_pipeline"),
     ("urls", "process_web_urls"),
     ("podcasts", "process_podcasts"),
-    ("posts", "process_instapaper_posts"),
     ("pdfs", "process_pdfs"),
     ("images", "process_images"),
     ("md", "process_markdown"),
@@ -66,7 +64,6 @@ class DocumentProcessor:
         self.links_failed = self.incoming / "links_failed.txt"
 
         self.pdf_processor = PDFProcessor(self.incoming, self.pdfs_dest)
-        self.instapaper_processor = InstapaperProcessor(self.incoming, self.posts_dest)
         self.podcast_processor = PodcastProcessor(self.incoming, self.podcasts_dest)
         self.image_processor = ImageProcessor(self.incoming, self.images_dest)
         self.markdown_processor = MarkdownProcessor(self.incoming, self.posts_dest)
@@ -572,15 +569,7 @@ class DocumentProcessor:
         """Process podcast files with the unified processor."""
         # Use the unified processor for the whole podcasts pipeline.
         return self._run_and_remember(self.podcast_processor.process_podcasts)
-    
-    def process_instapaper_posts(self) -> List[Path]:
-        """Process Instapaper web posts with the unified pipeline."""
-        # Use the unified processor for the whole Instapaper pipeline.
-        moved_posts = self.instapaper_processor.process_instapaper_posts()
 
-        self._remember(moved_posts)
-        return moved_posts
-    
     def process_pdfs(self) -> List[Path]:
         """Process PDFs using the specialized processor."""
         return self._run_and_remember(self.pdf_processor.process_pdfs)
