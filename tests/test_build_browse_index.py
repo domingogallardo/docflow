@@ -148,17 +148,22 @@ def test_build_browse_site_generates_indexes_and_actions(tmp_path: Path):
     assert "data-dg-search-input" in site_home_content
     assert "data-dg-search-button" in site_home_content
     assert "data-dg-search-random" in site_home_content
+    assert "data-dg-search-tweets" in site_home_content
     assert "dg-browse-search-data" in site_home_content
     assert "dg-search-suggestions" in site_home_content
     assert '"stem": "doc"' in site_home_content
     assert '"folder": "Posts 2026"' in site_home_content
+    assert '"category": "posts"' in site_home_content
     assert "entries.filter" in site_home_content
     assert "Search title text or term + term" in site_home_content
     assert "function queryTerms(v)" in site_home_content
     assert "split(/\\s+\\+\\s+/)" in site_home_content
+    assert "const includeTweets=!tweetsToggle||tweetsToggle.checked;" in site_home_content
+    assert "if(!includeTweets&&e&&e.category==='tweets')return false;" in site_home_content
     assert "terms.every(function(term){return title.indexOf(term)!==-1;})" in site_home_content
     assert "dg-search-results" in site_home_content
     assert "docflow.home.search" in site_home_content
+    assert "docflow.home.search.tweets" in site_home_content
     assert "Math.random()" in site_home_content
     assert "saveSearch(norm(input.value));render(null);input.focus();" in site_home_content
     assert "input.value=suggestions[Math.floor(Math.random()*suggestions.length)];run();" not in site_home_content
@@ -180,8 +185,10 @@ def test_browse_search_entries_include_full_name_folder_and_viewer_url(tmp_path:
     alan_entries = {entry["name"]: entry for entry in entries}
     assert alan_entries["Alan Kay on objects.html"]["stem"] == "Alan Kay on objects"
     assert alan_entries["Alan Kay on objects.html"]["folder"] == "Posts 2026"
+    assert alan_entries["Alan Kay on objects.html"]["category"] == "posts"
     assert alan_entries["Alan Kay on objects.html"]["href"] == "/posts/raw/Posts%202026/Alan%20Kay%20on%20objects.html"
     assert alan_entries["Notes from Alan Kay.pdf"]["folder"] == "Pdfs 2025"
+    assert alan_entries["Notes from Alan Kay.pdf"]["category"] == "pdfs"
     assert alan_entries["Notes from Alan Kay.pdf"]["href"] == "/pdfs/view/Pdfs%202025/Notes%20from%20Alan%20Kay.pdf"
 
 
@@ -218,6 +225,7 @@ def test_browse_search_entries_include_tweet_titles_with_consolidated_anchor(tmp
             "name": "Tweet - Example Author - File Title With Apple Inside",
             "href": "/tweets/raw/Tweets%202026/Tweets%202026-05-19.html#tweet-example",
             "folder": "Tweets 2026 / Tweet",
+            "category": "tweets",
         }
     ]
     assert all(entry["href"] != "/tweets/raw/Tweets%202026/Tweet%20-%20Example%20Author%20-%20File%20Title%20With%20Apple%20Inside.html" for entry in entries)

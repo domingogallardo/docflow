@@ -274,8 +274,10 @@ def _base_head(title: str) -> str:
         ".dg-actions button[disabled], .dg-actions a[disabled], .dg-rebuild[disabled]{opacity:.6;pointer-events:none}"
         ".dg-count{color:#666;margin-left:8px;white-space:nowrap}"
         ".dg-search{display:inline-flex;align-items:center;gap:6px}"
-        ".dg-search input{padding:3px 8px;border:1px solid #ccc;border-radius:6px;min-width:420px;max-width:100%;font:13px -apple-system,system-ui,Segoe UI,Roboto,Helvetica,Arial}"
+        ".dg-search input[type='text']{padding:3px 8px;border:1px solid #ccc;border-radius:6px;min-width:420px;max-width:100%;font:13px -apple-system,system-ui,Segoe UI,Roboto,Helvetica,Arial}"
         ".dg-search button{padding:2px 8px;border:1px solid #ccc;border-radius:6px;background:#f7f7f7;color:#333;font:12px -apple-system,system-ui,Segoe UI,Roboto,Helvetica,Arial;cursor:pointer}"
+        ".dg-search-toggle{display:inline-flex;align-items:center;gap:4px;color:#555;font:13px -apple-system,system-ui,Segoe UI,Roboto,Helvetica,Arial;white-space:nowrap}"
+        ".dg-search-toggle input{margin:0}"
         ".dg-search-hit{margin:6px 0 2px;font:13px -apple-system,system-ui,Segoe UI,Roboto,Helvetica,Arial;color:#444}"
         ".dg-search-hit a{color:#0a7;text-decoration:none}"
         ".dg-search-results{list-style:none;padding-left:0;margin:6px 0 0}"
@@ -387,6 +389,7 @@ def _collect_browse_search_entries(base_dir: Path, category_roots: dict[str, Pat
                         "name": path.name,
                         "href": href,
                         "folder": path.parent.name,
+                        "category": category,
                     },
                 )
             )
@@ -429,6 +432,7 @@ def _tweet_markdown_search_entry(path: Path) -> dict[str, str] | None:
         "name": title,
         "href": href,
         "folder": f"{path.parent.name} / Tweet",
+        "category": "tweets",
     }
 
 
@@ -494,6 +498,7 @@ def _search_controls_html() -> str:
         "<input type='text' data-dg-search-input "
         "placeholder='Search title text or term + term' "
         "aria-label='Search title text or term plus term'>"
+        "<label class='dg-search-toggle'><input type='checkbox' data-dg-search-tweets checked>Tweets</label>"
         "<button type='submit' data-dg-search-button aria-label='Search'>🔍</button>"
         "<button type='button' data-dg-search-random aria-label='Random search suggestion' title='Random search suggestion'>🎲</button>"
         "</form>"
@@ -520,18 +525,22 @@ def _search_script_html(search_entries: list[dict[str, str]]) -> str:
         + "function queryTerms(v){return norm(v).split(/\\s+\\+\\s+/).map(norm).filter(Boolean);}"
         + "const form=document.querySelector('[data-dg-search-form]');"
         + "const input=document.querySelector('[data-dg-search-input]');"
+        + "const tweetsToggle=document.querySelector('[data-dg-search-tweets]');"
         + "const randomButton=document.querySelector('[data-dg-search-random]');"
         + "const hit=document.querySelector('[data-dg-search-hit]');"
         + "const dataEl=document.getElementById('dg-browse-search-data');"
         + "const suggestionsEl=document.getElementById('dg-search-suggestions');"
         + "if(!form||!input||!hit||!dataEl)return;"
         + "const searchStateKey='docflow.home.search';"
+        + "const tweetsStateKey='docflow.home.search.tweets';"
         + "let entries=[];"
         + "let suggestions=[];"
         + "try{entries=JSON.parse(dataEl.textContent||'[]');}catch(_){entries=[];}"
         + "try{suggestions=JSON.parse((suggestionsEl&&suggestionsEl.textContent)||'[]');}catch(_){suggestions=[];}"
         + "function loadSavedSearch(){try{return window.sessionStorage.getItem(searchStateKey)||'';}catch(_){return '';}}"
         + "function saveSearch(q){try{if(q){window.sessionStorage.setItem(searchStateKey,q);}else{window.sessionStorage.removeItem(searchStateKey);}}catch(_){}}"
+        + "function loadTweetsEnabled(){try{return window.sessionStorage.getItem(tweetsStateKey)!=='0';}catch(_){return true;}}"
+        + "function saveTweetsEnabled(v){try{window.sessionStorage.setItem(tweetsStateKey,v?'1':'0');}catch(_){}}"
         + "function esc(v){return String(v||'').replace(/[&<>\"']/g,function(ch){return {'&':'&amp;','<':'&lt;','>':'&gt;','\"':'&quot;',\"'\":'&#39;'}[ch];});}"
         + "function render(matches){"
         + "if(!matches){hit.textContent='';return;}"
@@ -543,9 +552,11 @@ def _search_script_html(search_entries: list[dict[str, str]]) -> str:
         + "saveSearch(q);"
         + "if(!q){render(null);return;}"
         + "const terms=queryTerms(q).map(function(term){return term.toLowerCase();});"
-        + "render(entries.filter(function(e){const title=e&&String(e.stem||'').toLowerCase();return title&&terms.every(function(term){return title.indexOf(term)!==-1;});}));"
+        + "const includeTweets=!tweetsToggle||tweetsToggle.checked;"
+        + "render(entries.filter(function(e){if(!includeTweets&&e&&e.category==='tweets')return false;const title=e&&String(e.stem||'').toLowerCase();return title&&terms.every(function(term){return title.indexOf(term)!==-1;});}));"
         + "}"
         + "form.addEventListener('submit',function(ev){ev.preventDefault();run();});"
+        + "if(tweetsToggle){tweetsToggle.checked=loadTweetsEnabled();tweetsToggle.addEventListener('change',function(){saveTweetsEnabled(tweetsToggle.checked);run();});}"
         + "if(randomButton){randomButton.addEventListener('click',function(){if(!suggestions.length)return;input.value=suggestions[Math.floor(Math.random()*suggestions.length)];saveSearch(norm(input.value));render(null);input.focus();});}"
         + "window.addEventListener('pageshow',function(){if(input.value){run();}});"
         + "const savedSearch=loadSavedSearch();"
@@ -1089,8 +1100,10 @@ def write_site_home(base_dir: Path, category_roots: dict[str, Path] | None = Non
         "<style>body{margin:14px 18px;font:14px -apple-system,system-ui,Segoe UI,Roboto,Helvetica,Arial;color:#222}"
         "h1{margin:6px 0 10px;font-weight:600}a{color:#0a7;text-decoration:none}"
         ".dg-search{display:inline-flex;align-items:center;gap:6px}"
-        ".dg-search input{padding:3px 8px;border:1px solid #ccc;border-radius:6px;min-width:420px;max-width:100%;font:13px -apple-system,system-ui,Segoe UI,Roboto,Helvetica,Arial}"
+        ".dg-search input[type='text']{padding:3px 8px;border:1px solid #ccc;border-radius:6px;min-width:420px;max-width:100%;font:13px -apple-system,system-ui,Segoe UI,Roboto,Helvetica,Arial}"
         ".dg-search button{padding:2px 8px;border:1px solid #ccc;border-radius:6px;background:#f7f7f7;color:#333;font:12px -apple-system,system-ui,Segoe UI,Roboto,Helvetica,Arial;cursor:pointer}"
+        ".dg-search-toggle{display:inline-flex;align-items:center;gap:4px;color:#555;font:13px -apple-system,system-ui,Segoe UI,Roboto,Helvetica,Arial;white-space:nowrap}"
+        ".dg-search-toggle input{margin:0}"
         ".dg-search-hit{margin:6px 0 10px;font:13px -apple-system,system-ui,Segoe UI,Roboto,Helvetica,Arial;color:#444}"
         ".dg-search-hit a{color:#0a7;text-decoration:none}"
         ".dg-search-results{list-style:none;padding-left:0;margin:6px 0 0}"
