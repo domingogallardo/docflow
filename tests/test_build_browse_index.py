@@ -185,6 +185,58 @@ def test_browse_search_entries_include_full_name_folder_and_viewer_url(tmp_path:
     assert alan_entries["Notes from Alan Kay.pdf"]["href"] == "/pdfs/view/Pdfs%202025/Notes%20from%20Alan%20Kay.pdf"
 
 
+def test_browse_search_entries_include_tweet_titles_with_consolidated_anchor(tmp_path: Path):
+    base = tmp_path / "base"
+    tweets = base / "Tweets" / "Tweets 2026"
+    tweets.mkdir(parents=True)
+    (tweets / "tweet-example.md").write_text(
+        "\n".join(
+            [
+                "---",
+                "source: tweet",
+                "title: A useful tweet title",
+                "tweet_consolidated_url: /tweets/raw/Tweets%202026/Tweets%202026-05-19.html#tweet-example",
+                "tweet_consolidated_anchor: tweet-example",
+                "---",
+                "",
+                "# Fallback title",
+                "",
+                "Tweet body.",
+                "",
+            ]
+        ),
+        encoding="utf-8",
+    )
+    (tweets / "tweet-example.html").write_text("<html><body>Tweet</body></html>", encoding="utf-8")
+
+    entries = build_browse_index._collect_browse_search_entries(base, build_browse_index._category_roots(base))
+
+    title_entries = [entry for entry in entries if entry["stem"] == "A useful tweet title"]
+    assert title_entries == [
+        {
+            "stem": "A useful tweet title",
+            "name": "A useful tweet title",
+            "href": "/tweets/raw/Tweets%202026/Tweets%202026-05-19.html#tweet-example",
+            "folder": "Tweets 2026 / Tweet",
+        }
+    ]
+    assert all(entry["href"] != "/tweets/raw/Tweets%202026/tweet-example.html" for entry in entries)
+
+
+def test_browse_search_entries_skip_tweet_markdown_without_consolidated_anchor(tmp_path: Path):
+    base = tmp_path / "base"
+    tweets = base / "Tweets" / "Tweets 2026"
+    tweets.mkdir(parents=True)
+    (tweets / "loose-tweet.md").write_text(
+        "---\nsource: tweet\ntitle: Loose tweet title\n---\n\n# Loose tweet title\n",
+        encoding="utf-8",
+    )
+
+    entries = build_browse_index._collect_browse_search_entries(base, build_browse_index._category_roots(base))
+
+    assert all(entry["stem"] != "Loose tweet title" for entry in entries)
+
+
 def test_browse_search_suggestions_are_derived_from_indexed_titles():
     entries = [
         {"stem": "Alan Kay on objects", "name": "Alan Kay on objects.html", "href": "#", "folder": "Posts 2026"},

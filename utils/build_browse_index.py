@@ -34,6 +34,7 @@ from utils.site_paths import (
     viewer_url_for_rel_path,
 )
 from utils.highlight_store import highlight_status_for_path
+from utils.markdown_utils import extract_markdown_title, split_front_matter
 from utils.site_state import load_done_state, load_reading_state
 
 CATEGORY_KEYS = ("posts", "tweets", "podcasts", "pdfs", "images")
@@ -358,7 +359,19 @@ def _collect_browse_search_entries(base_dir: Path, category_roots: dict[str, Pat
             rel_to_root = path.relative_to(root)
             if any(_skip_directory(part) for part in rel_to_root.parts[:-1]):
                 continue
+            if category == "tweets" and path.suffix.lower() == ".md":
+                tweet_entry = _tweet_markdown_search_entry(path)
+                if tweet_entry is None:
+                    continue
+                try:
+                    mtime = path.stat().st_mtime
+                except Exception:
+                    continue
+                scanned.append((mtime, tweet_entry))
+                continue
             if not _is_visible_file_name(path.name):
+                continue
+            if category == "tweets" and _has_tweet_consolidated_url(path.with_suffix(".md")):
                 continue
             try:
                 rel = rel_path_from_abs(base_dir, path)
@@ -379,6 +392,44 @@ def _collect_browse_search_entries(base_dir: Path, category_roots: dict[str, Pat
             )
     scanned.sort(key=lambda item: item[0], reverse=True)
     return [entry for _, entry in scanned]
+
+
+def _read_tweet_markdown_meta(path: Path) -> tuple[dict[str, str], str] | None:
+    if path.suffix.lower() != ".md" or not path.is_file():
+        return None
+    try:
+        text = path.read_text(encoding="utf-8")
+    except Exception:
+        return None
+    meta, _ = split_front_matter(text)
+    if meta.get("source", "").strip().lower() != "tweet":
+        return None
+    return meta, text
+
+
+def _has_tweet_consolidated_url(path: Path) -> bool:
+    parsed = _read_tweet_markdown_meta(path)
+    if parsed is None:
+        return False
+    meta, _ = parsed
+    return bool(meta.get("tweet_consolidated_url", "").strip())
+
+
+def _tweet_markdown_search_entry(path: Path) -> dict[str, str] | None:
+    parsed = _read_tweet_markdown_meta(path)
+    if parsed is None:
+        return None
+    meta, text = parsed
+    href = meta.get("tweet_consolidated_url", "").strip()
+    if not href:
+        return None
+    title = (meta.get("title") or extract_markdown_title(text) or path.stem).strip()
+    return {
+        "stem": title,
+        "name": title,
+        "href": href,
+        "folder": f"{path.parent.name} / Tweet",
+    }
 
 
 def _search_suggestion_token_value(token: str) -> str:
