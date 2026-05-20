@@ -116,7 +116,7 @@ capture_sources() {
 run_one_day() {
   local target_day="$1"
   local target_source="$2"
-  local target_year="${target_day:0:4}"
+  local target_year="${3:-${target_day:0:4}}"
   PYTHONPATH="${REPO_DIR}:${PYTHONPATH:-}" \
     "${PYTHON_BIN}" "${BUILDER}" --day "${target_day}" --year "${target_year}" --capture-source "${target_source}"
 }
@@ -124,7 +124,7 @@ run_one_day() {
 cleanup_one_day_if_consolidated() {
   local target_day="$1"
   local target_source="$2"
-  local target_year="${target_day:0:4}"
+  local target_year="${3:-${target_day:0:4}}"
   PYTHONPATH="${REPO_DIR}:${PYTHONPATH:-}" \
     "${PYTHON_BIN}" "${BUILDER}" --day "${target_day}" --year "${target_year}" --cleanup-if-consolidated --capture-source "${target_source}"
 }
@@ -132,7 +132,7 @@ cleanup_one_day_if_consolidated() {
 consolidated_exists() {
   local target_day="$1"
   local target_source="$2"
-  local target_year="${target_day:0:4}"
+  local target_year="${3:-${target_day:0:4}}"
   local tweets_dir="${BASE_DIR}/Tweets/Tweets ${target_year}"
   local base_name=""
   local base_names=()
@@ -210,7 +210,13 @@ fi
 
 # mode = all_days
 echo "🧾 Scanning all tweet days (source=${capture_source})..."
-mapfile -t rows < <(DOCFLOW_CAPTURE_SOURCE="${capture_source}" "${PYTHON_BIN}" - <<'PY'
+rows_file="$(mktemp "${TMPDIR:-/tmp}/docflow_tweet_days.XXXXXX")"
+cleanup_rows_file() {
+  rm -f "${rows_file}"
+}
+trap cleanup_rows_file EXIT
+
+DOCFLOW_CAPTURE_SOURCE="${capture_source}" "${PYTHON_BIN}" - <<'PY' > "${rows_file}"
 from datetime import datetime, timedelta
 import os
 from pathlib import Path
@@ -259,18 +265,19 @@ for year_dir in sorted(base.glob("Tweets *")):
 for year, day, source in sorted(seen):
     print(f"{year}\t{day}\t{source}")
 PY
-)
 
 built=0
 skipped=0
 cleaned=0
 failed=0
-for row in "${rows[@]}"; do
-  IFS=$'\t' read -r year day source <<<"${row}"
-  if [ "${force}" -eq 0 ] && consolidated_exists "${day}" "${source}"; then
+while IFS=$'\t' read -r year day source; do
+  if [ -z "${year}" ]; then
+    continue
+  fi
+  if [ "${force}" -eq 0 ] && consolidated_exists "${day}" "${source}" "${year}"; then
     if [ "${cleanup_existing}" -eq 1 ]; then
       set +e
-      cleanup_one_day_if_consolidated "${day}" "${source}"
+      cleanup_one_day_if_consolidated "${day}" "${source}" "${year}"
       rc=$?
       set -e
       if [ "${rc}" -eq 0 ]; then
@@ -291,7 +298,7 @@ for row in "${rows[@]}"; do
 
   echo "▶️  ${day} (year=${year}, source=${source})"
   set +e
-  run_one_day "${day}" "${source}"
+  run_one_day "${day}" "${source}" "${year}"
   rc=$?
   set -e
   if [ "${rc}" -eq 0 ]; then
@@ -300,7 +307,10 @@ for row in "${rows[@]}"; do
     failed=$((failed + 1))
     echo "❌ Failed day ${day} (year=${year}, source=${source})"
   fi
-done
+done < "${rows_file}"
+
+rm -f "${rows_file}"
+trap - EXIT
 
 if [ "${cleanup_existing}" -eq 1 ]; then
   echo "✅ Consolidated cleanup summary: cleaned=${cleaned} skipped=${skipped} failed=${failed}"

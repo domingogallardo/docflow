@@ -410,8 +410,8 @@ def sync_markdown_only_metadata(
     if not md_path.exists():
         return
 
-    md_text = md_path.read_text(encoding="utf-8", errors="replace")
-    md_text = remove_front_matter_keys(md_text, {"docflow_html_path"})
+    original_md_text = md_path.read_text(encoding="utf-8", errors="replace")
+    md_text = remove_front_matter_keys(original_md_text, {"docflow_html_path"})
     meta, _ = split_front_matter(md_text)
     docflow_id = (meta.get("docflow_id") or "").strip() or str(uuid4())
     markdown_meta = {
@@ -421,7 +421,7 @@ def sync_markdown_only_metadata(
     }
 
     updated_md = upsert_front_matter(md_text, markdown_meta)
-    if updated_md != md_text:
+    if updated_md != original_md_text:
         md_path.write_text(updated_md, encoding="utf-8")
 
 
