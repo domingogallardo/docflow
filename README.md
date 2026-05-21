@@ -251,8 +251,19 @@ Optional for URL-to-Markdown clipping:
 
 ```bash
 # Requires Node.js and a local Obsidian Web Clipper checkout.
+mkdir -p "$HOME/Repos-Github"
+git clone https://github.com/obsidianmd/obsidian-clipper.git \
+  "$HOME/Repos-Github/obsidian-clipper"
+cd "$HOME/Repos-Github/obsidian-clipper"
+npm install
+npm run build
+
 export DOCFLOW_OBSIDIAN_CLIPPER_CLI="$HOME/Repos-Github/obsidian-clipper/dist/cli.cjs"
 ```
+
+docflow uses that `dist/cli.cjs` path by default when the Web Clipper checkout
+lives under `$HOME/Repos-Github/obsidian-clipper`. Set
+`DOCFLOW_OBSIDIAN_CLIPPER_CLI` when the checkout lives somewhere else.
 
 ### Manual quick start
 
