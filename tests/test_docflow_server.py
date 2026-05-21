@@ -14,6 +14,7 @@ from urllib.parse import quote
 import pytest
 
 from utils import docflow_server
+from utils.highlight_store import highlight_state_path, save_highlights_for_path
 from utils.markdown_utils import split_front_matter
 from utils.reading_position_store import reading_position_state_path, save_reading_position_for_path
 from utils.site_state import (
@@ -319,6 +320,10 @@ def test_api_delete_removes_local_markdown_and_state_entries(tmp_path: Path):
     md.write_text("# Doc\n", encoding="utf-8")
 
     rel_path = "Posts/Posts 2026/doc.html"
+    save_highlights_for_path(base, rel_path, {"highlights": [{"text": "important"}]})
+    highlight_path = highlight_state_path(base, rel_path)
+    assert highlight_path.exists()
+
     save_reading_position_for_path(
         base,
         rel_path,
@@ -337,11 +342,13 @@ def test_api_delete_removes_local_markdown_and_state_entries(tmp_path: Path):
         assert status == 200
         assert payload["ok"] is True
         assert payload["data"]["deleted_md"] is True
+        assert payload["data"]["removed_highlights"] is True
         assert payload["data"]["removed_reading_position"] is True
         assert payload["data"]["redirect"] == "/browse/posts/Posts%202026/"
 
         assert not html.exists()
         assert not md.exists()
+        assert not highlight_path.exists()
         assert not reading_position_path.exists()
         assert is_done(base, rel_path) is False
         assert is_reading(base, rel_path) is False

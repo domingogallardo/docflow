@@ -63,7 +63,7 @@ from utils.site_state import (
     set_reading_path,
     set_done_path,
 )
-from utils.highlight_store import load_highlights_for_path, save_highlights_for_path
+from utils.highlight_store import clear_highlights_for_path, load_highlights_for_path, save_highlights_for_path
 from utils.reading_position_store import (
     clear_reading_position_for_path,
     has_meaningful_reading_position,
@@ -430,11 +430,13 @@ class DocflowApp:
 
         removed_done = clear_done_path(self.base_dir, normalized)
         removed_reading = pop_reading_path(self.base_dir, normalized) is not None
+        removed_highlights = clear_highlights_for_path(self.base_dir, normalized)
         removed_reading_position = clear_reading_position_for_path(self.base_dir, normalized)
 
         if sibling_md_rel:
             clear_done_path(self.base_dir, sibling_md_rel)
             pop_reading_path(self.base_dir, sibling_md_rel)
+            clear_highlights_for_path(self.base_dir, sibling_md_rel)
             clear_reading_position_for_path(self.base_dir, sibling_md_rel)
 
         self.rebuild_for_path(
@@ -448,6 +450,7 @@ class DocflowApp:
             "deleted_md": deleted_md,
             "removed_done": removed_done,
             "removed_reading": removed_reading,
+            "removed_highlights": removed_highlights,
             "removed_reading_position": removed_reading_position,
             "redirect": _browse_parent_url_for_rel_path(normalized),
         }

@@ -183,5 +183,14 @@ def save_highlights_for_path(base_dir: Path, rel_path: str, payload: dict[str, A
     return normalized_payload
 
 
+def clear_highlights_for_path(base_dir: Path, rel_path: str) -> bool:
+    canonical_path = highlight_state_path(base_dir, rel_path)
+    if not canonical_path.exists():
+        return False
+    canonical_path.unlink()
+    _remove_dir_if_empty(canonical_path.parent)
+    return True
+
+
 def has_highlights_for_path(base_dir: Path, rel_path: str) -> bool:
     return highlight_status_for_path(base_dir, rel_path)[0]
