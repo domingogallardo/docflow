@@ -94,6 +94,23 @@ def _put_json(port: int, path: str, payload: dict[str, object]) -> tuple[int, di
         conn.close()
 
 
+def _put_json_with_headers(
+    port: int,
+    path: str,
+    payload: dict[str, object],
+) -> tuple[int, dict, dict[str, str]]:
+    conn = http.client.HTTPConnection("127.0.0.1", port, timeout=5)
+    try:
+        body = json.dumps(payload)
+        conn.request("PUT", path, body=body, headers={"Content-Type": "application/json"})
+        res = conn.getresponse()
+        data = json.loads(res.read().decode("utf-8"))
+        headers = {k.lower(): v for k, v in res.getheaders()}
+        return res.status, data, headers
+    finally:
+        conn.close()
+
+
 def test_api_to_done_moves_to_done_listing(tmp_path: Path):
     base = tmp_path / "base"
     posts = base / "Posts" / "Posts 2026"
@@ -1357,6 +1374,47 @@ def test_api_reading_position_roundtrip(tmp_path: Path):
         assert payload["progress"] is None
         history_payload = json.loads((base / "_site" / "history-index.json").read_text(encoding="utf-8"))
         assert history_payload["entries"] == []
+    finally:
+        server.shutdown()
+        server.server_close()
+
+
+def test_history_and_reading_position_state_responses_disable_cache(tmp_path: Path):
+    base = tmp_path / "base"
+    posts = base / "Posts" / "Posts 2026"
+    posts.mkdir(parents=True)
+    (posts / "doc.html").write_text("<html><body>Doc</body></html>", encoding="utf-8")
+
+    rel_path = "Posts/Posts 2026/doc.html"
+    encoded = quote(rel_path, safe="")
+
+    server, port = _start_server(base)
+    try:
+        status, _body, headers = _get_with_headers(port, "/history-index.json")
+        assert status == 200
+        assert headers["cache-control"] == "no-store"
+
+        status, _body, headers = _get_with_headers(
+            port,
+            f"/api/reading-position?path={encoded}",
+        )
+        assert status == 200
+        assert headers["cache-control"] == "no-store"
+
+        status, _payload, headers = _put_json_with_headers(
+            port,
+            f"/api/reading-position?path={encoded}",
+            {
+                "updated_at": "2026-03-17T10:00:00Z",
+                "scroll_y": 420,
+                "max_scroll": 1200,
+                "progress": 0.35,
+                "viewport_height": 900,
+                "document_height": 2100,
+            },
+        )
+        assert status == 200
+        assert headers["cache-control"] == "no-store"
     finally:
         server.shutdown()
         server.server_close()

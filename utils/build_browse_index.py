@@ -664,7 +664,7 @@ def _search_script_html() -> str:
         + "render(entries.filter(function(e){if(!includeTweets&&e&&e.category==='tweets')return false;const title=e&&String(e.stem||'');return title&&terms.every(function(term){return wholeTermMatch(title,term);});}));"
         + "}"
         + "function loadSearchIndex(){"
-        + "return fetch('/search-index.json',{cache:'no-store'}).then(function(res){if(!res.ok)throw new Error('load failed');return res.json();}).then(function(payload){entries=Array.isArray(payload&&payload.entries)?payload.entries:[];suggestions=Array.isArray(payload&&payload.suggestions)?payload.suggestions:[];searchIndexReady=true;}).catch(function(){entries=[];suggestions=[];searchIndexReady=true;});"
+        + "return fetch('/search-index.json').then(function(res){if(!res.ok)throw new Error('load failed');return res.json();}).then(function(payload){entries=Array.isArray(payload&&payload.entries)?payload.entries:[];suggestions=Array.isArray(payload&&payload.suggestions)?payload.suggestions:[];searchIndexReady=true;}).catch(function(){entries=[];suggestions=[];searchIndexReady=true;});"
         + "}"
         + "function showHistory(){"
         + "showingHistory=true;"

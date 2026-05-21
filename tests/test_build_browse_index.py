@@ -169,7 +169,7 @@ def test_build_browse_site_generates_indexes_and_actions(tmp_path: Path):
     assert "dg-browse-search-data" not in site_home_content
     assert "dg-search-suggestions" not in site_home_content
     assert '"stem": "doc"' not in site_home_content
-    assert "fetch('/search-index.json',{cache:'no-store'})" in site_home_content
+    assert "fetch('/search-index.json')" in site_home_content
     assert "fetch('/history-index.json',{cache:'no-store'})" in site_home_content
     assert "entries.filter" in site_home_content
     assert "Search title text or term + term" in site_home_content

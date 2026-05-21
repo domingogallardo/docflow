@@ -816,21 +816,36 @@ class DocflowApp:
         return None
 
 
-def _send_json(handler: BaseHTTPRequestHandler, status: int, payload: dict[str, object]) -> None:
+def _send_json(
+    handler: BaseHTTPRequestHandler,
+    status: int,
+    payload: dict[str, object],
+    *,
+    cache_control: str | None = None,
+) -> None:
     body = (json.dumps(payload, ensure_ascii=False) + "\n").encode("utf-8")
     handler.send_response(status)
     handler.send_header("Content-Type", "application/json; charset=utf-8")
+    if cache_control:
+        handler.send_header("Cache-Control", cache_control)
     handler.send_header("Content-Length", str(len(body)))
     handler.end_headers()
     handler.wfile.write(body)
 
 
-def _send_file(handler: BaseHTTPRequestHandler, path: Path) -> None:
+def _send_file(
+    handler: BaseHTTPRequestHandler,
+    path: Path,
+    *,
+    cache_control: str | None = None,
+) -> None:
     data = path.read_bytes()
     content_type = mimetypes.guess_type(path.name)[0] or "application/octet-stream"
 
     handler.send_response(HTTPStatus.OK)
     handler.send_header("Content-Type", content_type)
+    if cache_control:
+        handler.send_header("Cache-Control", cache_control)
     handler.send_header("Content-Length", str(len(data)))
     handler.end_headers()
     handler.wfile.write(data)
@@ -2040,11 +2055,21 @@ def make_handler(app: DocflowApp):
                 try:
                     rel_path = _get_query_path(parsed)
                     payload = app.api_get_reading_position(rel_path)
-                    _send_json(self, 200, payload)
+                    _send_json(self, 200, payload, cache_control="no-store")
                 except ApiError as exc:
-                    _send_json(self, exc.status, {"ok": False, "error": exc.message})
+                    _send_json(
+                        self,
+                        exc.status,
+                        {"ok": False, "error": exc.message},
+                        cache_control="no-store",
+                    )
                 except Exception as exc:
-                    _send_json(self, 500, {"ok": False, "error": str(exc)})
+                    _send_json(
+                        self,
+                        500,
+                        {"ok": False, "error": str(exc)},
+                        cache_control="no-store",
+                    )
                 return
 
             if path == "/api/pdf-page":
@@ -2127,7 +2152,8 @@ def make_handler(app: DocflowApp):
 
             site_file = app.resolve_site_file(path)
             if site_file and site_file.is_file():
-                _send_file(self, site_file)
+                cache_control = "no-store" if site_file.name == "history-index.json" else None
+                _send_file(self, site_file, cache_control=cache_control)
                 return
 
             _send_json(self, 404, {"ok": False, "error": "Not found"})
@@ -2167,11 +2193,24 @@ def make_handler(app: DocflowApp):
                     data = app.api_put_highlights(rel_path, payload)
                 else:
                     data = app.api_put_reading_position(rel_path, payload)
-                _send_json(self, 200, data)
+                cache_control = "no-store" if parsed.path == "/api/reading-position" else None
+                _send_json(self, 200, data, cache_control=cache_control)
             except ApiError as exc:
-                _send_json(self, exc.status, {"ok": False, "error": exc.message})
+                cache_control = "no-store" if parsed.path == "/api/reading-position" else None
+                _send_json(
+                    self,
+                    exc.status,
+                    {"ok": False, "error": exc.message},
+                    cache_control=cache_control,
+                )
             except Exception as exc:
-                _send_json(self, 500, {"ok": False, "error": str(exc)})
+                cache_control = "no-store" if parsed.path == "/api/reading-position" else None
+                _send_json(
+                    self,
+                    500,
+                    {"ok": False, "error": str(exc)},
+                    cache_control=cache_control,
+                )
 
         def log_message(self, format: str, *args: object) -> None:  # type: ignore[override]
             return
