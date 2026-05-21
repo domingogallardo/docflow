@@ -31,7 +31,7 @@ Podcast snippets are typically captured in [Snipd](https://www.snipd.com) and th
 
 `utils/docflow_server.py` currently offers:
 
-- Home page with exact filename search.
+- Home page with exact filename search and history of saved reading positions.
 - Browse / Reading / Done views.
 - Browse hides items already in Reading / Done.
 - Highlight toggle on list pages, with browser-persistent state until switched back off.

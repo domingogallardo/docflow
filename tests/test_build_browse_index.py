@@ -7,6 +7,7 @@ from pathlib import Path
 from utils import build_browse_index
 from utils import highlight_store
 from utils import site_state
+from utils.reading_position_store import save_reading_position_for_path
 
 def test_build_browse_site_generates_indexes_and_actions(tmp_path: Path):
     base = tmp_path / "base"
@@ -42,6 +43,16 @@ def test_build_browse_site_generates_indexes_and_actions(tmp_path: Path):
             "highlights": [{"id": "h1", "text": "Doc", "created_at": "2026-02-03T10:05:00Z"}],
         },
     )
+    save_reading_position_for_path(
+        base,
+        "Posts/Posts 2026/doc.html",
+        {"updated_at": "2026-05-20T10:00:00Z", "scroll_y": 240, "progress": 0.24},
+    )
+    save_reading_position_for_path(
+        base,
+        "Pdfs/Pdfs 2026/paper.pdf",
+        {"updated_at": "2026-05-21T10:00:00Z", "page": 3, "page_count": 8},
+    )
 
     counts = build_browse_index.build_browse_site(base)
 
@@ -54,6 +65,7 @@ def test_build_browse_site_generates_indexes_and_actions(tmp_path: Path):
     browse_home = base / "_site" / "browse" / "index.html"
     site_home = base / "_site" / "index.html"
     search_index = base / "_site" / "search-index.json"
+    history_index = base / "_site" / "history-index.json"
     posts_root_page = base / "_site" / "browse" / "posts" / "index.html"
     posts_year_page = base / "_site" / "browse" / "posts" / "Posts 2026" / "index.html"
     pdfs_year_page = base / "_site" / "browse" / "pdfs" / "Pdfs 2026" / "index.html"
@@ -65,6 +77,7 @@ def test_build_browse_site_generates_indexes_and_actions(tmp_path: Path):
     assert browse_home.exists()
     assert site_home.exists()
     assert search_index.exists()
+    assert history_index.exists()
     assert posts_root_page.exists()
     assert posts_year_page.exists()
     assert pdfs_year_page.exists()
@@ -152,10 +165,12 @@ def test_build_browse_site_generates_indexes_and_actions(tmp_path: Path):
     assert "data-dg-search-button" in site_home_content
     assert "data-dg-search-random" in site_home_content
     assert "data-dg-search-tweets" in site_home_content
+    assert "data-dg-history-link>History</a>" in site_home_content
     assert "dg-browse-search-data" not in site_home_content
     assert "dg-search-suggestions" not in site_home_content
     assert '"stem": "doc"' not in site_home_content
     assert "fetch('/search-index.json',{cache:'no-store'})" in site_home_content
+    assert "fetch('/history-index.json',{cache:'no-store'})" in site_home_content
     assert "entries.filter" in site_home_content
     assert "Search title text or term + term" in site_home_content
     assert "function queryTerms(v)" in site_home_content
@@ -173,6 +188,7 @@ def test_build_browse_site_generates_indexes_and_actions(tmp_path: Path):
     assert "saveSearch(norm(input.value));render(null);input.focus();" in site_home_content
     assert "input.value=suggestions[Math.floor(Math.random()*suggestions.length)];run();" not in site_home_content
     assert "window.addEventListener('pageshow',function(){if(input.value){run();}})" in site_home_content
+    assert site_home_content.find("data-dg-history-link") < site_home_content.find("Rebuild browse + reading + done")
     assert site_home_content.find("Rebuild browse + reading + done") < site_home_content.find("data-dg-search-input")
 
     search_index_payload = json.loads(search_index.read_text(encoding="utf-8"))
@@ -182,6 +198,15 @@ def test_build_browse_site_generates_indexes_and_actions(tmp_path: Path):
     assert search_entries["doc.html"]["folder"] == "Posts 2026"
     assert search_entries["doc.html"]["category"] == "posts"
     assert isinstance(search_index_payload["suggestions"], list)
+
+    history_index_payload = json.loads(history_index.read_text(encoding="utf-8"))
+    assert history_index_payload["version"] == 1
+    assert [entry["path"] for entry in history_index_payload["entries"]] == [
+        "Pdfs/Pdfs 2026/paper.pdf",
+        "Posts/Posts 2026/doc.html",
+    ]
+    assert history_index_payload["entries"][0]["page"] == 3
+    assert history_index_payload["entries"][1]["progress"] == 0.24
 
 
 def test_browse_search_entries_include_full_name_folder_and_viewer_url(tmp_path: Path):

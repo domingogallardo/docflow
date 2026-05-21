@@ -30,11 +30,13 @@ from utils.site_paths import (
     normalize_rel_path,
     rel_path_from_abs,
     resolve_base_dir,
+    resolve_library_path,
     site_root,
     viewer_url_for_rel_path,
 )
 from utils.highlight_store import highlight_status_for_path
 from utils.markdown_utils import split_front_matter
+from utils.reading_position_store import reading_positions_state_root
 from utils.site_state import load_done_state, load_reading_state
 
 CATEGORY_KEYS = ("posts", "tweets", "podcasts", "pdfs", "images")
@@ -528,6 +530,82 @@ def _search_result_html() -> str:
     return "<div class='dg-search-hit' data-dg-search-hit></div>"
 
 
+def _home_history_link_html() -> str:
+    return "<p><a href='#' data-dg-history-link>History</a></p>"
+
+
+def _read_json_object(path: Path) -> dict[str, object] | None:
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except Exception:
+        return None
+    return payload if isinstance(payload, dict) else None
+
+
+def _history_entry_from_position(base_dir: Path, payload: dict[str, object]) -> tuple[float, dict[str, object]] | None:
+    raw_path = payload.get("path")
+    updated_at = str(payload.get("updated_at") or "").strip()
+    updated_epoch = _iso_to_epoch(updated_at)
+    if not isinstance(raw_path, str) or updated_epoch is None:
+        return None
+
+    try:
+        rel_path = normalize_rel_path(raw_path)
+        abs_path = resolve_library_path(base_dir, rel_path)
+    except Exception:
+        return None
+    if not abs_path.is_file() or not _is_visible_file_name(abs_path.name):
+        return None
+
+    return (
+        updated_epoch,
+        {
+            "name": abs_path.name,
+            "href": viewer_url_for_rel_path(rel_path),
+            "folder": abs_path.parent.name,
+            "path": rel_path,
+            "updated_at": updated_at,
+            "progress": payload.get("progress"),
+            "page": payload.get("page"),
+        },
+    )
+
+
+def collect_site_history_entries(base_dir: Path) -> list[dict[str, object]]:
+    history_root = reading_positions_state_root(base_dir)
+    if not history_root.is_dir():
+        return []
+
+    scanned: list[tuple[float, dict[str, object]]] = []
+    for state_path in history_root.rglob("*.json"):
+        payload = _read_json_object(state_path)
+        if payload is None:
+            continue
+        history_entry = _history_entry_from_position(base_dir, payload)
+        if history_entry is not None:
+            scanned.append(history_entry)
+
+    scanned.sort(key=lambda item: (item[0], str(item[1].get("path") or "")), reverse=True)
+    return [entry for _, entry in scanned]
+
+
+def _history_index_payload(base_dir: Path) -> dict[str, object]:
+    return {
+        "version": 1,
+        "entries": collect_site_history_entries(base_dir),
+    }
+
+
+def write_site_history_index(base_dir: Path) -> Path:
+    output = site_root(base_dir) / "history-index.json"
+    output.parent.mkdir(parents=True, exist_ok=True)
+    output.write_text(
+        json.dumps(_history_index_payload(base_dir), ensure_ascii=False, separators=(",", ":")),
+        encoding="utf-8",
+    )
+    return output
+
+
 def _search_index_payload(search_entries: list[dict[str, str]]) -> dict[str, object]:
     return {
         "version": 1,
@@ -556,6 +634,7 @@ def _search_script_html() -> str:
         + "const input=document.querySelector('[data-dg-search-input]');"
         + "const tweetsToggle=document.querySelector('[data-dg-search-tweets]');"
         + "const randomButton=document.querySelector('[data-dg-search-random]');"
+        + "const historyLink=document.querySelector('[data-dg-history-link]');"
         + "const hit=document.querySelector('[data-dg-search-hit]');"
         + "if(!form||!input||!hit)return;"
         + "const searchStateKey='docflow.home.search';"
@@ -563,17 +642,19 @@ def _search_script_html() -> str:
         + "let entries=[];"
         + "let suggestions=[];"
         + "let searchIndexReady=false;"
+        + "let showingHistory=false;"
         + "function loadSavedSearch(){try{return window.sessionStorage.getItem(searchStateKey)||'';}catch(_){return '';}}"
         + "function saveSearch(q){try{if(q){window.sessionStorage.setItem(searchStateKey,q);}else{window.sessionStorage.removeItem(searchStateKey);}}catch(_){}}"
         + "function loadTweetsEnabled(){try{return window.sessionStorage.getItem(tweetsStateKey)!=='0';}catch(_){return true;}}"
         + "function saveTweetsEnabled(v){try{window.sessionStorage.setItem(tweetsStateKey,v?'1':'0');}catch(_){}}"
         + "function esc(v){return String(v||'').replace(/[&<>\"']/g,function(ch){return {'&':'&amp;','<':'&lt;','>':'&gt;','\"':'&quot;',\"'\":'&#39;'}[ch];});}"
-        + "function render(matches){"
+        + "function render(matches,emptyText){"
         + "if(!matches){hit.textContent='';return;}"
-        + "if(!matches.length){hit.textContent='No matching titles found.';return;}"
+        + "if(!matches.length){hit.textContent=emptyText||'No matching titles found.';return;}"
         + "hit.innerHTML='<div>'+matches.length+' result'+(matches.length===1?'':'s')+'</div><ul class=\"dg-search-results\">'+matches.map(function(e){return '<li><a href=\"'+esc(e.href)+'\">'+esc(e.name)+'</a> <span class=\"dg-search-folder\">'+esc(e.folder)+'</span></li>';}).join('')+'</ul>';"
         + "}"
         + "function run(){"
+        + "showingHistory=false;"
         + "const q=norm(input.value);"
         + "saveSearch(q);"
         + "if(!q){render(null);return;}"
@@ -585,13 +666,19 @@ def _search_script_html() -> str:
         + "function loadSearchIndex(){"
         + "return fetch('/search-index.json',{cache:'no-store'}).then(function(res){if(!res.ok)throw new Error('load failed');return res.json();}).then(function(payload){entries=Array.isArray(payload&&payload.entries)?payload.entries:[];suggestions=Array.isArray(payload&&payload.suggestions)?payload.suggestions:[];searchIndexReady=true;}).catch(function(){entries=[];suggestions=[];searchIndexReady=true;});"
         + "}"
+        + "function showHistory(){"
+        + "showingHistory=true;"
+        + "hit.textContent='Loading history...';"
+        + "return fetch('/history-index.json',{cache:'no-store'}).then(function(res){if(!res.ok)throw new Error('load failed');return res.json();}).then(function(payload){render(Array.isArray(payload&&payload.entries)?payload.entries:[],'No reading history found.');}).catch(function(){hit.textContent='Could not load history.';});"
+        + "}"
         + "form.addEventListener('submit',function(ev){ev.preventDefault();run();});"
         + "if(tweetsToggle){tweetsToggle.checked=loadTweetsEnabled();tweetsToggle.addEventListener('change',function(){saveTweetsEnabled(tweetsToggle.checked);run();});}"
         + "if(randomButton){randomButton.addEventListener('click',function(){if(!suggestions.length)return;input.value=suggestions[Math.floor(Math.random()*suggestions.length)];saveSearch(norm(input.value));render(null);input.focus();});}"
+        + "if(historyLink){historyLink.addEventListener('click',function(ev){ev.preventDefault();showHistory();});}"
         + "window.addEventListener('pageshow',function(){if(input.value){run();}});"
         + "const savedSearch=loadSavedSearch();"
         + "if(savedSearch&&!input.value){input.value=savedSearch;}"
-        + "loadSearchIndex().then(function(){if(input.value){run();}});"
+        + "loadSearchIndex().then(function(){if(input.value&&!showingHistory){run();}});"
         + "})();"
         + "</script>"
     )
@@ -1123,6 +1210,7 @@ def write_site_home(base_dir: Path, category_roots: dict[str, Path] | None = Non
         category_roots = _category_roots(base_dir)
     search_entries = _collect_browse_search_entries(base_dir, category_roots)
     _write_site_search_index(base_dir, search_entries)
+    write_site_history_index(base_dir)
     search_controls = _search_controls_html()
     search_result = _search_result_html()
     search_js = _search_script_html()
@@ -1145,6 +1233,7 @@ def write_site_home(base_dir: Path, category_roots: dict[str, Path] | None = Non
         "</style><script src='/assets/actions.js' defer></script></head><body>"
         "<h1>Docflow Intranet</h1>"
         "<p><a href='/browse/'>Browse</a> · <a href='/reading/'>Reading</a> · <a href='/done/'>Done</a></p>"
+        f"{_home_history_link_html()}"
         "<p><button data-api-action='rebuild'>Rebuild browse + reading + done</button></p>"
         f"{search_controls}"
         f"{search_result}"

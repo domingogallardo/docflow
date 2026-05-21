@@ -21,6 +21,7 @@ This file stores stable, reusable operational notes for future agent runs.
 
 - Home search stays client-side and title/path based, but `utils/build_browse_index.py` writes the generated inventory to `BASE_DIR/_site/search-index.json` instead of embedding all entries in `_site/index.html`.
 - The home fetches `/search-index.json`; keep search entry collection and suggestion derivation in `utils/build_browse_index.py` so the generated index and home behavior stay aligned.
+- Home reading history uses `BASE_DIR/_site/history-index.json`, generated from `BASE_DIR/state/reading_positions`; keep it sorted by saved reading-position `updated_at` descending and refresh it when reading-position API writes change the state.
 
 ### Highlight Navigation Overlay
 

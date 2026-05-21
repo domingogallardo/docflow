@@ -1327,6 +1327,8 @@ def test_api_reading_position_roundtrip(tmp_path: Path):
         assert payload["path"] == rel_path
         assert payload["scroll_y"] == 420
         assert payload["progress"] == 0.35
+        history_payload = json.loads((base / "_site" / "history-index.json").read_text(encoding="utf-8"))
+        assert [entry["path"] for entry in history_payload["entries"]] == [rel_path]
 
         status, body = _get(port, f"/api/reading-position?path={encoded}")
         assert status == 200
@@ -1353,6 +1355,8 @@ def test_api_reading_position_roundtrip(tmp_path: Path):
         payload = json.loads(body)
         assert payload["scroll_y"] is None
         assert payload["progress"] is None
+        history_payload = json.loads((base / "_site" / "history-index.json").read_text(encoding="utf-8"))
+        assert history_payload["entries"] == []
     finally:
         server.shutdown()
         server.server_close()

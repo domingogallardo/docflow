@@ -439,6 +439,7 @@ class DocflowApp:
             clear_highlights_for_path(self.base_dir, sibling_md_rel)
             clear_reading_position_for_path(self.base_dir, sibling_md_rel)
 
+        build_browse_index.write_site_history_index(self.base_dir)
         self.rebuild_for_path(
             normalized,
             rebuild_browse=True,
@@ -534,6 +535,7 @@ class DocflowApp:
         normalized = self._normalize_rel_path_or_400(rel_path)
         abs_path = self._require_existing_library_file(normalized)
         saved = save_reading_position_for_path(self.base_dir, normalized, payload)
+        build_browse_index.write_site_history_index(self.base_dir)
         can_persist_last_read = (
             has_meaningful_reading_position(saved)
             or abs_path.suffix.lower() == ".pdf"
