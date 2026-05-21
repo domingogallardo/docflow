@@ -18,20 +18,23 @@ Podcast snippets are typically captured in [Snipd](https://www.snipd.com) and th
 - Tweet ingestion also extracts the main external article link from each downloaded tweet/thread and queues it for the Web Clipper.
 - Image ingestion moves files into the yearly folder and, when `OPENAI_API_KEY` is configured, renames them with an AI-generated descriptive filename before rebuilding the gallery.
 
-### Local services currently in use
+### Local intranet service
 
-- Intranet at `http://localhost:8080`
-  - Managed day to day by LaunchAgent `com.domingo.docflow.intranet`.
-  - Serves the generated site plus raw content under `/posts/raw/...`, `/tweets/raw/...`, `/pdfs/raw/...`, `/images/raw/...`, and `/podcasts/raw/...`.
-- RemoteControl at `http://localhost:3000`
-  - Managed by LaunchAgent `com.domingo.remotecontrol.web`.
-  - Exposes an on-demand docflow task (`Docflow: descargar/documentar`) alongside non-docflow tasks.
+- `utils/docflow_server.py` serves the intranet at `http://localhost:8080` by default.
+- It serves generated `_site` pages plus raw library content under
+  `/incoming/raw/...`, `/posts/raw/...`, `/tweets/raw/...`, `/pdfs/raw/...`,
+  `/images/raw/...`, `/podcasts/raw/...`, and `/files/raw/...`.
+- PDFs listed in the intranet open through the reader route
+  `/pdfs/view/...`; `/pdfs/raw/...` remains the raw PDF route.
+- The current personal deployment can run that server from a LaunchAgent, but
+  the LaunchAgent plist and other machine-specific schedulers are not part of
+  this repository.
 
 ### Intranet capabilities
 
 `utils/docflow_server.py` currently offers:
 
-- Home page with exact filename search and `History`, a recent list derived from saved meaningful reading positions.
+- Home page with title search and `History`, a recent list derived from saved meaningful reading positions.
 - Browse / Reading / Done views.
 - Browse hides items already in Reading / Done.
 - Highlight toggle on list pages, with browser-persistent state until switched back off.
@@ -68,6 +71,7 @@ Documented and currently available endpoints:
 - `POST /api/rebuild-file`
 - `GET /api/export-pdf?path=<rel_path>`
 - `GET /api/export-markdown?path=<rel_path>`
+- `GET /api/pdf-page?path=<rel_path>&page=<number>`
 - `GET /api/highlights?path=<rel_path>`
 - `PUT /api/highlights?path=<rel_path>`
 - `GET /api/reading-position?path=<rel_path>`
@@ -75,7 +79,8 @@ Documented and currently available endpoints:
 
 `GET /api/export-markdown` returns the Markdown as an HTTP attachment with an explicit `.md` filename in both `filename` and `filename*`.
 
-If `DONE_LINKS_FILE` is set, each `POST /api/to-done` transition appends a Markdown link entry to that file.
+If `DONE_LINKS_FILE` is set, a `POST /api/to-done` transition on the canonical
+`DOCFLOW_BASE_DIR` appends a Markdown link entry to that file.
 
 ### Local state files
 
@@ -103,36 +108,6 @@ sorted by the saved reading-position `updated_at` timestamp descending.
 This is intentional for the current implementation: `reading_positions/` answers
 "where should reading resume?", while a durable "which documents were visited?"
 history would need separate state.
-
-### Background automations currently in use
-
-The current local setup uses both LaunchAgents and `cron`.
-
-LaunchAgents:
-
-- `~/Library/LaunchAgents/com.domingo.docflow.intranet.plist`
-  - Starts the docflow intranet on port `8080`.
-- `~/Library/LaunchAgents/com.domingo.remotecontrol.web.plist`
-  - Starts the RemoteControl web UI on port `3000`.
-
-Current `crontab` jobs related to docflow:
-
-- Every 6 hours: `/Users/domingo/Programacion/computer-ops/ops/bin/docflow_all.sh`
-  - Runs the full ingestion pipeline and rebuilds the intranet outputs.
-- Five minutes before each 6-hour run: `/Users/domingo/Programacion/computer-ops/ops/bin/docflow_import_incoming.sh`
-  - Prepares `Incoming/` before docflow runs.
-- Daily at `02:00`: `/Users/domingo/Programacion/computer-ops/ops/bin/docflow_tweet_daily.sh`
-  - Builds the previous day's consolidated tweets and rebuilds the intranet outputs.
-- Daily at `01:55`: `/Users/domingo/Programacion/computer-ops/ops/bin/docflow_import_incoming.sh`
-  - Prepares `Incoming/` before the nightly docflow jobs.
-- Daily at `02:05`: `/Users/domingo/Programacion/computer-ops/ops/bin/docflow_highlights_daily.sh`
-  - Builds the previous day's highlights report Markdown.
-
-The shared cron log is:
-
-```bash
-~/Library/Logs/remotecontrol/docflow.cron.log
-```
 
 ### Main folders
 
@@ -180,6 +155,8 @@ Common fields:
 - `docflow_html_generated_at`: UTC timestamp for when docflow generated the
   associated HTML.
 - `docflow_body_chars` and `docflow_word_count`: body-only Markdown statistics.
+- `docflow_last_read`: latest persisted reading activity timestamp when the
+  reader has saved a meaningful resume position and updates the Markdown pair.
 - `docflow_summary`: AI-generated Spanish summary for processed Markdown
   content, except tweets. Summaries aim for 3 to 5 sentences, are generated
   from a bounded content sample, and are capped at 500 characters.
@@ -192,8 +169,8 @@ Source-specific fields:
 - Podcasts: `podcast_show`, `podcast_episode_title`,
   `podcast_publish_date`, and `podcast_export_date`.
 - Tweets: `tweet_url`, `tweet_id`, `tweet_author`, `tweet_author_name`,
-  `tweet_capture_source`, `tweet_posted_kind`, `tweet_thread`,
-  `tweet_thread_count`, `tweet_reply_to_url`,
+  `tweet_capture_source`, `tweet_content_type`, `tweet_posted_kind`,
+  `tweet_thread`, `tweet_thread_count`, `tweet_reply_to_url`,
   `tweet_reply_context_included`, `tweet_conversation_count`,
   `tweet_consolidated_url`, and `tweet_consolidated_anchor`.
 
@@ -359,9 +336,11 @@ source ~/.docflow_env
 python utils/docflow_server.py --base-dir "$DOCFLOW_BASE_DIR" --rebuild-on-start
 ```
 
-### LaunchAgent management
+### Optional LaunchAgent management
 
-Preferred day-to-day usage is the LaunchAgent-managed intranet service:
+The personal deployment can manage the intranet server through a LaunchAgent
+named `com.domingo.docflow.intranet`. The plist is maintained outside this
+repository; when it is installed, restart it with:
 
 ```bash
 launchctl kickstart -k "gui/$(id -u)/com.domingo.docflow.intranet"
@@ -371,24 +350,13 @@ Useful status checks:
 
 ```bash
 launchctl print "gui/$(id -u)/com.domingo.docflow.intranet" | rg 'state =|pid =|last exit code ='
-launchctl print "gui/$(id -u)/com.domingo.remotecontrol.web" | rg 'state =|pid =|last exit code ='
 curl -s -o /dev/null -w '%{http_code}\n' http://127.0.0.1:8080/
-curl -s -o /dev/null -w '%{http_code}\n' http://127.0.0.1:3000/
 ```
 
 If a LaunchAgent is not loaded yet in a new environment:
 
 ```bash
 launchctl bootstrap "gui/$(id -u)" ~/Library/LaunchAgents/com.domingo.docflow.intranet.plist
-launchctl bootstrap "gui/$(id -u)" ~/Library/LaunchAgents/com.domingo.remotecontrol.web.plist
-```
-
-### Cron inspection
-
-Inspect the current scheduled jobs with:
-
-```bash
-crontab -l
 ```
 
 ### Manual runners
