@@ -17,6 +17,11 @@ This file stores stable, reusable operational notes for future agent runs.
 - Regenerate Done index only if Done state changed:
   - `python utils/build_done_index.py --base-dir "/path/to/BASE_DIR"`
 
+### Home Search Index
+
+- Home search stays client-side and title/path based, but `utils/build_browse_index.py` writes the generated inventory to `BASE_DIR/_site/search-index.json` instead of embedding all entries in `_site/index.html`.
+- The home fetches `/search-index.json`; keep search entry collection and suggestion derivation in `utils/build_browse_index.py` so the generated index and home behavior stay aligned.
+
 ### Highlight Navigation Overlay
 
 - Canonical highlight navigation logic lives in `utils/static/article.js` and is exposed via:

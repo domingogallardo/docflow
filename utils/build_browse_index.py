@@ -528,17 +528,25 @@ def _search_result_html() -> str:
     return "<div class='dg-search-hit' data-dg-search-hit></div>"
 
 
-def _search_script_html(search_entries: list[dict[str, str]]) -> str:
-    search_payload = json.dumps(search_entries, ensure_ascii=False).replace("</", "<\\/")
-    suggestion_payload = json.dumps(_collect_browse_search_suggestions(search_entries), ensure_ascii=False).replace("</", "<\\/")
+def _search_index_payload(search_entries: list[dict[str, str]]) -> dict[str, object]:
+    return {
+        "version": 1,
+        "entries": search_entries,
+        "suggestions": _collect_browse_search_suggestions(search_entries),
+    }
+
+
+def _write_site_search_index(base_dir: Path, search_entries: list[dict[str, str]]) -> None:
+    output = site_root(base_dir) / "search-index.json"
+    output.write_text(
+        json.dumps(_search_index_payload(search_entries), ensure_ascii=False, separators=(",", ":")),
+        encoding="utf-8",
+    )
+
+
+def _search_script_html() -> str:
     return (
-        "<script id='dg-browse-search-data' type='application/json'>"
-        + search_payload
-        + "</script>"
-        + "<script id='dg-search-suggestions' type='application/json'>"
-        + suggestion_payload
-        + "</script>"
-        + "<script>"
+        "<script>"
         + "(function(){"
         + "function norm(v){return String(v||'').trim().replace(/\\.(html?|pdf)$/i,'');}"
         + "function queryTerms(v){return norm(v).split(/\\s+\\+\\s+/).map(norm).filter(Boolean);}"
@@ -549,15 +557,12 @@ def _search_script_html(search_entries: list[dict[str, str]]) -> str:
         + "const tweetsToggle=document.querySelector('[data-dg-search-tweets]');"
         + "const randomButton=document.querySelector('[data-dg-search-random]');"
         + "const hit=document.querySelector('[data-dg-search-hit]');"
-        + "const dataEl=document.getElementById('dg-browse-search-data');"
-        + "const suggestionsEl=document.getElementById('dg-search-suggestions');"
-        + "if(!form||!input||!hit||!dataEl)return;"
+        + "if(!form||!input||!hit)return;"
         + "const searchStateKey='docflow.home.search';"
         + "const tweetsStateKey='docflow.home.search.tweets';"
         + "let entries=[];"
         + "let suggestions=[];"
-        + "try{entries=JSON.parse(dataEl.textContent||'[]');}catch(_){entries=[];}"
-        + "try{suggestions=JSON.parse((suggestionsEl&&suggestionsEl.textContent)||'[]');}catch(_){suggestions=[];}"
+        + "let searchIndexReady=false;"
         + "function loadSavedSearch(){try{return window.sessionStorage.getItem(searchStateKey)||'';}catch(_){return '';}}"
         + "function saveSearch(q){try{if(q){window.sessionStorage.setItem(searchStateKey,q);}else{window.sessionStorage.removeItem(searchStateKey);}}catch(_){}}"
         + "function loadTweetsEnabled(){try{return window.sessionStorage.getItem(tweetsStateKey)!=='0';}catch(_){return true;}}"
@@ -572,16 +577,21 @@ def _search_script_html(search_entries: list[dict[str, str]]) -> str:
         + "const q=norm(input.value);"
         + "saveSearch(q);"
         + "if(!q){render(null);return;}"
+        + "if(!searchIndexReady){hit.textContent='Loading search index...';return;}"
         + "const terms=queryTerms(q);"
         + "const includeTweets=!tweetsToggle||tweetsToggle.checked;"
         + "render(entries.filter(function(e){if(!includeTweets&&e&&e.category==='tweets')return false;const title=e&&String(e.stem||'');return title&&terms.every(function(term){return wholeTermMatch(title,term);});}));"
+        + "}"
+        + "function loadSearchIndex(){"
+        + "return fetch('/search-index.json',{cache:'no-store'}).then(function(res){if(!res.ok)throw new Error('load failed');return res.json();}).then(function(payload){entries=Array.isArray(payload&&payload.entries)?payload.entries:[];suggestions=Array.isArray(payload&&payload.suggestions)?payload.suggestions:[];searchIndexReady=true;}).catch(function(){entries=[];suggestions=[];searchIndexReady=true;});"
         + "}"
         + "form.addEventListener('submit',function(ev){ev.preventDefault();run();});"
         + "if(tweetsToggle){tweetsToggle.checked=loadTweetsEnabled();tweetsToggle.addEventListener('change',function(){saveTweetsEnabled(tweetsToggle.checked);run();});}"
         + "if(randomButton){randomButton.addEventListener('click',function(){if(!suggestions.length)return;input.value=suggestions[Math.floor(Math.random()*suggestions.length)];saveSearch(norm(input.value));render(null);input.focus();});}"
         + "window.addEventListener('pageshow',function(){if(input.value){run();}});"
         + "const savedSearch=loadSavedSearch();"
-        + "if(savedSearch&&!input.value){input.value=savedSearch;run();}"
+        + "if(savedSearch&&!input.value){input.value=savedSearch;}"
+        + "loadSearchIndex().then(function(){if(input.value){run();}});"
         + "})();"
         + "</script>"
     )
@@ -1112,9 +1122,10 @@ def write_site_home(base_dir: Path, category_roots: dict[str, Path] | None = Non
     if category_roots is None:
         category_roots = _category_roots(base_dir)
     search_entries = _collect_browse_search_entries(base_dir, category_roots)
+    _write_site_search_index(base_dir, search_entries)
     search_controls = _search_controls_html()
     search_result = _search_result_html()
-    search_js = _search_script_html(search_entries)
+    search_js = _search_script_html()
 
     html_doc = (
         "<html><head><meta charset='utf-8'><meta name='viewport' content='width=device-width, initial-scale=1'><title>Docflow</title>"

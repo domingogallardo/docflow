@@ -1,3 +1,4 @@
+import json
 import os
 import time
 from datetime import date, datetime, timezone
@@ -52,6 +53,7 @@ def test_build_browse_site_generates_indexes_and_actions(tmp_path: Path):
 
     browse_home = base / "_site" / "browse" / "index.html"
     site_home = base / "_site" / "index.html"
+    search_index = base / "_site" / "search-index.json"
     posts_root_page = base / "_site" / "browse" / "posts" / "index.html"
     posts_year_page = base / "_site" / "browse" / "posts" / "Posts 2026" / "index.html"
     pdfs_year_page = base / "_site" / "browse" / "pdfs" / "Pdfs 2026" / "index.html"
@@ -62,6 +64,7 @@ def test_build_browse_site_generates_indexes_and_actions(tmp_path: Path):
 
     assert browse_home.exists()
     assert site_home.exists()
+    assert search_index.exists()
     assert posts_root_page.exists()
     assert posts_year_page.exists()
     assert pdfs_year_page.exists()
@@ -149,11 +152,10 @@ def test_build_browse_site_generates_indexes_and_actions(tmp_path: Path):
     assert "data-dg-search-button" in site_home_content
     assert "data-dg-search-random" in site_home_content
     assert "data-dg-search-tweets" in site_home_content
-    assert "dg-browse-search-data" in site_home_content
-    assert "dg-search-suggestions" in site_home_content
-    assert '"stem": "doc"' in site_home_content
-    assert '"folder": "Posts 2026"' in site_home_content
-    assert '"category": "posts"' in site_home_content
+    assert "dg-browse-search-data" not in site_home_content
+    assert "dg-search-suggestions" not in site_home_content
+    assert '"stem": "doc"' not in site_home_content
+    assert "fetch('/search-index.json',{cache:'no-store'})" in site_home_content
     assert "entries.filter" in site_home_content
     assert "Search title text or term + term" in site_home_content
     assert "function queryTerms(v)" in site_home_content
@@ -172,6 +174,14 @@ def test_build_browse_site_generates_indexes_and_actions(tmp_path: Path):
     assert "input.value=suggestions[Math.floor(Math.random()*suggestions.length)];run();" not in site_home_content
     assert "window.addEventListener('pageshow',function(){if(input.value){run();}})" in site_home_content
     assert site_home_content.find("Rebuild browse + reading + done") < site_home_content.find("data-dg-search-input")
+
+    search_index_payload = json.loads(search_index.read_text(encoding="utf-8"))
+    assert search_index_payload["version"] == 1
+    search_entries = {entry["name"]: entry for entry in search_index_payload["entries"]}
+    assert search_entries["doc.html"]["stem"] == "doc"
+    assert search_entries["doc.html"]["folder"] == "Posts 2026"
+    assert search_entries["doc.html"]["category"] == "posts"
+    assert isinstance(search_index_payload["suggestions"], list)
 
 
 def test_browse_search_entries_include_full_name_folder_and_viewer_url(tmp_path: Path):
