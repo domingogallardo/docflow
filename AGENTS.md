@@ -29,7 +29,7 @@ This repository automates collecting and organizing personal documents (web arti
 
 - Single source of truth: `BASE_DIR`.
 - Generated site: `BASE_DIR/_site/`.
-- Local state: `BASE_DIR/state/` (`reading.json`, `done.json`, `highlights/`).
+- Local state: `BASE_DIR/state/` (`reading.json`, `done.json`, `highlights/`, `reading_positions/`).
 
 ## Git: Pre-commit/push checks
 
@@ -56,6 +56,7 @@ Useful setup (new environment):
 - Preserve file `mtime` only for existing content files inside `BASE_DIR` (for example articles/pages under `Posts`, `Tweets`, etc.) unless the task explicitly requires changing ordering semantics.
 - Do not preserve `mtime` for repository code/docs files outside `BASE_DIR` (for example `docs/*.md`, `utils/*.py`, tests).
 - Use intranet routes and local state as canonical behavior (`docflow_server.py`, `_site`, `state`).
+- Home `History` is currently generated from meaningful `reading_positions/` state, not from an independent visit log. Resetting a document to a non-meaningful resume position may remove it from `History`; keep resume state and any future durable visit history separate.
 - API backward compatibility is not required in this repo: there is a single user/consumer. Prefer removing obsolete API terms and endpoints instead of keeping legacy aliases.
 - Long-term operational notes live in `docs/memory.md`.
 

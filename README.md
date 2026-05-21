@@ -31,7 +31,7 @@ Podcast snippets are typically captured in [Snipd](https://www.snipd.com) and th
 
 `utils/docflow_server.py` currently offers:
 
-- Home page with exact filename search and history of saved reading positions.
+- Home page with exact filename search and `History`, a recent list derived from saved meaningful reading positions.
 - Browse / Reading / Done views.
 - Browse hides items already in Reading / Done.
 - Highlight toggle on list pages, with browser-persistent state until switched back off.
@@ -51,7 +51,7 @@ Podcast snippets are typically captured in [Snipd](https://www.snipd.com) and th
   `source: tweet`, only the HTML is removed; the Markdown is kept as
   `markdown_only`.
 - Highlight navigation on article pages when highlights exist (`Jump to highlight`, previous/next controls).
-- Article pages remember the last reading position and resume it on reopen unless the URL already targets an explicit hash/deep link.
+- Article pages remember the last meaningful reading position and resume it on reopen unless the URL already targets an explicit hash/deep link.
 - PDF files open in the intranet PDF viewer and resume on the last saved page.
 - PDF ingestion creates same-stem Markdown sidecars with `docflow_pdf_path`, so PDFs can carry reading metadata and participate in Reading order.
 
@@ -86,6 +86,23 @@ All state is stored under `BASE_DIR/state/`:
   - `reading_started_at` (from `reading_at` when moving from Reading to Done)
 - `highlights/<sha256-prefix>/<sha256>.json`: canonical per-document highlight payloads, including per-highlight `created_at` timestamps and document `updated_at`.
 - `reading_positions/<sha256-prefix>/<sha256>.json`: canonical per-document reading-position payloads (`scroll_y`, `max_scroll`, `progress`, viewport/document height metadata, and PDF `page` / `page_count` metadata).
+
+#### Home History semantics
+
+The home `History` link currently reads `BASE_DIR/_site/history-index.json`.
+That generated JSON is a projection of `BASE_DIR/state/reading_positions/`,
+sorted by the saved reading-position `updated_at` timestamp descending.
+
+`History` is therefore not yet an independent visit log:
+
+- A document appears after Docflow saves a meaningful reading position for it.
+- Opening a document without a meaningful progress/page save may not add it.
+- Moving an HTML article back to its beginning can remove its saved reading-position JSON and make it disappear from `History`.
+- Moving a PDF back to its first page can do the same when no other meaningful resume position remains.
+
+This is intentional for the current implementation: `reading_positions/` answers
+"where should reading resume?", while a durable "which documents were visited?"
+history would need separate state.
 
 ### Background automations currently in use
 

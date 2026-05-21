@@ -21,7 +21,9 @@ This file stores stable, reusable operational notes for future agent runs.
 
 - Home search stays client-side and title/path based, but `utils/build_browse_index.py` writes the generated inventory to `BASE_DIR/_site/search-index.json` instead of embedding all entries in `_site/index.html`.
 - The home fetches `/search-index.json`; keep search entry collection and suggestion derivation in `utils/build_browse_index.py` so the generated index and home behavior stay aligned.
-- Home reading history uses `BASE_DIR/_site/history-index.json`, generated from `BASE_DIR/state/reading_positions`; keep it sorted by saved reading-position `updated_at` descending and refresh it when reading-position API writes change the state.
+- Home `History` uses `BASE_DIR/_site/history-index.json`, generated from `BASE_DIR/state/reading_positions`; keep it sorted by saved reading-position `updated_at` descending and refresh it when reading-position API writes change the state.
+- Treat the current home `History` as a reading-position projection, not a durable visit log. Documents with no meaningful saved resume position are absent; if a reading-position save returns an HTML article to the beginning or a PDF to its first page and removes its reading-position JSON, the document disappears from `History`.
+- Keep the concepts separate in future changes: `reading_positions/` answers where reading should resume. A true browse/visit history must have independent state so it is not erased by resetting resume position.
 
 ### Highlight Navigation Overlay
 
@@ -36,7 +38,7 @@ This file stores stable, reusable operational notes for future agent runs.
   - Third row: highlight jump controls (`Jump to highlight:` + counter + up/down controls).
   - Keep the third row hidden when highlight progress total is `0`.
 - Highlight payload normalization in `utils/highlight_store.py` must keep stable `id` values; when a highlight arrives without `id`, generate one deterministically to support legacy data and navigation state.
-- Reading-position resume state is stored separately in `BASE_DIR/state/reading_positions/<sha256-prefix>/<sha256>.json`.
+- Reading-position resume state is stored separately in `BASE_DIR/state/reading_positions/<sha256-prefix>/<sha256>.json`; only meaningful resume positions should persist there.
 - Canonical read/write helpers for that state live in `utils/reading_position_store.py`.
 - PDF resume uses the same store with `page` and `page_count`; list links should point to `/pdfs/view/...`, while `/pdfs/raw/...` remains the raw file route.
 - API surface for resume state:
