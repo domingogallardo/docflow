@@ -944,16 +944,16 @@ def _pdf_viewer_html(*, rel_path: str, pdf_path: Path, stage: str, page_count: i
     title = pdf_path.name
     raw_url = raw_url_for_rel_path(rel_path)
     context_url = _browse_parent_url_for_rel_path(rel_path)
-    context_label = "Inside Browse"
+    context_label = "Up to Browse"
     if stage == "reading":
-        context_label = "Inside Reading"
+        context_label = "Up to Reading"
         context_url = "/reading/"
         action_buttons = (
             '<button type="button" data-api-action="to-browse">Back to Browse</button>'
             '<button type="button" data-api-action="to-done">Move to Done</button>'
         )
     elif stage == "done":
-        context_label = "Inside Done"
+        context_label = "Up to Done"
         context_url = "/done/"
         action_buttons = '<button type="button" data-api-action="reopen">Reopen to Reading</button>'
     else:
@@ -1628,9 +1628,9 @@ OVERLAY_JS = """
   }
 
   function currentInsideLabel() {
-    if (stage === 'reading') return 'Inside Reading';
-    if (stage === 'done') return 'Inside Done';
-    return 'Inside Browse';
+    if (stage === 'reading') return 'Up to Reading';
+    if (stage === 'done') return 'Up to Done';
+    return 'Up to Browse';
   }
 
   function withRefreshParam(url) {

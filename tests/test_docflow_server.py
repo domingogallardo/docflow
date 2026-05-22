@@ -439,7 +439,7 @@ def test_raw_route_serves_library_file(tmp_path: Path):
         assert 'data-browse-url="/browse/posts/Posts%202026/"' in body
         assert "window.addEventListener('pageshow'" in body
         assert "back_forward" in body
-        assert "Inside Browse" in body
+        assert "Up to Browse" in body
         assert "PDF" in body
         assert "MD" in body
         assert "/api/export-pdf?path=" in body
@@ -1724,7 +1724,7 @@ def test_pdf_view_route_serves_resume_viewer(tmp_path: Path, monkeypatch):
         assert 'class="dg-pdf-title"' in body
         assert 'id="dg-actions-toggle"' not in body
         assert 'id="dg-overlay-actions" class="dg-row dg-row-actions"' in body
-        assert '<a class="dg-link" href="/browse/pdfs/Pdfs%202026/">Inside Browse</a>' in body
+        assert '<a class="dg-link" href="/browse/pdfs/Pdfs%202026/">Up to Browse</a>' in body
         assert '<a class="dg-link" href="/pdfs/raw/Pdfs%202026/doc.pdf">Raw</a>' in body
         assert '<div class="bar">' not in body
         assert 'data-docflow-path="Pdfs/Pdfs 2026/doc.pdf"' in body
@@ -1759,7 +1759,7 @@ def test_pdf_view_context_link_follows_reading_stage(tmp_path: Path, monkeypatch
 
         status, body = _get(port, "/pdfs/view/Pdfs%202026/doc.pdf")
         assert status == 200
-        assert '<a class="dg-link" href="/reading/">Inside Reading</a>' in body
+        assert '<a class="dg-link" href="/reading/">Up to Reading</a>' in body
         assert "Back to Browse" in body
         assert "Move to Done" in body
         assert "/browse/pdfs/Pdfs%202026/" not in body

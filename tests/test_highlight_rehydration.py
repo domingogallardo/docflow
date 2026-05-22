@@ -151,7 +151,7 @@ def test_highlight_selection_same_text_node_mid_tail_span(tmp_path: Path):
         highlights = [item for item in payload.get("highlights", []) if isinstance(item, dict)]
         texts = [item.get("text") for item in highlights]
         assert target in texts
-        assert all("Inside Browse" not in str(item.get("suffix", "")) for item in highlights)
+        assert all("Up to Browse" not in str(item.get("suffix", "")) for item in highlights)
     finally:
         server.shutdown()
         server.server_close()
@@ -181,7 +181,7 @@ def test_done_page_rehydrates_highlight_with_stale_overlay_suffix(tmp_path: Path
                     "id": "h_stale",
                     "text": target,
                     "prefix": "Beforeyes ",
-                    "suffix": "Inside BrowsePDFMove to ReadingMove to Done",
+                    "suffix": "Up to BrowsePDFMove to ReadingMove to Done",
                     "created_at": "2026-05-04T00:00:00Z",
                 }
             ]

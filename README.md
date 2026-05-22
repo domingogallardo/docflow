@@ -44,7 +44,7 @@ Podcast snippets are typically captured in [Snipd](https://www.snipd.com) and th
 - Done ordered by `done_at` (newest first).
 - Stage transitions from the UI (`Move to Reading`, `Move to Done`, `Back to Browse`, `Reopen to Reading`).
 - Per-article actions in the overlay:
-  - Context link (`Inside Browse`, `Inside Reading`, `Inside Done`)
+  - Context link (`Up to Browse`, `Up to Reading`, `Up to Done`)
   - `PDF` export
   - `MD` export
   - `Rebuild`
