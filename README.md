@@ -207,7 +207,7 @@ export DONE_LINKS_FILE="/path/to/Obsidian/Leidos.md"
 - Core dependencies:
 
 ```bash
-pip install requests beautifulsoup4 markdownify openai pillow pytest markdown
+pip install requests beautifulsoup4 markdownify openai pillow pytest markdown scikit-learn
 ```
 
 Optional for intranet PDF page rendering:

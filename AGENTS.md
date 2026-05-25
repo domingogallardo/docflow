@@ -11,7 +11,7 @@ This repository automates collecting and organizing personal documents (web arti
 
 ## Build, Test, and Dev Commands
 
-- Install deps: `pip install requests beautifulsoup4 markdownify openai pillow pytest markdown`
+- Install deps: `pip install requests beautifulsoup4 markdownify openai pillow pytest markdown scikit-learn`
 - Tweet capture deps: `pip install "playwright>=1.55" && playwright install chromium`
 - Run full pipeline: `python process_documents.py all --year 2026`
 - Selective run: `python process_documents.py pdfs md`

@@ -59,9 +59,12 @@ TEMPORAL_GROUP_CATEGORIES = {"posts", "tweets", "podcasts"}
 SEARCH_SUGGESTION_LIMIT = 400
 CONTENT_FILTER_BUTTON_COUNT = 7
 CONTENT_FILTER_POOL_LIMIT = 240
-CONTENT_FILTER_MAX_DOC_FRACTION = 0.18
-CONTENT_FILTER_MIN_DOCS_FOR_MIN_DF = 30
-CONTENT_FILTER_MIN_DOC_COUNT = 2
+CONTENT_FILTER_MAX_DOC_FRACTION = 0.30
+CONTENT_FILTER_MIN_DOC_COUNT = 3
+CONTENT_FILTER_TARGET_MIN_FRACTION = 0.10
+CONTENT_FILTER_TARGET_MAX_FRACTION = 0.30
+CONTENT_FILTER_MIN_DOC_FRACTION = 0.03
+CONTENT_FILTER_DIVERSITY_OVERLAP = 0.55
 SEARCH_SUGGESTION_STOPWORDS = {
     "a",
     "al",
@@ -70,6 +73,8 @@ SEARCH_SUGGESTION_STOPWORDS = {
     "are",
     "as",
     "at",
+    "after",
+    "but",
     "by",
     "con",
     "de",
@@ -79,10 +84,13 @@ SEARCH_SUGGESTION_STOPWORDS = {
     "for",
     "from",
     "how",
+    "his",
+    "have",
     "in",
     "into",
     "is",
     "it",
+    "its",
     "la",
     "las",
     "le",
@@ -91,17 +99,23 @@ SEARCH_SUGGESTION_STOPWORDS = {
     "of",
     "on",
     "or",
+    "over",
     "para",
     "por",
     "que",
     "se",
     "según",
+    "their",
+    "them",
     "the",
+    "they",
     "to",
     "un",
     "una",
+    "via",
     "what",
     "why",
+    "without",
     "with",
     "y",
 }
@@ -116,12 +130,15 @@ CONTENT_FILTER_STOPWORDS = SEARCH_SUGGESTION_STOPWORDS | {
     "articulo",
     "asi",
     "between",
+    "build",
     "can",
     "cada",
     "como",
+    "common",
     "could",
     "cuando",
     "desde",
+    "despite",
     "esta",
     "este",
     "estos",
@@ -129,7 +146,9 @@ CONTENT_FILTER_STOPWORDS = SEARCH_SUGGESTION_STOPWORDS | {
     "here",
     "has",
     "just",
+    "large",
     "like",
+    "local",
     "more",
     "most",
     "many",
@@ -140,7 +159,11 @@ CONTENT_FILTER_STOPWORDS = SEARCH_SUGGESTION_STOPWORDS | {
     "otro",
     "otros",
     "pero",
+    "post",
+    "posts",
+    "rather",
     "recent",
+    "shared",
     "sobre",
     "son",
     "sus",
@@ -181,6 +204,7 @@ CONTENT_FILTER_GENERIC_WORDS = SEARCH_SUGGESTION_GENERIC_WORDS | {
     "approach",
     "approaches",
     "argumenta",
+    "arguing",
     "argues",
     "author",
     "case",
@@ -189,18 +213,23 @@ CONTENT_FILTER_GENERIC_WORDS = SEARCH_SUGGESTION_GENERIC_WORDS | {
     "concept",
     "covers",
     "debate",
+    "dgfilterboundary",
+    "document",
     "example",
     "forma",
     "future",
     "general",
+    "generic",
     "highlights",
     "idea",
     "important",
+    "context",
     "links",
     "manera",
     "major",
     "may",
     "mundo",
+    "mas",
     "need",
     "note",
     "paper",
@@ -217,6 +246,8 @@ CONTENT_FILTER_GENERIC_WORDS = SEARCH_SUGGESTION_GENERIC_WORDS | {
     "relationship",
     "role",
     "should",
+    "show",
+    "signal",
     "studies",
     "summary",
     "sistema",
@@ -224,9 +255,15 @@ CONTENT_FILTER_GENERIC_WORDS = SEARCH_SUGGESTION_GENERIC_WORDS | {
     "tema",
     "texto",
     "time",
+    "topic",
     "trabajo",
     "traces",
+    "tweet",
+    "tweets",
+    "unique",
+    "use",
     "way",
+    "work",
     "world",
 }
 SEARCH_SUGGESTION_WORD_RE = re.compile(r"[A-Za-zÀ-ÖØ-öø-ÿ0-9][A-Za-zÀ-ÖØ-öø-ÿ0-9'’.-]*")
@@ -363,36 +400,42 @@ def _content_filter_token_value(token: str) -> str:
     return _normalize_filter_term(token.strip(" .,:;!?()[]{}\"'’-/–—"))
 
 
+def _is_content_filter_term(term: str) -> bool:
+    words = term.split()
+    if not 1 <= len(words) <= 2:
+        return False
+
+    short_specific_words = {"ai", "ia", "ui", "ux"}
+    excluded = CONTENT_FILTER_STOPWORDS | CONTENT_FILTER_GENERIC_WORDS
+    for word in words:
+        if not word or word.isdigit() or not re.search(r"[a-z]", word):
+            return False
+        if len(word) < 3 and word not in short_specific_words:
+            return False
+
+    if words[0] in excluded or words[-1] in excluded:
+        return False
+    if len(words) == 1:
+        return words[0] not in excluded
+    return True
+
+
 def _content_filter_candidate_phrases(text: str) -> list[tuple[str, str]]:
     candidates: list[tuple[str, str]] = []
     seen: set[str] = set()
-    short_specific_words = {"ai", "ia", "ui", "ux"}
     for segment in re.split(r"[.!?;:\n\r]+", text):
         words = [word for word in _content_filter_tokens(re.sub(r"[_|]+", " ", segment)) if word]
         if not words:
             continue
-        for size in (3, 2):
+        for size in (2, 1):
             for index in range(0, len(words) - size + 1):
                 phrase_words = words[index : index + size]
                 normalized_words = [_content_filter_token_value(word) for word in phrase_words]
                 if any(re.search(r"[a-z][A-Z]", word) for word in phrase_words):
                     continue
-                if any(not word or word.isdigit() for word in normalized_words):
-                    continue
-                if any(len(word) < 3 and word not in short_specific_words for word in normalized_words):
-                    continue
-                if normalized_words[0] in CONTENT_FILTER_STOPWORDS or normalized_words[-1] in CONTENT_FILTER_STOPWORDS:
-                    continue
-                if normalized_words[0] in CONTENT_FILTER_GENERIC_WORDS or normalized_words[-1] in CONTENT_FILTER_GENERIC_WORDS:
-                    continue
-                meaningful_words = [
-                    word
-                    for word in normalized_words
-                    if word not in CONTENT_FILTER_STOPWORDS and word not in CONTENT_FILTER_GENERIC_WORDS
-                ]
-                if len(meaningful_words) < 2:
-                    continue
                 normalized_phrase = " ".join(normalized_words)
+                if not _is_content_filter_term(normalized_phrase):
+                    continue
                 if normalized_phrase in seen:
                     continue
                 seen.add(normalized_phrase)
@@ -400,40 +443,186 @@ def _content_filter_candidate_phrases(text: str) -> list[tuple[str, str]]:
     return candidates
 
 
-def _content_filter_pool(entries: list[BrowseEntry], limit: int = CONTENT_FILTER_POOL_LIMIT) -> list[str]:
-    file_entries = [entry for entry in entries if not entry.is_dir and entry.filter_text]
-    total_docs = len(file_entries)
+def _content_filter_analyzer(text: str) -> list[str]:
+    return [normalized for _, normalized in _content_filter_candidate_phrases(text)]
+
+
+def _content_filter_tokenizer(text: str) -> list[str]:
+    return [_content_filter_token_value(token) for token in _content_filter_tokens(text)]
+
+
+def _content_filter_preprocessor(text: str) -> str:
+    normalized = _normalize_filter_term(text)
+    return re.sub(r"[.!?;:\n\r]+", " dgfilterboundary ", normalized)
+
+
+def _content_filter_display_phrase(term: str) -> str:
+    words = term.split()
+    return " ".join(word.upper() if word in {"ai", "ia", "ui", "ux"} else word for word in words)
+
+
+def _binary_entropy(probability: float) -> float:
+    if probability <= 0 or probability >= 1:
+        return 0.0
+    return -(probability * math.log2(probability) + (1 - probability) * math.log2(1 - probability))
+
+
+def _coverage_target_score(coverage: float) -> float:
+    target_midpoint = (CONTENT_FILTER_TARGET_MIN_FRACTION + CONTENT_FILTER_TARGET_MAX_FRACTION) / 2
+    target_half_width = (CONTENT_FILTER_TARGET_MAX_FRACTION - CONTENT_FILTER_TARGET_MIN_FRACTION) / 2
+    if target_half_width <= 0:
+        return 1.0
+    distance = abs(coverage - target_midpoint)
+    return max(0.0, 1.0 - distance / target_half_width)
+
+
+def _coverage_signal(total_docs: int, coverage: float) -> float:
+    entropy = _binary_entropy(coverage)
+    if total_docs <= 5:
+        return max(entropy, 0.25)
+    return entropy
+
+
+def _content_filter_term_tokens(term: str) -> set[str]:
+    tokens: set[str] = set()
+    for token in term.split():
+        tokens.add(token)
+        if len(token) > 4 and token.endswith("s"):
+            tokens.add(token[:-1])
+    return tokens
+
+
+def _select_diverse_content_terms(ranked_terms: list[tuple[str, float]], limit: int) -> list[str]:
+    selected: list[str] = []
+    selected_tokens: list[set[str]] = []
+    for term, _score in ranked_terms:
+        tokens = _content_filter_term_tokens(term)
+        if not tokens:
+            continue
+        is_too_similar = False
+        for existing in selected_tokens:
+            overlap = len(tokens & existing) / max(1, min(len(tokens), len(existing)))
+            if overlap > CONTENT_FILTER_DIVERSITY_OVERLAP:
+                is_too_similar = True
+                break
+        if is_too_similar:
+            continue
+        selected.append(term)
+        selected_tokens.append(tokens)
+        if len(selected) >= limit:
+            break
+    return selected
+
+
+def _content_filter_min_doc_count(total_docs: int) -> int:
+    if total_docs <= 5:
+        return 1
+    return max(CONTENT_FILTER_MIN_DOC_COUNT, math.ceil(total_docs * CONTENT_FILTER_MIN_DOC_FRACTION))
+
+
+def _content_filter_pool_sklearn(texts: list[str], limit: int) -> list[str] | None:
+    try:
+        from sklearn.feature_extraction.text import CountVectorizer
+    except Exception:
+        return None
+
+    total_docs = len(texts)
+    if total_docs == 0:
+        return []
+
+    min_df = _content_filter_min_doc_count(total_docs)
+    max_df = max(min_df, int(total_docs * CONTENT_FILTER_MAX_DOC_FRACTION))
+    try:
+        vectorizer = CountVectorizer(
+            preprocessor=_content_filter_preprocessor,
+            tokenizer=_content_filter_tokenizer,
+            token_pattern=None,
+            ngram_range=(1, 2),
+            lowercase=False,
+            binary=False,
+            min_df=min_df,
+            max_df=max_df,
+        )
+        matrix = vectorizer.fit_transform(texts)
+    except ValueError:
+        return []
+
+    try:
+        terms = vectorizer.get_feature_names_out()
+    except AttributeError:
+        terms = vectorizer.get_feature_names()
+
+    if len(terms) == 0:
+        return []
+
+    binary_matrix = matrix.copy()
+    binary_matrix.data.fill(1)
+    doc_counts = binary_matrix.sum(axis=0).A1
+    term_counts = matrix.sum(axis=0).A1
+
+    ranked_terms: list[tuple[str, float]] = []
+    for index, term in enumerate(terms):
+        term = str(term)
+        if not _is_content_filter_term(term):
+            continue
+        doc_count = int(doc_counts[index])
+        if doc_count < min_df or doc_count > max_df:
+            continue
+        coverage = doc_count / total_docs
+        entropy = _coverage_signal(total_docs, coverage)
+        target_bonus = 1.0 + _coverage_target_score(coverage)
+        word_count = len(term.split())
+        ngram_bonus = 1.0 if word_count >= 2 else 0.86
+        frequency = 1.0 + math.log1p(float(term_counts[index]))
+        score = entropy * target_bonus * ngram_bonus * frequency
+        ranked_terms.append((term, score))
+
+    ranked_terms.sort(key=lambda item: (-item[1], item[0]))
+    return [_content_filter_display_phrase(term) for term in _select_diverse_content_terms(ranked_terms, limit)]
+
+
+def _content_filter_pool_fallback(texts: list[str], limit: int) -> list[str]:
+    total_docs = len(texts)
     if total_docs == 0:
         return []
 
     term_frequency: Counter[str] = Counter()
     document_frequency: Counter[str] = Counter()
-    first_rank: dict[str, int] = {}
-    display_phrase: dict[str, str] = {}
     max_doc_count = max(2, int(total_docs * CONTENT_FILTER_MAX_DOC_FRACTION))
-    min_doc_count = CONTENT_FILTER_MIN_DOC_COUNT if total_docs >= CONTENT_FILTER_MIN_DOCS_FOR_MIN_DF else 1
+    min_doc_count = _content_filter_min_doc_count(total_docs)
 
-    for doc_rank, entry in enumerate(file_entries):
-        doc_terms = _content_filter_candidate_phrases(entry.filter_text)
-        doc_counter = Counter(normalized for _, normalized in doc_terms)
-        for phrase, normalized in doc_terms:
-            display_phrase.setdefault(normalized, phrase)
-            first_rank.setdefault(normalized, doc_rank)
+    for text in texts:
+        doc_terms = _content_filter_analyzer(text)
+        doc_counter = Counter(doc_terms)
         term_frequency.update(doc_counter)
         document_frequency.update(doc_counter.keys())
 
-    scores: list[tuple[float, int, int, str, str]] = []
-    for normalized, doc_count in document_frequency.items():
+    ranked_terms: list[tuple[str, float]] = []
+    for term, doc_count in document_frequency.items():
         if doc_count < min_doc_count or doc_count > max_doc_count:
             continue
-        tf = 1 + math.log(term_frequency[normalized])
-        idf = math.log((total_docs + 1) / (doc_count + 1)) + 1
-        word_count = len(normalized.split())
-        score = tf * idf * (1.15 if word_count >= 3 else 1.0)
-        scores.append((score, word_count, -first_rank[normalized], display_phrase[normalized].lower(), normalized))
+        coverage = doc_count / total_docs
+        entropy = _coverage_signal(total_docs, coverage)
+        target_bonus = 1.0 + _coverage_target_score(coverage)
+        word_count = len(term.split())
+        ngram_bonus = 1.0 if word_count >= 2 else 0.86
+        frequency = 1.0 + math.log1p(term_frequency[term])
+        score = entropy * target_bonus * ngram_bonus * frequency
+        ranked_terms.append((term, score))
 
-    scores.sort(reverse=True)
-    return [display_phrase[normalized] for _, _, _, _, normalized in scores[:limit]]
+    ranked_terms.sort(key=lambda item: (-item[1], item[0]))
+    return [_content_filter_display_phrase(term) for term in _select_diverse_content_terms(ranked_terms, limit)]
+
+
+def _content_filter_pool(entries: list[BrowseEntry], limit: int = CONTENT_FILTER_POOL_LIMIT) -> list[str]:
+    texts = [entry.filter_text for entry in entries if not entry.is_dir and entry.filter_text]
+    if not texts:
+        return []
+
+    sklearn_pool = _content_filter_pool_sklearn(texts, limit)
+    if sklearn_pool is not None:
+        return sklearn_pool
+    return _content_filter_pool_fallback(texts, limit)
 
 
 def _highlight_status(base_dir: Path, rel_path: str) -> tuple[bool, float | None]:
@@ -1604,11 +1793,27 @@ def ensure_assets(base_dir: Path) -> None:
       .filter(Boolean);
   }
 
+  function tokenSet(value) {
+    return new Set(String(value || '').split(/[^a-z0-9]+/).filter(Boolean));
+  }
+
+  function tokenCoverageMatch(filterTokens, documentTokens) {
+    if (filterTokens.length === 0) return false;
+    let matches = 0;
+    for (const token of filterTokens) {
+      if (documentTokens.has(token)) matches += 1;
+    }
+    const required = filterTokens.length <= 2 ? filterTokens.length : Math.ceil(filterTokens.length * 0.67);
+    return matches >= required;
+  }
+
   function matchesFilterText(filterText, terms) {
-    const tokens = new Set(filterText.split(/[^a-z0-9]+/).filter(Boolean));
+    const documentTokens = tokenSet(filterText);
     return terms.some((term) => {
-      if (term.length <= 3) return tokens.has(term);
-      return filterText.includes(term);
+      const filterTokens = Array.from(tokenSet(term));
+      if (filterTokens.length <= 1) return documentTokens.has(filterTokens[0]);
+      if (filterText.includes(term)) return true;
+      return tokenCoverageMatch(filterTokens, documentTokens);
     });
   }
 

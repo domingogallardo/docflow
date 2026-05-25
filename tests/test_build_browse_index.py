@@ -122,6 +122,8 @@ def test_build_browse_site_generates_indexes_and_actions(tmp_path: Path):
     assert "renderSuggestedFilters" in browse_sort_content
     assert "normalizeText" in browse_sort_content
     assert "matchesFilterText" in browse_sort_content
+    assert "tokenCoverageMatch" in browse_sort_content
+    assert "documentTokens" in browse_sort_content
     assert "data-dg-filter-summary" in browse_sort_content
     assert "dgWorking" not in browse_sort_content
 
@@ -389,11 +391,32 @@ def test_content_filter_pool_uses_titles_and_summaries_without_common_phrases():
 
     pool = build_browse_index._content_filter_pool(entries, limit=20)
 
-    assert "object oriented programming" in pool
-    assert "Artificial intelligence" in pool
+    assert "object oriented" in pool
+    assert "artificial intelligence" in pool
     assert "rental markets" in pool
     assert "The summary" not in pool
     assert not any("summary" in phrase.lower() for phrase in pool)
+
+
+def test_content_filter_pool_includes_specific_unigrams_and_bigrams():
+    entries = []
+    for index in range(20):
+        theme = "robotics" if index < 5 else "privacy law" if index < 10 else f"local archive topic {index}"
+        entries.append(
+            build_browse_index.BrowseEntry(
+                name=f"doc-{index}.html",
+                href="#",
+                mtime=0,
+                is_dir=False,
+                icon="",
+                filter_text=f"{theme}. Topic context.",
+            )
+        )
+
+    pool = [term.lower() for term in build_browse_index._content_filter_pool(entries, limit=40)]
+
+    assert "robotics" in pool
+    assert "privacy law" in pool
 
 
 def test_content_filter_pool_falls_back_to_titles_when_summaries_are_missing():
@@ -408,7 +431,7 @@ def test_content_filter_pool_falls_back_to_titles_when_summaries_are_missing():
         ),
     ]
 
-    assert "Adaptive learning" in build_browse_index._content_filter_pool(entries, limit=10)
+    assert "adaptive learning" in build_browse_index._content_filter_pool(entries, limit=10)
 
 
 def test_content_filter_pool_discards_too_common_phrases_and_keeps_specific_recurring_terms():
@@ -428,9 +451,63 @@ def test_content_filter_pool_discards_too_common_phrases_and_keeps_specific_recu
 
     pool = build_browse_index._content_filter_pool(entries, limit=20)
 
-    assert "rare thematic cluster" in pool
-    assert "Common signal phrase" not in pool
+    assert "rare thematic" in pool
+    assert "common signal" not in pool
     assert not any(phrase.startswith("unique local") for phrase in pool)
+
+
+def test_content_filter_pool_prefers_intermediate_coverage():
+    entries = []
+    for index in range(50):
+        parts = ["common shared phrase"]
+        if index < 12:
+            parts.append("climate adaptation")
+        if 20 <= index < 22:
+            parts.append("tiny rare cluster")
+        parts.append(f"local document marker {index}")
+        entries.append(
+            build_browse_index.BrowseEntry(
+                name=f"doc-{index}.html",
+                href="#",
+                mtime=0,
+                is_dir=False,
+                icon="",
+                filter_text=". ".join(parts) + ".",
+            )
+        )
+
+    pool = build_browse_index._content_filter_pool(entries, limit=20)
+
+    assert "climate adaptation" in pool
+    assert "common shared phrase" not in pool
+    assert "tiny rare cluster" not in pool
+
+
+def test_content_filter_pool_fallback_uses_statistical_coverage(monkeypatch):
+    monkeypatch.setattr(build_browse_index, "_content_filter_pool_sklearn", lambda texts, limit: None)
+    entries = []
+    for index in range(40):
+        parts = ["generic article signal"]
+        if index < 8:
+            parts.append("semantic retrieval")
+        if index == 20:
+            parts.append("single oddity")
+        entries.append(
+            build_browse_index.BrowseEntry(
+                name=f"doc-{index}.html",
+                href="#",
+                mtime=0,
+                is_dir=False,
+                icon="",
+                filter_text=". ".join(parts) + ".",
+            )
+        )
+
+    pool = build_browse_index._content_filter_pool(entries, limit=20)
+
+    assert "semantic retrieval" in pool
+    assert "generic article signal" not in pool
+    assert "single oddity" not in pool
 
 
 def test_collect_category_items_handles_missing_dirs(tmp_path: Path):
