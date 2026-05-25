@@ -9,10 +9,13 @@ from __future__ import annotations
 import argparse
 import html
 import json
+import math
 import os
 import re
 import shutil
 import time
+import unicodedata
+from collections import Counter
 from datetime import date, datetime, timedelta, timezone
 from dataclasses import dataclass, replace
 from pathlib import Path
@@ -54,6 +57,11 @@ YEAR_COUNT_CATEGORIES = {"posts", "tweets", "pdfs", "images"}
 YEAR_SORT_CATEGORIES = {"posts", "tweets", "pdfs", "images"}
 TEMPORAL_GROUP_CATEGORIES = {"posts", "tweets", "podcasts"}
 SEARCH_SUGGESTION_LIMIT = 400
+CONTENT_FILTER_BUTTON_COUNT = 7
+CONTENT_FILTER_POOL_LIMIT = 240
+CONTENT_FILTER_MAX_DOC_FRACTION = 0.18
+CONTENT_FILTER_MIN_DOCS_FOR_MIN_DF = 30
+CONTENT_FILTER_MIN_DOC_COUNT = 2
 SEARCH_SUGGESTION_STOPWORDS = {
     "a",
     "al",
@@ -97,6 +105,57 @@ SEARCH_SUGGESTION_STOPWORDS = {
     "with",
     "y",
 }
+CONTENT_FILTER_STOPWORDS = SEARCH_SUGGESTION_STOPWORDS | {
+    "about",
+    "also",
+    "ante",
+    "aqui",
+    "across",
+    "around",
+    "article",
+    "articulo",
+    "asi",
+    "between",
+    "can",
+    "cada",
+    "como",
+    "could",
+    "cuando",
+    "desde",
+    "esta",
+    "este",
+    "estos",
+    "esto",
+    "here",
+    "has",
+    "just",
+    "like",
+    "more",
+    "most",
+    "many",
+    "muy",
+    "new",
+    "not",
+    "otra",
+    "otro",
+    "otros",
+    "pero",
+    "recent",
+    "sobre",
+    "son",
+    "sus",
+    "that",
+    "than",
+    "three",
+    "this",
+    "through",
+    "tras",
+    "using",
+    "where",
+    "when",
+    "while",
+    "will",
+}
 SEARCH_SUGGESTION_GENERIC_WORDS = {
     "complete",
     "comprehensive",
@@ -115,6 +174,60 @@ SEARCH_SUGGESTION_GENERIC_WORDS = {
     "review",
     "ultimate",
     "understanding",
+}
+CONTENT_FILTER_GENERIC_WORDS = SEARCH_SUGGESTION_GENERIC_WORDS | {
+    "ability",
+    "analysis",
+    "approach",
+    "approaches",
+    "argumenta",
+    "argues",
+    "author",
+    "case",
+    "central",
+    "clave",
+    "concept",
+    "covers",
+    "debate",
+    "example",
+    "forma",
+    "future",
+    "general",
+    "highlights",
+    "idea",
+    "important",
+    "links",
+    "manera",
+    "major",
+    "may",
+    "mundo",
+    "need",
+    "note",
+    "paper",
+    "parte",
+    "personas",
+    "perspective",
+    "piece",
+    "possible",
+    "process",
+    "presents",
+    "puede",
+    "pueden",
+    "relacion",
+    "relationship",
+    "role",
+    "should",
+    "studies",
+    "summary",
+    "sistema",
+    "systems",
+    "tema",
+    "texto",
+    "time",
+    "trabajo",
+    "traces",
+    "way",
+    "world",
 }
 SEARCH_SUGGESTION_WORD_RE = re.compile(r"[A-Za-zÀ-ÖØ-öø-ÿ0-9][A-Za-zÀ-ÖØ-öø-ÿ0-9'’.-]*")
 SPANISH_MONTH_NAMES = {
@@ -156,6 +269,7 @@ class BrowseEntry:
     highlight_last_epoch: float | None = None
     sort_mtime: float | None = None
     item_count: int | None = None
+    filter_text: str = ""
 
 
 def _safe_quote_component(value: str) -> str:
@@ -184,6 +298,142 @@ def _icon_for_filename(name: str) -> str:
     if lower.endswith((".html", ".htm")):
         return "📄 "
     return ""
+
+
+def _browse_controls_html(entries: list[BrowseEntry]) -> str:
+    filter_pool = _content_filter_pool(entries)
+    buttons = [
+        (
+            "<button type='button' class='dg-sort-toggle' data-dg-sort-toggle aria-pressed='false'>"
+            "Highlight: off"
+            "</button>"
+        )
+    ]
+    buttons.append(
+        "<span class='dg-content-filter-slot' "
+        f"data-dg-content-filter-pool='{html.escape(json.dumps(filter_pool, ensure_ascii=False, separators=(',', ':')), quote=True)}' "
+        f"data-dg-content-filter-count='{CONTENT_FILTER_BUTTON_COUNT}'></span>"
+    )
+    buttons.append("<span class='dg-filter-summary' data-dg-filter-summary aria-live='polite'></span>")
+    return "".join(buttons)
+
+
+def _truncate_filter_part(value: str, limit: int = 320) -> str:
+    text = " ".join(str(value).split())
+    if len(text) <= limit:
+        return text
+    return text[:limit].rsplit(" ", 1)[0]
+
+
+def _filter_text_for_path(path: Path) -> str:
+    parts = [path.stem]
+    md_path = path if path.suffix.lower() == ".md" else path.with_suffix(".md")
+    if md_path.is_file():
+        try:
+            meta, _ = split_front_matter(md_path.read_text(encoding="utf-8", errors="replace"))
+        except Exception:
+            meta = {}
+        for key in (
+            "title",
+            "docflow_summary",
+            "podcast_episode_title",
+        ):
+            value = meta.get(key, "")
+            if value:
+                parts.append(_truncate_filter_part(value))
+
+    text = " ".join(part for part in parts if part)
+    return _truncate_filter_part(text, limit=1200)
+
+
+def _normalize_filter_term(value: str) -> str:
+    normalized = unicodedata.normalize("NFD", value)
+    normalized = "".join(ch for ch in normalized if unicodedata.category(ch) != "Mn")
+    return normalized.lower()
+
+
+def _content_filter_tokens(value: str) -> list[str]:
+    return [
+        match.group(0).strip(" .,:;!?()[]{}\"'’-/–—")
+        for match in SEARCH_SUGGESTION_WORD_RE.finditer(value)
+    ]
+
+
+def _content_filter_token_value(token: str) -> str:
+    return _normalize_filter_term(token.strip(" .,:;!?()[]{}\"'’-/–—"))
+
+
+def _content_filter_candidate_phrases(text: str) -> list[tuple[str, str]]:
+    candidates: list[tuple[str, str]] = []
+    seen: set[str] = set()
+    short_specific_words = {"ai", "ia", "ui", "ux"}
+    for segment in re.split(r"[.!?;:\n\r]+", text):
+        words = [word for word in _content_filter_tokens(re.sub(r"[_|]+", " ", segment)) if word]
+        if not words:
+            continue
+        for size in (3, 2):
+            for index in range(0, len(words) - size + 1):
+                phrase_words = words[index : index + size]
+                normalized_words = [_content_filter_token_value(word) for word in phrase_words]
+                if any(re.search(r"[a-z][A-Z]", word) for word in phrase_words):
+                    continue
+                if any(not word or word.isdigit() for word in normalized_words):
+                    continue
+                if any(len(word) < 3 and word not in short_specific_words for word in normalized_words):
+                    continue
+                if normalized_words[0] in CONTENT_FILTER_STOPWORDS or normalized_words[-1] in CONTENT_FILTER_STOPWORDS:
+                    continue
+                if normalized_words[0] in CONTENT_FILTER_GENERIC_WORDS or normalized_words[-1] in CONTENT_FILTER_GENERIC_WORDS:
+                    continue
+                meaningful_words = [
+                    word
+                    for word in normalized_words
+                    if word not in CONTENT_FILTER_STOPWORDS and word not in CONTENT_FILTER_GENERIC_WORDS
+                ]
+                if len(meaningful_words) < 2:
+                    continue
+                normalized_phrase = " ".join(normalized_words)
+                if normalized_phrase in seen:
+                    continue
+                seen.add(normalized_phrase)
+                candidates.append((" ".join(phrase_words), normalized_phrase))
+    return candidates
+
+
+def _content_filter_pool(entries: list[BrowseEntry], limit: int = CONTENT_FILTER_POOL_LIMIT) -> list[str]:
+    file_entries = [entry for entry in entries if not entry.is_dir and entry.filter_text]
+    total_docs = len(file_entries)
+    if total_docs == 0:
+        return []
+
+    term_frequency: Counter[str] = Counter()
+    document_frequency: Counter[str] = Counter()
+    first_rank: dict[str, int] = {}
+    display_phrase: dict[str, str] = {}
+    max_doc_count = max(2, int(total_docs * CONTENT_FILTER_MAX_DOC_FRACTION))
+    min_doc_count = CONTENT_FILTER_MIN_DOC_COUNT if total_docs >= CONTENT_FILTER_MIN_DOCS_FOR_MIN_DF else 1
+
+    for doc_rank, entry in enumerate(file_entries):
+        doc_terms = _content_filter_candidate_phrases(entry.filter_text)
+        doc_counter = Counter(normalized for _, normalized in doc_terms)
+        for phrase, normalized in doc_terms:
+            display_phrase.setdefault(normalized, phrase)
+            first_rank.setdefault(normalized, doc_rank)
+        term_frequency.update(doc_counter)
+        document_frequency.update(doc_counter.keys())
+
+    scores: list[tuple[float, int, int, str, str]] = []
+    for normalized, doc_count in document_frequency.items():
+        if doc_count < min_doc_count or doc_count > max_doc_count:
+            continue
+        tf = 1 + math.log(term_frequency[normalized])
+        idf = math.log((total_docs + 1) / (doc_count + 1)) + 1
+        word_count = len(normalized.split())
+        score = tf * idf * (1.15 if word_count >= 3 else 1.0)
+        scores.append((score, word_count, -first_rank[normalized], display_phrase[normalized].lower(), normalized))
+
+    scores.sort(reverse=True)
+    return [display_phrase[normalized] for _, _, _, _, normalized in scores[:limit]]
 
 
 def _highlight_status(base_dir: Path, rel_path: str) -> tuple[bool, float | None]:
@@ -216,6 +466,7 @@ def _render_entry(entry: BrowseEntry) -> str:
         f"data-dg-highlight-last='{(entry.highlight_last_epoch or 0):.6f}'",
         f"data-dg-sort-mtime='{_sort_mtime(entry):.6f}'",
         f"data-dg-name='{html.escape(entry.name.lower(), quote=True)}'",
+        f"data-dg-filter-text='{html.escape(entry.filter_text or entry.name, quote=True)}'",
     ]
     attrs = f"{cls_attr} " + " ".join(attr_bits) if cls_attr else " " + " ".join(attr_bits)
     return (
@@ -262,13 +513,12 @@ def _base_head(title: str) -> str:
     return (
         f"<html><head><meta charset='utf-8'><meta name='viewport' content='width=device-width, initial-scale=1'><title>{html.escape(title)}</title>"
         "<style>"
-        "body{margin:14px 18px;font:14px -apple-system,system-ui,Segoe UI,Roboto,Helvetica,Arial;color:#222}"
+        "body{margin:14px 18px;font:14px -apple-system,system-ui,Segoe UI,Roboto,Helvetica,Arial;color:#222;background:#fff}"
         "h2{margin:6px 0 10px;font-weight:600}"
         "hr{border:0;border-top:1px solid #e6e6e6;margin:8px 0}"
         "ul.dg-index{list-style:none;padding-left:0}"
         ".dg-index li{padding:2px 6px;border-radius:6px;margin:2px 0;display:flex;justify-content:space-between;align-items:center;gap:10px}"
         ".dg-legendbar{display:flex;align-items:center;justify-content:flex-start;gap:6px;flex-wrap:wrap;margin-bottom:6px}"
-        ".dg-legend{color:#666;font:13px -apple-system,system-ui,Segoe UI,Roboto,Helvetica,Arial}"
         ".dg-nav{color:#666;font:13px -apple-system,system-ui,Segoe UI,Roboto,Helvetica,Arial;margin-bottom:8px}"
         ".dg-nav a{text-decoration:none;color:#0a7}"
         ".dg-actions{display:inline-flex;gap:6px}"
@@ -285,8 +535,12 @@ def _base_head(title: str) -> str:
         ".dg-search-results{list-style:none;padding-left:0;margin:6px 0 0}"
         ".dg-search-results li{margin:3px 0}"
         ".dg-search-folder{color:#666;margin-left:6px}"
-        ".dg-sort-toggle{padding:2px 8px;border:1px solid #ccc;border-radius:6px;background:#f7f7f7;color:#333;font:12px -apple-system,system-ui,Segoe UI,Roboto,Helvetica,Arial;cursor:pointer}"
+        ".dg-sort-toggle,.dg-content-filter{padding:2px 8px;border:1px solid #ccc;border-radius:6px;background:#f7f7f7;color:#333;font:12px -apple-system,system-ui,Segoe UI,Roboto,Helvetica,Arial;cursor:pointer}"
         ".dg-sort-toggle.is-active{border-color:#c8a400;background:#fff6e5}"
+        ".dg-content-filter.is-active{border-color:#0a7;background:#eaf8f2}"
+        ".dg-sort-toggle[disabled],.dg-content-filter[disabled]{opacity:.55;cursor:default}"
+        ".dg-filter-summary{color:#666;font:12px -apple-system,system-ui,Segoe UI,Roboto,Helvetica,Arial}"
+        ".dg-time-heading[hidden],.dg-time-section[hidden],.dg-index li[hidden]{display:none!important}"
         ".dg-parent-index{list-style:none;padding-left:0;margin:0 0 8px}"
         ".dg-time-heading{font-size:13px;margin:14px 0 4px;color:#555;font-weight:600}"
         ".dg-time-section{margin-top:0;margin-bottom:8px}"
@@ -311,17 +565,14 @@ def _render_directory_page(
     rows.append("<div class='dg-nav'><a href='/'>Home</a> · <a href='/browse/'>Browse</a> · <a href='/reading/'>Reading</a> · <a href='/done/'>Done</a></div>")
     rows.append(f"<h2>Index of {html.escape(display_path)}</h2>")
     if controls_html is None:
-        controls_html = (
-            "<button type='button' class='dg-sort-toggle' data-dg-sort-toggle aria-pressed='false'>"
-            "Highlight: off"
-            "</button>"
+        section_entries = (
+            [entry for _, section in entry_sections for entry in section]
+            if entry_sections is not None
+            else entries
         )
-    rows.append(
-        "<div class='dg-legendbar'>"
-        "<div class='dg-legend'>🟡 highlight</div>"
-        f"{controls_html}"
-        "</div>"
-    )
+        controls_html = _browse_controls_html(section_entries) if any(not entry.is_dir for entry in section_entries) else ""
+    if controls_html:
+        rows.append(f"<div class='dg-legendbar'>{controls_html}</div>")
     if pre_list_html:
         rows.append(pre_list_html)
 
@@ -935,6 +1186,7 @@ def _scan_directory(
                         rel_path=rel,
                         highlighted=highlighted,
                         highlight_last_epoch=highlight_last_epoch,
+                        filter_text=_filter_text_for_path(abs_path),
                     )
                 )
     except OSError:
@@ -1338,6 +1590,66 @@ def ensure_assets(base_dir: Path) -> None:
     toggle.setAttribute('aria-pressed', highlightsFirst ? 'true' : 'false');
   }
 
+  function normalizeText(value) {
+    return String(value || '')
+      .normalize('NFD')
+      .replace(/[\\u0300-\\u036f]/g, '')
+      .toLowerCase();
+  }
+
+  function termsForFilter(button) {
+    return (button.getAttribute('data-dg-filter-terms') || '')
+      .split('|')
+      .map((term) => normalizeText(term.trim()))
+      .filter(Boolean);
+  }
+
+  function matchesFilterText(filterText, terms) {
+    const tokens = new Set(filterText.split(/[^a-z0-9]+/).filter(Boolean));
+    return terms.some((term) => {
+      if (term.length <= 3) return tokens.has(term);
+      return filterText.includes(term);
+    });
+  }
+
+  function parseContentFilterPool(slot) {
+    if (!slot) return [];
+    try {
+      const parsed = JSON.parse(slot.getAttribute('data-dg-content-filter-pool') || '[]');
+      return Array.isArray(parsed) ? parsed.filter((item) => typeof item === 'string' && item.trim()) : [];
+    } catch (error) {
+      return [];
+    }
+  }
+
+  function shuffledSample(values, count) {
+    const pool = [...values];
+    for (let index = pool.length - 1; index > 0; index -= 1) {
+      const swapIndex = Math.floor(Math.random() * (index + 1));
+      const current = pool[index];
+      pool[index] = pool[swapIndex];
+      pool[swapIndex] = current;
+    }
+    return pool.slice(0, count);
+  }
+
+  function renderSuggestedFilters(slot) {
+    const pool = parseContentFilterPool(slot);
+    const count = Number(slot && slot.getAttribute('data-dg-content-filter-count')) || 7;
+    if (!slot || pool.length === 0) return;
+    slot.replaceChildren();
+    shuffledSample(pool, count).forEach((term, index) => {
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.className = 'dg-content-filter';
+      button.setAttribute('data-dg-content-filter', `suggested-${index}`);
+      button.setAttribute('data-dg-filter-terms', term);
+      button.setAttribute('aria-pressed', 'false');
+      button.textContent = term;
+      slot.appendChild(button);
+    });
+  }
+
   function compareEntries(a, b, highlightsFirst, sortDirection) {
     if (highlightsFirst) {
       const aHl = a.dataset.dgHighlighted === '1' ? 0 : 1;
@@ -1397,9 +1709,14 @@ def ensure_assets(base_dir: Path) -> None:
     }
 
     const lists = Array.from(document.querySelectorAll('ul.dg-index, ul.dg-done-list, ul.dg-reading-list'));
+    renderSuggestedFilters(document.querySelector('[data-dg-content-filter-pool]'));
+    const filterButtons = Array.from(document.querySelectorAll('[data-dg-content-filter]'));
+    const filterSummary = document.querySelector('[data-dg-filter-summary]');
     if (!toggle || lists.length === 0) return;
 
     const groups = lists.map((list) => {
+      const previous = list.previousElementSibling;
+      const heading = previous && previous.classList.contains('dg-time-heading') ? previous : null;
       const sortable = Array.from(list.querySelectorAll('li[data-dg-sortable=\"1\"]'));
       const sortableFiles = sortable.filter((node) => {
         const link = node.querySelector('a[href]');
@@ -1407,20 +1724,61 @@ def ensure_assets(base_dir: Path) -> None:
         const href = (link.getAttribute('href') || '').trim();
         return href !== '' && !href.endsWith('/');
       });
-      return { list, sortableFiles };
+      return { list, heading, sortableFiles };
     }).filter((group) => group.sortableFiles.length > 0);
 
     let highlightsFirst = loadHighlightPreference();
+    let activeFilterKey = '';
 
     if (groups.length === 0) {
       syncToggleState(toggle, highlightsFirst);
       toggle.setAttribute('disabled', '');
+      filterButtons.forEach((button) => button.setAttribute('disabled', ''));
       return;
     }
 
     const defaultSortDirection = (toggle.getAttribute('data-dg-sort-direction') || 'desc').toLowerCase() === 'asc'
       ? 'asc'
       : 'desc';
+
+    function syncFilterState() {
+      for (const button of filterButtons) {
+        const isActive = button.getAttribute('data-dg-content-filter') === activeFilterKey;
+        button.classList.toggle('is-active', isActive);
+        button.setAttribute('aria-pressed', isActive ? 'true' : 'false');
+      }
+    }
+
+    function applyContentFilter() {
+      const activeButton = filterButtons.find(
+        (button) => button.getAttribute('data-dg-content-filter') === activeFilterKey
+      );
+      const terms = activeButton ? termsForFilter(activeButton) : [];
+      let visibleCount = 0;
+      let totalCount = 0;
+
+      for (const group of groups) {
+        let groupVisible = 0;
+        for (const node of group.sortableFiles) {
+          totalCount += 1;
+          const filterText = normalizeText(node.dataset.dgFilterText || '');
+          const isVisible = terms.length === 0 || matchesFilterText(filterText, terms);
+          node.hidden = !isVisible;
+          if (isVisible) {
+            visibleCount += 1;
+            groupVisible += 1;
+          }
+        }
+        const hideGroup = terms.length > 0 && groupVisible === 0;
+        if (group.heading) group.heading.hidden = hideGroup;
+        group.list.hidden = hideGroup;
+      }
+
+      syncFilterState();
+      if (filterSummary) {
+        filterSummary.textContent = terms.length > 0 ? `${visibleCount}/${totalCount} matches` : '';
+      }
+    }
 
     function renderOrder() {
       for (const group of groups) {
@@ -1432,6 +1790,7 @@ def ensure_assets(base_dir: Path) -> None:
         }
       }
       syncToggleState(toggle, highlightsFirst);
+      applyContentFilter();
     }
 
     toggle.addEventListener('click', () => {
@@ -1439,6 +1798,14 @@ def ensure_assets(base_dir: Path) -> None:
       saveHighlightPreference(highlightsFirst);
       renderOrder();
     });
+
+    for (const button of filterButtons) {
+      button.addEventListener('click', () => {
+        const key = button.getAttribute('data-dg-content-filter') || '';
+        activeFilterKey = activeFilterKey === key ? '' : key;
+        applyContentFilter();
+      });
+    }
 
     renderOrder();
   });

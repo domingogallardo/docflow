@@ -16,7 +16,15 @@ def test_build_browse_site_generates_indexes_and_actions(tmp_path: Path):
     html = posts / "doc.html"
     html.write_text("<html><title>Sample Title</title><body>Doc</body></html>", encoding="utf-8")
     md = posts / "doc.md"
-    md.write_text("# Markdown sibling\\n", encoding="utf-8")
+    md.write_text(
+        "---\n"
+        "title: Markdown sibling\n"
+        "source_name: Example Source\n"
+        "docflow_summary: AI math note about Python and Spain.\n"
+        "---\n\n"
+        "# Markdown sibling\\n",
+        encoding="utf-8",
+    )
 
     pdfs = base / "Pdfs" / "Pdfs 2026"
     pdfs.mkdir(parents=True)
@@ -108,6 +116,13 @@ def test_build_browse_site_generates_indexes_and_actions(tmp_path: Path):
     assert "syncToggleState(toggle, highlightsFirst)" in browse_sort_content
     assert "dataset.dgHighlightLast" in browse_sort_content
     assert "bLast - aLast" in browse_sort_content
+    assert "data-dg-content-filter" in browse_sort_content
+    assert "data-dg-content-filter-pool" in browse_sort_content
+    assert "activeFilterKey" in browse_sort_content
+    assert "renderSuggestedFilters" in browse_sort_content
+    assert "normalizeText" in browse_sort_content
+    assert "matchesFilterText" in browse_sort_content
+    assert "data-dg-filter-summary" in browse_sort_content
     assert "dgWorking" not in browse_sort_content
 
     root_content = posts_root_page.read_text(encoding="utf-8")
@@ -126,7 +141,13 @@ def test_build_browse_site_generates_indexes_and_actions(tmp_path: Path):
     assert "doc.md" not in content
     assert "data-dg-sort-toggle" in content
     assert "Highlight: off" in content
+    assert "<div class='dg-legend'>🟡 highlight</div>" not in content
+    assert "data-dg-content-filter-pool=" in content
+    assert "data-dg-content-filter-count='7'" in content
+    assert "Python and Spain" in content
+    assert "data-dg-filter-summary" in content
     assert "data-dg-sortable='1'" in content
+    assert "data-dg-filter-text='doc Markdown sibling AI math note about Python and Spain.'" in content
     assert "data-dg-working" not in content
     assert "data-dg-done" not in content
     assert "data-dg-highlighted='1'" in content
@@ -142,8 +163,9 @@ def test_build_browse_site_generates_indexes_and_actions(tmp_path: Path):
 
     browse_home_content = browse_home.read_text(encoding="utf-8")
     assert "Incoming" not in browse_home_content
-    assert "🟡 highlight" in browse_home_content
+    assert "🟡 highlight" not in browse_home_content
     assert "data-dg-sort-toggle" not in browse_home_content
+    assert "data-dg-content-filter-pool" not in browse_home_content
     assert "data-dg-search-input" not in browse_home_content
     assert "data-dg-search-button" not in browse_home_content
     assert "dg-browse-search-data" not in browse_home_content
@@ -326,6 +348,89 @@ def test_browse_search_suggestions_are_derived_from_indexed_titles():
     assert "Tweet title" not in suggestions
     assert len(suggestions) <= 20
     assert build_browse_index.SEARCH_SUGGESTION_LIMIT == 400
+
+
+def test_content_filter_pool_uses_titles_and_summaries_without_common_phrases():
+    entries = [
+        build_browse_index.BrowseEntry(
+            name="alan.html",
+            href="#",
+            mtime=0,
+            is_dir=False,
+            icon="",
+            filter_text=(
+                "Alan Kay on objects. "
+                "The summary links Alan Kay to object oriented programming and personal computing."
+            ),
+        ),
+        build_browse_index.BrowseEntry(
+            name="ai.html",
+            href="#",
+            mtime=0,
+            is_dir=False,
+            icon="",
+            filter_text=(
+                "Artificial intelligence and creativity. "
+                "The summary studies creative AI systems and artistic tools."
+            ),
+        ),
+        build_browse_index.BrowseEntry(
+            name="housing.html",
+            href="#",
+            mtime=0,
+            is_dir=False,
+            icon="",
+            filter_text=(
+                "Housing crisis in Spain. "
+                "The summary covers rental markets in Madrid and Barcelona."
+            ),
+        ),
+    ]
+
+    pool = build_browse_index._content_filter_pool(entries, limit=20)
+
+    assert "object oriented programming" in pool
+    assert "Artificial intelligence" in pool
+    assert "rental markets" in pool
+    assert "The summary" not in pool
+    assert not any("summary" in phrase.lower() for phrase in pool)
+
+
+def test_content_filter_pool_falls_back_to_titles_when_summaries_are_missing():
+    entries = [
+        build_browse_index.BrowseEntry(
+            name="adaptive-learning.html",
+            href="#",
+            mtime=0,
+            is_dir=False,
+            icon="",
+            filter_text="Adaptive learning systems",
+        ),
+    ]
+
+    assert "Adaptive learning" in build_browse_index._content_filter_pool(entries, limit=10)
+
+
+def test_content_filter_pool_discards_too_common_phrases_and_keeps_specific_recurring_terms():
+    entries = []
+    for index in range(40):
+        specific = "rare thematic cluster" if index < 3 else f"unique local topic {index}"
+        entries.append(
+            build_browse_index.BrowseEntry(
+                name=f"doc-{index}.html",
+                href="#",
+                mtime=0,
+                is_dir=False,
+                icon="",
+                filter_text=f"Common signal phrase. {specific}.",
+            )
+        )
+
+    pool = build_browse_index._content_filter_pool(entries, limit=20)
+
+    assert "rare thematic cluster" in pool
+    assert "Common signal phrase" not in pool
+    assert not any(phrase.startswith("unique local") for phrase in pool)
 
 
 def test_collect_category_items_handles_missing_dirs(tmp_path: Path):
@@ -537,13 +642,13 @@ def test_current_year_browse_pages_group_articles_by_relative_time(tmp_path: Pat
         assert "<h3 class='dg-time-heading'>Abril 2026</h3>" in content
         assert "<h3 class='dg-time-heading'>Marzo 2026</h3>" in content
         assert "<h3 class='dg-time-heading'>Febrero 2026</h3>" in content
-        assert content.find("Hoy") < content.find(f"{prefix}-today.html")
-        assert content.find("Ayer") < content.find(f"{prefix}-yesterday.html")
-        assert content.find("Últimos 7 días") < content.find(f"{prefix}-last-seven.html")
-        assert content.find("Últimos 30 días") < content.find(f"{prefix}-last-thirty.html")
-        assert content.find("Abril 2026") < content.find(f"{prefix}-april.html")
-        assert content.find("Marzo 2026") < content.find(f"{prefix}-march.html")
-        assert content.find("Febrero 2026") < content.find(f"{prefix}-february.html")
+        assert content.find("Hoy") < content.find(f">{prefix}-today.html</a>")
+        assert content.find("Ayer") < content.find(f">{prefix}-yesterday.html</a>")
+        assert content.find("Últimos 7 días") < content.find(f">{prefix}-last-seven.html</a>")
+        assert content.find("Últimos 30 días") < content.find(f">{prefix}-last-thirty.html</a>")
+        assert content.find("Abril 2026") < content.find(f">{prefix}-april.html</a>")
+        assert content.find("Marzo 2026") < content.find(f">{prefix}-march.html</a>")
+        assert content.find("Febrero 2026") < content.find(f">{prefix}-february.html</a>")
 
 
 def test_non_current_year_browse_pages_group_by_month(tmp_path: Path, monkeypatch):
@@ -585,8 +690,8 @@ def test_previous_year_browse_pages_group_by_month(tmp_path: Path, monkeypatch):
     content = page.read_text(encoding="utf-8")
     assert "<h3 class='dg-time-heading'>Abril 2025</h3>" in content
     assert "<h3 class='dg-time-heading'>Marzo 2025</h3>" in content
-    assert content.find("Abril 2025") < content.find("april.html")
-    assert content.find("Marzo 2025") < content.find("march.html")
+    assert content.find("Abril 2025") < content.find(">april.html</a>")
+    assert content.find("Marzo 2025") < content.find(">march.html</a>")
     assert content.find("Abril 2025") < content.find("Marzo 2025")
 
 

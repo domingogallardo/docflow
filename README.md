@@ -37,6 +37,7 @@ Podcast snippets are typically captured in [Snipd](https://www.snipd.com) and th
 - Home page with title search and `History`, a recent list derived from saved meaningful reading positions.
 - Browse / Reading / Done views.
 - Browse hides items already in Reading / Done.
+- Browse list pages include random topical filter buttons next to the highlight toggle for quick scanning.
 - Highlight toggle on list pages, with browser-persistent state until switched back off.
 - With `Highlight: on`, highlighted items move first and are ordered by most recent highlight.
 - In `Done`, `Highlight: on` regroups items by the year of the latest highlight, so re-highlighted older items surface under the current highlight year.
