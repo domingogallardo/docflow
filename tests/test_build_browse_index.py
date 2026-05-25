@@ -123,6 +123,8 @@ def test_build_browse_site_generates_indexes_and_actions(tmp_path: Path):
     assert "normalizeText" in browse_sort_content
     assert "matchesFilterText" in browse_sort_content
     assert "tokenCoverageMatch" in browse_sort_content
+    assert "isMultiWordFilter" in browse_sort_content
+    assert "suggestedFilterSample" in browse_sort_content
     assert "documentTokens" in browse_sort_content
     assert "data-dg-filter-summary" in browse_sort_content
     assert "dgWorking" not in browse_sort_content

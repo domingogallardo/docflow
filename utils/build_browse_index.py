@@ -63,7 +63,7 @@ CONTENT_FILTER_MAX_DOC_FRACTION = 0.30
 CONTENT_FILTER_MIN_DOC_COUNT = 3
 CONTENT_FILTER_TARGET_MIN_FRACTION = 0.10
 CONTENT_FILTER_TARGET_MAX_FRACTION = 0.30
-CONTENT_FILTER_MIN_DOC_FRACTION = 0.03
+CONTENT_FILTER_MIN_DOC_FRACTION = 0.01
 CONTENT_FILTER_DIVERSITY_OVERLAP = 0.55
 SEARCH_SUGGESTION_STOPWORDS = {
     "a",
@@ -492,23 +492,31 @@ def _content_filter_term_tokens(term: str) -> set[str]:
     return tokens
 
 
+def _content_filter_term_similarity(left: str, right: str) -> float:
+    left_words = set(left.split())
+    right_words = set(right.split())
+    if not left_words or not right_words:
+        return 0.0
+    if len(left_words) == 1 and len(right_words) == 1:
+        left_tokens = _content_filter_term_tokens(left)
+        right_tokens = _content_filter_term_tokens(right)
+        return len(left_tokens & right_tokens) / max(1, min(len(left_tokens), len(right_tokens)))
+    return len(left_words & right_words) / max(1, max(len(left_words), len(right_words)))
+
+
 def _select_diverse_content_terms(ranked_terms: list[tuple[str, float]], limit: int) -> list[str]:
     selected: list[str] = []
-    selected_tokens: list[set[str]] = []
     for term, _score in ranked_terms:
-        tokens = _content_filter_term_tokens(term)
-        if not tokens:
+        if not term.split():
             continue
         is_too_similar = False
-        for existing in selected_tokens:
-            overlap = len(tokens & existing) / max(1, min(len(tokens), len(existing)))
-            if overlap > CONTENT_FILTER_DIVERSITY_OVERLAP:
+        for existing in selected:
+            if _content_filter_term_similarity(term, existing) > CONTENT_FILTER_DIVERSITY_OVERLAP:
                 is_too_similar = True
                 break
         if is_too_similar:
             continue
         selected.append(term)
-        selected_tokens.append(tokens)
         if len(selected) >= limit:
             break
     return selected
@@ -707,7 +715,8 @@ def _base_head(title: str) -> str:
         "hr{border:0;border-top:1px solid #e6e6e6;margin:8px 0}"
         "ul.dg-index{list-style:none;padding-left:0}"
         ".dg-index li{padding:2px 6px;border-radius:6px;margin:2px 0;display:flex;justify-content:space-between;align-items:center;gap:10px}"
-        ".dg-legendbar{display:flex;align-items:center;justify-content:flex-start;gap:6px;flex-wrap:wrap;margin-bottom:6px}"
+        ".dg-legendbar{display:flex;align-items:center;justify-content:flex-start;column-gap:6px;row-gap:5px;flex-wrap:wrap;margin-bottom:8px}"
+        ".dg-content-filter-slot{display:inline-flex;align-items:center;column-gap:6px;row-gap:5px;flex-wrap:wrap}"
         ".dg-nav{color:#666;font:13px -apple-system,system-ui,Segoe UI,Roboto,Helvetica,Arial;margin-bottom:8px}"
         ".dg-nav a{text-decoration:none;color:#0a7}"
         ".dg-actions{display:inline-flex;gap:6px}"
@@ -1838,12 +1847,26 @@ def ensure_assets(base_dir: Path) -> None:
     return pool.slice(0, count);
   }
 
+  function isMultiWordFilter(value) {
+    return normalizeText(value).split(/\s+/).filter(Boolean).length > 1;
+  }
+
+  function suggestedFilterSample(values, count) {
+    const multiWord = values.filter(isMultiWordFilter);
+    const singleWord = values.filter((value) => !isMultiWordFilter(value));
+    const multiWordCount = Math.min(multiWord.length, count, Math.max(1, Math.round(count * 0.3)));
+    const selected = shuffledSample(multiWord, multiWordCount);
+    const selectedSet = new Set(selected);
+    const remaining = singleWord.concat(multiWord.filter((value) => !selectedSet.has(value)));
+    return selected.concat(shuffledSample(remaining, count - selected.length));
+  }
+
   function renderSuggestedFilters(slot) {
     const pool = parseContentFilterPool(slot);
     const count = Number(slot && slot.getAttribute('data-dg-content-filter-count')) || 7;
     if (!slot || pool.length === 0) return;
     slot.replaceChildren();
-    shuffledSample(pool, count).forEach((term, index) => {
+    suggestedFilterSample(pool, count).forEach((term, index) => {
       const button = document.createElement('button');
       button.type = 'button';
       button.className = 'dg-content-filter';
