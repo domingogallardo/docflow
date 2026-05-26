@@ -155,6 +155,10 @@ Common fields:
 - `docflow_post_url`: original post/article URL for web posts and tweet
   articles. When possible, docflow infers web post URLs from the first HTTP(S)
   link in the clipped Markdown body.
+- `docflow_original_published_at`: original publication date/time discovered
+  from the saved article URL, when available.
+- `docflow_original_published_source`: where the original publication date was
+  found, such as JSON-LD, HTML meta tags, `<time>`, or the URL path.
 - `docflow_ingested_at`: UTC timestamp for when docflow incorporated the item.
   This is present for newly ingested items; older migrated/normalized posts may
   omit it when no real ingest timestamp is known.
@@ -328,7 +332,14 @@ python utils/backfill_pdf_sidecars.py --base-dir "$DOCFLOW_BASE_DIR" --dry-run
 python utils/backfill_pdf_sidecars.py --base-dir "$DOCFLOW_BASE_DIR"
 ```
 
-5. Run the intranet server manually (mainly for troubleshooting):
+5. Backfill original publication dates from saved post URLs:
+
+```bash
+python utils/backfill_original_article_dates.py --base-dir "$DOCFLOW_BASE_DIR" --dry-run
+python utils/backfill_original_article_dates.py --base-dir "$DOCFLOW_BASE_DIR"
+```
+
+6. Run the intranet server manually (mainly for troubleshooting):
 
 ```bash
 source ~/.docflow_env

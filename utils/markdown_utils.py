@@ -25,6 +25,8 @@ _FRONT_MATTER_KEYS = {
     "docflow_final_url": "docflow-final-url",
     "docflow_original_url": "docflow-original-url",
     "docflow_post_url": "docflow-post-url",
+    "docflow_original_published_at": "docflow-original-published-at",
+    "docflow_original_published_source": "docflow-original-published-source",
     "docflow_word_count": "docflow-word-count",
     "docflow_body_chars": "docflow-body-chars",
     "docflow_summary": "docflow-summary",

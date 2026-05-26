@@ -59,5 +59,5 @@ def test_backfill_pdf_sidecars_completes_existing_sidecar_without_mtime_change(t
     meta, body = split_front_matter(md.read_text(encoding="utf-8"))
     assert meta["title"] == "Existing"
     assert meta["docflow_pdf_path"] == "Pdfs/Pdfs 2026/paper.pdf"
-    assert meta["docflow_ingested_at"].endswith("Z")
+    assert "docflow_ingested_at" not in meta
     assert body.lstrip().startswith("# Existing")
