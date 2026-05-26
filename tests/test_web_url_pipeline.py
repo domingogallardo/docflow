@@ -11,7 +11,7 @@ def prepare_processor(tmp_path: Path):
     return processor, incoming
 
 
-def test_process_web_urls_downloads_markdown_and_removes_successful_links(tmp_path, monkeypatch):
+def test_process_web_urls_downloads_markdown_and_removes_attempted_links(tmp_path, monkeypatch):
     processor, incoming = prepare_processor(tmp_path)
     ok_url = "https://example.com/good"
     bad_url = "https://example.com/bad"
@@ -39,18 +39,17 @@ def test_process_web_urls_downloads_markdown_and_removes_successful_links(tmp_pa
     generated = processor.process_web_urls()
 
     assert generated == [incoming / "clipper-good.md"]
-    assert processor.links_file.read_text(encoding="utf-8") == "# queue\nhttps://example.com/bad\n"
+    assert processor.links_file.read_text(encoding="utf-8") == "# queue\n"
     assert ok_url in processor.processed_history.read_text(encoding="utf-8")
     failed_text = processor.links_failed.read_text(encoding="utf-8")
     assert bad_url in failed_text
     assert "extractor failed" in failed_text
 
 
-def test_process_web_urls_keeps_links_file_unchanged_when_all_fail(tmp_path, monkeypatch):
+def test_process_web_urls_removes_failed_links_from_queue(tmp_path, monkeypatch):
     processor, _ = prepare_processor(tmp_path)
     url = "https://example.com/bad"
-    original = f"# queue\n{url}\n"
-    processor.links_file.write_text(original, encoding="utf-8")
+    processor.links_file.write_text(f"# queue\n{url}\n", encoding="utf-8")
 
     def fake_download(url, *, output_dir):
         raise RuntimeError("network failed")
@@ -60,7 +59,7 @@ def test_process_web_urls_keeps_links_file_unchanged_when_all_fail(tmp_path, mon
     generated = processor.process_web_urls()
 
     assert generated == []
-    assert processor.links_file.read_text(encoding="utf-8") == original
+    assert processor.links_file.read_text(encoding="utf-8") == "# queue\n"
     assert not processor.processed_history.exists()
     assert "network failed" in processor.links_failed.read_text(encoding="utf-8")
 

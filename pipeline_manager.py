@@ -607,13 +607,17 @@ class DocumentProcessor:
             print(f"✅ URL saved as Markdown: {result.output_path.name}")
 
         if processed_urls:
-            self._remove_urls_from_links_file(self.links_file, processed_urls)
             self._append_url_history(processed_urls, history_path=self.processed_history)
-            print(f"🔗 {len(processed_urls)} URL(s) processed and removed from links.txt")
+            print(f"🔗 {len(processed_urls)} URL(s) processed")
 
         if failures:
             self._append_link_failures(failures, failed_path=self.links_failed)
             print(f"⚠️  {len(failures)} URL(s) failed; see {self.links_failed}")
+
+        attempted_urls = [*processed_urls, *[url for url, _ in failures]]
+        if attempted_urls:
+            self._remove_urls_from_links_file(self.links_file, attempted_urls)
+            print(f"🔗 {len(attempted_urls)} attempted URL(s) removed from links.txt")
 
         return generated
     
