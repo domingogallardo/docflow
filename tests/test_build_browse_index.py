@@ -127,6 +127,19 @@ def test_build_browse_site_generates_indexes_and_actions(tmp_path: Path):
     assert "suggestedFilterSample" in browse_sort_content
     assert "documentTokens" in browse_sort_content
     assert "data-dg-filter-summary" in browse_sort_content
+    assert "contentFilterPreferencePrefix = 'docflow.content-filter.'" in browse_sort_content
+    assert "contentFilterSamplePrefix = 'docflow.content-filter-sample.'" in browse_sort_content
+    assert "contentFilterPreferencePrefix + window.location.pathname" in browse_sort_content
+    assert "contentFilterSamplePrefix + window.location.pathname" in browse_sort_content
+    assert "window.sessionStorage.getItem(contentFilterPreferenceKey())" in browse_sort_content
+    assert "window.sessionStorage.setItem(contentFilterPreferenceKey(), JSON.stringify({ terms }))" in browse_sort_content
+    assert "window.sessionStorage.getItem(contentFilterSampleKey())" in browse_sort_content
+    assert "window.sessionStorage.setItem(contentFilterSampleKey(), JSON.stringify(sample))" in browse_sort_content
+    assert "const reuseStoredSample = true" in browse_sort_content
+    assert "renderSuggestedFilters(filterSlot, savedFilterTerms, reuseStoredSample)" in browse_sort_content
+    assert "data-dg-content-filter-random" in browse_sort_content
+    assert "renderSuggestedFilters(filterSlot, '', false)" in browse_sort_content
+    assert "saveContentFilterPreference(activeFilterKey ? (button.getAttribute('data-dg-filter-terms') || '') : '')" in browse_sort_content
     assert "dgWorking" not in browse_sort_content
 
     root_content = posts_root_page.read_text(encoding="utf-8")
@@ -148,6 +161,8 @@ def test_build_browse_site_generates_indexes_and_actions(tmp_path: Path):
     assert "<div class='dg-legend'>🟡 highlight</div>" not in content
     assert "data-dg-content-filter-pool=" in content
     assert "data-dg-content-filter-count='7'" in content
+    assert "data-dg-content-filter-random" in content
+    assert "Random content filters" in content
     assert "Python and Spain" in content
     assert "data-dg-filter-summary" in content
     assert "data-dg-sortable='1'" in content
@@ -170,6 +185,7 @@ def test_build_browse_site_generates_indexes_and_actions(tmp_path: Path):
     assert "🟡 highlight" not in browse_home_content
     assert "data-dg-sort-toggle" not in browse_home_content
     assert "data-dg-content-filter-pool" not in browse_home_content
+    assert "data-dg-content-filter-random" not in browse_home_content
     assert "data-dg-search-input" not in browse_home_content
     assert "data-dg-search-button" not in browse_home_content
     assert "dg-browse-search-data" not in browse_home_content

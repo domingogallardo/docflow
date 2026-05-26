@@ -352,6 +352,10 @@ def _browse_controls_html(entries: list[BrowseEntry]) -> str:
         f"data-dg-content-filter-pool='{html.escape(json.dumps(filter_pool, ensure_ascii=False, separators=(',', ':')), quote=True)}' "
         f"data-dg-content-filter-count='{CONTENT_FILTER_BUTTON_COUNT}'></span>"
     )
+    buttons.append(
+        "<button type='button' class='dg-content-filter-random' data-dg-content-filter-random "
+        "aria-label='Random content filters' title='Random content filters'>🎲</button>"
+    )
     buttons.append("<span class='dg-filter-summary' data-dg-filter-summary aria-live='polite'></span>")
     return "".join(buttons)
 
@@ -734,10 +738,10 @@ def _base_head(title: str) -> str:
         ".dg-search-results{list-style:none;padding-left:0;margin:6px 0 0}"
         ".dg-search-results li{margin:3px 0}"
         ".dg-search-folder{color:#666;margin-left:6px}"
-        ".dg-sort-toggle,.dg-content-filter{padding:2px 8px;border:1px solid #ccc;border-radius:6px;background:#f7f7f7;color:#333;font:12px -apple-system,system-ui,Segoe UI,Roboto,Helvetica,Arial;cursor:pointer}"
+        ".dg-sort-toggle,.dg-content-filter,.dg-content-filter-random{padding:2px 8px;border:1px solid #ccc;border-radius:6px;background:#f7f7f7;color:#333;font:12px -apple-system,system-ui,Segoe UI,Roboto,Helvetica,Arial;cursor:pointer}"
         ".dg-sort-toggle.is-active{border-color:#c8a400;background:#fff6e5}"
         ".dg-content-filter.is-active{border-color:#0a7;background:#eaf8f2}"
-        ".dg-sort-toggle[disabled],.dg-content-filter[disabled]{opacity:.55;cursor:default}"
+        ".dg-sort-toggle[disabled],.dg-content-filter[disabled],.dg-content-filter-random[disabled]{opacity:.55;cursor:default}"
         ".dg-filter-summary{color:#666;font:12px -apple-system,system-ui,Segoe UI,Roboto,Helvetica,Arial}"
         ".dg-time-heading[hidden],.dg-time-section[hidden],.dg-index li[hidden]{display:none!important}"
         ".dg-parent-index{list-style:none;padding-left:0;margin:0 0 8px}"
@@ -1793,12 +1797,16 @@ def ensure_assets(base_dir: Path) -> None:
 
     browse_sort_js = """
 (function() {
-  window.addEventListener('pageshow', (event) => {
-    let navType = '';
+  function currentNavigationType() {
     try {
       const entries = performance.getEntriesByType('navigation');
-      if (entries && entries.length > 0) navType = entries[0].type || '';
+      if (entries && entries.length > 0) return entries[0].type || '';
     } catch (error) {}
+    return '';
+  }
+
+  window.addEventListener('pageshow', (event) => {
+    const navType = currentNavigationType();
     if (event.persisted || navType === 'back_forward') {
       window.location.reload();
     }
@@ -1810,6 +1818,8 @@ def ensure_assets(base_dir: Path) -> None:
   }
 
   const highlightPreferenceKey = 'docflow.highlight-sort';
+  const contentFilterPreferencePrefix = 'docflow.content-filter.';
+  const contentFilterSamplePrefix = 'docflow.content-filter-sample.';
 
   function loadHighlightPreference() {
     try {
@@ -1822,6 +1832,52 @@ def ensure_assets(base_dir: Path) -> None:
   function saveHighlightPreference(highlightsFirst) {
     try {
       window.localStorage.setItem(highlightPreferenceKey, highlightsFirst ? 'on' : 'off');
+    } catch (error) {}
+  }
+
+  function contentFilterPreferenceKey() {
+    return contentFilterPreferencePrefix + window.location.pathname;
+  }
+
+  function contentFilterSampleKey() {
+    return contentFilterSamplePrefix + window.location.pathname;
+  }
+
+  function loadContentFilterPreference() {
+    try {
+      const payload = JSON.parse(window.sessionStorage.getItem(contentFilterPreferenceKey()) || 'null');
+      return payload && typeof payload.terms === 'string' ? payload.terms : '';
+    } catch (error) {
+      return '';
+    }
+  }
+
+  function saveContentFilterPreference(terms) {
+    try {
+      if (terms) {
+        window.sessionStorage.setItem(contentFilterPreferenceKey(), JSON.stringify({ terms }));
+      } else {
+        window.sessionStorage.removeItem(contentFilterPreferenceKey());
+      }
+    } catch (error) {}
+  }
+
+  function loadContentFilterSample() {
+    try {
+      const payload = JSON.parse(window.sessionStorage.getItem(contentFilterSampleKey()) || 'null');
+      return Array.isArray(payload) ? payload.filter((item) => typeof item === 'string' && item.trim()) : [];
+    } catch (error) {
+      return [];
+    }
+  }
+
+  function saveContentFilterSample(sample) {
+    try {
+      if (sample.length > 0) {
+        window.sessionStorage.setItem(contentFilterSampleKey(), JSON.stringify(sample));
+      } else {
+        window.sessionStorage.removeItem(contentFilterSampleKey());
+      }
     } catch (error) {}
   }
 
@@ -1894,22 +1950,43 @@ def ensure_assets(base_dir: Path) -> None:
     return normalizeText(value).split(/\s+/).filter(Boolean).length > 1;
   }
 
-  function suggestedFilterSample(values, count) {
+  function suggestedFilterSample(values, count, preferredValue) {
     const multiWord = values.filter(isMultiWordFilter);
     const singleWord = values.filter((value) => !isMultiWordFilter(value));
     const multiWordCount = Math.min(multiWord.length, count, Math.max(1, Math.round(count * 0.3)));
     const selected = shuffledSample(multiWord, multiWordCount);
     const selectedSet = new Set(selected);
     const remaining = singleWord.concat(multiWord.filter((value) => !selectedSet.has(value)));
-    return selected.concat(shuffledSample(remaining, count - selected.length));
+    let sample = selected.concat(shuffledSample(remaining, count - selected.length));
+    if (preferredValue && values.includes(preferredValue) && !sample.includes(preferredValue)) {
+      sample = [preferredValue].concat(sample).slice(0, count);
+    }
+    return sample;
   }
 
-  function renderSuggestedFilters(slot) {
+  function renderSuggestedFilters(slot, preferredValue, reuseStoredSample) {
     const pool = parseContentFilterPool(slot);
     const count = Number(slot && slot.getAttribute('data-dg-content-filter-count')) || 7;
     if (!slot || pool.length === 0) return;
+    const poolSet = new Set(pool);
+    let sample = reuseStoredSample
+      ? loadContentFilterSample().filter((value, index, values) => poolSet.has(value) && values.indexOf(value) === index)
+      : [];
+    sample = sample.slice(0, count);
+    if (preferredValue && poolSet.has(preferredValue) && !sample.includes(preferredValue)) {
+      sample = [preferredValue].concat(sample).slice(0, count);
+    }
+    if (sample.length < Math.min(count, pool.length)) {
+      const sampleSet = new Set(sample);
+      const remaining = pool.filter((value) => !sampleSet.has(value));
+      sample = sample.concat(suggestedFilterSample(remaining, count - sample.length, ''));
+    }
+    if (sample.length === 0) {
+      sample = suggestedFilterSample(pool, count, preferredValue);
+    }
+    saveContentFilterSample(sample);
     slot.replaceChildren();
-    suggestedFilterSample(pool, count).forEach((term, index) => {
+    sample.forEach((term, index) => {
       const button = document.createElement('button');
       button.type = 'button';
       button.className = 'dg-content-filter';
@@ -1980,8 +2057,12 @@ def ensure_assets(base_dir: Path) -> None:
     }
 
     const lists = Array.from(document.querySelectorAll('ul.dg-index, ul.dg-done-list, ul.dg-reading-list'));
-    renderSuggestedFilters(document.querySelector('[data-dg-content-filter-pool]'));
-    const filterButtons = Array.from(document.querySelectorAll('[data-dg-content-filter]'));
+    const filterSlot = document.querySelector('[data-dg-content-filter-pool]');
+    const randomFiltersButton = document.querySelector('[data-dg-content-filter-random]');
+    const reuseStoredSample = true;
+    const savedFilterTerms = loadContentFilterPreference();
+    renderSuggestedFilters(filterSlot, savedFilterTerms, reuseStoredSample);
+    let filterButtons = Array.from(document.querySelectorAll('[data-dg-content-filter]'));
     const filterSummary = document.querySelector('[data-dg-filter-summary]');
     if (!toggle || lists.length === 0) return;
 
@@ -2005,12 +2086,20 @@ def ensure_assets(base_dir: Path) -> None:
       syncToggleState(toggle, highlightsFirst);
       toggle.setAttribute('disabled', '');
       filterButtons.forEach((button) => button.setAttribute('disabled', ''));
+      if (randomFiltersButton) randomFiltersButton.setAttribute('disabled', '');
       return;
     }
 
     const defaultSortDirection = (toggle.getAttribute('data-dg-sort-direction') || 'desc').toLowerCase() === 'asc'
       ? 'asc'
       : 'desc';
+
+    if (savedFilterTerms) {
+      const savedButton = filterButtons.find(
+        (button) => (button.getAttribute('data-dg-filter-terms') || '') === savedFilterTerms
+      );
+      activeFilterKey = savedButton ? (savedButton.getAttribute('data-dg-content-filter') || '') : '';
+    }
 
     function syncFilterState() {
       for (const button of filterButtons) {
@@ -2070,11 +2159,27 @@ def ensure_assets(base_dir: Path) -> None:
       renderOrder();
     });
 
-    for (const button of filterButtons) {
-      button.addEventListener('click', () => {
-        const key = button.getAttribute('data-dg-content-filter') || '';
-        activeFilterKey = activeFilterKey === key ? '' : key;
-        applyContentFilter();
+    function bindFilterButtons() {
+      for (const button of filterButtons) {
+        button.addEventListener('click', () => {
+          const key = button.getAttribute('data-dg-content-filter') || '';
+          activeFilterKey = activeFilterKey === key ? '' : key;
+          saveContentFilterPreference(activeFilterKey ? (button.getAttribute('data-dg-filter-terms') || '') : '');
+          applyContentFilter();
+        });
+      }
+    }
+
+    bindFilterButtons();
+
+    if (randomFiltersButton) {
+      randomFiltersButton.addEventListener('click', () => {
+        activeFilterKey = '';
+        saveContentFilterPreference('');
+        renderSuggestedFilters(filterSlot, '', false);
+        filterButtons = Array.from(document.querySelectorAll('[data-dg-content-filter]'));
+        bindFilterButtons();
+        renderOrder();
       });
     }
 
