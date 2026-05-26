@@ -32,6 +32,54 @@ def test_extract_original_published_date_falls_back_to_url_path():
     assert candidate.source == "url:path"
 
 
+def test_extract_original_published_date_reads_early_visible_article_date():
+    html = """
+    <html><body><article>
+      <h1>Press release</h1>
+      <p>20 November 2017</p>
+      <p>On 19 October 2017, something else happened in the story body.</p>
+    </article></body></html>
+    """
+
+    candidate = extract_original_published_date(html)
+
+    assert candidate is not None
+    assert candidate.value == "2017-11-20"
+    assert candidate.source == "visible_text:article_start"
+
+
+def test_extract_original_published_date_reads_submitted_visible_date():
+    html = """
+    <html><body><main>
+      <p>Astrophysics &gt; Earth and Planetary Astrophysics</p>
+      <p>arXiv:1711.03558v3</p>
+      <p>[Submitted on 9 Nov 2017 (v1), last revised 11 May 2018]</p>
+    </main></body></html>
+    """
+
+    candidate = extract_original_published_date(html)
+
+    assert candidate is not None
+    assert candidate.value == "2017-11-09"
+    assert candidate.source == "visible_text:article_start"
+
+
+def test_extract_original_published_date_prefers_structured_date_over_visible_text():
+    html = """
+    <html><head>
+      <meta property="article:published_time" content="2026-05-02T10:00:00Z">
+    </head><body><article>
+      <p>Published 1 May 2026</p>
+    </article></body></html>
+    """
+
+    candidate = extract_original_published_date(html)
+
+    assert candidate is not None
+    assert candidate.value == "2026-05-02T10:00:00Z"
+    assert candidate.source == "meta:property=article:published_time"
+
+
 def test_backfill_original_article_dates_updates_markdown_and_preserves_mtime(tmp_path: Path):
     base = tmp_path / "base"
     posts = base / "Posts" / "Posts 2026"

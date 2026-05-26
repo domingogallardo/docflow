@@ -59,6 +59,80 @@ _META_DATE_KEYS = (
     ("itemprop", "datePublished"),
     ("itemprop", "dateCreated"),
 )
+_VISIBLE_MONTHS = {
+    "january": 1,
+    "jan": 1,
+    "jan.": 1,
+    "february": 2,
+    "feb": 2,
+    "feb.": 2,
+    "march": 3,
+    "mar": 3,
+    "mar.": 3,
+    "april": 4,
+    "apr": 4,
+    "apr.": 4,
+    "may": 5,
+    "june": 6,
+    "jun": 6,
+    "jun.": 6,
+    "july": 7,
+    "jul": 7,
+    "jul.": 7,
+    "august": 8,
+    "aug": 8,
+    "aug.": 8,
+    "september": 9,
+    "sep": 9,
+    "sep.": 9,
+    "sept": 9,
+    "sept.": 9,
+    "october": 10,
+    "oct": 10,
+    "oct.": 10,
+    "november": 11,
+    "nov": 11,
+    "nov.": 11,
+    "december": 12,
+    "dec": 12,
+    "dec.": 12,
+    "enero": 1,
+    "febrero": 2,
+    "marzo": 3,
+    "abril": 4,
+    "mayo": 5,
+    "junio": 6,
+    "julio": 7,
+    "agosto": 8,
+    "septiembre": 9,
+    "setiembre": 9,
+    "octubre": 10,
+    "noviembre": 11,
+    "diciembre": 12,
+}
+_VISIBLE_MONTH_RE = "|".join(re.escape(month) for month in sorted(_VISIBLE_MONTHS, key=len, reverse=True))
+_VISIBLE_DATE_PATTERNS = (
+    re.compile(rf"\b({_VISIBLE_MONTH_RE})\s+(\d{{1,2}})(?:st|nd|rd|th)?[,]?\s+((?:19|20)\d{{2}})\b", re.I),
+    re.compile(
+        rf"\b(\d{{1,2}})(?:st|nd|rd|th)?\s+(?:de\s+)?({_VISIBLE_MONTH_RE})(?:\s+de)?[,]?\s+((?:19|20)\d{{2}})\b",
+        re.I,
+    ),
+    re.compile(r"\b((?:19|20)\d{2})[-/.]([01]?\d)[-/.]([0-3]?\d)\b"),
+    re.compile(r"\b([0-3]?\d)[-/]([01]?\d)[-/]((?:19|20)\d{2})\b"),
+)
+_VISIBLE_CONTAINER_SELECTORS = (
+    "article",
+    "main",
+    "[role='main']",
+    ".post",
+    ".entry",
+    ".article",
+    ".content",
+)
+_VISIBLE_SKIP_TAGS = ("script", "style", "noscript", "svg", "nav", "footer", "aside", "form")
+_VISIBLE_LINE_LIMIT = 10
+_VISIBLE_TOTAL_CHAR_LIMIT = 900
+_VISIBLE_LINE_CHAR_LIMIT = 180
 
 
 @dataclass(frozen=True)
@@ -235,6 +309,67 @@ def _time_date_candidate(soup: BeautifulSoup) -> DateCandidate | None:
     return None
 
 
+def _visible_text_date_candidate(soup: BeautifulSoup) -> DateCandidate | None:
+    root = _visible_text_root(soup)
+    if root is None:
+        return None
+
+    for line in _initial_visible_lines(root):
+        normalized = _parse_visible_text_date(line)
+        if normalized:
+            return DateCandidate(normalized, "visible_text:article_start")
+    return None
+
+
+def _visible_text_root(soup: BeautifulSoup):
+    for selector in _VISIBLE_CONTAINER_SELECTORS:
+        found = soup.select_one(selector)
+        if found is not None:
+            return found
+    return soup.body or soup
+
+
+def _initial_visible_lines(root) -> list[str]:
+    for tag in root.find_all(_VISIBLE_SKIP_TAGS):
+        tag.decompose()
+
+    lines: list[str] = []
+    total_chars = 0
+    for raw_text in root.stripped_strings:
+        line = re.sub(r"\s+", " ", raw_text).strip()
+        if len(line) < 6 or len(line) > _VISIBLE_LINE_CHAR_LIMIT:
+            continue
+
+        lines.append(line)
+        total_chars += len(line)
+        if len(lines) >= _VISIBLE_LINE_LIMIT or total_chars >= _VISIBLE_TOTAL_CHAR_LIMIT:
+            break
+    return lines
+
+
+def _parse_visible_text_date(line: str) -> str | None:
+    for index, pattern in enumerate(_VISIBLE_DATE_PATTERNS):
+        match = pattern.search(line)
+        if not match:
+            continue
+
+        if index == 0:
+            return _date_from_parts(match.group(3), _VISIBLE_MONTHS[match.group(1).lower()], match.group(2))
+        if index == 1:
+            return _date_from_parts(match.group(3), _VISIBLE_MONTHS[match.group(2).lower()], match.group(1))
+        if index == 2:
+            return _date_from_parts(match.group(1), match.group(2), match.group(3))
+        return _date_from_parts(match.group(3), match.group(2), match.group(1))
+    return None
+
+
+def _date_from_parts(year: object, month: object, day: object) -> str | None:
+    try:
+        return date(int(year), int(month), int(day)).isoformat()
+    except (TypeError, ValueError):
+        return None
+
+
 def _url_date_candidate(url: str) -> DateCandidate | None:
     path = urlparse(url).path
     patterns = (
@@ -256,7 +391,12 @@ def _url_date_candidate(url: str) -> DateCandidate | None:
 
 def extract_original_published_date(html: str, *, url: str = "") -> DateCandidate | None:
     soup = BeautifulSoup(html, "html.parser")
-    for extractor in (_json_ld_date_candidate, _meta_date_candidate, _time_date_candidate):
+    for extractor in (
+        _json_ld_date_candidate,
+        _meta_date_candidate,
+        _time_date_candidate,
+        _visible_text_date_candidate,
+    ):
         candidate = extractor(soup)
         if candidate:
             return candidate

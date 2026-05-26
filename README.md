@@ -158,7 +158,8 @@ Common fields:
 - `docflow_original_published_at`: original publication date/time discovered
   from the saved article URL, when available.
 - `docflow_original_published_source`: where the original publication date was
-  found, such as JSON-LD, HTML meta tags, `<time>`, or the URL path.
+  found, such as JSON-LD, HTML meta tags, `<time>`, early visible article text,
+  or the URL path.
 - `docflow_ingested_at`: UTC timestamp for when docflow incorporated the item.
   This is present for newly ingested items; older migrated/normalized posts may
   omit it when no real ingest timestamp is known.
