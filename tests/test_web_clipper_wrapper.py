@@ -6,6 +6,7 @@ from web_clipper_wrapper import (
     clean_html_for_markdown,
     default_output_path,
     markdown_quality,
+    original_published_metadata,
     read_urls_from_file,
     resolve_node_bin,
     strip_frontmatter,
@@ -114,6 +115,41 @@ def test_markdown_quality_rejects_escaped_json_payload():
 
 def test_strip_frontmatter_returns_body_only():
     assert strip_frontmatter("---\na: b\n---\nBody\n") == "Body"
+
+
+def test_original_published_metadata_prefers_html_structured_date():
+    html = """
+    <html><head>
+      <script type="application/ld+json">
+        {"@type": "Article", "datePublished": "2026-05-02"}
+      </script>
+    </head></html>
+    """
+    markdown = "Published May 1, 2026\n\nBody"
+
+    metadata = original_published_metadata(
+        html,
+        markdown,
+        url="https://example.com/2026/05/03/article",
+    )
+
+    assert metadata == {
+        "docflow_original_published_at": "2026-05-02",
+        "docflow_original_published_source": "json_ld:datePublished",
+    }
+
+
+def test_original_published_metadata_uses_markdown_before_url_path():
+    metadata = original_published_metadata(
+        "<html></html>",
+        "Published May 2, 2026\n\nBody",
+        url="https://example.com/2026/05/03/article",
+    )
+
+    assert metadata == {
+        "docflow_original_published_at": "2026-05-02",
+        "docflow_original_published_source": "markdown_text:first_lines",
+    }
 
 
 def test_attempts_for_esade_include_domain_rule_after_content():

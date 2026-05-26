@@ -705,6 +705,11 @@ def test_current_year_browse_pages_group_articles_by_relative_time(tmp_path: Pat
         for suffix, mtime in dated_files:
             doc = year_dir / f"{prefix}-{suffix}.html"
             doc.write_text(f"<html><body>{prefix} {suffix}</body></html>", encoding="utf-8")
+            if root_name == "Posts":
+                doc.with_suffix(".md").write_text(
+                    f"---\ndocflow_ingested_at: {mtime.isoformat().replace('+00:00', 'Z')}\n---\n\n# {prefix} {suffix}\n",
+                    encoding="utf-8",
+                )
             epoch = mtime.timestamp()
             os.utime(doc, (epoch, epoch))
 
@@ -737,7 +742,11 @@ def test_non_current_year_browse_pages_group_by_month(tmp_path: Path, monkeypatc
     posts.mkdir(parents=True)
     old = posts / "old.html"
     old.write_text("<html><body>Old</body></html>", encoding="utf-8")
-    old_epoch = datetime(2025, 12, 20, 12, tzinfo=timezone.utc).timestamp()
+    old.with_suffix(".md").write_text(
+        "---\ndocflow_original_published_at: 2025-12-20\n---\n\n# Old\n",
+        encoding="utf-8",
+    )
+    old_epoch = datetime(2026, 1, 20, 12, tzinfo=timezone.utc).timestamp()
     os.utime(old, (old_epoch, old_epoch))
 
     build_browse_index.build_browse_site(base)
@@ -745,6 +754,7 @@ def test_non_current_year_browse_pages_group_by_month(tmp_path: Path, monkeypatc
     page = base / "_site" / "browse" / "posts" / "Posts 2025" / "index.html"
     content = page.read_text(encoding="utf-8")
     assert "<h3 class='dg-time-heading'>Diciembre 2025</h3>" in content
+    assert "<h3 class='dg-time-heading'>Enero 2026</h3>" not in content
     assert "old.html" in content
 
 
@@ -758,10 +768,17 @@ def test_previous_year_browse_pages_group_by_month(tmp_path: Path, monkeypatch):
     march = posts / "march.html"
     april.write_text("<html><body>April</body></html>", encoding="utf-8")
     march.write_text("<html><body>March</body></html>", encoding="utf-8")
-    april_epoch = datetime(2025, 4, 10, 12, tzinfo=timezone.utc).timestamp()
-    march_epoch = datetime(2025, 3, 10, 12, tzinfo=timezone.utc).timestamp()
-    os.utime(april, (april_epoch, april_epoch))
-    os.utime(march, (march_epoch, march_epoch))
+    april.with_suffix(".md").write_text(
+        "---\ndocflow_ingested_at: 2025-04-10T12:00:00Z\n---\n\n# April\n",
+        encoding="utf-8",
+    )
+    march.with_suffix(".md").write_text(
+        "---\ndocflow_ingested_at: 2025-03-10T12:00:00Z\n---\n\n# March\n",
+        encoding="utf-8",
+    )
+    wrong_epoch = datetime(2026, 1, 10, 12, tzinfo=timezone.utc).timestamp()
+    os.utime(april, (wrong_epoch, wrong_epoch))
+    os.utime(march, (wrong_epoch, wrong_epoch))
 
     build_browse_index.build_browse_site(base)
 
@@ -772,6 +789,50 @@ def test_previous_year_browse_pages_group_by_month(tmp_path: Path, monkeypatch):
     assert content.find("Abril 2025") < content.find(">april.html</a>")
     assert content.find("Marzo 2025") < content.find(">march.html</a>")
     assert content.find("Abril 2025") < content.find("Marzo 2025")
+
+
+def test_posts_browse_months_prefer_ingested_over_original_date(tmp_path: Path, monkeypatch):
+    base = tmp_path / "base"
+    monkeypatch.setattr(build_browse_index, "_local_today", lambda: date(2026, 5, 18))
+    posts = base / "Posts" / "Posts 2025"
+    posts.mkdir(parents=True)
+
+    article = posts / "article.html"
+    article.write_text("<html><body>Article</body></html>", encoding="utf-8")
+    article.with_suffix(".md").write_text(
+        "---\n"
+        "docflow_ingested_at: 2025-12-20T12:00:00Z\n"
+        "docflow_original_published_at: 2025-01-05\n"
+        "---\n\n# Article\n",
+        encoding="utf-8",
+    )
+    wrong_epoch = datetime(2026, 2, 10, 12, tzinfo=timezone.utc).timestamp()
+    os.utime(article, (wrong_epoch, wrong_epoch))
+
+    build_browse_index.build_browse_site(base)
+
+    page = base / "_site" / "browse" / "posts" / "Posts 2025" / "index.html"
+    content = page.read_text(encoding="utf-8")
+    assert "<h3 class='dg-time-heading'>Diciembre 2025</h3>" in content
+    assert "<h3 class='dg-time-heading'>Enero 2025</h3>" not in content
+    assert "<h3 class='dg-time-heading'>Febrero 2026</h3>" not in content
+
+
+def test_posts_1990_browse_page_does_not_group_by_month(tmp_path: Path):
+    base = tmp_path / "base"
+    posts = base / "Posts" / "Posts 1990"
+    posts.mkdir(parents=True)
+    unknown = posts / "unknown.html"
+    unknown.write_text("<html><body>Unknown</body></html>", encoding="utf-8")
+    epoch = datetime(2026, 1, 10, 12, tzinfo=timezone.utc).timestamp()
+    os.utime(unknown, (epoch, epoch))
+
+    build_browse_index.build_browse_site(base)
+
+    page = base / "_site" / "browse" / "posts" / "Posts 1990" / "index.html"
+    content = page.read_text(encoding="utf-8")
+    assert "unknown.html" in content
+    assert "<h3 class='dg-time-heading'>" not in content
 
 
 def test_rebuild_browse_for_path_updates_only_target_branch(tmp_path: Path):

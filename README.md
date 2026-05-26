@@ -189,6 +189,44 @@ Supported fields are also exported to generated HTML as `docflow-*` meta tags
 where relevant, for example `docflow-source-url`, `docflow-html-generated-at`,
 or `docflow-tweet-id`.
 
+### Post folder dates
+
+Post folders represent the year Docflow should file the article under, using
+this effective-year rule:
+
+1. Use the year from `docflow_ingested_at` when it exists. This preserves the
+   real download/incorporation year for newly processed posts.
+2. Otherwise use the year from `docflow_original_published_at` when it exists.
+   This lets migrated posts without a real ingest timestamp leave fallback
+   folders such as `Posts 1990` and move to the best-known article year.
+3. Otherwise keep the post in its current `Posts YYYY` folder.
+
+Do not use `docflow_html_generated_at` for folder placement; it is only a
+technical generation timestamp.
+
+Year browse pages group posts by month using the same effective date rule.
+`Posts 1990` is treated as an unknown-date holding folder, so it is rendered as
+a flat list without month headings.
+
+### Date metadata lifecycle
+
+Newly downloaded or newly processed Markdown gets `docflow_ingested_at` during
+metadata enrichment. This is the authoritative timestamp for when Docflow
+incorporated the item.
+
+New URL downloads also try to set `docflow_original_published_at` and
+`docflow_original_published_source` during clipping, using the already fetched
+HTML first and then the first Markdown body lines before falling back to dates
+embedded in the URL path.
+
+`utils/backfill_original_article_dates.py` remains available for historical
+posts and repairs. The script skips posts that already have
+`docflow_original_published_at` unless `--force` is passed.
+
+After adding or refreshing original publication dates, run
+`utils/reorganize_posts_by_date.py` to apply the folder rule above, then rebuild
+the intranet indexes.
+
 ## Operation and maintenance
 
 ### BASE_DIR location
@@ -340,7 +378,14 @@ python utils/backfill_original_article_dates.py --base-dir "$DOCFLOW_BASE_DIR" -
 python utils/backfill_original_article_dates.py --base-dir "$DOCFLOW_BASE_DIR"
 ```
 
-6. Run the intranet server manually (mainly for troubleshooting):
+6. Reorganize post folders using the effective date rule:
+
+```bash
+python utils/reorganize_posts_by_date.py --base-dir "$DOCFLOW_BASE_DIR" --dry-run
+python utils/reorganize_posts_by_date.py --base-dir "$DOCFLOW_BASE_DIR"
+```
+
+7. Run the intranet server manually (mainly for troubleshooting):
 
 ```bash
 source ~/.docflow_env

@@ -133,6 +133,24 @@ _VISIBLE_SKIP_TAGS = ("script", "style", "noscript", "svg", "nav", "footer", "as
 _VISIBLE_LINE_LIMIT = 10
 _VISIBLE_TOTAL_CHAR_LIMIT = 900
 _VISIBLE_LINE_CHAR_LIMIT = 180
+_MARKDOWN_INITIAL_LINE_LIMIT = 3
+_MARKDOWN_LINE_CHAR_LIMIT = 130
+_MIN_ORIGINAL_DATE = date(1990, 1, 1)
+_MARKDOWN_DATE_CONTEXT_RE = re.compile(
+    r"\b("
+    r"published|posted|publicado|publicada|pubblicato|submitted|"
+    r"first published|written by|by|por"
+    r")\b",
+    re.I,
+)
+_MARKDOWN_DATE_NOISE_RE = re.compile(
+    r"\b("
+    r"updated|retrieved|accessed|archived|accepted|doi|last modified|"
+    r"ultima entrada|\u00faltima entrada|cover date|episode aired|temporada|season|"
+    r"compartida|tweet|twitter|forecast|created by|reported|results as of"
+    r")\b",
+    re.I,
+)
 
 
 @dataclass(frozen=True)
@@ -363,6 +381,57 @@ def _parse_visible_text_date(line: str) -> str | None:
     return None
 
 
+def extract_original_published_date_from_markdown(markdown: str) -> DateCandidate | None:
+    _, body = split_front_matter(markdown)
+    for line in _initial_markdown_text_lines(body):
+        if _MARKDOWN_DATE_NOISE_RE.search(line) and not _MARKDOWN_DATE_CONTEXT_RE.search(line):
+            continue
+        normalized = _parse_visible_text_date(line)
+        if not normalized or not _is_supported_original_date(normalized):
+            continue
+        if _looks_like_markdown_publication_line(line):
+            return DateCandidate(normalized, "markdown_text:first_lines")
+    return None
+
+
+def _initial_markdown_text_lines(body: str) -> list[str]:
+    lines: list[str] = []
+    for raw_line in body.splitlines():
+        line = _clean_markdown_line(raw_line)
+        if not line:
+            continue
+        lines.append(line)
+        if len(lines) >= _MARKDOWN_INITIAL_LINE_LIMIT:
+            break
+    return lines
+
+
+def _clean_markdown_line(raw_line: str) -> str:
+    line = raw_line.strip()
+    if not line:
+        return ""
+    if line.startswith(("#", ">", "!", "<!--")):
+        return ""
+    if "http://" in line or "https://" in line:
+        return ""
+
+    line = re.sub(r"!\[[^\]]*\]\([^)]*\)", "", line)
+    line = re.sub(r"\[([^\]]+)\]\([^)]*\)", r"\1", line)
+    line = re.sub(r"[*_`~]+", "", line)
+    line = re.sub(r"\s+", " ", line).strip(" -\t")
+    if len(line) < 6 or len(line) > _MARKDOWN_LINE_CHAR_LIMIT:
+        return ""
+    return line
+
+
+def _looks_like_markdown_publication_line(line: str) -> bool:
+    if _MARKDOWN_DATE_CONTEXT_RE.search(line):
+        return True
+    if len(re.findall(r"\w+", line, flags=re.UNICODE)) > 10:
+        return False
+    return bool(_parse_visible_text_date(line))
+
+
 def _date_from_parts(year: object, month: object, day: object) -> str | None:
     try:
         return date(int(year), int(month), int(day)).isoformat()
@@ -385,7 +454,9 @@ def _url_date_candidate(url: str) -> DateCandidate | None:
             value = date(int(match.group(1)), int(match.group(2)), int(match.group(3))).isoformat()
         except ValueError:
             continue
-        return DateCandidate(value, "url:path")
+        candidate = DateCandidate(value, "url:path")
+        if _is_supported_original_date(candidate.value):
+            return candidate
     return None
 
 
@@ -398,11 +469,19 @@ def extract_original_published_date(html: str, *, url: str = "") -> DateCandidat
         _visible_text_date_candidate,
     ):
         candidate = extractor(soup)
-        if candidate:
+        if candidate and _is_supported_original_date(candidate.value):
             return candidate
     if url:
         return _url_date_candidate(url)
     return None
+
+
+def _is_supported_original_date(value: str) -> bool:
+    try:
+        parsed = date.fromisoformat(value[:10])
+    except ValueError:
+        return False
+    return _MIN_ORIGINAL_DATE <= parsed <= date.today()
 
 
 def backfill_original_article_dates(
@@ -440,9 +519,13 @@ def backfill_original_article_dates(
 
         try:
             html = fetch(url, timeout)
-            candidate = extract_original_published_date(html, url=url)
+            candidate = (
+                extract_original_published_date(html)
+                or extract_original_published_date_from_markdown(md_text)
+                or extract_original_published_date("", url=url)
+            )
         except Exception as exc:
-            candidate = _url_date_candidate(url)
+            candidate = extract_original_published_date_from_markdown(md_text) or _url_date_candidate(url)
             if candidate is None:
                 failed += 1
                 print(f"failed: {path.name}: {exc}")

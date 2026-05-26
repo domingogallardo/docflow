@@ -4,6 +4,7 @@ from utils import split_front_matter
 from utils.backfill_original_article_dates import (
     backfill_original_article_dates,
     extract_original_published_date,
+    extract_original_published_date_from_markdown,
 )
 
 
@@ -78,6 +79,46 @@ def test_extract_original_published_date_prefers_structured_date_over_visible_te
     assert candidate is not None
     assert candidate.value == "2026-05-02T10:00:00Z"
     assert candidate.source == "meta:property=article:published_time"
+
+
+def test_extract_original_published_date_from_markdown_reads_first_lines():
+    markdown = """---
+title: Article
+---
+
+# Article title
+
+Published May 2, 2026
+
+The story body starts here and mentions May 1, 2026 later.
+"""
+
+    candidate = extract_original_published_date_from_markdown(markdown)
+
+    assert candidate is not None
+    assert candidate.value == "2026-05-02"
+    assert candidate.source == "markdown_text:first_lines"
+
+
+def test_extract_original_published_date_from_markdown_ignores_late_body_dates():
+    markdown = """# Article title
+
+This opening line has no date.
+
+This second line also has no date.
+
+This third line still has no date.
+
+Published May 2, 2026
+"""
+
+    assert extract_original_published_date_from_markdown(markdown) is None
+
+
+def test_extract_original_published_date_from_markdown_rejects_old_dates():
+    markdown = "Published May 2, 1989\n\nBody"
+
+    assert extract_original_published_date_from_markdown(markdown) is None
 
 
 def test_backfill_original_article_dates_updates_markdown_and_preserves_mtime(tmp_path: Path):

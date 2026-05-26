@@ -305,6 +305,7 @@ class BrowseEntry:
     highlighted: bool = False
     highlight_last_epoch: float | None = None
     sort_mtime: float | None = None
+    temporal_epoch: float | None = None
     item_count: int | None = None
     filter_text: str = ""
 
@@ -855,6 +856,25 @@ def _search_entry_sort_epoch(path: Path, fallback_epoch: float) -> float:
 
 
 def _markdown_docflow_ingested_epoch(path: Path) -> float | None:
+    meta = _read_markdown_front_matter(path)
+    if meta is None:
+        return None
+    return _iso_to_epoch(meta.get("docflow_ingested_at"))
+
+
+def _post_effective_date_epoch(path: Path) -> float | None:
+    md_path = path if path.suffix.lower() == ".md" else path.with_suffix(".md")
+    meta = _read_markdown_front_matter(md_path)
+    if meta is None:
+        return None
+    for key in ("docflow_ingested_at", "docflow_original_published_at"):
+        epoch = _iso_to_epoch(meta.get(key))
+        if epoch is not None:
+            return epoch
+    return None
+
+
+def _read_markdown_front_matter(path: Path) -> dict[str, str] | None:
     if path.suffix.lower() != ".md" or not path.is_file():
         return None
     try:
@@ -862,7 +882,7 @@ def _markdown_docflow_ingested_epoch(path: Path) -> float | None:
     except Exception:
         return None
     meta, _ = split_front_matter(text)
-    return _iso_to_epoch(meta.get("docflow_ingested_at"))
+    return meta
 
 
 def _read_tweet_markdown_meta(path: Path) -> tuple[dict[str, str], str] | None:
@@ -1310,6 +1330,7 @@ def _cleanup_obsolete_incoming_dir(base_dir: Path) -> None:
 def _scan_directory(
     *,
     base_dir: Path,
+    category: str,
     abs_dir: Path,
     reading_items: dict[str, dict],
     done_items: dict[str, dict],
@@ -1372,6 +1393,12 @@ def _scan_directory(
 
                 display_mtime = st.st_mtime
                 effective_mtime = display_mtime
+                temporal_epoch = effective_mtime
+                if category == "posts":
+                    post_epoch = _post_effective_date_epoch(abs_path)
+                    if post_epoch is not None:
+                        effective_mtime = post_epoch
+                    temporal_epoch = post_epoch
                 highlighted, highlight_last_epoch = _highlight_status(base_dir, rel)
                 entries.append(
                     BrowseEntry(
@@ -1384,6 +1411,7 @@ def _scan_directory(
                         rel_path=rel,
                         highlighted=highlighted,
                         highlight_last_epoch=highlight_last_epoch,
+                        temporal_epoch=temporal_epoch,
                         filter_text=_filter_text_for_path(abs_path),
                     )
                 )
@@ -1414,6 +1442,7 @@ def _write_category_directory_page(
 
     entries, child_dirs, direct_files = _scan_directory(
         base_dir=base_dir,
+        category=category,
         abs_dir=abs_dir,
         reading_items=reading_items,
         done_items=done_items,
@@ -1491,8 +1520,10 @@ def _temporal_group_year(category: str, rel_dir: Path) -> int | None:
     return _year_from_name(rel_dir.name)
 
 
-def _entry_local_date(entry: BrowseEntry) -> date:
-    return datetime.fromtimestamp(_sort_mtime(entry)).astimezone().date()
+def _entry_local_date(entry: BrowseEntry) -> date | None:
+    if entry.temporal_epoch is None:
+        return None
+    return datetime.fromtimestamp(entry.temporal_epoch).astimezone().date()
 
 
 def _temporal_sections_for_entries(entries: list[BrowseEntry]) -> list[tuple[str, list[BrowseEntry]]]:
@@ -1514,10 +1545,13 @@ def _relative_temporal_sections_for_entries(
 
     buckets: dict[str, list[BrowseEntry]] = {label: [] for label in labels}
     extra_months: dict[tuple[int, int], list[BrowseEntry]] = {}
+    undated: list[BrowseEntry] = []
 
     for entry in entries:
         entry_date = _entry_local_date(entry)
-        if entry_date == today:
+        if entry_date is None:
+            undated.append(entry)
+        elif entry_date == today:
             buckets["Hoy"].append(entry)
         elif entry_date == yesterday:
             buckets["Ayer"].append(entry)
@@ -1534,6 +1568,8 @@ def _relative_temporal_sections_for_entries(
     for year, month in sorted(extra_months, reverse=True):
         month_name = SPANISH_MONTH_NAMES.get(month, f"{month:02d}")
         sections.append((f"{month_name} {year}", extra_months[(year, month)]))
+    if undated:
+        sections.append(("Sin fecha", undated))
     return sections
 
 
@@ -1543,10 +1579,13 @@ def _monthly_sections_for_entries(
 ) -> list[tuple[str, list[BrowseEntry]]]:
     buckets: dict[int, list[BrowseEntry]] = {month: [] for month in range(12, 0, -1)}
     extra_months: dict[tuple[int, int], list[BrowseEntry]] = {}
+    undated: list[BrowseEntry] = []
 
     for entry in entries:
         entry_date = _entry_local_date(entry)
-        if entry_date.year == year:
+        if entry_date is None:
+            undated.append(entry)
+        elif entry_date.year == year:
             buckets[entry_date.month].append(entry)
         else:
             extra_months.setdefault((entry_date.year, entry_date.month), []).append(entry)
@@ -1560,6 +1599,8 @@ def _monthly_sections_for_entries(
     for extra_year, month in sorted(extra_months, reverse=True):
         month_name = SPANISH_MONTH_NAMES.get(month, f"{month:02d}")
         sections.append((f"{month_name} {extra_year}", extra_months[(extra_year, month)]))
+    if undated:
+        sections.append(("Sin fecha", undated))
     return sections
 
 
@@ -1571,6 +1612,8 @@ def _temporal_sections_for_category_year(
 ) -> list[tuple[str, list[BrowseEntry]]] | None:
     year = _temporal_group_year(category, rel_dir)
     if year is None:
+        return None
+    if category == "posts" and year == 1990:
         return None
 
     today = _local_today()

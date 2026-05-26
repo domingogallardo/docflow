@@ -28,6 +28,12 @@ import utils as U
 from path_utils import unique_path
 from openai_client import build_openai_client
 from summary_ai import SummaryAIUpdater
+from utils.backfill_original_article_dates import (
+    ORIGINAL_PUBLISHED_AT_KEY,
+    ORIGINAL_PUBLISHED_SOURCE_KEY,
+    extract_original_published_date,
+    extract_original_published_date_from_markdown,
+)
 
 
 DEFAULT_USER_AGENT = (
@@ -378,6 +384,21 @@ def strip_frontmatter(markdown: str) -> str:
     return markdown
 
 
+def original_published_metadata(html: str, markdown: str, *, url: str) -> dict[str, str]:
+    """Return original publication metadata discovered during URL clipping."""
+    candidate = (
+        extract_original_published_date(html)
+        or extract_original_published_date_from_markdown(markdown)
+        or extract_original_published_date("", url=url)
+    )
+    if candidate is None:
+        return {}
+    return {
+        ORIGINAL_PUBLISHED_AT_KEY: candidate.value,
+        ORIGINAL_PUBLISHED_SOURCE_KEY: candidate.source,
+    }
+
+
 def default_output_path(output_dir: Path, url: str) -> Path:
     """Build a stable, docflow-friendly filename from the URL path."""
     parsed = urlparse(url)
@@ -455,6 +476,9 @@ def download_url_to_markdown(
                     "docflow_final_url": final_url,
                     "docflow_removed_data_images": removed_data_images,
                 }
+                extra_metadata.update(
+                    original_published_metadata(html, markdown, url=final_url)
+                )
                 if url.rstrip("/") != final_url.rstrip("/"):
                     extra_metadata["docflow_original_url"] = url
                 markdown = U.enrich_markdown_metadata(
