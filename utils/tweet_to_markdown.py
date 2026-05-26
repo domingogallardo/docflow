@@ -2563,11 +2563,15 @@ def _build_single_tweet_markdown(
     _append_tweet_content_lines(md_lines, parts, strip_author=bool(parent_lines))
 
     markdown = "\n".join(md_lines).strip() + "\n"
+    extra_metadata = {"tweet_id": _status_id_from_url(tweet_url) or ""}
+    if parts.is_article:
+        extra_metadata["docflow_post_url"] = tweet_url
+
     return enrich_markdown_metadata(
         markdown,
         source_url=tweet_url,
         title=title,
-        extra={"tweet_id": _status_id_from_url(tweet_url) or ""},
+        extra=extra_metadata,
     )
 
 
@@ -2611,11 +2615,15 @@ def _build_thread_markdown(
         _append_tweet_content_lines(md_lines, parts, strip_author=True)
 
     markdown = "\n".join(md_lines).strip() + "\n"
+    extra_metadata = {"tweet_id": _status_id_from_url(tweet_url) or ""}
+    if target_parts.is_article:
+        extra_metadata["docflow_post_url"] = tweet_url
+
     return enrich_markdown_metadata(
         markdown,
         source_url=tweet_url,
         title=title,
-        extra={"tweet_id": _status_id_from_url(tweet_url) or ""},
+        extra=extra_metadata,
     )
 
 

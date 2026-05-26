@@ -386,6 +386,7 @@ def test_build_single_tweet_markdown_marks_article_content_type():
     )
 
     assert "tweet_content_type: article" in markdown
+    assert "docflow_post_url: https://x.com/author/status/1" in markdown
 
 
 def test_strip_platform_inline_prompts_removes_glued_x_article_prompt_tail():
@@ -972,6 +973,7 @@ def test_build_single_tweet_markdown_includes_external_link_without_media():
     assert "source_url: https://x.com/autor/status/123" in md
     assert "tweet_id: 123" in md
     assert "docflow_source_type: tweet" in md
+    assert "docflow_post_url:" not in md
 
 
 def test_build_single_tweet_markdown_skips_duplicate_external_link():

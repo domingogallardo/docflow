@@ -24,6 +24,7 @@ _FRONT_MATTER_KEYS = {
     "docflow_extraction_attempt": "docflow-extraction-attempt",
     "docflow_final_url": "docflow-final-url",
     "docflow_original_url": "docflow-original-url",
+    "docflow_post_url": "docflow-post-url",
     "docflow_word_count": "docflow-word-count",
     "docflow_body_chars": "docflow-body-chars",
     "docflow_summary": "docflow-summary",
@@ -272,6 +273,17 @@ def markdown_body_stats(md_text: str) -> dict[str, int]:
     }
 
 
+def first_markdown_http_url(md_text: str) -> str:
+    """Return the first HTTP(S) URL from the Markdown body."""
+    _, body = split_front_matter(md_text)
+    pattern = re.compile(r"\]\((https?://[^)\s]+)\)|(?<!\()(?P<bare>https?://[^\s<>)]+)")
+    for match in pattern.finditer(body):
+        url = (match.group(1) or match.group("bare") or "").rstrip(".,;:")
+        if url.startswith(("http://", "https://")):
+            return url
+    return ""
+
+
 def utc_now_iso() -> str:
     return datetime.now(timezone.utc).isoformat(timespec="seconds").replace("+00:00", "Z")
 
@@ -301,11 +313,18 @@ def enrich_markdown_metadata(
     effective_source_url = source_url
     if not effective_source_url and candidate_source.startswith(("http://", "https://")):
         effective_source_url = candidate_source
+    source_type = infer_source_type(meta, effective_source_url)
+    post_url = ""
+    if source_type == "web":
+        post_url = str(meta.get("docflow_post_url", "")).strip()
+        if not post_url:
+            post_url = first_markdown_http_url(md_text) or effective_source_url or ""
 
     defaults: dict[str, object] = {
         "title": title or extract_markdown_title(md_text),
         "source_url": effective_source_url or "",
-        "docflow_source_type": infer_source_type(meta, effective_source_url),
+        "docflow_source_type": source_type,
+        "docflow_post_url": post_url,
         "docflow_ingested_at": now or utc_now_iso(),
     }
     values: dict[str, object] = {}

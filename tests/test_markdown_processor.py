@@ -139,6 +139,8 @@ Contenido.""",
     md_content = (destination / "article.md").read_text(encoding="utf-8")
     assert "source_url: https://example.com/article" in md_content
     assert "docflow_source_type: web" in md_content
+    assert "docflow_post_url: https://example.com/article" in md_content
+    assert 'name="docflow-post-url"' in html_content
 
 
 def test_markdown_processor_removes_imported_description_and_tags(tmp_path):

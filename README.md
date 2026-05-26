@@ -152,6 +152,9 @@ Common fields:
 - `source_url`: canonical source URL when the item has one.
 - `docflow_source_type`: normalized type (`markdown`, `web`, `tweet`,
   `podcast`, or `pdf`).
+- `docflow_post_url`: original post/article URL for web posts and tweet
+  articles. When possible, docflow infers web post URLs from the first HTTP(S)
+  link in the clipped Markdown body.
 - `docflow_ingested_at`: UTC timestamp for when docflow incorporated the item.
 - `docflow_html_generated_at`: UTC timestamp for when docflow generated the
   associated HTML.

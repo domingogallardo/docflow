@@ -638,6 +638,7 @@ def test_enrich_markdown_metadata_adds_canonical_fields():
     assert meta["title"] == "Demo title"
     assert meta["source_url"] == "https://example.com/article"
     assert meta["docflow_source_type"] == "web"
+    assert meta["docflow_post_url"] == "https://example.com/article"
     assert meta["docflow_ingested_at"] == "2026-01-02T03:04:05Z"
     assert meta["docflow_extractor"] == "test"
     assert meta["docflow_word_count"] == "5"
@@ -666,7 +667,50 @@ Body with words.
     assert "tags" not in meta
     assert "clippings" not in enriched
     assert meta["source_url"] == "https://example.com/article"
+    assert meta["docflow_post_url"] == "https://example.com/article"
     assert body.lstrip().startswith("# Demo title")
+
+
+def test_enrich_markdown_metadata_uses_first_body_link_as_post_url():
+    from utils import enrich_markdown_metadata, split_front_matter
+
+    md = """# Demo title
+
+[original](https://example.com/original)
+
+[second](https://example.com/second)
+"""
+    enriched = enrich_markdown_metadata(
+        md,
+        source_url="https://example.com/final",
+        now="2026-01-02T03:04:05Z",
+    )
+
+    meta, _ = split_front_matter(enriched)
+    assert meta["source_url"] == "https://example.com/final"
+    assert meta["docflow_post_url"] == "https://example.com/original"
+
+
+def test_enrich_markdown_metadata_does_not_add_post_url_to_tweets():
+    from utils import enrich_markdown_metadata, split_front_matter
+
+    md = """---
+source: tweet
+---
+
+# Tweet
+
+https://example.com/article
+"""
+    enriched = enrich_markdown_metadata(
+        md,
+        source_url="https://x.com/autor/status/123",
+        now="2026-01-02T03:04:05Z",
+    )
+
+    meta, _ = split_front_matter(enriched)
+    assert meta["docflow_source_type"] == "tweet"
+    assert "docflow_post_url" not in meta
 
 
 def test_upsert_front_matter_preserves_unrelated_lines():
@@ -830,4 +874,3 @@ def test_ensure_pdf_sidecar_markdown_sets_docflow_ingested_at(tmp_path):
     assert meta["docflow_ingested_at"] == "2026-01-02T03:04:05Z"
     assert meta["docflow_pdf_path"] == "Pdfs/paper.pdf"
     assert body.lstrip().startswith("# paper")
-
