@@ -223,6 +223,16 @@ embedded in the URL path.
 posts and repairs. The script skips posts that already have
 `docflow_original_published_at` unless `--force` is passed.
 
+`utils/backfill_post_ingested_dates_from_mtime.py` repairs post Markdown that
+predates the ingest field but has a meaningful file `mtime` after the initial
+Docflow normalization window. By default that window ends at
+`2025-03-20T23:59:59Z`; after running the backfill, post articles that still
+lack both `docflow_ingested_at` and `docflow_original_published_at` should have
+a Markdown `mtime` at or before that threshold. The script only scans article
+Markdown under `Posts/`, skips generated `report.md` taxonomy reports, writes
+missing `docflow_ingested_at` values from the Markdown `mtime`, mirrors the
+value to a same-stem HTML file when present, and preserves both file mtimes.
+
 After adding or refreshing original publication dates, run
 `utils/reorganize_posts_by_date.py` to apply the folder rule above, then rebuild
 the intranet indexes.
@@ -378,14 +388,23 @@ python utils/backfill_original_article_dates.py --base-dir "$DOCFLOW_BASE_DIR" -
 python utils/backfill_original_article_dates.py --base-dir "$DOCFLOW_BASE_DIR"
 ```
 
-6. Reorganize post folders using the effective date rule:
+6. Backfill missing post ingest dates from meaningful mtimes:
+
+```bash
+python utils/backfill_post_ingested_dates_from_mtime.py --base-dir "$DOCFLOW_BASE_DIR" --dry-run
+python utils/backfill_post_ingested_dates_from_mtime.py --base-dir "$DOCFLOW_BASE_DIR"
+```
+
+Use `--after` only when intentionally changing the normalization threshold.
+
+7. Reorganize post folders using the effective date rule:
 
 ```bash
 python utils/reorganize_posts_by_date.py --base-dir "$DOCFLOW_BASE_DIR" --dry-run
 python utils/reorganize_posts_by_date.py --base-dir "$DOCFLOW_BASE_DIR"
 ```
 
-7. Run the intranet server manually (mainly for troubleshooting):
+8. Run the intranet server manually (mainly for troubleshooting):
 
 ```bash
 source ~/.docflow_env
