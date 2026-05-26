@@ -58,7 +58,7 @@ YEAR_SORT_CATEGORIES = {"posts", "tweets", "pdfs", "images"}
 TEMPORAL_GROUP_CATEGORIES = {"posts", "tweets", "podcasts"}
 SEARCH_SUGGESTION_LIMIT = 400
 CONTENT_FILTER_BUTTON_COUNT = 7
-CONTENT_FILTER_POOL_LIMIT = 240
+CONTENT_FILTER_POOL_LIMIT = 400
 CONTENT_FILTER_MAX_DOC_FRACTION = 0.30
 CONTENT_FILTER_MIN_DOC_COUNT = 3
 CONTENT_FILTER_TARGET_MIN_FRACTION = 0.10
@@ -308,6 +308,7 @@ class BrowseEntry:
     temporal_epoch: float | None = None
     item_count: int | None = None
     filter_text: str = ""
+    filter_terms: tuple[str, ...] = ()
 
 
 def _safe_quote_component(value: str) -> str:
@@ -338,8 +339,7 @@ def _icon_for_filename(name: str) -> str:
     return ""
 
 
-def _browse_controls_html(entries: list[BrowseEntry]) -> str:
-    filter_pool = _content_filter_pool(entries)
+def _browse_controls_html(filter_pool: list[str]) -> str:
     buttons = [
         (
             "<button type='button' class='dg-sort-toggle' data-dg-sort-toggle aria-pressed='false'>"
@@ -360,11 +360,8 @@ def _browse_controls_html(entries: list[BrowseEntry]) -> str:
     return "".join(buttons)
 
 
-def _truncate_filter_part(value: str, limit: int = 320) -> str:
-    text = " ".join(str(value).split())
-    if len(text) <= limit:
-        return text
-    return text[:limit].rsplit(" ", 1)[0]
+def _filter_text_part(value: str) -> str:
+    return " ".join(str(value).split())
 
 
 def _filter_text_for_path(path: Path) -> str:
@@ -382,10 +379,10 @@ def _filter_text_for_path(path: Path) -> str:
         ):
             value = meta.get(key, "")
             if value:
-                parts.append(_truncate_filter_part(value))
+                parts.append(_filter_text_part(value))
 
     text = " ".join(part for part in parts if part)
-    return _truncate_filter_part(text, limit=1200)
+    return _filter_text_part(text)
 
 
 def _normalize_filter_term(value: str) -> str:
@@ -638,6 +635,57 @@ def _content_filter_pool(entries: list[BrowseEntry], limit: int = CONTENT_FILTER
     return _content_filter_pool_fallback(texts, limit)
 
 
+def _content_filter_match_tokens(value: str) -> set[str]:
+    normalized = _normalize_filter_term(value)
+    return set(token for token in re.split(r"[^a-z0-9]+", normalized) if token)
+
+
+def _content_filter_token_coverage_match(filter_tokens: list[str], document_tokens: set[str]) -> bool:
+    if not filter_tokens:
+        return False
+
+    matches = sum(1 for token in filter_tokens if token in document_tokens)
+    required = len(filter_tokens) if len(filter_tokens) <= 2 else math.ceil(len(filter_tokens) * 0.67)
+    return matches >= required
+
+
+def _content_filter_term_matches_text(term: str, normalized_text: str, document_tokens: set[str]) -> bool:
+    normalized_term = _normalize_filter_term(term.strip())
+    filter_tokens = [token for token in re.split(r"[^a-z0-9]+", normalized_term) if token]
+    if not filter_tokens:
+        return False
+    if len(filter_tokens) == 1:
+        return filter_tokens[0] in document_tokens
+    if normalized_term in normalized_text:
+        return True
+    return _content_filter_token_coverage_match(filter_tokens, document_tokens)
+
+
+def _content_filter_terms_for_text(text: str, filter_pool: list[str]) -> tuple[str, ...]:
+    if not text or not filter_pool:
+        return ()
+
+    normalized_text = _normalize_filter_term(text)
+    document_tokens = _content_filter_match_tokens(text)
+    return tuple(
+        term
+        for term in filter_pool
+        if _content_filter_term_matches_text(term, normalized_text, document_tokens)
+    )
+
+
+def _entries_with_content_filter_terms(entries: list[BrowseEntry], filter_pool: list[str]) -> list[BrowseEntry]:
+    if not filter_pool:
+        return entries
+
+    return [
+        replace(entry, filter_terms=_content_filter_terms_for_text(entry.filter_text, filter_pool))
+        if not entry.is_dir
+        else entry
+        for entry in entries
+    ]
+
+
 def _highlight_status(base_dir: Path, rel_path: str) -> tuple[bool, float | None]:
     low_name = Path(rel_path).name.lower()
     if not low_name.endswith((".html", ".htm")):
@@ -668,7 +716,9 @@ def _render_entry(entry: BrowseEntry) -> str:
         f"data-dg-highlight-last='{(entry.highlight_last_epoch or 0):.6f}'",
         f"data-dg-sort-mtime='{_sort_mtime(entry):.6f}'",
         f"data-dg-name='{html.escape(entry.name.lower(), quote=True)}'",
-        f"data-dg-filter-text='{html.escape(entry.filter_text or entry.name, quote=True)}'",
+        "data-dg-filter-terms='"
+        + html.escape(json.dumps(entry.filter_terms, ensure_ascii=False, separators=(",", ":")), quote=True)
+        + "'",
     ]
     attrs = f"{cls_attr} " + " ".join(attr_bits) if cls_attr else " " + " ".join(attr_bits)
     return (
@@ -773,7 +823,18 @@ def _render_directory_page(
             if entry_sections is not None
             else entries
         )
-        controls_html = _browse_controls_html(section_entries) if any(not entry.is_dir for entry in section_entries) else ""
+        if any(not entry.is_dir for entry in section_entries):
+            filter_pool = _content_filter_pool(section_entries)
+            if entry_sections is not None:
+                entry_sections = [
+                    (label, _entries_with_content_filter_terms(section, filter_pool))
+                    for label, section in entry_sections
+                ]
+            else:
+                entries = _entries_with_content_filter_terms(entries, filter_pool)
+            controls_html = _browse_controls_html(filter_pool)
+        else:
+            controls_html = ""
     if controls_html:
         rows.append(f"<div class='dg-legendbar'>{controls_html}</div>")
     if pre_list_html:
@@ -1901,30 +1962,6 @@ def ensure_assets(base_dir: Path) -> None:
       .filter(Boolean);
   }
 
-  function tokenSet(value) {
-    return new Set(String(value || '').split(/[^a-z0-9]+/).filter(Boolean));
-  }
-
-  function tokenCoverageMatch(filterTokens, documentTokens) {
-    if (filterTokens.length === 0) return false;
-    let matches = 0;
-    for (const token of filterTokens) {
-      if (documentTokens.has(token)) matches += 1;
-    }
-    const required = filterTokens.length <= 2 ? filterTokens.length : Math.ceil(filterTokens.length * 0.67);
-    return matches >= required;
-  }
-
-  function matchesFilterText(filterText, terms) {
-    const documentTokens = tokenSet(filterText);
-    return terms.some((term) => {
-      const filterTokens = Array.from(tokenSet(term));
-      if (filterTokens.length <= 1) return documentTokens.has(filterTokens[0]);
-      if (filterText.includes(term)) return true;
-      return tokenCoverageMatch(filterTokens, documentTokens);
-    });
-  }
-
   function parseContentFilterPool(slot) {
     if (!slot) return [];
     try {
@@ -1933,6 +1970,25 @@ def ensure_assets(base_dir: Path) -> None:
     } catch (error) {
       return [];
     }
+  }
+
+  function contentTermsForNode(node) {
+    if (node._dgContentFilterTerms) return node._dgContentFilterTerms;
+    try {
+      const parsed = JSON.parse(node.dataset.dgFilterTerms || '[]');
+      node._dgContentFilterTerms = Array.isArray(parsed)
+        ? parsed.map((item) => normalizeText(item)).filter(Boolean)
+        : [];
+    } catch (error) {
+      node._dgContentFilterTerms = [];
+    }
+    return node._dgContentFilterTerms;
+  }
+
+  function matchesFilterTerms(itemTerms, terms) {
+    if (terms.length === 0) return true;
+    const itemSet = new Set(itemTerms);
+    return terms.some((term) => itemSet.has(term));
   }
 
   function shuffledSample(values, count) {
@@ -2121,8 +2177,7 @@ def ensure_assets(base_dir: Path) -> None:
         let groupVisible = 0;
         for (const node of group.sortableFiles) {
           totalCount += 1;
-          const filterText = normalizeText(node.dataset.dgFilterText || '');
-          const isVisible = terms.length === 0 || matchesFilterText(filterText, terms);
+          const isVisible = matchesFilterTerms(contentTermsForNode(node), terms);
           node.hidden = !isVisible;
           if (isVisible) {
             visibleCount += 1;

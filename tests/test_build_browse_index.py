@@ -121,11 +121,11 @@ def test_build_browse_site_generates_indexes_and_actions(tmp_path: Path):
     assert "activeFilterKey" in browse_sort_content
     assert "renderSuggestedFilters" in browse_sort_content
     assert "normalizeText" in browse_sort_content
-    assert "matchesFilterText" in browse_sort_content
-    assert "tokenCoverageMatch" in browse_sort_content
+    assert "contentTermsForNode" in browse_sort_content
+    assert "matchesFilterTerms" in browse_sort_content
     assert "isMultiWordFilter" in browse_sort_content
     assert "suggestedFilterSample" in browse_sort_content
-    assert "documentTokens" in browse_sort_content
+    assert "JSON.parse(node.dataset.dgFilterTerms || '[]')" in browse_sort_content
     assert "data-dg-filter-summary" in browse_sort_content
     assert "contentFilterPreferencePrefix = 'docflow.content-filter.'" in browse_sort_content
     assert "contentFilterSamplePrefix = 'docflow.content-filter-sample.'" in browse_sort_content
@@ -163,10 +163,13 @@ def test_build_browse_site_generates_indexes_and_actions(tmp_path: Path):
     assert "data-dg-content-filter-count='7'" in content
     assert "data-dg-content-filter-random" in content
     assert "Random content filters" in content
-    assert "Python and Spain" in content
+    assert "data-dg-filter-text" not in content
+    assert "AI math note about Python and Spain." not in content
+    assert "data-dg-filter-terms='" in content
+    assert "python" in content
+    assert "spain" in content
     assert "data-dg-filter-summary" in content
     assert "data-dg-sortable='1'" in content
-    assert "data-dg-filter-text='doc Markdown sibling AI math note about Python and Spain.'" in content
     assert "data-dg-working" not in content
     assert "data-dg-done" not in content
     assert "data-dg-highlighted='1'" in content
@@ -368,6 +371,7 @@ def test_browse_search_suggestions_are_derived_from_indexed_titles():
     assert "Tweet title" not in suggestions
     assert len(suggestions) <= 20
     assert build_browse_index.SEARCH_SUGGESTION_LIMIT == 400
+    assert build_browse_index.CONTENT_FILTER_POOL_LIMIT == 400
 
 
 def test_content_filter_pool_uses_titles_and_summaries_without_common_phrases():
@@ -450,6 +454,34 @@ def test_content_filter_pool_falls_back_to_titles_when_summaries_are_missing():
     ]
 
     assert "adaptive learning" in build_browse_index._content_filter_pool(entries, limit=10)
+
+
+def test_filter_text_for_path_uses_full_summary_without_truncating(tmp_path: Path):
+    html_path = tmp_path / "doc.html"
+    html_path.write_text("<html></html>", encoding="utf-8")
+    late_marker = "late semantic marker"
+    long_summary = " ".join(["introductory context"] * 80) + f" {late_marker}"
+    html_path.with_suffix(".md").write_text(
+        "---\n"
+        "title: Full summary article\n"
+        f"docflow_summary: {long_summary}\n"
+        "---\n\n"
+        "# Full summary article\n",
+        encoding="utf-8",
+    )
+
+    filter_text = build_browse_index._filter_text_for_path(html_path)
+
+    assert late_marker in filter_text
+
+
+def test_content_filter_terms_for_text_intersects_pool_with_document_text():
+    terms = build_browse_index._content_filter_terms_for_text(
+        "Machine-learning systems improve retrieval. Privacy appears only as context.",
+        ["machine learning", "privacy law", "retrieval"],
+    )
+
+    assert terms == ("machine learning", "retrieval")
 
 
 def test_content_filter_pool_discards_too_common_phrases_and_keeps_specific_recurring_terms():
