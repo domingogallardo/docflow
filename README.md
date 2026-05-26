@@ -229,9 +229,9 @@ Docflow normalization window. By default that window ends at
 `2025-03-20T23:59:59Z`; after running the backfill, post articles that still
 lack both `docflow_ingested_at` and `docflow_original_published_at` should have
 a Markdown `mtime` at or before that threshold. The script only scans article
-Markdown under `Posts/`, skips generated `report.md` taxonomy reports, writes
-missing `docflow_ingested_at` values from the Markdown `mtime`, mirrors the
-value to a same-stem HTML file when present, and preserves both file mtimes.
+Markdown under `Posts/`, writes missing `docflow_ingested_at` values from the
+Markdown `mtime`, mirrors the value to a same-stem HTML file when present, and
+preserves both file mtimes.
 
 After adding or refreshing original publication dates, run
 `utils/reorganize_posts_by_date.py` to apply the folder rule above, then rebuild

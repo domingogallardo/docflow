@@ -34,10 +34,6 @@ def test_backfill_post_ingested_dates_from_mtime_updates_posts_only_and_preserve
     tweet_md.write_text("---\ntitle: Tweet\n---\n\n# Tweet\n", encoding="utf-8")
     _set_mtime(tweet_md, "2026-01-02T03:04:05Z")
 
-    report_md = posts / "report.md"
-    report_md.write_text("---\ntitle: Taxonomy report\n---\n\n# Taxonomy report\n", encoding="utf-8")
-    _set_mtime(report_md, "2026-01-02T03:04:05Z")
-
     result = backfill_post_ingested_dates_from_mtime(
         base,
         after="2025-03-20T23:59:59Z",
@@ -55,8 +51,6 @@ def test_backfill_post_ingested_dates_from_mtime_updates_posts_only_and_preserve
     assert 'content="2026-01-02T03:04:05Z"' in html_text
     tweet_meta, _ = split_front_matter(tweet_md.read_text(encoding="utf-8"))
     assert "docflow_ingested_at" not in tweet_meta
-    report_meta, _ = split_front_matter(report_md.read_text(encoding="utf-8"))
-    assert "docflow_ingested_at" not in report_meta
 
 
 def test_backfill_post_ingested_dates_from_mtime_skips_old_mtime_and_existing(tmp_path: Path):

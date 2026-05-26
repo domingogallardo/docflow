@@ -38,8 +38,6 @@ def _iter_post_markdown_paths(base_dir: Path) -> list[Path]:
     for path in posts_root.rglob("*.md"):
         if any(part.startswith(".") for part in path.relative_to(posts_root).parts):
             continue
-        if path.name == "report.md":
-            continue
         if path.is_file():
             paths.append(path)
     return sorted(paths)
