@@ -645,6 +645,28 @@ def test_enrich_markdown_metadata_adds_canonical_fields():
     assert body.lstrip().startswith("# Demo title")
 
 
+def test_enrich_markdown_metadata_does_not_backfill_missing_ingested_at():
+    from utils import enrich_markdown_metadata, split_front_matter
+
+    md = """---
+docflow_id: existing-id
+docflow_markdown_path: Posts/Posts 2020/Old post.md
+docflow_render_status: paired_html
+---
+
+# Old post
+
+Body with words.
+"""
+
+    enriched = enrich_markdown_metadata(md, now="2026-01-02T03:04:05Z")
+
+    meta, _ = split_front_matter(enriched)
+    assert meta["docflow_id"] == "existing-id"
+    assert "docflow_ingested_at" not in meta
+    assert meta["docflow_word_count"] == "5"
+
+
 def test_enrich_markdown_metadata_removes_imported_description_and_tags():
     from utils import enrich_markdown_metadata, split_front_matter
 
@@ -668,6 +690,7 @@ Body with words.
     assert "clippings" not in enriched
     assert meta["source_url"] == "https://example.com/article"
     assert meta["docflow_post_url"] == "https://example.com/article"
+    assert meta["docflow_ingested_at"] == "2026-01-02T03:04:05Z"
     assert body.lstrip().startswith("# Demo title")
 
 
@@ -874,3 +897,26 @@ def test_ensure_pdf_sidecar_markdown_sets_docflow_ingested_at(tmp_path):
     assert meta["docflow_ingested_at"] == "2026-01-02T03:04:05Z"
     assert meta["docflow_pdf_path"] == "Pdfs/paper.pdf"
     assert body.lstrip().startswith("# paper")
+
+
+def test_ensure_pdf_sidecar_markdown_does_not_backfill_existing_ingested_at(tmp_path):
+    from utils import ensure_pdf_sidecar_markdown, split_front_matter
+
+    pdf = tmp_path / "Pdfs" / "paper.pdf"
+    pdf.parent.mkdir()
+    pdf.write_bytes(b"%PDF-1.4\n")
+    md = pdf.with_suffix(".md")
+    md.write_text(
+        "---\ndocflow_id: existing-id\ndocflow_render_status: markdown_only\n---\n\n# Paper\n",
+        encoding="utf-8",
+    )
+
+    ensure_pdf_sidecar_markdown(
+        pdf,
+        base_dir=tmp_path,
+        now="2026-01-02T03:04:05Z",
+    )
+
+    meta, _ = split_front_matter(md.read_text(encoding="utf-8"))
+    assert meta["docflow_id"] == "existing-id"
+    assert "docflow_ingested_at" not in meta

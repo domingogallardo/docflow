@@ -298,6 +298,10 @@ def infer_source_type(meta: Mapping[str, str], source_url: str | None = None) ->
     return "markdown"
 
 
+def _has_docflow_metadata(meta: Mapping[str, str]) -> bool:
+    return any(key.startswith("docflow_") for key in meta)
+
+
 def enrich_markdown_metadata(
     md_text: str,
     *,
@@ -325,8 +329,9 @@ def enrich_markdown_metadata(
         "source_url": effective_source_url or "",
         "docflow_source_type": source_type,
         "docflow_post_url": post_url,
-        "docflow_ingested_at": now or utc_now_iso(),
     }
+    if not _has_docflow_metadata(meta):
+        defaults["docflow_ingested_at"] = now or utc_now_iso()
     values: dict[str, object] = {}
     values.update(markdown_body_stats(md_text))
     if extra:
@@ -460,16 +465,18 @@ def ensure_pdf_sidecar_markdown(
         md_path.write_text(f"# {title}\n\nAssociated PDF: `{pdf_path.name}`\n", encoding="utf-8")
 
     md_text = md_path.read_text(encoding="utf-8", errors="replace")
+    defaults = {
+        "title": title,
+        "source": "pdf",
+        "docflow_source_type": "pdf",
+        "docflow_pdf_path": _relative_docflow_path(pdf_path, base_dir),
+    }
+    if not existed:
+        defaults["docflow_ingested_at"] = now or utc_now_iso()
     updated_md = upsert_front_matter(
         md_text,
         {},
-        defaults={
-            "title": title,
-            "source": "pdf",
-            "docflow_source_type": "pdf",
-            "docflow_pdf_path": _relative_docflow_path(pdf_path, base_dir),
-            "docflow_ingested_at": now or utc_now_iso(),
-        },
+        defaults=defaults,
     )
     if updated_md != md_text:
         md_path.write_text(updated_md, encoding="utf-8")

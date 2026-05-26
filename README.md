@@ -156,6 +156,8 @@ Common fields:
   articles. When possible, docflow infers web post URLs from the first HTTP(S)
   link in the clipped Markdown body.
 - `docflow_ingested_at`: UTC timestamp for when docflow incorporated the item.
+  This is present for newly ingested items; older migrated/normalized posts may
+  omit it when no real ingest timestamp is known.
 - `docflow_html_generated_at`: UTC timestamp for when docflow generated the
   associated HTML.
 - `docflow_body_chars` and `docflow_word_count`: body-only Markdown statistics.
