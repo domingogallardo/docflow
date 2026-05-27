@@ -151,10 +151,12 @@ CONTENT_FILTER_STOPWORDS = SEARCH_SUGGESTION_STOPWORDS | {
     "local",
     "more",
     "most",
+    "must",
     "many",
     "muy",
     "new",
     "not",
+    "other",
     "otra",
     "otro",
     "otros",
@@ -265,6 +267,9 @@ CONTENT_FILTER_GENERIC_WORDS = SEARCH_SUGGESTION_GENERIC_WORDS | {
     "way",
     "work",
     "world",
+}
+CONTENT_FILTER_GENERIC_SINGLE_WORDS = {
+    "real",
 }
 SEARCH_SUGGESTION_WORD_RE = re.compile(r"[A-Za-zÀ-ÖØ-öø-ÿ0-9][A-Za-zÀ-ÖØ-öø-ÿ0-9'’.-]*")
 SPANISH_MONTH_NAMES = {
@@ -415,10 +420,10 @@ def _is_content_filter_term(term: str) -> bool:
         if len(word) < 3 and word not in short_specific_words:
             return False
 
-    if words[0] in excluded or words[-1] in excluded:
-        return False
     if len(words) == 1:
-        return words[0] not in excluded
+        return words[0] not in excluded and words[0] not in CONTENT_FILTER_GENERIC_SINGLE_WORDS
+    if words[0] in excluded or words[-1] in CONTENT_FILTER_STOPWORDS:
+        return False
     return True
 
 
@@ -1392,6 +1397,12 @@ def _cleanup_obsolete_incoming_dir(base_dir: Path) -> None:
         shutil.rmtree(incoming_dir)
 
 
+def _reset_browse_category_output(base_dir: Path, category: str) -> None:
+    category_dir = site_root(base_dir) / "browse" / category
+    if category_dir.exists():
+        shutil.rmtree(category_dir)
+
+
 def _scan_directory(
     *,
     base_dir: Path,
@@ -1669,6 +1680,23 @@ def _monthly_sections_for_entries(
     return sections
 
 
+def _yearly_sections_for_entries(entries: list[BrowseEntry]) -> list[tuple[str, list[BrowseEntry]]]:
+    buckets: dict[int, list[BrowseEntry]] = {}
+    undated: list[BrowseEntry] = []
+
+    for entry in entries:
+        entry_date = _entry_local_date(entry)
+        if entry_date is None:
+            undated.append(entry)
+        else:
+            buckets.setdefault(entry_date.year, []).append(entry)
+
+    sections = [(str(year), buckets[year]) for year in sorted(buckets, reverse=True)]
+    if undated:
+        sections.append(("Sin fecha", undated))
+    return sections
+
+
 def _temporal_sections_for_category_year(
     *,
     category: str,
@@ -1679,7 +1707,7 @@ def _temporal_sections_for_category_year(
     if year is None:
         return None
     if category == "posts" and year == 1990:
-        return None
+        return _yearly_sections_for_entries(entries)
 
     today = _local_today()
     if year == today.year:
@@ -2420,6 +2448,7 @@ def build_browse_site(base_dir: Path) -> dict[str, int]:
 
     counts: dict[str, int] = {}
     for category in CATEGORY_KEYS:
+        _reset_browse_category_output(base_dir, category)
         counts[category] = _write_category_tree(
             base_dir=base_dir,
             category=category,

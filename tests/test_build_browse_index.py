@@ -1,5 +1,6 @@
 import json
 import os
+import shutil
 import time
 from datetime import date, datetime, timezone
 from pathlib import Path
@@ -441,6 +442,33 @@ def test_content_filter_pool_includes_specific_unigrams_and_bigrams():
     assert "privacy law" in pool
 
 
+def test_content_filter_pool_filters_common_theme_words_without_losing_specific_bigrams():
+    entries = []
+    for index in range(12):
+        parts = [f"local marker {index}"]
+        if index < 3:
+            parts.extend(["must upgrade", "other details", "real marker", "real estate"])
+            parts.append("urban planning")
+        entries.append(
+            build_browse_index.BrowseEntry(
+                name=f"doc-{index}.html",
+                href="#",
+                mtime=0,
+                is_dir=False,
+                icon="",
+                filter_text=". ".join(parts) + ".",
+            )
+        )
+
+    pool = [term.lower() for term in build_browse_index._content_filter_pool(entries, limit=20)]
+
+    assert "must" not in pool
+    assert "other" not in pool
+    assert "real" not in pool
+    assert "real estate" in pool
+    assert "urban planning" in pool
+
+
 def test_content_filter_pool_falls_back_to_titles_when_summaries_are_missing():
     entries = [
         build_browse_index.BrowseEntry(
@@ -866,21 +894,57 @@ def test_posts_browse_months_prefer_ingested_over_original_date(tmp_path: Path, 
     assert "<h3 class='dg-time-heading'>Febrero 2026</h3>" not in content
 
 
-def test_posts_1990_browse_page_does_not_group_by_month(tmp_path: Path):
+def test_posts_1990_browse_page_groups_docflow_dates_by_year(tmp_path: Path):
     base = tmp_path / "base"
     posts = base / "Posts" / "Posts 1990"
     posts.mkdir(parents=True)
     unknown = posts / "unknown.html"
     unknown.write_text("<html><body>Unknown</body></html>", encoding="utf-8")
+    unknown.with_suffix(".md").write_text("---\n---\n\n# Unknown\n", encoding="utf-8")
+    original = posts / "original.html"
+    original.write_text("<html><body>Original</body></html>", encoding="utf-8")
+    original.with_suffix(".md").write_text(
+        "---\ndocflow_original_published_at: 1998-07-10\n---\n\n# Original\n",
+        encoding="utf-8",
+    )
+    ingested = posts / "ingested.html"
+    ingested.write_text("<html><body>Ingested</body></html>", encoding="utf-8")
+    ingested.with_suffix(".md").write_text(
+        "---\ndocflow_ingested_at: 2000-02-20T12:00:00Z\n---\n\n# Ingested\n",
+        encoding="utf-8",
+    )
     epoch = datetime(2026, 1, 10, 12, tzinfo=timezone.utc).timestamp()
-    os.utime(unknown, (epoch, epoch))
+    for path in (unknown, original, ingested):
+        os.utime(path, (epoch, epoch))
 
     build_browse_index.build_browse_site(base)
 
     page = base / "_site" / "browse" / "posts" / "Posts 1990" / "index.html"
     content = page.read_text(encoding="utf-8")
+    assert "<h3 class='dg-time-heading'>2000</h3>" in content
+    assert "<h3 class='dg-time-heading'>1998</h3>" in content
+    assert "<h3 class='dg-time-heading'>Sin fecha</h3>" in content
+    assert content.find("2000") < content.find(">ingested.html</a>")
+    assert content.find("1998") < content.find(">original.html</a>")
+    assert content.find("Sin fecha") < content.find(">unknown.html</a>")
+    assert "Febrero 2000" not in content
     assert "unknown.html" in content
-    assert "<h3 class='dg-time-heading'>" not in content
+
+
+def test_full_browse_rebuild_removes_obsolete_category_pages(tmp_path: Path):
+    base = tmp_path / "base"
+    posts_1999 = base / "Posts" / "Posts 1999"
+    posts_1999.mkdir(parents=True)
+    (posts_1999 / "old.html").write_text("<html><body>Old</body></html>", encoding="utf-8")
+
+    build_browse_index.build_browse_site(base)
+    stale_page = base / "_site" / "browse" / "posts" / "Posts 1999" / "index.html"
+    assert stale_page.exists()
+
+    shutil.rmtree(posts_1999)
+    build_browse_index.build_browse_site(base)
+
+    assert not stale_page.exists()
 
 
 def test_rebuild_browse_for_path_updates_only_target_branch(tmp_path: Path):
