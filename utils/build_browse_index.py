@@ -66,6 +66,7 @@ CONTENT_FILTER_TARGET_MIN_FRACTION = 0.10
 CONTENT_FILTER_TARGET_MAX_FRACTION = 0.30
 CONTENT_FILTER_MIN_DOC_FRACTION = 0.01
 CONTENT_FILTER_DIVERSITY_OVERLAP = 0.55
+CONTENT_FILTER_INTERNAL_TOKENS = {"dgfilterboundary"}
 CONTENT_FILTER_VOCAB_FILENAME = "content_filter_vocab.json"
 
 
@@ -288,6 +289,8 @@ def _is_content_filter_term(term: str) -> bool:
     for word in words:
         if not word or word.isdigit() or not re.search(r"[a-z]", word):
             return False
+        if word in CONTENT_FILTER_INTERNAL_TOKENS:
+            return False
         if len(word) < 3 and word not in short_specific_words:
             return False
 
@@ -323,15 +326,6 @@ def _content_filter_candidate_phrases(text: str) -> list[tuple[str, str]]:
 
 def _content_filter_analyzer(text: str) -> list[str]:
     return [normalized for _, normalized in _content_filter_candidate_phrases(text)]
-
-
-def _content_filter_tokenizer(text: str) -> list[str]:
-    return [_content_filter_token_value(token) for token in _content_filter_tokens(text)]
-
-
-def _content_filter_preprocessor(text: str) -> str:
-    normalized = _normalize_filter_term(text)
-    return re.sub(r"[.!?;:\n\r]+", " dgfilterboundary ", normalized)
 
 
 def _content_filter_display_phrase(term: str) -> str:
@@ -420,10 +414,7 @@ def _content_filter_pool_sklearn(texts: list[str], limit: int) -> list[str] | No
     max_df = max(min_df, int(total_docs * CONTENT_FILTER_MAX_DOC_FRACTION))
     try:
         vectorizer = CountVectorizer(
-            preprocessor=_content_filter_preprocessor,
-            tokenizer=_content_filter_tokenizer,
-            token_pattern=None,
-            ngram_range=(1, 2),
+            analyzer=_content_filter_analyzer,
             lowercase=False,
             binary=False,
             min_df=min_df,
@@ -507,8 +498,8 @@ def _content_filter_pool(entries: list[BrowseEntry], limit: int = CONTENT_FILTER
 
     sklearn_pool = _content_filter_pool_sklearn(texts, limit)
     if sklearn_pool is not None:
-        return sklearn_pool
-    return _content_filter_pool_fallback(texts, limit)
+        return _content_filter_pool_terms_with_matches(texts, sklearn_pool)
+    return _content_filter_pool_terms_with_matches(texts, _content_filter_pool_fallback(texts, limit))
 
 
 def _content_filter_match_tokens(value: str) -> set[str]:
@@ -535,6 +526,29 @@ def _content_filter_term_matches_text(term: str, normalized_text: str, document_
     if normalized_term in normalized_text:
         return True
     return _content_filter_token_coverage_match(filter_tokens, document_tokens)
+
+
+def _content_filter_pool_terms_with_matches(texts: list[str], pool: list[str]) -> list[str]:
+    if not texts or not pool:
+        return []
+
+    documents = [
+        (_normalize_filter_term(text), _content_filter_match_tokens(text))
+        for text in texts
+    ]
+    matched_terms: list[str] = []
+    seen: set[str] = set()
+    for term in pool:
+        normalized_term = _normalize_filter_term(term)
+        if not normalized_term or normalized_term in seen:
+            continue
+        seen.add(normalized_term)
+        if any(
+            _content_filter_term_matches_text(term, normalized_text, document_tokens)
+            for normalized_text, document_tokens in documents
+        ):
+            matched_terms.append(term)
+    return matched_terms
 
 
 def _content_filter_terms_for_text(text: str, filter_pool: list[str]) -> tuple[str, ...]:

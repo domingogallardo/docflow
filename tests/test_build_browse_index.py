@@ -540,6 +540,38 @@ def test_content_filter_pool_filters_common_theme_words_without_losing_specific_
     assert "urban planning" in pool
 
 
+def test_content_filter_pool_does_not_emit_internal_boundary_terms():
+    entries = []
+    for index in range(10):
+        text = "Models. Agents. Protocol design." if index < 3 else f"local marker {index}"
+        entries.append(
+            build_browse_index.BrowseEntry(
+                name=f"doc-{index}.html",
+                href="#",
+                mtime=0,
+                is_dir=False,
+                icon="",
+                filter_text=text,
+            )
+        )
+
+    pool = [term.lower() for term in build_browse_index._content_filter_pool(entries, limit=20)]
+
+    assert pool
+    assert "models dgfilterboundary" not in pool
+    assert not any("dgfilterboundary" in term for term in pool)
+    assert not build_browse_index._is_content_filter_term("models dgfilterboundary")
+
+
+def test_content_filter_pool_discards_terms_without_real_matches():
+    pool = build_browse_index._content_filter_pool_terms_with_matches(
+        ["Models and agents. Protocol design."],
+        ["models", "models dgfilterboundary", "missing topic", "protocol design"],
+    )
+
+    assert pool == ["models", "protocol design"]
+
+
 def test_content_filter_pool_falls_back_to_titles_when_summaries_are_missing():
     entries = [
         build_browse_index.BrowseEntry(
