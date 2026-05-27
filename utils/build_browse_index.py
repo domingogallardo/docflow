@@ -35,6 +35,7 @@ from utils.site_paths import (
     resolve_base_dir,
     resolve_library_path,
     site_root,
+    state_root,
     viewer_url_for_rel_path,
 )
 from utils.highlight_store import highlight_status_for_path
@@ -65,212 +66,82 @@ CONTENT_FILTER_TARGET_MIN_FRACTION = 0.10
 CONTENT_FILTER_TARGET_MAX_FRACTION = 0.30
 CONTENT_FILTER_MIN_DOC_FRACTION = 0.01
 CONTENT_FILTER_DIVERSITY_OVERLAP = 0.55
-SEARCH_SUGGESTION_STOPWORDS = {
-    "a",
-    "al",
-    "an",
-    "and",
-    "are",
-    "as",
-    "at",
-    "after",
-    "but",
-    "by",
-    "con",
-    "de",
-    "del",
-    "el",
-    "en",
-    "for",
-    "from",
-    "how",
-    "his",
-    "have",
-    "in",
-    "into",
-    "is",
-    "it",
-    "its",
-    "la",
-    "las",
-    "le",
-    "lo",
-    "los",
-    "of",
-    "on",
-    "or",
-    "over",
-    "para",
-    "por",
-    "que",
-    "se",
-    "según",
-    "their",
-    "them",
-    "the",
-    "they",
-    "to",
-    "un",
-    "una",
-    "via",
-    "what",
-    "why",
-    "without",
-    "with",
-    "y",
-}
-CONTENT_FILTER_STOPWORDS = SEARCH_SUGGESTION_STOPWORDS | {
-    "about",
-    "also",
-    "ante",
-    "aqui",
-    "across",
-    "around",
-    "article",
-    "articulo",
-    "asi",
-    "between",
-    "build",
-    "can",
-    "cada",
-    "como",
-    "common",
-    "could",
-    "cuando",
-    "desde",
-    "despite",
-    "esta",
-    "este",
-    "estos",
-    "esto",
-    "here",
-    "has",
-    "just",
-    "large",
-    "like",
-    "local",
-    "more",
-    "most",
-    "must",
-    "many",
-    "muy",
-    "new",
-    "not",
-    "other",
-    "otra",
-    "otro",
-    "otros",
-    "pero",
-    "post",
-    "posts",
-    "rather",
-    "recent",
-    "shared",
-    "sobre",
-    "son",
-    "sus",
-    "that",
-    "than",
-    "three",
-    "this",
-    "through",
-    "tras",
-    "using",
-    "where",
-    "when",
-    "while",
-    "will",
-}
-SEARCH_SUGGESTION_GENERIC_WORDS = {
-    "complete",
-    "comprehensive",
-    "deep",
-    "dive",
-    "episode",
-    "explained",
-    "exploring",
-    "guide",
-    "insights",
-    "introduction",
-    "journey",
-    "notes",
-    "overview",
-    "part",
-    "review",
-    "ultimate",
-    "understanding",
-}
-CONTENT_FILTER_GENERIC_WORDS = SEARCH_SUGGESTION_GENERIC_WORDS | {
-    "ability",
-    "analysis",
-    "approach",
-    "approaches",
-    "argumenta",
-    "arguing",
-    "argues",
-    "author",
-    "case",
-    "central",
-    "clave",
-    "concept",
-    "covers",
-    "debate",
-    "dgfilterboundary",
-    "document",
-    "example",
-    "forma",
-    "future",
-    "general",
-    "generic",
-    "highlights",
-    "idea",
-    "important",
-    "context",
-    "links",
-    "manera",
-    "major",
-    "may",
-    "mundo",
-    "mas",
-    "need",
-    "note",
-    "paper",
-    "parte",
-    "personas",
-    "perspective",
-    "piece",
-    "possible",
-    "process",
-    "presents",
-    "puede",
-    "pueden",
-    "relacion",
-    "relationship",
-    "role",
-    "should",
-    "show",
-    "signal",
-    "studies",
-    "summary",
-    "sistema",
-    "systems",
-    "tema",
-    "texto",
-    "time",
-    "topic",
-    "trabajo",
-    "traces",
-    "tweet",
-    "tweets",
-    "unique",
-    "use",
-    "way",
-    "work",
-    "world",
-}
-CONTENT_FILTER_GENERIC_SINGLE_WORDS = {
-    "real",
-}
+CONTENT_FILTER_VOCAB_FILENAME = "content_filter_vocab.json"
+
+
+def content_filter_vocab_path(base_dir: Path) -> Path:
+    return state_root(base_dir) / CONTENT_FILTER_VOCAB_FILENAME
+
+
+def _normalize_vocab_word(value: str) -> str:
+    normalized = unicodedata.normalize("NFD", value.strip())
+    normalized = "".join(ch for ch in normalized if unicodedata.category(ch) != "Mn")
+    return normalized.lower()
+
+
+def _vocab_words(data: object, key: str) -> set[str]:
+    if not isinstance(data, dict):
+        return set()
+    value = data.get(key, [])
+    if not isinstance(value, list):
+        return set()
+    return {
+        normalized
+        for item in value
+        if isinstance(item, str)
+        for normalized in [_normalize_vocab_word(item)]
+        if normalized
+    }
+
+
+def _load_content_filter_vocab(path: Path) -> dict[str, set[str]]:
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except Exception:
+        data = {}
+    return {
+        "search_suggestion_stopwords": _vocab_words(data, "search_suggestion_stopwords"),
+        "content_filter_stopwords": _vocab_words(data, "content_filter_stopwords"),
+        "search_suggestion_generic_words": _vocab_words(data, "search_suggestion_generic_words"),
+        "content_filter_generic_words": _vocab_words(data, "content_filter_generic_words"),
+        "content_filter_generic_single_words": _vocab_words(data, "content_filter_generic_single_words"),
+    }
+
+
+def _load_content_filter_vocab_for_base_dir(base_dir: Path) -> dict[str, set[str]]:
+    return _load_content_filter_vocab(content_filter_vocab_path(base_dir))
+
+
+def _initial_content_filter_vocab() -> dict[str, set[str]]:
+    try:
+        return _load_content_filter_vocab_for_base_dir(resolve_base_dir())
+    except Exception:
+        return _load_content_filter_vocab(Path(""))
+
+
+def _set_content_filter_vocab(vocab: dict[str, set[str]]) -> None:
+    global CONTENT_FILTER_VOCAB
+    global SEARCH_SUGGESTION_STOPWORDS
+    global CONTENT_FILTER_STOPWORDS
+    global SEARCH_SUGGESTION_GENERIC_WORDS
+    global CONTENT_FILTER_GENERIC_WORDS
+    global CONTENT_FILTER_GENERIC_SINGLE_WORDS
+
+    CONTENT_FILTER_VOCAB = vocab
+    SEARCH_SUGGESTION_STOPWORDS = CONTENT_FILTER_VOCAB["search_suggestion_stopwords"]
+    CONTENT_FILTER_STOPWORDS = SEARCH_SUGGESTION_STOPWORDS | CONTENT_FILTER_VOCAB["content_filter_stopwords"]
+    SEARCH_SUGGESTION_GENERIC_WORDS = CONTENT_FILTER_VOCAB["search_suggestion_generic_words"]
+    CONTENT_FILTER_GENERIC_WORDS = SEARCH_SUGGESTION_GENERIC_WORDS | CONTENT_FILTER_VOCAB["content_filter_generic_words"]
+    CONTENT_FILTER_GENERIC_SINGLE_WORDS = CONTENT_FILTER_VOCAB["content_filter_generic_single_words"]
+
+
+CONTENT_FILTER_VOCAB: dict[str, set[str]]
+SEARCH_SUGGESTION_STOPWORDS: set[str]
+CONTENT_FILTER_STOPWORDS: set[str]
+SEARCH_SUGGESTION_GENERIC_WORDS: set[str]
+CONTENT_FILTER_GENERIC_WORDS: set[str]
+CONTENT_FILTER_GENERIC_SINGLE_WORDS: set[str]
+_set_content_filter_vocab(_initial_content_filter_vocab())
 SEARCH_SUGGESTION_WORD_RE = re.compile(r"[A-Za-zÀ-ÖØ-öø-ÿ0-9][A-Za-zÀ-ÖØ-öø-ÿ0-9'’.-]*")
 SPANISH_MONTH_NAMES = {
     1: "Enero",
@@ -995,7 +866,7 @@ def _tweet_markdown_search_entry(path: Path) -> dict[str, str] | None:
 
 
 def _search_suggestion_token_value(token: str) -> str:
-    return token.strip(" .,:;!?()[]{}\"'’-/–—").lower()
+    return _normalize_filter_term(token.strip(" .,:;!?()[]{}\"'’-/–—"))
 
 
 def _search_suggestion_candidates(stem: str) -> list[str]:
@@ -2379,6 +2250,7 @@ def rebuild_browse_for_path(base_dir: Path, rel_path: str) -> dict[str, object]:
     Rebuilds only the containing directory and its ancestors in the matching category.
     Falls back to full rebuild for unsupported paths.
     """
+    _set_content_filter_vocab(_load_content_filter_vocab_for_base_dir(base_dir))
     ensure_assets(base_dir)
     _cleanup_obsolete_incoming_dir(base_dir)
 
@@ -2435,6 +2307,7 @@ def rebuild_browse_for_path(base_dir: Path, rel_path: str) -> dict[str, object]:
 
 
 def build_browse_site(base_dir: Path) -> dict[str, int]:
+    _set_content_filter_vocab(_load_content_filter_vocab_for_base_dir(base_dir))
     ensure_assets(base_dir)
     _cleanup_obsolete_incoming_dir(base_dir)
 

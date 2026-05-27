@@ -5,10 +5,38 @@ import time
 from datetime import date, datetime, timezone
 from pathlib import Path
 
+import pytest
+
 from utils import build_browse_index
 from utils import highlight_store
 from utils import site_state
 from utils.reading_position_store import save_reading_position_for_path
+
+
+@pytest.fixture(autouse=True)
+def use_test_content_filter_vocab() -> None:
+    build_browse_index._set_content_filter_vocab(
+        {
+            "search_suggestion_stopwords": {"and", "from", "in", "on", "the"},
+            "content_filter_stopwords": {
+                "article",
+                "common",
+                "does",
+                "generic",
+                "local",
+                "must",
+                "other",
+                "shared",
+                "signal",
+                "topic",
+                "unique",
+            },
+            "search_suggestion_generic_words": {"notes"},
+            "content_filter_generic_words": {"context", "summary"},
+            "content_filter_generic_single_words": {"real"},
+        }
+    )
+
 
 def test_build_browse_site_generates_indexes_and_actions(tmp_path: Path):
     base = tmp_path / "base"
@@ -375,6 +403,48 @@ def test_browse_search_suggestions_are_derived_from_indexed_titles():
     assert build_browse_index.CONTENT_FILTER_POOL_LIMIT == 400
 
 
+def test_content_filter_vocab_is_loaded_from_json(tmp_path: Path):
+    vocab_path = tmp_path / "content_filter_vocab.json"
+    vocab_path.write_text(
+        json.dumps(
+            {
+                "search_suggestion_stopwords": ["Según"],
+                "content_filter_stopwords": ["Must"],
+                "search_suggestion_generic_words": ["Guide"],
+                "content_filter_generic_words": ["Topic"],
+                "content_filter_generic_single_words": ["Real"],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    vocab = build_browse_index._load_content_filter_vocab(vocab_path)
+
+    assert vocab["search_suggestion_stopwords"] == {"segun"}
+    assert vocab["content_filter_stopwords"] == {"must"}
+    assert vocab["search_suggestion_generic_words"] == {"guide"}
+    assert vocab["content_filter_generic_words"] == {"topic"}
+    assert vocab["content_filter_generic_single_words"] == {"real"}
+
+
+def test_build_browse_site_loads_content_filter_vocab_from_state(tmp_path: Path):
+    base = tmp_path / "base"
+    posts = base / "Posts" / "Posts 2026"
+    posts.mkdir(parents=True)
+    (posts / "doc.html").write_text("<html><body>Doc</body></html>", encoding="utf-8")
+    vocab_path = build_browse_index.content_filter_vocab_path(base)
+    vocab_path.parent.mkdir(parents=True)
+    vocab_path.write_text(
+        json.dumps({"content_filter_stopwords": ["customsemanticjunk"]}),
+        encoding="utf-8",
+    )
+
+    build_browse_index.build_browse_site(base)
+
+    assert vocab_path == base / "state" / "content_filter_vocab.json"
+    assert not build_browse_index._is_content_filter_term("customsemanticjunk")
+
+
 def test_content_filter_pool_uses_titles_and_summaries_without_common_phrases():
     entries = [
         build_browse_index.BrowseEntry(
@@ -447,7 +517,7 @@ def test_content_filter_pool_filters_common_theme_words_without_losing_specific_
     for index in range(12):
         parts = [f"local marker {index}"]
         if index < 3:
-            parts.extend(["must upgrade", "other details", "real marker", "real estate"])
+            parts.extend(["must upgrade", "other details", "does happen", "real marker", "real estate"])
             parts.append("urban planning")
         entries.append(
             build_browse_index.BrowseEntry(
@@ -464,6 +534,7 @@ def test_content_filter_pool_filters_common_theme_words_without_losing_specific_
 
     assert "must" not in pool
     assert "other" not in pool
+    assert "does" not in pool
     assert "real" not in pool
     assert "real estate" in pool
     assert "urban planning" in pool
