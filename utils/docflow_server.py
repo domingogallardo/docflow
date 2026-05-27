@@ -951,15 +951,20 @@ def _pdf_viewer_html(*, rel_path: str, pdf_path: Path, stage: str, page_count: i
         action_buttons = (
             '<button type="button" data-api-action="to-browse">Back to Browse</button>'
             '<button type="button" data-api-action="to-done">Move to Done</button>'
+            '<button type="button" data-api-action="delete">Delete</button>'
         )
     elif stage == "done":
         context_label = "Up to Done"
         context_url = "/done/"
-        action_buttons = '<button type="button" data-api-action="reopen">Reopen to Reading</button>'
+        action_buttons = (
+            '<button type="button" data-api-action="reopen">Reopen to Reading</button>'
+            '<button type="button" data-api-action="delete">Delete</button>'
+        )
     else:
         action_buttons = (
             '<button type="button" data-api-action="to-reading">Move to Reading</button>'
             '<button type="button" data-api-action="to-done">Move to Done</button>'
+            '<button type="button" data-api-action="delete">Delete</button>'
         )
 
     esc_title = html.escape(title)
@@ -1112,6 +1117,10 @@ body > #dg-overlay{position:static;right:auto;top:auto;z-index:2;box-sizing:bord
     button.addEventListener('click', function(){
       if (busy) return;
       var action = button.getAttribute('data-api-action') || '';
+      if (action === 'delete') {
+        var name = relPath.split('/').pop() || relPath || 'this file';
+        if (!window.confirm('Are you sure you want to delete "' + name + '"?')) return;
+      }
       busy = true;
       updateActions();
       fetch('/api/' + action, {
@@ -1120,7 +1129,12 @@ body > #dg-overlay{position:static;right:auto;top:auto;z-index:2;box-sizing:bord
         headers:{'Content-Type':'application/json'},
         body:JSON.stringify({path:relPath})
       }).then(function(res){ return res.ok ? res.json() : null; })
-        .then(function(){
+        .then(function(payload){
+          if (action === 'delete') {
+            var redirectTo = payload && payload.data && payload.data.redirect;
+            location.href = typeof redirectTo === 'string' && redirectTo ? redirectTo : '/browse/';
+            return;
+          }
           if (action === 'to-browse') location.href = '/browse/';
           else if (action === 'to-done') location.href = '/done/';
           else location.href = '/reading/';
@@ -1851,10 +1865,7 @@ OVERLAY_JS = """
     for (const [label, action] of stageActions()) {
       actionsRow.appendChild(makeButton(label, action));
     }
-    if (stage === 'browse') {
-      actionsRow.appendChild(makeButton('Rebuild', 'rebuild-file'));
-      actionsRow.appendChild(makeButton('Delete', 'delete'));
-    }
+    if (stage === 'browse') actionsRow.appendChild(makeButton('Delete', 'delete'));
     bar.appendChild(actionsRow);
 
     const navControl = makeHighlightNav();

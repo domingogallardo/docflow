@@ -446,7 +446,7 @@ def test_raw_route_serves_library_file(tmp_path: Path):
         assert "/api/export-markdown?path=" in body
         assert "to-reading" in body
         assert "to-done" in body
-        assert "Rebuild" in body
+        assert "Rebuild" not in body
         assert "Delete" in body
         assert "dg-hl-nav" in body
         assert "dg-row-status" in body
@@ -1726,6 +1726,8 @@ def test_pdf_view_route_serves_resume_viewer(tmp_path: Path, monkeypatch):
         assert 'id="dg-overlay-actions" class="dg-row dg-row-actions"' in body
         assert '<a class="dg-link" href="/browse/pdfs/Pdfs%202026/">Up to Browse</a>' in body
         assert '<a class="dg-link" href="/pdfs/raw/Pdfs%202026/doc.pdf">Raw</a>' in body
+        assert 'data-api-action="delete"' in body
+        assert "Are you sure you want to delete" in body
         assert '<div class="bar">' not in body
         assert 'data-docflow-path="Pdfs/Pdfs 2026/doc.pdf"' in body
         assert 'data-page-count="2"' in body
