@@ -572,6 +572,90 @@ def test_content_filter_pool_discards_terms_without_real_matches():
     assert pool == ["models", "protocol design"]
 
 
+def test_build_browse_site_reuses_content_filter_cache(tmp_path: Path, monkeypatch):
+    base = tmp_path / "base"
+    posts = base / "Posts" / "Posts 2026"
+    posts.mkdir(parents=True)
+    for index in range(5):
+        html = posts / f"doc-{index}.html"
+        html.write_text(f"<html><body>Doc {index}</body></html>", encoding="utf-8")
+        summary = "semantic retrieval cluster" if index < 2 else f"distinct marker {index}"
+        html.with_suffix(".md").write_text(
+            f"---\ndocflow_summary: {summary}\n---\n\n# Doc {index}\n",
+            encoding="utf-8",
+        )
+
+    build_browse_index.build_browse_site(base)
+    assert build_browse_index.content_filter_cache_path(base).exists()
+
+    def fail_pool(_entries, _limit=build_browse_index.CONTENT_FILTER_POOL_LIMIT):
+        raise AssertionError("content filter pool should come from cache")
+
+    monkeypatch.setattr(build_browse_index, "_content_filter_pool", fail_pool)
+
+    build_browse_index.build_browse_site(base)
+
+
+def test_build_browse_site_invalidates_content_filter_cache_when_text_changes(tmp_path: Path, monkeypatch):
+    base = tmp_path / "base"
+    posts = base / "Posts" / "Posts 2026"
+    posts.mkdir(parents=True)
+    docs = []
+    for index in range(5):
+        html = posts / f"doc-{index}.html"
+        docs.append(html)
+        html.write_text(f"<html><body>Doc {index}</body></html>", encoding="utf-8")
+        html.with_suffix(".md").write_text(
+            f"---\ndocflow_summary: initial topic {index}\n---\n\n# Doc {index}\n",
+            encoding="utf-8",
+        )
+
+    build_browse_index.build_browse_site(base)
+    docs[0].with_suffix(".md").write_text(
+        "---\ndocflow_summary: changed semantic retrieval\n---\n\n# Changed\n",
+        encoding="utf-8",
+    )
+
+    original_pool = build_browse_index._content_filter_pool
+    calls = []
+
+    def spy_pool(entries, limit=build_browse_index.CONTENT_FILTER_POOL_LIMIT):
+        calls.append([entry.name for entry in entries])
+        return original_pool(entries, limit)
+
+    monkeypatch.setattr(build_browse_index, "_content_filter_pool", spy_pool)
+
+    build_browse_index.build_browse_site(base)
+
+    assert calls
+
+
+def test_rebuild_browse_for_path_reuses_content_filter_cache(tmp_path: Path, monkeypatch):
+    base = tmp_path / "base"
+    posts = base / "Posts" / "Posts 2026"
+    posts.mkdir(parents=True)
+    for index in range(5):
+        html = posts / f"doc-{index}.html"
+        html.write_text(f"<html><body>Doc {index}</body></html>", encoding="utf-8")
+        summary = "semantic retrieval cluster" if index < 2 else f"distinct marker {index}"
+        html.with_suffix(".md").write_text(
+            f"---\ndocflow_summary: {summary}\n---\n\n# Doc {index}\n",
+            encoding="utf-8",
+        )
+
+    build_browse_index.build_browse_site(base)
+
+    def fail_pool(_entries, _limit=build_browse_index.CONTENT_FILTER_POOL_LIMIT):
+        raise AssertionError("partial rebuild should reuse cached filter data")
+
+    monkeypatch.setattr(build_browse_index, "_content_filter_pool", fail_pool)
+
+    result = build_browse_index.rebuild_browse_for_path(base, "Posts/Posts 2026/doc-0.html")
+
+    assert result["mode"] == "partial"
+    assert "/browse/posts/Posts 2026/" in result["updated"]
+
+
 def test_content_filter_pool_falls_back_to_titles_when_summaries_are_missing():
     entries = [
         build_browse_index.BrowseEntry(

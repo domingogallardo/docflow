@@ -7,6 +7,7 @@ keeping pages static.
 from __future__ import annotations
 
 import argparse
+import hashlib
 import html
 import json
 import math
@@ -67,11 +68,18 @@ CONTENT_FILTER_TARGET_MAX_FRACTION = 0.30
 CONTENT_FILTER_MIN_DOC_FRACTION = 0.01
 CONTENT_FILTER_DIVERSITY_OVERLAP = 0.55
 CONTENT_FILTER_INTERNAL_TOKENS = {"dgfilterboundary"}
+CONTENT_FILTER_CACHE_FILENAME = "content_filter_cache.json"
+CONTENT_FILTER_CACHE_VERSION = 1
+CONTENT_FILTER_ALGORITHM_VERSION = 1
 CONTENT_FILTER_VOCAB_FILENAME = "content_filter_vocab.json"
 
 
 def content_filter_vocab_path(base_dir: Path) -> Path:
     return state_root(base_dir) / CONTENT_FILTER_VOCAB_FILENAME
+
+
+def content_filter_cache_path(base_dir: Path) -> Path:
+    return state_root(base_dir) / CONTENT_FILTER_CACHE_FILENAME
 
 
 def _normalize_vocab_word(value: str) -> str:
@@ -158,6 +166,62 @@ SPANISH_MONTH_NAMES = {
     11: "Noviembre",
     12: "Diciembre",
 }
+
+
+def _stable_json_hash(value: object) -> str:
+    payload = json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+    return hashlib.sha256(payload.encode("utf-8")).hexdigest()
+
+
+def _content_filter_vocab_signature() -> str:
+    return _stable_json_hash(
+        {
+            "vocab": {
+                key: sorted(values)
+                for key, values in CONTENT_FILTER_VOCAB.items()
+            },
+            "internal_tokens": sorted(CONTENT_FILTER_INTERNAL_TOKENS),
+        }
+    )
+
+
+def _content_filter_algorithm_signature() -> dict[str, object]:
+    return {
+        "algorithm_version": CONTENT_FILTER_ALGORITHM_VERSION,
+        "pool_limit": CONTENT_FILTER_POOL_LIMIT,
+        "max_doc_fraction": CONTENT_FILTER_MAX_DOC_FRACTION,
+        "min_doc_count": CONTENT_FILTER_MIN_DOC_COUNT,
+        "target_min_fraction": CONTENT_FILTER_TARGET_MIN_FRACTION,
+        "target_max_fraction": CONTENT_FILTER_TARGET_MAX_FRACTION,
+        "min_doc_fraction": CONTENT_FILTER_MIN_DOC_FRACTION,
+        "diversity_overlap": CONTENT_FILTER_DIVERSITY_OVERLAP,
+        "vocab": _content_filter_vocab_signature(),
+    }
+
+
+def _empty_content_filter_cache() -> dict[str, object]:
+    return {"version": CONTENT_FILTER_CACHE_VERSION, "pages": {}}
+
+
+def _load_content_filter_cache(base_dir: Path) -> dict[str, object]:
+    try:
+        data = json.loads(content_filter_cache_path(base_dir).read_text(encoding="utf-8"))
+    except Exception:
+        return _empty_content_filter_cache()
+    if not isinstance(data, dict) or data.get("version") != CONTENT_FILTER_CACHE_VERSION:
+        return _empty_content_filter_cache()
+    if not isinstance(data.get("pages"), dict):
+        return _empty_content_filter_cache()
+    return data
+
+
+def _save_content_filter_cache(base_dir: Path, cache: dict[str, object]) -> None:
+    path = content_filter_cache_path(base_dir)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(
+        json.dumps(cache, ensure_ascii=False, sort_keys=True, separators=(",", ":")) + "\n",
+        encoding="utf-8",
+    )
 
 
 @dataclass(frozen=True)
@@ -551,6 +615,139 @@ def _content_filter_pool_terms_with_matches(texts: list[str], pool: list[str]) -
     return matched_terms
 
 
+def _content_filter_entry_key(entry: BrowseEntry) -> str:
+    return entry.rel_path or entry.href or entry.name
+
+
+def _content_filter_file_entries(entries: list[BrowseEntry]) -> list[BrowseEntry]:
+    return [entry for entry in entries if not entry.is_dir and entry.filter_text]
+
+
+def _content_filter_page_fingerprint(entries: list[BrowseEntry]) -> str:
+    return _stable_json_hash(
+        {
+            "algorithm": _content_filter_algorithm_signature(),
+            "entries": sorted(
+                [
+                    {
+                        "key": _content_filter_entry_key(entry),
+                        "filter_text": entry.filter_text,
+                    }
+                    for entry in _content_filter_file_entries(entries)
+                ],
+                key=lambda item: item["key"],
+            ),
+        }
+    )
+
+
+def _content_filter_cache_pages(cache: dict[str, object]) -> dict[str, object]:
+    pages = cache.get("pages")
+    if not isinstance(pages, dict):
+        pages = {}
+        cache["pages"] = pages
+    return pages
+
+
+def _cached_content_filter_terms(
+    *,
+    display_path: str,
+    entries: list[BrowseEntry],
+    cache: dict[str, object],
+) -> tuple[list[str], dict[str, tuple[str, ...]]] | None:
+    pages = _content_filter_cache_pages(cache)
+    cached = pages.get(display_path)
+    if not isinstance(cached, dict):
+        return None
+    if cached.get("fingerprint") != _content_filter_page_fingerprint(entries):
+        return None
+    raw_pool = cached.get("filter_pool")
+    raw_terms = cached.get("filter_terms")
+    if not isinstance(raw_pool, list) or not isinstance(raw_terms, dict):
+        return None
+
+    filter_pool = [term for term in raw_pool if isinstance(term, str) and term.strip()]
+    terms_by_key: dict[str, tuple[str, ...]] = {}
+    for entry in _content_filter_file_entries(entries):
+        key = _content_filter_entry_key(entry)
+        raw_entry_terms = raw_terms.get(key)
+        if not isinstance(raw_entry_terms, list):
+            return None
+        terms_by_key[key] = tuple(
+            term for term in raw_entry_terms if isinstance(term, str) and term.strip()
+        )
+    return filter_pool, terms_by_key
+
+
+def _cache_content_filter_terms(
+    *,
+    display_path: str,
+    entries: list[BrowseEntry],
+    filter_pool: list[str],
+    terms_by_key: dict[str, tuple[str, ...]],
+    cache: dict[str, object],
+) -> None:
+    pages = _content_filter_cache_pages(cache)
+    pages[display_path] = {
+        "fingerprint": _content_filter_page_fingerprint(entries),
+        "filter_pool": filter_pool,
+        "filter_terms": {
+            _content_filter_entry_key(entry): list(terms_by_key.get(_content_filter_entry_key(entry), ()))
+            for entry in _content_filter_file_entries(entries)
+        },
+    }
+
+
+def _content_filter_data_for_entries(
+    *,
+    display_path: str,
+    entries: list[BrowseEntry],
+    cache: dict[str, object] | None,
+) -> tuple[list[str], dict[str, tuple[str, ...]]]:
+    if not _content_filter_file_entries(entries):
+        if cache is not None:
+            _content_filter_cache_pages(cache).pop(display_path, None)
+        return [], {}
+
+    if cache is not None:
+        cached = _cached_content_filter_terms(
+            display_path=display_path,
+            entries=entries,
+            cache=cache,
+        )
+        if cached is not None:
+            return cached
+
+    filter_pool = _content_filter_pool(entries)
+    annotated_entries = _entries_with_content_filter_terms(entries, filter_pool)
+    terms_by_key = {
+        _content_filter_entry_key(entry): entry.filter_terms
+        for entry in annotated_entries
+        if not entry.is_dir
+    }
+    if cache is not None:
+        _cache_content_filter_terms(
+            display_path=display_path,
+            entries=entries,
+            filter_pool=filter_pool,
+            terms_by_key=terms_by_key,
+            cache=cache,
+        )
+    return filter_pool, terms_by_key
+
+
+def _entries_with_content_filter_term_map(
+    entries: list[BrowseEntry],
+    terms_by_key: dict[str, tuple[str, ...]],
+) -> list[BrowseEntry]:
+    return [
+        replace(entry, filter_terms=terms_by_key.get(_content_filter_entry_key(entry), ()))
+        if not entry.is_dir
+        else entry
+        for entry in entries
+    ]
+
+
 def _content_filter_terms_for_text(text: str, filter_pool: list[str]) -> tuple[str, ...]:
     if not text or not filter_pool:
         return ()
@@ -703,6 +900,7 @@ def _render_directory_page(
     controls_html: str | None = None,
     pre_list_html: str = "",
     entry_sections: list[tuple[str, list[BrowseEntry]]] | None = None,
+    content_filter_cache: dict[str, object] | None = None,
 ) -> str:
     rows: list[str] = [_base_head(title)]
     rows.append("<div class='dg-nav'><a href='/'>Home</a> · <a href='/browse/'>Browse</a> · <a href='/reading/'>Reading</a> · <a href='/done/'>Done</a></div>")
@@ -714,14 +912,18 @@ def _render_directory_page(
             else entries
         )
         if any(not entry.is_dir for entry in section_entries):
-            filter_pool = _content_filter_pool(section_entries)
+            filter_pool, filter_terms_by_key = _content_filter_data_for_entries(
+                display_path=display_path,
+                entries=section_entries,
+                cache=content_filter_cache,
+            )
             if entry_sections is not None:
                 entry_sections = [
-                    (label, _entries_with_content_filter_terms(section, filter_pool))
+                    (label, _entries_with_content_filter_term_map(section, filter_terms_by_key))
                     for label, section in entry_sections
                 ]
             else:
-                entries = _entries_with_content_filter_terms(entries, filter_pool)
+                entries = _entries_with_content_filter_term_map(entries, filter_terms_by_key)
             controls_html = _browse_controls_html(filter_pool)
         else:
             controls_html = ""
@@ -1393,6 +1595,7 @@ def _write_category_directory_page(
     reading_items: dict[str, dict],
     done_items: dict[str, dict],
     visibility_cache: dict[str, bool],
+    content_filter_cache: dict[str, object] | None = None,
 ) -> tuple[list[str], int]:
     out_root = site_root(base_dir) / "browse" / category
     out_root.mkdir(parents=True, exist_ok=True)
@@ -1432,6 +1635,7 @@ def _write_category_directory_page(
         entries=entries,
         parent_href="../",
         entry_sections=entry_sections,
+        content_filter_cache=content_filter_cache,
     )
     (out_dir / "index.html").write_text(html_doc, encoding="utf-8")
     return child_dirs, direct_files
@@ -1607,6 +1811,7 @@ def _write_category_tree(
     category_root: Path,
     reading_items: dict[str, dict],
     done_items: dict[str, dict],
+    content_filter_cache: dict[str, object] | None = None,
 ) -> int:
     visibility_cache: dict[str, bool] = {}
 
@@ -1619,6 +1824,7 @@ def _write_category_tree(
             reading_items=reading_items,
             done_items=done_items,
             visibility_cache=visibility_cache,
+            content_filter_cache=content_filter_cache,
         )
 
         total_files = direct_files
@@ -2288,6 +2494,7 @@ def rebuild_browse_for_path(base_dir: Path, rel_path: str) -> dict[str, object]:
     roots = _category_roots(base_dir)
     category_root = roots[category]
     visibility_cache: dict[str, bool] = {}
+    content_filter_cache = _load_content_filter_cache(base_dir)
 
     dirs_to_update: list[Path] = []
     if rel_dir == Path("."):
@@ -2310,9 +2517,11 @@ def rebuild_browse_for_path(base_dir: Path, rel_path: str) -> dict[str, object]:
             reading_items=reading_items,
             done_items=done_items,
             visibility_cache=visibility_cache,
+            content_filter_cache=content_filter_cache,
         )
         updated_paths.append(_display_path_for_category_dir(category, target_rel_dir))
 
+    _save_content_filter_cache(base_dir, content_filter_cache)
     return {
         "mode": "partial",
         "category": category,
@@ -2332,6 +2541,7 @@ def build_browse_site(base_dir: Path) -> dict[str, int]:
     done_state_items = done_state.get("items", {})
     done_items = done_state_items if isinstance(done_state_items, dict) else {}
     roots = _category_roots(base_dir)
+    content_filter_cache = _load_content_filter_cache(base_dir)
 
     counts: dict[str, int] = {}
     for category in CATEGORY_KEYS:
@@ -2342,10 +2552,12 @@ def build_browse_site(base_dir: Path) -> dict[str, int]:
             category_root=roots[category],
             reading_items=reading_items,
             done_items=done_items,
+            content_filter_cache=content_filter_cache,
         )
 
     _write_browse_home(base_dir, roots, counts)
     write_site_home(base_dir, roots)
+    _save_content_filter_cache(base_dir, content_filter_cache)
     return counts
 
 

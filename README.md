@@ -92,6 +92,8 @@ All state is stored under `BASE_DIR/state/`:
   - `reading_started_at` (from `reading_at` when moving from Reading to Done)
 - `highlights/<sha256-prefix>/<sha256>.json`: canonical per-document highlight payloads, including per-highlight `created_at` timestamps and document `updated_at`.
 - `reading_positions/<sha256-prefix>/<sha256>.json`: canonical per-document reading-position payloads (`scroll_y`, `max_scroll`, `progress`, viewport/document height metadata, and PDF `page` / `page_count` metadata).
+- `content_filter_vocab.json`: editable vocabulary used to suppress low-value Browse filter terms.
+- `content_filter_cache.json`: generated Browse filter cache, safe to delete when forcing a full thematic filter rebuild.
 
 #### Home History semantics
 
