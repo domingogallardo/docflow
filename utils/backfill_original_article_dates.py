@@ -23,7 +23,7 @@ if __package__ in (None, ""):
     if str(_REPO_ROOT) not in sys.path:
         sys.path.insert(0, str(_REPO_ROOT))
 
-from utils.markdown_utils import split_front_matter, upsert_front_matter
+from utils.markdown_utils import split_front_matter, update_html_meta_tags, upsert_front_matter
 from utils.site_paths import library_roots, resolve_base_dir
 
 ORIGINAL_PUBLISHED_AT_KEY = "docflow_original_published_at"
@@ -439,6 +439,44 @@ def _date_from_parts(year: object, month: object, day: object) -> str | None:
         return None
 
 
+def _candidate_date(candidate: DateCandidate) -> date | None:
+    try:
+        return date.fromisoformat(candidate.value[:10])
+    except ValueError:
+        return None
+
+
+def _is_today_json_ld_candidate(candidate: DateCandidate) -> bool:
+    candidate_day = _candidate_date(candidate)
+    return candidate.source.startswith("json_ld:") and candidate_day == date.today()
+
+
+def _supported_candidate(candidate: DateCandidate | None) -> DateCandidate | None:
+    if candidate and _is_supported_original_date(candidate.value):
+        return candidate
+    return None
+
+
+def _select_html_date_candidate(soup: BeautifulSoup) -> DateCandidate | None:
+    json_ld = _supported_candidate(_json_ld_date_candidate(soup))
+    meta = _supported_candidate(_meta_date_candidate(soup))
+    time_candidate = _supported_candidate(_time_date_candidate(soup))
+    visible = _supported_candidate(_visible_text_date_candidate(soup))
+
+    if json_ld is not None:
+        if _is_today_json_ld_candidate(json_ld):
+            for fallback in (time_candidate, visible, meta):
+                if fallback is not None and _candidate_date(fallback) is not None:
+                    return fallback
+            return None
+        return json_ld
+
+    for candidate in (meta, time_candidate, visible):
+        if candidate is not None:
+            return candidate
+    return None
+
+
 def _url_date_candidate(url: str) -> DateCandidate | None:
     path = urlparse(url).path
     patterns = (
@@ -462,15 +500,9 @@ def _url_date_candidate(url: str) -> DateCandidate | None:
 
 def extract_original_published_date(html: str, *, url: str = "") -> DateCandidate | None:
     soup = BeautifulSoup(html, "html.parser")
-    for extractor in (
-        _json_ld_date_candidate,
-        _meta_date_candidate,
-        _time_date_candidate,
-        _visible_text_date_candidate,
-    ):
-        candidate = extractor(soup)
-        if candidate and _is_supported_original_date(candidate.value):
-            return candidate
+    candidate = _select_html_date_candidate(soup)
+    if candidate is not None:
+        return candidate
     if url:
         return _url_date_candidate(url)
     return None
@@ -551,6 +583,12 @@ def backfill_original_article_dates(
         if updated_md != md_text:
             path.write_text(updated_md, encoding="utf-8")
             os.utime(path, ns=(original_stat.st_atime_ns, original_stat.st_mtime_ns))
+        html_path = path.with_suffix(".html")
+        if html_path.is_file():
+            html_stat = html_path.stat()
+            updated_meta, _ = split_front_matter(updated_md)
+            update_html_meta_tags(html_path, updated_meta)
+            os.utime(html_path, ns=(html_stat.st_atime_ns, html_stat.st_mtime_ns))
         updated += 1
 
     return BackfillResult(

@@ -25,6 +25,58 @@ def test_extract_original_published_date_prefers_json_ld():
     assert candidate.source == "json_ld:datePublished"
 
 
+def test_extract_original_published_date_ignores_today_json_ld_when_time_disagrees(monkeypatch):
+    from datetime import date as real_date
+
+    class FakeDate(real_date):
+        @classmethod
+        def today(cls):
+            return real_date(2026, 5, 27)
+
+    from utils import backfill_original_article_dates as module
+
+    monkeypatch.setattr(module, "date", FakeDate)
+    html = """
+    <html><head>
+      <script type="application/ld+json">
+        {"@type": "Article", "datePublished": "2026-05-27T03:33:04-07:00"}
+      </script>
+    </head><body>
+      <article>
+        <time datetime="2024-02-07T13:02:50+00:00">February 7, 2024</time>
+      </article>
+    </body></html>
+    """
+
+    candidate = extract_original_published_date(html)
+
+    assert candidate is not None
+    assert candidate.value == "2024-02-07T13:02:50Z"
+    assert candidate.source == "time:datetime"
+
+
+def test_extract_original_published_date_ignores_today_json_ld_without_stable_fallback(monkeypatch):
+    from datetime import date as real_date
+
+    class FakeDate(real_date):
+        @classmethod
+        def today(cls):
+            return real_date(2026, 5, 27)
+
+    from utils import backfill_original_article_dates as module
+
+    monkeypatch.setattr(module, "date", FakeDate)
+    html = """
+    <html><head>
+      <script type="application/ld+json">
+        {"@type": "Article", "datePublished": "2026-05-27T03:33:04-07:00"}
+      </script>
+    </head><body><article><h1>Article</h1></article></body></html>
+    """
+
+    assert extract_original_published_date(html) is None
+
+
 def test_extract_original_published_date_falls_back_to_url_path():
     candidate = extract_original_published_date("<html></html>", url="https://example.com/2024/12/31/post")
 
@@ -147,6 +199,46 @@ def test_backfill_original_article_dates_updates_markdown_and_preserves_mtime(tm
     meta, _ = split_front_matter(md.read_text(encoding="utf-8"))
     assert meta["docflow_original_published_at"] == "2026-05-02T10:00:00Z"
     assert meta["docflow_original_published_source"] == "meta:property=article:published_time"
+
+
+def test_backfill_original_article_dates_updates_html_meta_and_preserves_mtime(tmp_path: Path):
+    base = tmp_path / "base"
+    posts = base / "Posts" / "Posts 2026"
+    posts.mkdir(parents=True)
+    md = posts / "Article.md"
+    html = posts / "Article.html"
+    md.write_text(
+        "---\n"
+        "docflow_post_url: https://example.com/article\n"
+        "docflow_original_published_at: 2026-05-01\n"
+        "docflow_original_published_source: json_ld:datePublished\n"
+        "---\n\n# Article\n",
+        encoding="utf-8",
+    )
+    html.write_text(
+        "<html><head>"
+        '<meta name="docflow-original-published-at" content="2026-05-01">'
+        '<meta name="docflow-original-published-source" content="json_ld:datePublished">'
+        "</head><body></body></html>",
+        encoding="utf-8",
+    )
+    original_md_mtime_ns = md.stat().st_mtime_ns
+    original_html_mtime_ns = html.stat().st_mtime_ns
+
+    result = backfill_original_article_dates(
+        base,
+        force=True,
+        fetch_url=lambda url, timeout: '<time datetime="2026-05-02T10:00:00Z"></time>',
+    )
+
+    assert result.updated == 1
+    assert md.stat().st_mtime_ns == original_md_mtime_ns
+    assert html.stat().st_mtime_ns == original_html_mtime_ns
+    meta, _ = split_front_matter(md.read_text(encoding="utf-8"))
+    assert meta["docflow_original_published_at"] == "2026-05-02T10:00:00Z"
+    html_text = html.read_text(encoding="utf-8")
+    assert 'content="2026-05-02T10:00:00Z"' in html_text
+    assert 'content="time:datetime"' in html_text
 
 
 def test_backfill_original_article_dates_dry_run_does_not_write(tmp_path: Path):
