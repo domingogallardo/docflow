@@ -5,6 +5,7 @@ from web_clipper_wrapper import (
     attempts_for_url,
     clean_html_for_markdown,
     default_output_path,
+    fetch_html,
     markdown_quality,
     original_published_metadata,
     read_urls_from_file,
@@ -63,6 +64,28 @@ def test_html_bridge_redirect_url_reads_substack_title_bridge():
     assert _html_bridge_redirect_url(html) == (
         "https://example.substack.com/p/post?x=1&triedRedirect=true"
     )
+
+
+def test_fetch_html_uses_detected_encoding_when_header_has_no_charset(monkeypatch):
+    class FakeResponse:
+        content = "<p>\u00a0\u2744</p>".encode("utf-8")
+        headers = {"content-type": "text/html"}
+        apparent_encoding = "utf-8"
+        url = "https://example.com/article"
+
+        def raise_for_status(self):
+            pass
+
+    def fake_get(url, headers, timeout):
+        return FakeResponse()
+
+    monkeypatch.setattr("web_clipper_wrapper.requests.get", fake_get)
+
+    html, final_url = fetch_html("https://example.com/article")
+
+    assert html == "<p>\u00a0\u2744</p>"
+    assert "Â" not in html
+    assert final_url == "https://example.com/article"
 
 
 def test_markdown_quality_rejects_frontmatter_only():

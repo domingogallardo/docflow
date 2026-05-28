@@ -50,6 +50,15 @@ URL_RE = re.compile(r"https?://[^\s<>\"]+")
 DATA_IMAGE_RE = re.compile(r"data:image/[^)\s\"']+", re.IGNORECASE)
 DEFAULT_NODE_BIN = Path("/opt/homebrew/bin/node")
 ESCAPED_JSON_NOISE_RE = re.compile(r"\\n|\\/|\\u[0-9A-Fa-f]{4}")
+HEADER_CHARSET_RE = re.compile(r"(?:^|;)\s*charset=[\"']?([^;\"'\s]+)", re.IGNORECASE)
+HTML_CHARSET_RE = re.compile(
+    rb"<meta[^>]+charset=[\"']?\s*([A-Za-z0-9._:-]+)",
+    re.IGNORECASE,
+)
+HTML_HTTP_EQUIV_CHARSET_RE = re.compile(
+    rb"<meta[^>]+http-equiv=[\"']?content-type[\"']?[^>]+content=[\"'][^\"']*charset=([^;\"'\s]+)",
+    re.IGNORECASE,
+)
 
 
 @dataclass(frozen=True)
@@ -227,6 +236,45 @@ def _html_bridge_redirect_url(html: str) -> str | None:
     return None
 
 
+def _charset_from_content_type(content_type: str | None) -> str | None:
+    if not content_type:
+        return None
+    match = HEADER_CHARSET_RE.search(content_type)
+    return match.group(1).strip() if match else None
+
+
+def _charset_from_html_bytes(content: bytes) -> str | None:
+    head = content[:4096]
+    for pattern in (HTML_CHARSET_RE, HTML_HTTP_EQUIV_CHARSET_RE):
+        match = pattern.search(head)
+        if match:
+            return match.group(1).decode("ascii", errors="ignore").strip()
+    return None
+
+
+def _decode_html_response(response: requests.Response) -> str:
+    """Decode HTML without treating requests' ISO-8859-1 default as declared."""
+    encodings = [
+        _charset_from_content_type(response.headers.get("content-type")),
+        _charset_from_html_bytes(response.content),
+        response.apparent_encoding,
+        "utf-8",
+    ]
+    tried: set[str] = set()
+    for encoding in encodings:
+        if not encoding:
+            continue
+        normalized = encoding.lower()
+        if normalized in tried:
+            continue
+        tried.add(normalized)
+        try:
+            return response.content.decode(encoding)
+        except (LookupError, UnicodeDecodeError):
+            continue
+    return response.content.decode("utf-8", errors="replace")
+
+
 def fetch_html(url: str, *, timeout: int = 30) -> tuple[str, str]:
     """Download page HTML with browser-like headers and return (html, final_url)."""
     headers = {
@@ -239,16 +287,15 @@ def fetch_html(url: str, *, timeout: int = 30) -> tuple[str, str]:
     for _ in range(3):
         response = requests.get(current_url, headers=headers, timeout=timeout)
         response.raise_for_status()
-        if not response.encoding:
-            response.encoding = response.apparent_encoding
+        html = _decode_html_response(response)
 
-        bridge_url = _html_bridge_redirect_url(response.text)
+        bridge_url = _html_bridge_redirect_url(html)
         if not bridge_url or bridge_url in seen_urls:
-            return response.text, response.url
+            return html, response.url
         seen_urls.add(current_url)
         current_url = bridge_url
 
-    return response.text, response.url
+    return html, response.url
 
 
 def clean_html_for_markdown(html: str, *, remove_data_images: bool = True) -> tuple[str, int]:
