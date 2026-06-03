@@ -1,3 +1,4 @@
+import json
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -44,6 +45,35 @@ def test_process_web_urls_downloads_markdown_and_removes_attempted_links(tmp_pat
     failed_text = processor.links_failed.read_text(encoding="utf-8")
     assert bad_url in failed_text
     assert "extractor failed" in failed_text
+
+
+def test_process_web_urls_passes_and_clears_source_x_post_metadata(tmp_path, monkeypatch):
+    processor, incoming = prepare_processor(tmp_path)
+    article_url = "https://example.com/from-tweet"
+    tweet_url = "https://x.com/user/status/123"
+    processor.links_file.write_text(f"{article_url}\n", encoding="utf-8")
+    processor.tweet_article_sources.write_text(
+        json.dumps({article_url: tweet_url}) + "\n",
+        encoding="utf-8",
+    )
+
+    def fake_download(url, *, output_dir, source_x_post_url):
+        assert url == article_url
+        assert output_dir == incoming
+        assert source_x_post_url == tweet_url
+        output_path = output_dir / "clipper-from-tweet.md"
+        output_path.write_text(
+            f"---\nsource_url: {url}\ntweet_url: {source_x_post_url}\n---\nBody\n",
+            encoding="utf-8",
+        )
+        return SimpleNamespace(output_path=output_path)
+
+    monkeypatch.setattr("pipeline_manager.download_url_to_markdown", fake_download)
+
+    generated = processor.process_web_urls()
+
+    assert generated == [incoming / "clipper-from-tweet.md"]
+    assert not processor.tweet_article_sources.exists()
 
 
 def test_process_web_urls_removes_failed_links_from_queue(tmp_path, monkeypatch):

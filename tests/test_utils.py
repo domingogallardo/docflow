@@ -736,6 +736,46 @@ https://example.com/article
     assert "docflow_post_url" not in meta
 
 
+def test_markdown_to_html_renders_source_x_post_for_tweet_discovered_article():
+    from utils import markdown_to_html
+
+    md = """---
+source_url: https://example.com/article
+docflow_source_type: web
+tweet_url: https://x.com/user/status/123
+---
+
+# Article
+
+Body.
+"""
+
+    html = markdown_to_html(md, title="Article")
+
+    assert "Original link:" in html
+    assert "Source X post:" in html
+    assert 'href="https://x.com/user/status/123"' in html
+
+
+def test_markdown_to_html_does_not_render_source_x_post_for_tweets():
+    from utils import markdown_to_html
+
+    md = """---
+source: tweet
+docflow_source_type: tweet
+tweet_url: https://x.com/user/status/123
+---
+
+# Tweet
+
+Body.
+"""
+
+    html = markdown_to_html(md, title="Tweet")
+
+    assert "Source X post:" not in html
+
+
 def test_upsert_front_matter_preserves_unrelated_lines():
     from utils import upsert_front_matter
 

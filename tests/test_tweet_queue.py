@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Tests for tweet collection via X likes."""
+import json
 from pathlib import Path
 from unittest.mock import patch
 
@@ -121,6 +122,9 @@ def test_process_tweet_urls_queues_primary_article_link(tmp_path, monkeypatch):
     assert processor.links_file.read_text(encoding="utf-8") == (
         "https://example.com/article?utm_source=x\n"
     )
+    assert json.loads(processor.tweet_article_sources.read_text(encoding="utf-8")) == {
+        "https://example.com/article?utm_source=x": "https://x.com/user/status/1"
+    }
 
 
 def test_process_tweet_urls_queues_one_primary_article_per_thread_block(tmp_path, monkeypatch):

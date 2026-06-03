@@ -2,6 +2,7 @@
 """
 DocumentProcessor - main class for document processing.
 """
+import json
 from pathlib import Path
 from typing import Callable, Iterable, List, Optional, Sequence, Tuple
 from datetime import datetime
@@ -62,6 +63,7 @@ class DocumentProcessor:
         self.tweets_replies_failed = self.incoming / "tweets_replies_failed.txt"
         self.links_file = self.incoming / "links.txt"
         self.links_failed = self.incoming / "links_failed.txt"
+        self.tweet_article_sources = self.incoming / "tweet_article_sources.json"
 
         self.pdf_processor = PDFProcessor(self.incoming, self.pdfs_dest)
         self.podcast_processor = PodcastProcessor(self.incoming, self.podcasts_dest)
@@ -214,11 +216,17 @@ class DocumentProcessor:
             destination = self._unique_destination(self.incoming / filename)
             destination.write_text(markdown, encoding="utf-8")
             generated.append(destination)
-            article_links = self._extract_primary_article_links_from_tweet_markdown(
+            article_sources = self._extract_primary_article_links_with_sources_from_tweet_markdown(
                 markdown,
                 resolve_short_url=self._resolve_tco_url,
             )
+            article_links = [url for url, _ in article_sources]
             queued_links = self._append_links_to_queue(article_links, links_path=self.links_file)
+            self._record_tweet_article_sources(
+                article_sources,
+                queued_links,
+                sources_path=self.tweet_article_sources,
+            )
             if queued_links:
                 print(f"🔗 Queued {len(queued_links)} article link(s) from tweet")
             if item.url in fresh_url_set:
@@ -402,8 +410,26 @@ class DocumentProcessor:
         resolve_short_url: Callable[[str], str | None] | None = None,
     ) -> List[str]:
         """Return the first external article-like link from each captured tweet block."""
+        return [
+            link
+            for link, _ in cls._extract_primary_article_links_with_sources_from_tweet_markdown(
+                markdown,
+                resolve_short_url=resolve_short_url,
+            )
+        ]
+
+    @classmethod
+    def _extract_primary_article_links_with_sources_from_tweet_markdown(
+        cls,
+        markdown: str,
+        *,
+        resolve_short_url: Callable[[str], str | None] | None = None,
+    ) -> List[Tuple[str, str]]:
+        """Return article links with the X post URL whose block exposed them."""
         links: List[str] = []
+        links_with_sources: List[Tuple[str, str]] = []
         current_block: List[str] = []
+        current_source = ""
 
         def flush_block() -> None:
             if not current_block:
@@ -414,21 +440,27 @@ class DocumentProcessor:
             )
             if link:
                 links.append(link)
+                links_with_sources.append((link, current_source))
             current_block.clear()
 
         for line in markdown.splitlines():
             if line.startswith("[View on X]("):
                 flush_block()
                 current_block.append(line)
+                match = URL_RE.search(line)
+                current_source = match.group(0).rstrip(").,;") if match else ""
                 continue
             if line.strip() == "---":
                 flush_block()
+                current_source = ""
                 continue
             if current_block:
                 current_block.append(line)
 
         flush_block()
-        return cls._dedupe_urls(links)
+        deduped_links = cls._dedupe_urls(links)
+        sources_by_link = {link: source for link, source in links_with_sources}
+        return [(link, sources_by_link.get(link, "")) for link in deduped_links]
 
     @classmethod
     def _first_article_link_in_tweet_block(
@@ -488,6 +520,75 @@ class DocumentProcessor:
             for url in new_urls:
                 fh.write(f"{url}\n")
         return new_urls
+
+    @staticmethod
+    def _load_tweet_article_sources(path: Path) -> dict[str, str]:
+        if not path.exists():
+            return {}
+        try:
+            raw = json.loads(path.read_text(encoding="utf-8"))
+        except (json.JSONDecodeError, OSError):
+            return {}
+        if not isinstance(raw, dict):
+            return {}
+        return {
+            str(url): str(source)
+            for url, source in raw.items()
+            if str(url).startswith(("http://", "https://"))
+            and str(source).startswith(("http://", "https://"))
+        }
+
+    @classmethod
+    def _write_tweet_article_sources(cls, path: Path, sources: dict[str, str]) -> None:
+        if not sources:
+            if path.exists():
+                path.unlink()
+            return
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(
+            json.dumps(sources, ensure_ascii=False, indent=2, sort_keys=True) + "\n",
+            encoding="utf-8",
+        )
+
+    @classmethod
+    def _record_tweet_article_sources(
+        cls,
+        article_sources: Sequence[Tuple[str, str]],
+        queued_links: Sequence[str],
+        *,
+        sources_path: Path,
+    ) -> None:
+        queued = set(queued_links)
+        if not queued:
+            return
+        sources = cls._load_tweet_article_sources(sources_path)
+        changed = False
+        for article_url, tweet_url in article_sources:
+            if article_url not in queued or not tweet_url:
+                continue
+            if sources.get(article_url) == tweet_url:
+                continue
+            sources[article_url] = tweet_url
+            changed = True
+        if changed:
+            cls._write_tweet_article_sources(sources_path, sources)
+
+    @classmethod
+    def _remove_tweet_article_sources(
+        cls,
+        urls: Sequence[str],
+        *,
+        sources_path: Path,
+    ) -> None:
+        if not urls or not sources_path.exists():
+            return
+        sources = cls._load_tweet_article_sources(sources_path)
+        if not sources:
+            return
+        remove = set(urls)
+        updated = {url: source for url, source in sources.items() if url not in remove}
+        if len(updated) != len(sources):
+            cls._write_tweet_article_sources(sources_path, updated)
 
     @staticmethod
     def _remove_urls_from_links_file(path: Path, processed_urls: Sequence[str]) -> None:
@@ -592,11 +693,20 @@ class DocumentProcessor:
         generated: List[Path] = []
         processed_urls: List[str] = []
         failures: List[Tuple[str, str]] = []
+        tweet_article_sources = self._load_tweet_article_sources(self.tweet_article_sources)
 
         print(f"🔗 Downloading {len(urls)} URL(s) as Markdown...")
         for url in urls:
             try:
-                result = download_url_to_markdown(url, output_dir=self.incoming)
+                source_x_post_url = tweet_article_sources.get(url, "")
+                if source_x_post_url:
+                    result = download_url_to_markdown(
+                        url,
+                        output_dir=self.incoming,
+                        source_x_post_url=source_x_post_url,
+                    )
+                else:
+                    result = download_url_to_markdown(url, output_dir=self.incoming)
             except Exception as exc:
                 failures.append((url, str(exc)))
                 print(f"❌ Error downloading {url}: {exc}")
@@ -617,6 +727,10 @@ class DocumentProcessor:
         attempted_urls = [*processed_urls, *[url for url, _ in failures]]
         if attempted_urls:
             self._remove_urls_from_links_file(self.links_file, attempted_urls)
+            self._remove_tweet_article_sources(
+                attempted_urls,
+                sources_path=self.tweet_article_sources,
+            )
             print(f"🔗 {len(attempted_urls)} attempted URL(s) removed from links.txt")
 
         return generated

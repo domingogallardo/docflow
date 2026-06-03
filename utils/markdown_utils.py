@@ -554,6 +554,27 @@ def original_source_link_html(meta: dict[str, str]) -> str:
     )
 
 
+def source_x_post_link_html(meta: dict[str, str]) -> str:
+    """Render the X post that led docflow to a clipped article."""
+    source_type = (meta.get("docflow_source_type") or "").strip().lower()
+    if source_type and source_type != "web":
+        return ""
+    source = (meta.get("source") or "").strip().lower()
+    if source == "tweet":
+        return ""
+    tweet_url = (meta.get("tweet_url") or "").strip()
+    if not tweet_url.startswith(("http://", "https://")):
+        return ""
+
+    escaped_url = html.escape(tweet_url, quote=True)
+    return (
+        '<p class="docflow-source-x-post">'
+        f'Source X post: <a href="{escaped_url}" target="_blank" '
+        f'rel="noopener">{escaped_url}</a>'
+        "</p>\n"
+    )
+
+
 def clean_duplicate_markdown_links(text: str) -> str:
     """Clean Markdown links where the text and URL are identical."""
     duplicate_link_pattern = r'\[(https?://[^\]]+)\]\(\1\)'
@@ -1135,6 +1156,7 @@ def markdown_to_html(md_text: str, title: str = None) -> str:
     title_tag = f"<title>{title}</title>\n" if title else ""
     meta_tags = front_matter_meta_tags(front_matter)
     original_link = original_source_link_html(front_matter)
+    source_x_post_link = source_x_post_link_html(front_matter)
     return (
         "<!DOCTYPE html>\n"
         "<html>\n<head>\n<meta charset=\"UTF-8\">\n"
@@ -1142,6 +1164,7 @@ def markdown_to_html(md_text: str, title: str = None) -> str:
         f"{title_tag}"
         "</head>\n<body>\n"
         f"{original_link}"
+        f"{source_x_post_link}"
         f"{html_body}\n"
         "</body>\n</html>\n"
     )

@@ -469,6 +469,7 @@ def download_url_to_markdown(
     remove_data_images: bool = True,
     min_chars: int = 800,
     min_words: int = 120,
+    source_x_post_url: str | None = None,
 ) -> ArticleDownloadResult:
     """Download a URL and save a validated Markdown file."""
     html, final_url = fetch_html(url)
@@ -528,6 +529,10 @@ def download_url_to_markdown(
                 )
                 if url.rstrip("/") != final_url.rstrip("/"):
                     extra_metadata["docflow_original_url"] = url
+                if source_x_post_url and source_x_post_url.startswith(
+                    ("http://", "https://")
+                ):
+                    extra_metadata["tweet_url"] = source_x_post_url
                 markdown = U.enrich_markdown_metadata(
                     markdown,
                     source_url=final_url,
