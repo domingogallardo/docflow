@@ -2000,6 +2000,11 @@ def ensure_assets(base_dir: Path) -> None:
   const highlightPreferenceKey = 'docflow.highlight-sort';
   const contentFilterPreferencePrefix = 'docflow.content-filter.';
   const contentFilterSamplePrefix = 'docflow.content-filter-sample.';
+  const listScrollPositionPrefix = 'docflow.list-scroll.';
+
+  try {
+    if ('scrollRestoration' in window.history) window.history.scrollRestoration = 'manual';
+  } catch (error) {}
 
   function loadHighlightPreference() {
     try {
@@ -2021,6 +2026,80 @@ def ensure_assets(base_dir: Path) -> None:
 
   function contentFilterSampleKey() {
     return contentFilterSamplePrefix + window.location.pathname;
+  }
+
+  function listScrollPositionKey() {
+    return listScrollPositionPrefix + window.location.pathname;
+  }
+
+  function currentScrollY() {
+    const scrollEl = document.scrollingElement || document.documentElement || document.body;
+    return scrollEl ? asNumber(scrollEl.scrollTop) : 0;
+  }
+
+  function maxScrollY() {
+    const scrollEl = document.scrollingElement || document.documentElement || document.body;
+    if (!scrollEl) return 0;
+    return Math.max(0, asNumber(scrollEl.scrollHeight) - asNumber(window.innerHeight || scrollEl.clientHeight));
+  }
+
+  function saveListScrollPosition() {
+    try {
+      window.sessionStorage.setItem(
+        listScrollPositionKey(),
+        JSON.stringify({ y: Math.round(currentScrollY()), updated_at: Date.now() })
+      );
+    } catch (error) {}
+  }
+
+  function loadListScrollPosition() {
+    try {
+      const payload = JSON.parse(window.sessionStorage.getItem(listScrollPositionKey()) || 'null');
+      return payload && Number.isFinite(Number(payload.y)) ? Number(payload.y) : null;
+    } catch (error) {
+      return null;
+    }
+  }
+
+  function restoreListScrollPosition() {
+    if (window.location.hash) return;
+    const savedY = loadListScrollPosition();
+    if (savedY === null || savedY <= 0) return;
+    const targetY = Math.max(0, Math.min(savedY, maxScrollY()));
+    try {
+      window.scrollTo({ top: targetY, left: 0, behavior: 'auto' });
+    } catch (error) {
+      window.scrollTo(0, targetY);
+    }
+  }
+
+  function scheduleListScrollRestore() {
+    restoreListScrollPosition();
+    window.requestAnimationFrame(() => {
+      restoreListScrollPosition();
+      window.setTimeout(restoreListScrollPosition, 80);
+    });
+  }
+
+  function installListScrollPersistence() {
+    let ticking = false;
+    window.addEventListener('scroll', () => {
+      if (ticking) return;
+      ticking = true;
+      window.requestAnimationFrame(() => {
+        ticking = false;
+        saveListScrollPosition();
+      });
+    }, { passive: true });
+    window.addEventListener('pagehide', saveListScrollPosition);
+    window.addEventListener('beforeunload', saveListScrollPosition);
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'hidden') saveListScrollPosition();
+    });
+    document.addEventListener('click', (event) => {
+      const link = event.target && event.target.closest ? event.target.closest('a[href]') : null;
+      if (link) saveListScrollPosition();
+    }, true);
   }
 
   function loadContentFilterPreference() {
@@ -2199,6 +2278,7 @@ def ensure_assets(base_dir: Path) -> None:
   }
 
   document.addEventListener('DOMContentLoaded', () => {
+    installListScrollPersistence();
     const toggle = document.querySelector('[data-dg-sort-toggle]');
     const doneDefaultView = document.querySelector('[data-dg-highlight-view="default"]');
     const doneHighlightView = document.querySelector('[data-dg-highlight-view="highlight"]');
@@ -2211,6 +2291,7 @@ def ensure_assets(base_dir: Path) -> None:
         toggle.setAttribute('disabled', '');
         doneDefaultView.hidden = highlightsFirst;
         doneHighlightView.hidden = !highlightsFirst;
+        scheduleListScrollRestore();
         return;
       }
 
@@ -2228,6 +2309,7 @@ def ensure_assets(base_dir: Path) -> None:
       });
 
       renderDoneViews();
+      scheduleListScrollRestore();
       return;
     }
 
@@ -2239,7 +2321,10 @@ def ensure_assets(base_dir: Path) -> None:
     renderSuggestedFilters(filterSlot, savedFilterTerms, reuseStoredSample);
     let filterButtons = Array.from(document.querySelectorAll('[data-dg-content-filter]'));
     const filterSummary = document.querySelector('[data-dg-filter-summary]');
-    if (!toggle || lists.length === 0) return;
+    if (!toggle || lists.length === 0) {
+      scheduleListScrollRestore();
+      return;
+    }
 
     const groups = lists.map((list) => {
       const previous = list.previousElementSibling;
@@ -2262,6 +2347,7 @@ def ensure_assets(base_dir: Path) -> None:
       toggle.setAttribute('disabled', '');
       filterButtons.forEach((button) => button.setAttribute('disabled', ''));
       if (randomFiltersButton) randomFiltersButton.setAttribute('disabled', '');
+      scheduleListScrollRestore();
       return;
     }
 
@@ -2358,6 +2444,7 @@ def ensure_assets(base_dir: Path) -> None:
     }
 
     renderOrder();
+    scheduleListScrollRestore();
   });
 })();
 """.strip()

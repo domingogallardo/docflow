@@ -158,12 +158,21 @@ def test_build_browse_site_generates_indexes_and_actions(tmp_path: Path):
     assert "data-dg-filter-summary" in browse_sort_content
     assert "contentFilterPreferencePrefix = 'docflow.content-filter.'" in browse_sort_content
     assert "contentFilterSamplePrefix = 'docflow.content-filter-sample.'" in browse_sort_content
+    assert "listScrollPositionPrefix = 'docflow.list-scroll.'" in browse_sort_content
+    assert "window.history.scrollRestoration = 'manual'" in browse_sort_content
+    assert "function saveListScrollPosition()" in browse_sort_content
+    assert "function restoreListScrollPosition()" in browse_sort_content
+    assert "function installListScrollPersistence()" in browse_sort_content
+    assert "window.addEventListener('pagehide', saveListScrollPosition)" in browse_sort_content
+    assert "scheduleListScrollRestore()" in browse_sort_content
     assert "contentFilterPreferencePrefix + window.location.pathname" in browse_sort_content
     assert "contentFilterSamplePrefix + window.location.pathname" in browse_sort_content
+    assert "listScrollPositionPrefix + window.location.pathname" in browse_sort_content
     assert "window.sessionStorage.getItem(contentFilterPreferenceKey())" in browse_sort_content
     assert "window.sessionStorage.setItem(contentFilterPreferenceKey(), JSON.stringify({ terms }))" in browse_sort_content
     assert "window.sessionStorage.getItem(contentFilterSampleKey())" in browse_sort_content
     assert "window.sessionStorage.setItem(contentFilterSampleKey(), JSON.stringify(sample))" in browse_sort_content
+    assert "window.sessionStorage.setItem(" in browse_sort_content
     assert "const reuseStoredSample = true" in browse_sort_content
     assert "renderSuggestedFilters(filterSlot, savedFilterTerms, reuseStoredSample)" in browse_sort_content
     assert "data-dg-content-filter-random" in browse_sort_content
