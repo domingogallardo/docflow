@@ -44,6 +44,10 @@ def test_viewer_url_for_rel_path_uses_pdf_viewer_only_for_pdfs():
     assert site_paths.viewer_url_for_rel_path("Posts/Posts 2026/a.html") == "/posts/raw/Posts%202026/a.html"
 
 
+def test_static_asset_url_includes_cache_busting_version():
+    assert site_paths.static_asset_url("browse-sort.js") == "/assets/browse-sort.js?v=20260609-scroll-restore"
+
+
 def test_resolve_base_dir_prefers_env(monkeypatch, tmp_path: Path):
     monkeypatch.setenv(site_paths.BASE_DIR_ENV, str(tmp_path))
     assert site_paths.resolve_base_dir() == tmp_path

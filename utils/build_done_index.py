@@ -17,7 +17,13 @@ if __package__ in (None, ""):
         sys.path.insert(0, str(_REPO_ROOT))
 
 from utils.highlight_store import highlight_status_for_path
-from utils.site_paths import viewer_url_for_rel_path, resolve_base_dir, resolve_library_path, site_root
+from utils.site_paths import (
+    viewer_url_for_rel_path,
+    resolve_base_dir,
+    resolve_library_path,
+    site_root,
+    static_asset_url,
+)
 from utils.site_state import load_done_state
 
 DONE_VIEWPORT = "width=device-width, initial-scale=1"
@@ -274,8 +280,8 @@ def build_site_done_html(items: list[SiteDoneItem]) -> str:
         '<!DOCTYPE html><html><head><meta charset="utf-8">'
         f'<meta name="viewport" content="{DONE_VIEWPORT}">'
         f"<style>{DONE_BASE_STYLE}</style>"
-        '<script src="/assets/actions.js" defer></script>'
-        '<script src="/assets/browse-sort.js" defer></script>'
+        f'<script src="{static_asset_url("actions.js")}" defer></script>'
+        f'<script src="{static_asset_url("browse-sort.js")}" defer></script>'
         "<title>Done</title></head><body>"
         '<div class="dg-nav"><a href="/">Home</a> · <a href="/browse/">Browse</a> · <a href="/reading/">Reading</a> · <a href="/done/">Done</a></div>'
         '<h1>Done</h1>'

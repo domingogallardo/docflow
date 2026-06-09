@@ -37,6 +37,7 @@ from utils.site_paths import (
     resolve_library_path,
     site_root,
     state_root,
+    static_asset_url,
     viewer_url_for_rel_path,
 )
 from utils.highlight_store import highlight_status_for_path
@@ -885,8 +886,8 @@ def _base_head(title: str) -> str:
         ".dg-time-heading{font-size:13px;margin:14px 0 4px;color:#555;font-weight:600}"
         ".dg-time-section{margin-top:0;margin-bottom:8px}"
         "</style>"
-        "<script src='/assets/actions.js' defer></script>"
-        "<script src='/assets/browse-sort.js' defer></script>"
+        f"<script src='{static_asset_url('actions.js')}' defer></script>"
+        f"<script src='{static_asset_url('browse-sort.js')}' defer></script>"
         "</head><body>"
     )
 
@@ -1907,7 +1908,7 @@ def write_site_home(base_dir: Path, category_roots: dict[str, Path] | None = Non
         ".dg-search-results li{margin:3px 0}"
         ".dg-search-folder{color:#666;margin-left:6px}"
         ".dg-actions button{padding:2px 6px;border:1px solid #ccc;border-radius:6px;background:#f7f7f7;color:#333;font:12px -apple-system,system-ui,Segoe UI,Roboto,Helvetica,Arial;cursor:pointer}"
-        "</style><script src='/assets/actions.js' defer></script></head><body>"
+        f"</style><script src='{static_asset_url('actions.js')}' defer></script></head><body>"
         "<h1>Docflow Intranet</h1>"
         "<p><a href='/browse/'>Browse</a> · <a href='/reading/'>Reading</a> · <a href='/done/'>Done</a></p>"
         f"{_home_history_link_html()}"

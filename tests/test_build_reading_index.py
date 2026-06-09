@@ -43,7 +43,7 @@ def test_write_site_reading_index_uses_reading_state(tmp_path: Path):
     assert "data-dg-highlighted='1'" in content
     assert f"data-dg-highlight-last='{highlight_store.latest_highlight_epoch(saved_highlights):.6f}'" in content
     assert "data-dg-sort-mtime=" in content
-    assert "<script src=\"/assets/browse-sort.js\" defer></script>" in content
+    assert '<script src="/assets/browse-sort.js?v=20260609-scroll-restore" defer></script>' in content
     assert "🟡" in content
     assert "Posts/Posts 2026/doc.html" not in content
 

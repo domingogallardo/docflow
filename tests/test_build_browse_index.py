@@ -212,7 +212,7 @@ def test_build_browse_site_generates_indexes_and_actions(tmp_path: Path):
     assert "data-dg-done" not in content
     assert "data-dg-highlighted='1'" in content
     assert f"data-dg-highlight-last='{highlight_store.latest_highlight_epoch(saved_highlights):.6f}'" in content
-    assert "<script src='/assets/browse-sort.js' defer></script>" in content
+    assert "<script src='/assets/browse-sort.js?v=20260609-scroll-restore' defer></script>" in content
     assert 'data-api-action="to-reading"' not in content
     assert '/posts/raw/Posts%202026/doc.html' in content
 

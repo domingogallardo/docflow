@@ -9,6 +9,7 @@ from pathlib import Path
 from urllib.parse import quote, unquote
 
 BASE_DIR_ENV = "DOCFLOW_BASE_DIR"
+STATIC_ASSET_VERSION = "20260609-scroll-restore"
 
 
 class PathValidationError(ValueError):
@@ -56,6 +57,11 @@ def resolve_base_dir(cli_base_dir: str | None = None) -> Path:
 
 def site_root(base_dir: Path) -> Path:
     return base_dir / "_site"
+
+
+def static_asset_url(name: str) -> str:
+    """Return a versioned URL for generated intranet static assets."""
+    return f"/assets/{quote(name)}?v={STATIC_ASSET_VERSION}"
 
 
 def state_root(base_dir: Path) -> Path:
