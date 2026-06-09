@@ -320,6 +320,7 @@ def build_template(attempt: ClipAttempt) -> dict:
         "noteContentFormat": attempt.content_format,
         "properties": [
             {"name": "source", "value": "{{url}}", "type": "text"},
+            {"name": "author", "value": "{{author}}", "type": "multitext"},
         ],
     }
 

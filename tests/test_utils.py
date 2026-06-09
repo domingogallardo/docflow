@@ -776,6 +776,46 @@ Body.
     assert "Source X post:" not in html
 
 
+def test_markdown_to_html_renders_front_matter_author():
+    from bs4 import BeautifulSoup
+    from utils import markdown_to_html
+
+    md = """---
+author:
+  - "[[Casey Newton]]"
+---
+
+# Article
+
+Body.
+"""
+
+    html = markdown_to_html(md, title="Article")
+
+    soup = BeautifulSoup(html, "html.parser")
+    author = soup.find("p", class_="docflow-author")
+    assert author is not None
+    assert author.get_text() == "By Casey Newton"
+    assert soup.body.find() == author
+
+
+def test_markdown_to_html_renders_inline_front_matter_author():
+    from utils import markdown_to_html
+
+    md = """---
+author: "[[John Gruber]]"
+---
+
+# Article
+
+Body.
+"""
+
+    html = markdown_to_html(md, title="Article")
+
+    assert '<p class="docflow-author">By John Gruber</p>' in html
+
+
 def test_upsert_front_matter_preserves_unrelated_lines():
     from utils import upsert_front_matter
 

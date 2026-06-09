@@ -75,13 +75,17 @@ def split_front_matter(md_text: str) -> tuple[dict[str, str], str]:
 
 def _parse_front_matter(lines: list[str]) -> dict[str, str]:
     meta: dict[str, str] = {}
-    for line in lines:
+    index = 0
+    while index < len(lines):
+        line = lines[index]
         if ":" not in line:
+            index += 1
             continue
         key, raw = line.split(":", 1)
         key = key.strip()
         value = raw.strip()
         if not key:
+            index += 1
             continue
         if value.startswith('"') and value.endswith('"') and len(value) >= 2:
             value = (
@@ -93,8 +97,31 @@ def _parse_front_matter(lines: list[str]) -> dict[str, str]:
             )
         elif value.startswith("'") and value.endswith("'") and len(value) >= 2:
             value = value[1:-1]
+        elif value == "":
+            list_values: list[str] = []
+            lookahead = index + 1
+            while lookahead < len(lines):
+                next_line = lines[lookahead]
+                if _line_key(next_line):
+                    break
+                item = next_line.strip()
+                if item.startswith("-"):
+                    item = item[1:].strip()
+                    if item.startswith('"') and item.endswith('"') and len(item) >= 2:
+                        item = item[1:-1]
+                    elif item.startswith("'") and item.endswith("'") and len(item) >= 2:
+                        item = item[1:-1]
+                    if item:
+                        list_values.append(item)
+                elif item:
+                    break
+                lookahead += 1
+            if list_values:
+                value = ", ".join(list_values)
+                index = lookahead - 1
         if value:
             meta[key] = value
+        index += 1
     return meta
 
 
@@ -573,6 +600,33 @@ def source_x_post_link_html(meta: dict[str, str]) -> str:
         f'rel="noopener">{escaped_url}</a>'
         "</p>\n"
     )
+
+
+def _clean_author_name(value: str) -> str:
+    value = value.strip()
+    if value.startswith("[[") and value.endswith("]]"):
+        value = value[2:-2].strip()
+    if "|" in value:
+        value = value.split("|", 1)[1].rstrip("]").strip()
+    return value
+
+
+def author_html(meta: dict[str, str]) -> str:
+    """Render a visible author line when Markdown front matter provides one."""
+    raw_author = (meta.get("author") or "").strip()
+    if not raw_author:
+        return ""
+
+    authors = [
+        _clean_author_name(part)
+        for part in re.split(r"\s*,\s*", raw_author)
+        if _clean_author_name(part)
+    ]
+    if not authors:
+        return ""
+
+    escaped_author = html.escape(", ".join(authors))
+    return f'<p class="docflow-author">By {escaped_author}</p>\n'
 
 
 def clean_duplicate_markdown_links(text: str) -> str:
@@ -1157,12 +1211,17 @@ def markdown_to_html(md_text: str, title: str = None) -> str:
     meta_tags = front_matter_meta_tags(front_matter)
     original_link = original_source_link_html(front_matter)
     source_x_post_link = source_x_post_link_html(front_matter)
+    author_line = author_html(front_matter)
     return (
         "<!DOCTYPE html>\n"
         "<html>\n<head>\n<meta charset=\"UTF-8\">\n"
         f"{meta_tags}"
         f"{title_tag}"
+        "<style>\n"
+        ".docflow-author { color: #555; font-size: 0.95rem; margin: 0 0 1.5rem; }\n"
+        "</style>\n"
         "</head>\n<body>\n"
+        f"{author_line}"
         f"{original_link}"
         f"{source_x_post_link}"
         f"{html_body}\n"

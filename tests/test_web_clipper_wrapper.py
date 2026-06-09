@@ -3,6 +3,7 @@ from pathlib import Path
 from web_clipper_wrapper import (
     _html_bridge_redirect_url,
     attempts_for_url,
+    build_template,
     clean_html_for_markdown,
     default_output_path,
     fetch_html,
@@ -173,6 +174,14 @@ def test_original_published_metadata_uses_markdown_before_url_path():
         "docflow_original_published_at": "2026-05-02",
         "docflow_original_published_source": "markdown_text:first_lines",
     }
+
+
+def test_build_template_requests_author_from_clipper():
+    attempt = attempts_for_url("https://example.com/article")[0]
+
+    template = build_template(attempt)
+
+    assert {"name": "author", "value": "{{author}}", "type": "multitext"} in template["properties"]
 
 
 def test_attempts_for_esade_include_domain_rule_after_content():
