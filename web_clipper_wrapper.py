@@ -17,7 +17,7 @@ import subprocess
 import tempfile
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Iterable, List, Sequence
+from typing import Any, Iterable, List, Sequence
 from urllib.parse import unquote, urlparse
 
 import requests
@@ -447,6 +447,99 @@ def original_published_metadata(html: str, markdown: str, *, url: str) -> dict[s
     }
 
 
+def _iter_json_ld_nodes(value: Any) -> Iterable[dict[str, Any]]:
+    if isinstance(value, dict):
+        yield value
+        graph = value.get("@graph")
+        if isinstance(graph, list):
+            for item in graph:
+                yield from _iter_json_ld_nodes(item)
+    elif isinstance(value, list):
+        for item in value:
+            yield from _iter_json_ld_nodes(item)
+
+
+def _json_ld_type_matches(node: dict[str, Any], wanted: set[str]) -> bool:
+    raw_type = node.get("@type")
+    if isinstance(raw_type, str):
+        types = {raw_type}
+    elif isinstance(raw_type, list):
+        types = {str(item) for item in raw_type}
+    else:
+        types = set()
+    return bool(types & wanted)
+
+
+def _author_name_from_value(value: Any) -> str:
+    if isinstance(value, str):
+        return value.strip()
+    if isinstance(value, dict):
+        for key in ("name", "alternateName"):
+            candidate = str(value.get(key) or "").strip()
+            if candidate:
+                return candidate
+    if isinstance(value, list):
+        names = [_author_name_from_value(item) for item in value]
+        return ", ".join(name for name in names if name)
+    return ""
+
+
+def _clean_extracted_author(value: str) -> str:
+    author = " ".join(value.split()).strip(" \t\r\n-|•")
+    if not author:
+        return ""
+    lowered = author.lower()
+    if lowered.startswith(("http://", "https://")):
+        return ""
+    if "://" in lowered or lowered in {"subscribe", "sign in"}:
+        return ""
+    return author
+
+
+def author_metadata(html: str) -> dict[str, str]:
+    """Return author metadata discovered from common article HTML hints."""
+    soup = BeautifulSoup(html, "html.parser")
+    article_types = {"Article", "NewsArticle", "BlogPosting", "ReportageNewsArticle"}
+
+    for script in soup.find_all("script", attrs={"type": "application/ld+json"}):
+        raw = script.string or script.get_text("", strip=True)
+        if not raw:
+            continue
+        try:
+            payload = json.loads(raw)
+        except json.JSONDecodeError:
+            continue
+        for node in _iter_json_ld_nodes(payload):
+            if not _json_ld_type_matches(node, article_types):
+                continue
+            author = _clean_extracted_author(_author_name_from_value(node.get("author")))
+            if author:
+                return {"author": author}
+
+    meta_selectors = (
+        {"name": "author"},
+        {"property": "article:author"},
+        {"property": "og:article:author"},
+        {"name": "byl"},
+        {"name": "parsely-author"},
+    )
+    for attrs in meta_selectors:
+        tag = soup.find("meta", attrs=attrs)
+        if not tag:
+            continue
+        author = _clean_extracted_author(str(tag.get("content") or ""))
+        if author:
+            return {"author": author}
+
+    rel_author = soup.find("a", rel=lambda value: value and "author" in value)
+    if rel_author:
+        author = _clean_extracted_author(rel_author.get_text(" ", strip=True))
+        if author:
+            return {"author": author}
+
+    return {}
+
+
 def default_output_path(output_dir: Path, url: str) -> Path:
     """Build a stable, docflow-friendly filename from the URL path."""
     parsed = urlparse(url)
@@ -528,6 +621,7 @@ def download_url_to_markdown(
                 extra_metadata.update(
                     original_published_metadata(html, markdown, url=final_url)
                 )
+                extra_metadata.update(author_metadata(html))
                 if url.rstrip("/") != final_url.rstrip("/"):
                     extra_metadata["docflow_original_url"] = url
                 if source_x_post_url and source_x_post_url.startswith(

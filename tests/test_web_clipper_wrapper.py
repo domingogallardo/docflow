@@ -3,6 +3,7 @@ from pathlib import Path
 from web_clipper_wrapper import (
     _html_bridge_redirect_url,
     attempts_for_url,
+    author_metadata,
     build_template,
     clean_html_for_markdown,
     default_output_path,
@@ -174,6 +175,60 @@ def test_original_published_metadata_uses_markdown_before_url_path():
         "docflow_original_published_at": "2026-05-02",
         "docflow_original_published_source": "markdown_text:first_lines",
     }
+
+
+def test_author_metadata_reads_json_ld_article_author():
+    html = """
+    <html><head>
+      <script type="application/ld+json">
+        {
+          "@type": "BlogPosting",
+          "author": {"@type": "Person", "name": "M.G. Siegler"}
+        }
+      </script>
+    </head></html>
+    """
+
+    assert author_metadata(html) == {"author": "M.G. Siegler"}
+
+
+def test_author_metadata_reads_json_ld_graph_article_author():
+    html = """
+    <html><head>
+      <script type="application/ld+json">
+        {
+          "@context": "https://schema.org",
+          "@graph": [
+            {"@type": "WebSite", "name": "Example"},
+            {
+              "@type": ["Article", "BlogPosting"],
+              "author": [
+                {"@type": "Person", "name": "Ada Lovelace"},
+                {"@type": "Person", "name": "Grace Hopper"}
+              ]
+            }
+          ]
+        }
+      </script>
+    </head></html>
+    """
+
+    assert author_metadata(html) == {"author": "Ada Lovelace, Grace Hopper"}
+
+
+def test_author_metadata_uses_meta_author_fallback():
+    html = '<html><head><meta name="author" content="Tyler Cowen"></head></html>'
+
+    assert author_metadata(html) == {"author": "Tyler Cowen"}
+
+
+def test_author_metadata_ignores_url_only_article_author():
+    html = (
+        '<html><head><meta property="article:author" '
+        'content="https://example.com/authors/alice"></head></html>'
+    )
+
+    assert author_metadata(html) == {}
 
 
 def test_build_template_requests_author_from_clipper():
