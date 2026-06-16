@@ -11,6 +11,7 @@ from typing import Callable, Iterable, List, Optional
 from path_utils import unique_pair
 
 RenameFunc = Callable[[Path, str], Path]
+MIN_REASONING_OUTPUT_TOKENS = 128
 
 
 class TitleAIUpdater:
@@ -167,6 +168,7 @@ class TitleAIUpdater:
     ) -> str:
         delay = 1.0
         last_err: Optional[Exception] = None
+        output_budget = max(max_tokens, MIN_REASONING_OUTPUT_TOKENS)
 
         for attempt in range(1, retries + 1):
             try:
@@ -180,8 +182,8 @@ class TitleAIUpdater:
                     model=self.model,
                     instructions=system,
                     input=prompt,
-                    max_output_tokens=max_tokens,
-                    reasoning={"effort": "minimal"},
+                    max_output_tokens=output_budget,
+                    reasoning={"effort": "low"},
                     text={"verbosity": "low"},
                 )
 
@@ -225,6 +227,20 @@ class TitleAIUpdater:
                     if text:
                         return text
 
+                incomplete_details = getattr(resp, "incomplete_details", None)
+                incomplete_reason = ""
+                if isinstance(incomplete_details, dict):
+                    incomplete_reason = str(incomplete_details.get("reason", ""))
+                elif incomplete_details is not None:
+                    incomplete_reason = str(getattr(incomplete_details, "reason", ""))
+                if (
+                    getattr(resp, "status", None) == "incomplete"
+                    and incomplete_reason == "max_output_tokens"
+                    and attempt < retries
+                ):
+                    output_budget *= 2
+                    continue
+
                 try:
                     debug_payload = resp.model_dump() if hasattr(resp, "model_dump") else repr(resp)
                     print(f"🛠️ DEBUG empty OpenAI response: {debug_payload}")
@@ -246,6 +262,14 @@ class TitleAIUpdater:
                     or "temporarily unavailable" in msg
                     or "rate limit" in msg
                 )
+                token_budget_error = (
+                    isinstance(status, int)
+                    and status == 400
+                    and "max_output_tokens" in msg
+                )
+                if attempt < retries and token_budget_error:
+                    output_budget *= 2
+                    continue
                 if attempt < retries and transient:
                     time.sleep(delay + random.uniform(0, 0.5))
                     delay = min(delay * 2, 20)

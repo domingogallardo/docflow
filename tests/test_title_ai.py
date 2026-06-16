@@ -4,6 +4,58 @@ from pathlib import Path
 from title_ai import TitleAIUpdater
 
 
+class _FakeResponse:
+    def __init__(
+        self,
+        output_text: str = "Generated title",
+        *,
+        status: str | None = None,
+        incomplete_reason: str | None = None,
+    ) -> None:
+        self.output_text = output_text
+        self.status = status
+        self.incomplete_details = (
+            {"reason": incomplete_reason} if incomplete_reason else None
+        )
+
+
+class _FakeResponses:
+    def __init__(self, responses: list[_FakeResponse] | None = None) -> None:
+        self.calls = []
+        self._responses = responses or [_FakeResponse()]
+
+    def create(self, **kwargs):
+        self.calls.append(kwargs)
+        return self._responses.pop(0)
+
+
+class _FakeClient:
+    def __init__(self, responses: list[_FakeResponse] | None = None) -> None:
+        self.responses = _FakeResponses(responses)
+
+
+def test_ai_text_uses_low_reasoning_effort() -> None:
+    client = _FakeClient()
+    updater = TitleAIUpdater(ai_client=client)
+
+    assert updater._ai_text(system="System", prompt="Prompt", max_tokens=8) == "Generated title"
+    assert client.responses.calls[0]["reasoning"] == {"effort": "low"}
+    assert client.responses.calls[0]["max_output_tokens"] == 128
+
+
+def test_ai_text_retries_incomplete_token_budget() -> None:
+    client = _FakeClient(
+        [
+            _FakeResponse("", status="incomplete", incomplete_reason="max_output_tokens"),
+            _FakeResponse("Generated title"),
+        ]
+    )
+    updater = TitleAIUpdater(ai_client=client)
+
+    assert updater._ai_text(system="System", prompt="Prompt", max_tokens=8) == "Generated title"
+    assert [call["max_output_tokens"] for call in client.responses.calls] == [128, 256]
+
+
 def test_extract_language_sample_ignores_tweet_boilerplate(tmp_path: Path) -> None:
     content = (
         "---\n"

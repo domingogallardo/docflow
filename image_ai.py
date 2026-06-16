@@ -83,8 +83,8 @@ class ImageAIDescriber:
                         ],
                     }
                 ],
-                max_output_tokens=48,
-                reasoning={"effort": "minimal"},
+                max_output_tokens=128,
+                reasoning={"effort": "low"},
                 text={"verbosity": "low"},
             )
         except Exception as exc:
