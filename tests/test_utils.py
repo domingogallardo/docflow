@@ -149,6 +149,36 @@ def test_add_margins_reuses_existing_anchor_and_fixes_nested_image_links(tmp_pat
     assert img.get("src") == "https://img.test/thumb.jpg"
 
 
+def test_add_margins_uses_card_image_src_for_zoom(tmp_path):
+    from bs4 import BeautifulSoup
+
+    html = tmp_path / "sample.html"
+    html.write_text(
+        (
+            "<html><head></head><body>"
+            '<div class="docflow-link-card">'
+            '<a class="docflow-link-card__image-link" href="https://t.co/card">'
+            '<img class="docflow-link-card__image" src="https://img.test/card.jpg">'
+            "</a>"
+            '<a class="docflow-link-card__title" href="https://t.co/card">Card</a>'
+            "</div>"
+            "</body></html>"
+        ),
+        encoding="utf-8",
+    )
+
+    utils.add_margins_to_html_files(tmp_path)
+
+    out = html.read_text(encoding="utf-8")
+    soup = BeautifulSoup(out, "html.parser")
+    link = soup.find("a", class_="docflow-link-card__image-link")
+    assert link is not None
+    assert link.get("href") == "https://t.co/card"
+    assert link.get("data-image-zoom-src") == "https://img.test/card.jpg"
+    assert "image-zoom" in (link.get("class") or [])
+    assert 'data-image-zoom-src") || link.getAttribute("href")' in out
+
+
 def test_add_margins_adds_wrapped_pre_styles(tmp_path):
     html = tmp_path / "sample.html"
     html.write_text("<html><head></head><body><pre><code>Long prose line</code></pre></body></html>", encoding="utf-8")
@@ -847,6 +877,26 @@ def test_markdown_to_html_renders_markdown_link_card_as_card():
     assert 'class="docflow-link-card__title"' in html
     assert 'src="https://example.com/card.jpg"' in html
     assert "[!link-card]" not in html
+
+
+def test_markdown_to_html_renders_bare_url_link_card_without_bracket_artifact():
+    from utils import markdown_to_html
+
+    md = "\n".join(
+        [
+            "# Tweet",
+            "",
+            "> [!link-card]",
+            "> https://t.co/osNHgNwBu7",
+            "> t.co",
+        ]
+    )
+
+    html = markdown_to_html(md, title="Tweet")
+
+    assert '<a class="docflow-link-card__title" href="https://t.co/osNHgNwBu7"' in html
+    assert ">https://t.co/osNHgNwBu7</a>" in html
+    assert "[https://t.co/osNHgNwBu7" not in html
 
 
 def test_markdown_to_html_renders_inline_front_matter_author():

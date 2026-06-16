@@ -130,6 +130,7 @@ SUBSCRIBE_PROMPT_LABELS_NORMALIZED = {
     "click to subscribe",
 }
 PLATFORM_UI_PROMPT_LABELS_NORMALIZED = {
+    "alt",
     "last edited",
     "opens edit history",
     "view activity",
@@ -2461,6 +2462,25 @@ def _extract_tweet_parts(
                 url=link_card.url if link_card and link_card.url else text_link_card.url,
             )
 
+    if link_card and (link_card.title or link_card.description) and not link_card.image_url:
+        card_image_url = next(
+            (candidate for _, candidate in image_candidates if "/card_img/" in candidate),
+            None,
+        )
+        if card_image_url:
+            link_card = LinkCard(
+                domain=link_card.domain,
+                title=link_card.title,
+                description=link_card.description,
+                image_url=card_image_url,
+                url=link_card.url,
+            )
+            image_candidates = [
+                (img, candidate)
+                for img, candidate in image_candidates
+                if candidate != card_image_url
+            ]
+
     has_quote_marker = _has_quote_marker(body_text)
     body_text = _insert_quote_separator(
         body_text,
@@ -2729,7 +2749,7 @@ def _should_append_external_link(body_text: str, external_link: str | None) -> b
 
 
 def _link_card_metadata(card: LinkCard | None) -> dict[str, object]:
-    if card is None:
+    if not _is_meaningful_link_card(card):
         return {}
     return {
         "tweet_link_card_domain": card.domain or "",
@@ -2740,10 +2760,14 @@ def _link_card_metadata(card: LinkCard | None) -> dict[str, object]:
     }
 
 
-def _append_link_card_lines(lines: List[str], card: LinkCard | None) -> None:
+def _is_meaningful_link_card(card: LinkCard | None) -> bool:
     if card is None:
-        return
-    if not any([card.domain, card.title, card.description, card.image_url, card.url]):
+        return False
+    return bool(card.title or card.description or card.image_url)
+
+
+def _append_link_card_lines(lines: List[str], card: LinkCard | None) -> None:
+    if not _is_meaningful_link_card(card):
         return
 
     lines.extend(

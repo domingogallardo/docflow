@@ -287,6 +287,27 @@ def test_strip_platform_inline_prompts_removes_show_translation_line():
     assert result == "Autor\n@handle\nContenido válido."
 
 
+def test_strip_platform_inline_prompts_removes_alt_label_line():
+    raw = "\n".join(
+        [
+            "Tweet body.",
+            "https://example.com/post",
+            "ALT",
+            "[![image 1](https://example.com/image.jpg)](https://example.com/image.jpg)",
+        ]
+    )
+
+    result = strip_platform_inline_prompts(raw)
+
+    assert result == "\n".join(
+        [
+            "Tweet body.",
+            "https://example.com/post",
+            "[![image 1](https://example.com/image.jpg)](https://example.com/image.jpg)",
+        ]
+    )
+
+
 def test_strip_platform_inline_prompts_removes_translation_variants():
     raw = "\n".join(
         [
@@ -1124,6 +1145,31 @@ def test_build_single_tweet_markdown_renders_link_card_separately():
     assert "> I propose an approach..." in md
     assert '<aside class="docflow-link-card">' not in md
     assert "Image: https://pbs.twimg.com/card_img.jpg" not in md
+
+
+def test_build_single_tweet_markdown_skips_bare_external_link_card():
+    parts = TweetParts(
+        author_name="Thomas Bloom",
+        author_handle="@thomasfbloom",
+        body_text="A new blog post on Erdős, aliens, and evil spirits.\n\nhttps://erdosproblems.com/forum/thread/blog:7",
+        avatar_url=None,
+        trailing_media_lines=[],
+        media_present=False,
+        external_link="https://t.co/8osQ5DQGDn",
+        link_card=LinkCard(
+            domain="t.co",
+            url="https://t.co/8osQ5DQGDn",
+        ),
+    )
+
+    md = _build_single_tweet_markdown(
+        parts,
+        "https://x.com/thomasfbloom/status/2066551645845020755",
+    )
+
+    assert "> [!link-card]" not in md
+    assert "tweet_link_card_domain:" not in md
+    assert "Original link: https://t.co/8osQ5DQGDn" in md
 
 
 def test_build_thread_markdown_strips_repeated_author_headers():

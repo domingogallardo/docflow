@@ -31,6 +31,10 @@ def _ensure_image_zoom_class(anchor) -> None:
         anchor["class"] = classes
 
 
+def _is_link_card_image_anchor(anchor) -> bool:
+    return "docflow-link-card__image-link" in _normalized_anchor_classes(anchor)
+
+
 def _simplify_anchor_image_path(anchor, img) -> None:
     while True:
         parent = img.parent
@@ -138,7 +142,7 @@ def add_margins_to_html_files(directory: Path, file_filter=None):
         "  document.addEventListener(\"click\", function(e){\n"
         "    var link = e.target.closest(\"a.image-zoom\");\n"
         "    if(!link){ return; }\n"
-        "    var src = link.getAttribute(\"href\");\n"
+        "    var src = link.getAttribute(\"data-image-zoom-src\") || link.getAttribute(\"href\");\n"
         "    if(!src){ return; }\n"
         "    var img = link.querySelector(\"img\");\n"
         "    var alt = img ? (img.getAttribute(\"alt\") || \"\") : \"\";\n"
@@ -171,6 +175,8 @@ def add_margins_to_html_files(directory: Path, file_filter=None):
                     keep_anchor = anchor_ancestors[-1]
                     for nested_anchor in anchor_ancestors[:-1]:
                         nested_anchor.unwrap()
+                    if _is_link_card_image_anchor(keep_anchor):
+                        keep_anchor["data-image-zoom-src"] = src
                     _ensure_image_zoom_class(keep_anchor)
                     _simplify_anchor_image_path(keep_anchor, img)
                     continue

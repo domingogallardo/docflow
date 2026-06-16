@@ -295,6 +295,15 @@ def _parse_markdown_link_card_lines(lines: list[str]) -> dict[str, str | None]:
             card["url"] = card["url"] or bold_link_match.group("url")
             continue
 
+        link_match = _MARKDOWN_LINK_RE.match(line)
+        if link_match:
+            title = link_match.group("title")
+            url = link_match.group("url")
+            card["url"] = card["url"] or url
+            if title != url:
+                card["title"] = card["title"] or title
+            continue
+
         if line.startswith("!["):
             link_match = re.match(r"^!\[[^\]]*\]\((?P<image>https?://[^)]+)\)$", line)
             if link_match:
@@ -346,9 +355,11 @@ def _parse_legacy_link_card_lines(lines: list[str]) -> dict[str, str | None]:
         elif lowered == "description":
             card["description"] = value
         elif lowered == "image":
-            card["image_url"] = value
+            image_link = _MARKDOWN_LINK_RE.match(value)
+            card["image_url"] = image_link.group("url") if image_link else value
         elif lowered == "url":
-            card["url"] = value
+            url_link = _MARKDOWN_LINK_RE.match(value)
+            card["url"] = url_link.group("url") if url_link else value
 
     return card
 
@@ -1486,8 +1497,8 @@ def markdown_to_html(md_text: str, title: str = None) -> str:
     md_body = normalize_youtube_image_links(md_body)
     md_body = normalize_multiline_x_embeds(md_body)
     md_body = normalize_markdown_block_links(md_body)
-    md_body = normalize_docflow_link_cards(md_body)
     md_body = convert_urls_to_links(md_body)
+    md_body = normalize_docflow_link_cards(md_body)
 
     try:
         html_body = markdown.markdown(
