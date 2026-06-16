@@ -32,6 +32,8 @@ from utils.tweet_to_markdown import (
     _reply_parent_url_from_payload,
     _is_self_thread_parent,
     _extract_x_article_markdown_from_html,
+    _strip_link_card_from_body,
+    LinkCard,
 )
 
 
@@ -170,6 +172,105 @@ def test_strip_platform_inline_prompts_separates_glued_link_card():
             "Releases · steipete/birdclaw",
             "From github.com",
         ]
+    )
+
+
+def test_strip_link_card_from_body_removes_domain_first_card():
+    raw = "\n".join(
+        [
+            "Gwern acaba de publicar otro de esos artículos suyos imprescindibles",
+            "gwern.net",
+            "Guardian Angels: LLM Personalization for Productivity and Security",
+            "I propose an approach...",
+        ]
+    )
+
+    body, card = _strip_link_card_from_body(raw, "https://gwern.net/guardian-angels")
+
+    assert body == "Gwern acaba de publicar otro de esos artículos suyos imprescindibles"
+    assert card == LinkCard(
+        domain="gwern.net",
+        title="Guardian Angels: LLM Personalization for Productivity and Security",
+        description="I propose an approach...",
+        url="https://gwern.net/guardian-angels",
+    )
+
+
+def test_strip_link_card_from_body_handles_shortened_external_link():
+    raw = "\n".join(
+        [
+            "Gwern acaba de publicar otro de esos artículos suyos imprescindibles",
+            "gwern.net",
+            "Guardian Angels: LLM Personalization for Productivity and Security",
+            "I propose an approach...",
+            "",
+            "Original link: https://t.co/GPgbJLNlTz",
+        ]
+    )
+
+    body, card = _strip_link_card_from_body(raw, "https://t.co/GPgbJLNlTz")
+
+    assert body == "\n".join(
+        [
+            "Gwern acaba de publicar otro de esos artículos suyos imprescindibles",
+            "Original link: https://t.co/GPgbJLNlTz",
+        ]
+    )
+    assert card == LinkCard(
+        domain="gwern.net",
+        title="Guardian Angels: LLM Personalization for Productivity and Security",
+        description="I propose an approach...",
+        url="https://t.co/GPgbJLNlTz",
+    )
+
+
+def test_strip_link_card_from_body_removes_title_before_source_card():
+    raw = "\n".join(
+        [
+            "Wanted a truly local storage since they are not fully accessible via the api).",
+            "Releases · steipete/birdclaw",
+            "From github.com",
+        ]
+    )
+
+    body, card = _strip_link_card_from_body(raw, "https://github.com/steipete/birdclaw/releases")
+
+    assert body == "Wanted a truly local storage since they are not fully accessible via the api)."
+    assert card == LinkCard(
+        domain="github.com",
+        title="Releases · steipete/birdclaw",
+        url="https://github.com/steipete/birdclaw/releases",
+    )
+
+
+def test_strip_link_card_from_body_stops_before_metrics():
+    raw = "\n".join(
+        [
+            "Texto real del tweet.",
+            "example.com",
+            "Example title",
+            "Example description",
+            "8:59 PM · Mar 10, 2026",
+            "53.2K",
+            "Views",
+        ]
+    )
+
+    body, card = _strip_link_card_from_body(raw, "https://example.com/post")
+
+    assert body == "\n".join(
+        [
+            "Texto real del tweet.",
+            "8:59 PM · Mar 10, 2026",
+            "53.2K",
+            "Views",
+        ]
+    )
+    assert card == LinkCard(
+        domain="example.com",
+        title="Example title",
+        description="Example description",
+        url="https://example.com/post",
     )
 
 
@@ -988,6 +1089,39 @@ def test_build_single_tweet_markdown_skips_duplicate_external_link():
     )
     md = _build_single_tweet_markdown(parts, "https://x.com/autor/status/123")
     assert "Original link: https://example.com/post" not in md
+
+
+def test_build_single_tweet_markdown_renders_link_card_separately():
+    parts = TweetParts(
+        author_name="Domingo Gallardo",
+        author_handle="@domingogallardo",
+        body_text="Gwern acaba de publicar otro de esos artículos suyos imprescindibles",
+        avatar_url=None,
+        trailing_media_lines=[],
+        media_present=False,
+        external_link="https://gwern.net/guardian-angels",
+        link_card=LinkCard(
+            domain="gwern.net",
+            title="Guardian Angels: LLM Personalization for Productivity and Security",
+            description="I propose an approach...",
+            image_url="https://pbs.twimg.com/card_img.jpg",
+            url="https://gwern.net/guardian-angels",
+        ),
+    )
+
+    md = _build_single_tweet_markdown(
+        parts,
+        "https://x.com/domingogallardo/status/2063875732191715779",
+        capture_source="posted",
+    )
+
+    body_index = md.index("Gwern acaba de publicar otro de esos artículos suyos imprescindibles")
+    card_index = md.index("#### Link card")
+    assert body_index < card_index
+    assert "tweet_link_card_domain: gwern.net" in md
+    assert "tweet_link_card_url: https://gwern.net/guardian-angels" in md
+    assert "[Guardian Angels: LLM Personalization for Productivity and Security](https://gwern.net/guardian-angels)" in md
+    assert "Description: I propose an approach..." in md
 
 
 def test_build_thread_markdown_strips_repeated_author_headers():

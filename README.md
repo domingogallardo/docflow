@@ -185,7 +185,10 @@ Source-specific fields:
   `tweet_capture_source`, `tweet_content_type`, `tweet_posted_kind`,
   `tweet_thread`, `tweet_thread_count`, `tweet_reply_to_url`,
   `tweet_reply_context_included`, `tweet_conversation_count`,
-  `tweet_consolidated_url`, and `tweet_consolidated_anchor`.
+  `tweet_link_card_domain`, `tweet_link_card_title`,
+  `tweet_link_card_description`, `tweet_link_card_image`,
+  `tweet_link_card_url`, `tweet_consolidated_url`, and
+  `tweet_consolidated_anchor`.
 
 Supported fields are also exported to generated HTML as `docflow-*` meta tags
 where relevant, for example `docflow-source-url`, `docflow-html-generated-at`,

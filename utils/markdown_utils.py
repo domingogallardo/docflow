@@ -48,6 +48,11 @@ _FRONT_MATTER_KEYS = {
     "tweet_reply_to_url": "docflow-tweet-reply-to-url",
     "tweet_reply_context_included": "docflow-tweet-reply-context-included",
     "tweet_conversation_count": "docflow-tweet-conversation-count",
+    "tweet_link_card_domain": "docflow-tweet-link-card-domain",
+    "tweet_link_card_title": "docflow-tweet-link-card-title",
+    "tweet_link_card_description": "docflow-tweet-link-card-description",
+    "tweet_link_card_image": "docflow-tweet-link-card-image",
+    "tweet_link_card_url": "docflow-tweet-link-card-url",
 }
 
 _REMOVED_IMPORTED_FRONT_MATTER_KEYS = frozenset({"description", "tags"})

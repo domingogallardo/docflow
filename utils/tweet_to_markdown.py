@@ -355,6 +355,15 @@ UNAVAILABLE_TEXT_HINTS = (
 
 
 @dataclass(frozen=True)
+class LinkCard:
+    domain: str | None = None
+    title: str | None = None
+    description: str | None = None
+    image_url: str | None = None
+    url: str | None = None
+
+
+@dataclass(frozen=True)
 class TweetParts:
     author_name: str | None
     author_handle: str | None
@@ -363,6 +372,7 @@ class TweetParts:
     trailing_media_lines: List[str]
     media_present: bool
     external_link: str | None
+    link_card: LinkCard | None = None
     is_article: bool = False
 
 
@@ -572,6 +582,125 @@ def normalize_glued_link_card_breaks(text: str) -> str:
     """Separate compact X link-card title/source text from the tweet body."""
     text = LINK_CARD_SOURCE_RE.sub(r"\n\g<source>", text)
     return LINK_CARD_TITLE_BOUNDARY_RE.sub("\n", text)
+
+
+def _domain_variants(url_or_domain: str | None) -> set[str]:
+    if not url_or_domain:
+        return set()
+    value = url_or_domain.strip()
+    if not value:
+        return set()
+    parsed = urlparse(value if "://" in value else f"https://{value}")
+    host = (parsed.netloc or parsed.path).split("@")[-1].split(":")[0].lower()
+    if not host:
+        return set()
+    variants = {host}
+    if host.startswith("www."):
+        variants.add(host[4:])
+    else:
+        variants.add(f"www.{host}")
+    return variants
+
+
+def _line_domain(line: str) -> str | None:
+    stripped = line.strip()
+    if not stripped:
+        return None
+    match = re.match(r"^(?:From|De)\s+([A-Za-z0-9][A-Za-z0-9.-]*\.[A-Za-z]{2,})$", stripped)
+    if match:
+        return match.group(1).lower()
+    if re.match(r"^[A-Za-z0-9][A-Za-z0-9.-]*\.[A-Za-z]{2,}$", stripped):
+        return stripped.lower()
+    return None
+
+
+def _is_probable_card_stop_line(line: str) -> bool:
+    stripped = line.strip()
+    if not stripped:
+        return False
+    return (
+        _is_timestamp_line(stripped)
+        or _is_metric_only_line(stripped)
+        or _is_keyword_stat(stripped)
+        or _is_show_more_line(stripped)
+        or stripped.startswith("Original link:")
+        or stripped.lower() in QUOTE_MARKERS
+    )
+
+
+def _strip_link_card_from_body(
+    text: str,
+    external_link: str | None,
+    *,
+    link_card: LinkCard | None = None,
+) -> tuple[str, LinkCard | None]:
+    """Remove X link-card preview text from tweet body and return captured card data."""
+    domain_candidates = _domain_variants(external_link)
+    if link_card:
+        domain_candidates.update(_domain_variants(link_card.domain))
+        domain_candidates.update(_domain_variants(link_card.url))
+    shortener_domains = {"t.co", "www.t.co"}
+
+    lines = text.splitlines()
+    for idx, line in enumerate(lines):
+        domain = _line_domain(line)
+        if not domain:
+            continue
+        domain_matches = domain in domain_candidates
+        can_use_preview_domain = not domain_candidates or domain_candidates <= shortener_domains
+        if not domain_matches and not can_use_preview_domain:
+            continue
+
+        if idx == 0:
+            start = idx
+            title = None
+        elif line.strip().lower().startswith(("from ", "de ")):
+            start = idx - 1
+            while start > 0 and not lines[start].strip():
+                start -= 1
+            title = lines[start].strip() or None
+        else:
+            start = idx
+            title = None
+
+        if start <= 0 and not any(candidate.strip() for candidate in lines[:start]):
+            continue
+
+        end = idx + 1
+        while end < len(lines):
+            candidate = lines[end].strip()
+            if _is_probable_card_stop_line(candidate):
+                break
+            end += 1
+
+        if title is None:
+            title_idx = idx + 1
+            while title_idx < end and not lines[title_idx].strip():
+                title_idx += 1
+            title = lines[title_idx].strip() if title_idx < end else None
+            description_lines = [
+                candidate.strip()
+                for candidate in lines[title_idx + 1 : end]
+                if candidate.strip()
+            ]
+        else:
+            description_lines = [
+                candidate.strip()
+                for candidate in lines[idx + 1 : end]
+                if candidate.strip()
+            ]
+
+        kept = lines[:start] + lines[end:]
+        cleaned = "\n".join(_collapse_blank_lines([candidate.strip() for candidate in kept])).strip()
+        card = LinkCard(
+            domain=domain,
+            title=title,
+            description=" ".join(description_lines).strip() or None,
+            url=external_link,
+        )
+        return cleaned, card
+
+    return text.strip(), None
 
 
 def strip_platform_inline_prompts(
@@ -2164,6 +2293,73 @@ def _extract_primary_link(article, tweet_url: str) -> str | None:
     return None
 
 
+def _extract_link_card(article, external_link: str | None) -> LinkCard | None:
+    if not external_link:
+        return None
+
+    normalized_link = _normalize_link_for_match(external_link)
+    link_domains = _domain_variants(external_link)
+    for anchor in article.locator("a").all():
+        href = anchor.get_attribute("href") or ""
+        expanded = (
+            anchor.get_attribute("data-expanded-url")
+            or anchor.get_attribute("data-full-url")
+            or href
+        )
+        candidate = (expanded or "").strip()
+        if not candidate.startswith(("http://", "https://")):
+            continue
+        if _normalize_link_for_match(candidate) != normalized_link:
+            continue
+
+        try:
+            raw_text = anchor.inner_text(timeout=1000)
+        except Exception:
+            raw_text = ""
+
+        text_lines = [line.strip() for line in raw_text.splitlines() if line.strip()]
+        domain = None
+        title = None
+        description = None
+        if text_lines:
+            for idx, line in enumerate(text_lines):
+                line_domain = _line_domain(line)
+                if line_domain and line_domain in link_domains:
+                    domain = line_domain
+                    if idx == 0:
+                        if idx + 1 < len(text_lines):
+                            title = text_lines[idx + 1]
+                        if idx + 2 < len(text_lines):
+                            description = " ".join(text_lines[idx + 2 :])
+                    else:
+                        title = text_lines[idx - 1]
+                        if idx + 1 < len(text_lines):
+                            description = " ".join(text_lines[idx + 1 :])
+                    break
+
+        if domain is None:
+            domain = next(iter(_domain_variants(candidate)), None)
+
+        image_url = None
+        for img in anchor.locator("img").all():
+            src = img.get_attribute("src") or ""
+            if not src or _emoji_from_twimg_url(src):
+                continue
+            image_url = src
+            break
+
+        if any([domain, title, description, image_url]):
+            return LinkCard(
+                domain=domain,
+                title=title,
+                description=description,
+                image_url=image_url,
+                url=external_link,
+            )
+
+    return None
+
+
 def _extract_tweet_parts(
     article,
     tweet_url: str,
@@ -2174,6 +2370,7 @@ def _extract_tweet_parts(
     anchor_handle = _anchor_handle_for_tweet(page, tweet_url) if page is not None else None
     author_name, author_handle = _extract_author_details(article)
     external_link = _extract_primary_link(article, tweet_url)
+    link_card = _extract_link_card(article, external_link)
 
     quoted_tweet_url = None
     if quoted_status_id:
@@ -2201,6 +2398,8 @@ def _extract_tweet_parts(
                 if parts:
                     candidate = parts[-1].split(" ")[0]
         if candidate and _emoji_from_twimg_url(candidate):
+            continue
+        if candidate and link_card and candidate == link_card.image_url:
             continue
         if candidate and candidate not in seen:
             seen.add(candidate)
@@ -2235,6 +2434,32 @@ def _extract_tweet_parts(
                 author_handle=author_handle,
             )
         )
+        body_text, text_link_card = _strip_link_card_from_body(
+            body_text,
+            external_link,
+            link_card=link_card,
+        )
+        if text_link_card:
+            existing_domain = link_card.domain if link_card else None
+            use_text_domain = (
+                not existing_domain
+                or _domain_variants(existing_domain) <= {"t.co", "www.t.co"}
+            )
+            link_card = LinkCard(
+                domain=(
+                    text_link_card.domain
+                    if use_text_domain
+                    else existing_domain
+                ),
+                title=link_card.title if link_card and link_card.title else text_link_card.title,
+                description=(
+                    link_card.description
+                    if link_card and link_card.description
+                    else text_link_card.description
+                ),
+                image_url=link_card.image_url if link_card and link_card.image_url else None,
+                url=link_card.url if link_card and link_card.url else text_link_card.url,
+            )
 
     has_quote_marker = _has_quote_marker(body_text)
     body_text = _insert_quote_separator(
@@ -2273,6 +2498,7 @@ def _extract_tweet_parts(
         trailing_media_lines=trailing_media_lines,
         media_present=media_present,
         external_link=external_link,
+        link_card=link_card,
         is_article=bool(article_markdown),
     )
 
@@ -2502,6 +2728,40 @@ def _should_append_external_link(body_text: str, external_link: str | None) -> b
     return normalized not in body_text.lower()
 
 
+def _link_card_metadata(card: LinkCard | None) -> dict[str, object]:
+    if card is None:
+        return {}
+    return {
+        "tweet_link_card_domain": card.domain or "",
+        "tweet_link_card_title": card.title or "",
+        "tweet_link_card_description": card.description or "",
+        "tweet_link_card_image": card.image_url or "",
+        "tweet_link_card_url": card.url or "",
+    }
+
+
+def _append_link_card_lines(lines: List[str], card: LinkCard | None) -> None:
+    if card is None:
+        return
+    if not any([card.domain, card.title, card.description, card.image_url, card.url]):
+        return
+
+    lines.extend(["", "#### Link card"])
+    if card.title:
+        if card.url:
+            lines.append(f"[{card.title}]({card.url})")
+        else:
+            lines.append(card.title)
+    if card.domain:
+        lines.append(f"Domain: {card.domain}")
+    if card.description:
+        lines.append(f"Description: {card.description}")
+    if card.image_url:
+        lines.append(f"Image: {card.image_url}")
+    if card.url and not card.title:
+        lines.append(f"URL: {card.url}")
+
+
 def _build_single_tweet_markdown(
     parts: TweetParts,
     tweet_url: str,
@@ -2544,6 +2804,7 @@ def _build_single_tweet_markdown(
         front_matter["tweet_author_name"] = parts.author_name
     if parts.is_article:
         front_matter["tweet_content_type"] = "article"
+    front_matter.update(_link_card_metadata(parts.link_card))
 
     md_lines = [
         *front_matter_block(front_matter).splitlines(),
@@ -2561,11 +2822,13 @@ def _build_single_tweet_markdown(
         md_lines.extend(["", "---", "", f"#### {response_heading}"])
 
     _append_tweet_content_lines(md_lines, parts, strip_author=bool(parent_lines))
+    _append_link_card_lines(md_lines, parts.link_card)
 
     markdown = "\n".join(md_lines).strip() + "\n"
     extra_metadata = {"tweet_id": _status_id_from_url(tweet_url) or ""}
     if parts.is_article:
         extra_metadata["docflow_post_url"] = tweet_url
+    extra_metadata.update(_link_card_metadata(parts.link_card))
 
     return enrich_markdown_metadata(
         markdown,
@@ -2604,6 +2867,7 @@ def _build_thread_markdown(
         front_matter["tweet_author_name"] = target_parts.author_name
     if target_parts.is_article:
         front_matter["tweet_content_type"] = "article"
+    front_matter.update(_link_card_metadata(target_parts.link_card))
 
     md_lines = [*front_matter_block(front_matter).splitlines(), f"# {title}"]
     if target_parts.avatar_url:
@@ -2613,11 +2877,13 @@ def _build_thread_markdown(
         link_url = section_url or tweet_url
         md_lines.extend(["", "---", f"[View on X]({link_url})"])
         _append_tweet_content_lines(md_lines, parts, strip_author=True)
+        _append_link_card_lines(md_lines, parts.link_card)
 
     markdown = "\n".join(md_lines).strip() + "\n"
     extra_metadata = {"tweet_id": _status_id_from_url(tweet_url) or ""}
     if target_parts.is_article:
         extra_metadata["docflow_post_url"] = tweet_url
+    extra_metadata.update(_link_card_metadata(target_parts.link_card))
 
     return enrich_markdown_metadata(
         markdown,
