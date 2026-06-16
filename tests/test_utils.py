@@ -799,6 +799,56 @@ Body.
     assert soup.body.find() == author
 
 
+def test_markdown_to_html_renders_legacy_link_card_as_card():
+    from utils import markdown_to_html
+
+    md = "\n".join(
+        [
+            "# Tweet",
+            "",
+            "Texto real.",
+            "",
+            "\\#### Link card",
+            "[Example title](https://example.com/post)",
+            "Domain: example.com",
+            "Description: Example description.",
+            "Image: https://example.com/card.jpg",
+        ]
+    )
+
+    html = markdown_to_html(md, title="Tweet")
+
+    assert '<div class="docflow-link-card">' in html
+    assert 'class="docflow-link-card__title"' in html
+    assert 'src="https://example.com/card.jpg"' in html
+    assert "Image: https://example.com/card.jpg" not in html
+
+
+def test_markdown_to_html_renders_markdown_link_card_as_card():
+    from utils import markdown_to_html
+
+    md = "\n".join(
+        [
+            "# Tweet",
+            "",
+            "Texto real.",
+            "",
+            "> [!link-card]",
+            "> [![Link preview](https://example.com/card.jpg)](https://example.com/post)",
+            "> **[Example title](https://example.com/post)**",
+            "> example.com",
+            "> Example description.",
+        ]
+    )
+
+    html = markdown_to_html(md, title="Tweet")
+
+    assert '<div class="docflow-link-card">' in html
+    assert 'class="docflow-link-card__title"' in html
+    assert 'src="https://example.com/card.jpg"' in html
+    assert "[!link-card]" not in html
+
+
 def test_markdown_to_html_renders_inline_front_matter_author():
     from utils import markdown_to_html
 

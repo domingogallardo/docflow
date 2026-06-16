@@ -56,6 +56,301 @@ _FRONT_MATTER_KEYS = {
 }
 
 _REMOVED_IMPORTED_FRONT_MATTER_KEYS = frozenset({"description", "tags"})
+_LINK_CARD_HEADING_RE = re.compile(r"^\\?####\s+Link card\s*$", re.IGNORECASE)
+_LINK_CARD_CALLOUT_RE = re.compile(r"^>\s*\[!link-card\]\s*$", re.IGNORECASE)
+_MARKDOWN_HEADING_RE = re.compile(r"^\s{0,3}#{1,6}\s+")
+_MARKDOWN_LINK_RE = re.compile(r"^\[(?P<title>[^\]]+)\]\((?P<url>https?://[^)]+)\)$")
+_MARKDOWN_BOLD_LINK_RE = re.compile(
+    r"^\*\*\[(?P<title>[^\]]+)\]\((?P<url>https?://[^)]+)\)\*\*$"
+)
+_MARKDOWN_IMAGE_LINK_RE = re.compile(
+    r"^\[!\[[^\]]*\]\((?P<image>https?://[^)]+)\)\]\((?P<url>https?://[^)]+)\)$"
+)
+
+_DOCFLOW_LINK_CARD_CSS = (
+    ".docflow-link-card {"
+    " display: flex;"
+    " gap: 12px;"
+    " align-items: stretch;"
+    " max-width: 680px;"
+    " margin: 14px 0;"
+    " padding: 10px;"
+    " border: 1px solid #d6d9de;"
+    " border-radius: 10px;"
+    " background: #f8fafc;"
+    " box-sizing: border-box;"
+    "}\n"
+    ".docflow-link-card__image-link,"
+    " .docflow-link-card__image {"
+    " flex: 0 0 88px;"
+    " width: 88px;"
+    " min-height: 72px;"
+    " border-radius: 8px;"
+    " overflow: hidden;"
+    " background: #e5e7eb;"
+    "}\n"
+    ".docflow-link-card__image {"
+    " display: block;"
+    " height: 100%;"
+    " object-fit: cover;"
+    "}\n"
+    ".docflow-link-card__body {"
+    " min-width: 0;"
+    " display: flex;"
+    " flex-direction: column;"
+    " justify-content: center;"
+    " gap: 4px;"
+    "}\n"
+    ".docflow-link-card__domain {"
+    " color: #6b7280;"
+    " font-size: 0.85rem;"
+    " line-height: 1.25;"
+    "}\n"
+    ".docflow-link-card__title {"
+    " color: #111827;"
+    " font-weight: 650;"
+    " line-height: 1.3;"
+    " text-decoration: none;"
+    " overflow-wrap: anywhere;"
+    "}\n"
+    ".docflow-link-card__title:hover { text-decoration: underline; }\n"
+    ".docflow-link-card__description {"
+    " color: #374151;"
+    " font-size: 0.92rem;"
+    " line-height: 1.35;"
+    " margin: 0;"
+    "}\n"
+)
+
+
+def link_card_html(
+    *,
+    domain: str | None = None,
+    title: str | None = None,
+    description: str | None = None,
+    image_url: str | None = None,
+    url: str | None = None,
+) -> str:
+    """Return a compact HTML preview for an X link-card."""
+    safe_url = html.escape(url or "", quote=True)
+    safe_title = html.escape(title or "", quote=False)
+    safe_domain = html.escape(domain or "", quote=False)
+    safe_description = html.escape(description or "", quote=False)
+    safe_image_url = html.escape(image_url or "", quote=True)
+
+    chunks = ['<div class="docflow-link-card">']
+    if safe_image_url:
+        image = (
+            f'<img class="docflow-link-card__image" src="{safe_image_url}" '
+            'alt="" loading="lazy">'
+        )
+        if safe_url:
+            chunks.append(
+                f'<a class="docflow-link-card__image-link" href="{safe_url}" '
+                f'target="_blank" rel="noopener">{image}</a>'
+            )
+        else:
+            chunks.append(image)
+
+    chunks.append('<div class="docflow-link-card__body">')
+    if safe_title:
+        if safe_url:
+            chunks.append(
+                f'<a class="docflow-link-card__title" href="{safe_url}" '
+                f'target="_blank" rel="noopener">{safe_title}</a>'
+            )
+        else:
+            chunks.append(f'<div class="docflow-link-card__title">{safe_title}</div>')
+    elif safe_url:
+        chunks.append(
+            f'<a class="docflow-link-card__title" href="{safe_url}" '
+            f'target="_blank" rel="noopener">{safe_url}</a>'
+        )
+    if safe_domain:
+        chunks.append(f'<div class="docflow-link-card__domain">{safe_domain}</div>')
+    if safe_description:
+        chunks.append(f'<p class="docflow-link-card__description">{safe_description}</p>')
+    chunks.extend(["</div>", "</div>"])
+    return "".join(chunks)
+
+
+def link_card_markdown(
+    *,
+    domain: str | None = None,
+    title: str | None = None,
+    description: str | None = None,
+    image_url: str | None = None,
+    url: str | None = None,
+) -> str:
+    """Return a Markdown-friendly representation for an X link-card."""
+    lines = ["> [!link-card]"]
+    if image_url and url:
+        lines.append(f"> [![Link preview]({image_url})]({url})")
+    elif image_url:
+        lines.append(f"> ![Link preview]({image_url})")
+
+    if title and url:
+        lines.append(f"> **[{_escape_markdown_link_text(title)}]({url})**")
+    elif title:
+        lines.append(f"> **{_escape_markdown_text(title)}**")
+    elif url:
+        lines.append(f"> {url}")
+    if domain:
+        lines.append(f"> {domain}")
+    if description:
+        lines.append(f"> {description}")
+    return "\n".join(lines)
+
+
+def _escape_markdown_link_text(text: str) -> str:
+    return text.replace("\\", "\\\\").replace("[", "\\[").replace("]", "\\]")
+
+
+def _escape_markdown_text(text: str) -> str:
+    return _escape_markdown_link_text(text).replace("*", "\\*")
+
+
+def normalize_docflow_link_cards(md_text: str) -> str:
+    """Convert Markdown link-card sections into styled HTML cards."""
+    lines = md_text.splitlines()
+    normalized: list[str] = []
+    index = 0
+
+    while index < len(lines):
+        line = lines[index]
+        if _LINK_CARD_CALLOUT_RE.match(line.strip()):
+            card_lines: list[str] = []
+            cursor = index + 1
+            while cursor < len(lines):
+                candidate = lines[cursor]
+                if not candidate.strip():
+                    break
+                if not candidate.lstrip().startswith(">"):
+                    break
+                card_lines.append(candidate.lstrip()[1:].strip())
+                cursor += 1
+
+            card = _parse_markdown_link_card_lines(card_lines)
+            if not any(card.values()):
+                normalized.append(line)
+                index += 1
+                continue
+
+            normalized.append(link_card_html(**card))
+            index = cursor
+            continue
+
+        if not _LINK_CARD_HEADING_RE.match(line.strip()):
+            normalized.append(line)
+            index += 1
+            continue
+
+        cursor = index + 1
+        while cursor < len(lines) and not lines[cursor].strip():
+            cursor += 1
+
+        card_lines: list[str] = []
+        while cursor < len(lines):
+            candidate = lines[cursor].strip()
+            if not candidate:
+                break
+            if candidate == "---" or _MARKDOWN_HEADING_RE.match(candidate):
+                break
+            card_lines.append(candidate)
+            cursor += 1
+
+        card = _parse_legacy_link_card_lines(card_lines)
+        if not any(card.values()):
+            normalized.append(line)
+            index += 1
+            continue
+
+        normalized.append(link_card_html(**card))
+        index = cursor
+
+    trailing_newline = "\n" if md_text.endswith("\n") else ""
+    return "\n".join(normalized) + trailing_newline
+
+
+def _parse_markdown_link_card_lines(lines: list[str]) -> dict[str, str | None]:
+    card: dict[str, str | None] = {
+        "domain": None,
+        "title": None,
+        "description": None,
+        "image_url": None,
+        "url": None,
+    }
+    description_lines: list[str] = []
+
+    for line in lines:
+        image_match = _MARKDOWN_IMAGE_LINK_RE.match(line)
+        if image_match:
+            card["image_url"] = image_match.group("image")
+            card["url"] = card["url"] or image_match.group("url")
+            continue
+
+        bold_link_match = _MARKDOWN_BOLD_LINK_RE.match(line)
+        if bold_link_match:
+            card["title"] = bold_link_match.group("title")
+            card["url"] = card["url"] or bold_link_match.group("url")
+            continue
+
+        if line.startswith("!["):
+            link_match = re.match(r"^!\[[^\]]*\]\((?P<image>https?://[^)]+)\)$", line)
+            if link_match:
+                card["image_url"] = link_match.group("image")
+                continue
+
+        if card["domain"] is None and re.match(r"^[A-Za-z0-9][A-Za-z0-9.-]*\.[A-Za-z]{2,}$", line):
+            card["domain"] = line
+            continue
+
+        if line.startswith("http://") or line.startswith("https://"):
+            card["url"] = card["url"] or line
+            continue
+
+        if line:
+            description_lines.append(line)
+
+    if description_lines:
+        card["description"] = " ".join(description_lines)
+    return card
+
+
+def _parse_legacy_link_card_lines(lines: list[str]) -> dict[str, str | None]:
+    card: dict[str, str | None] = {
+        "domain": None,
+        "title": None,
+        "description": None,
+        "image_url": None,
+        "url": None,
+    }
+
+    for line in lines:
+        link_match = _MARKDOWN_LINK_RE.match(line)
+        if link_match:
+            card["title"] = link_match.group("title")
+            card["url"] = link_match.group("url")
+            continue
+
+        if ":" not in line:
+            if card["title"] is None:
+                card["title"] = line
+            continue
+
+        key, value = line.split(":", 1)
+        value = value.strip()
+        lowered = key.strip().lower()
+        if lowered == "domain":
+            card["domain"] = value
+        elif lowered == "description":
+            card["description"] = value
+        elif lowered == "image":
+            card["image_url"] = value
+        elif lowered == "url":
+            card["url"] = value
+
+    return card
 
 
 def split_front_matter(md_text: str) -> tuple[dict[str, str], str]:
@@ -1191,6 +1486,7 @@ def markdown_to_html(md_text: str, title: str = None) -> str:
     md_body = normalize_youtube_image_links(md_body)
     md_body = normalize_multiline_x_embeds(md_body)
     md_body = normalize_markdown_block_links(md_body)
+    md_body = normalize_docflow_link_cards(md_body)
     md_body = convert_urls_to_links(md_body)
 
     try:
@@ -1224,6 +1520,7 @@ def markdown_to_html(md_text: str, title: str = None) -> str:
         f"{title_tag}"
         "<style>\n"
         ".docflow-author { color: #555; font-size: 0.95rem; margin: 0 0 1.5rem; }\n"
+        f"{_DOCFLOW_LINK_CARD_CSS}"
         "</style>\n"
         "</head>\n<body>\n"
         f"{author_line}"

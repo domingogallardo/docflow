@@ -1116,12 +1116,14 @@ def test_build_single_tweet_markdown_renders_link_card_separately():
     )
 
     body_index = md.index("Gwern acaba de publicar otro de esos artículos suyos imprescindibles")
-    card_index = md.index("#### Link card")
+    card_index = md.index("> [!link-card]")
     assert body_index < card_index
     assert "tweet_link_card_domain: gwern.net" in md
     assert "tweet_link_card_url: https://gwern.net/guardian-angels" in md
-    assert "[Guardian Angels: LLM Personalization for Productivity and Security](https://gwern.net/guardian-angels)" in md
-    assert "Description: I propose an approach..." in md
+    assert "> **[Guardian Angels: LLM Personalization for Productivity and Security](https://gwern.net/guardian-angels)**" in md
+    assert "> I propose an approach..." in md
+    assert '<aside class="docflow-link-card">' not in md
+    assert "Image: https://pbs.twimg.com/card_img.jpg" not in md
 
 
 def test_build_thread_markdown_strips_repeated_author_headers():

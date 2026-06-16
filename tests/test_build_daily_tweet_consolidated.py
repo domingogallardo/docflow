@@ -1156,6 +1156,31 @@ def test_clean_body_keeps_liked_reply_section_headings_for_html_rendering() -> N
     assert headings == ["En respuesta a", "Tweet favorito"]
 
 
+def test_markdown_to_html_fragment_renders_link_card_as_card() -> None:
+    from bs4 import BeautifulSoup
+
+    body = "\n".join(
+        [
+            "Texto real del tweet.",
+            "",
+            "> [!link-card]",
+            "> [![Link preview](https://example.com/card.jpg)](https://example.com/post)",
+            "> **[Example title](https://example.com/post)**",
+            "> example.com",
+            "> Example description.",
+        ]
+    )
+
+    html_fragment = mod._markdown_to_html_fragment(body)
+    soup = BeautifulSoup(html_fragment, "html.parser")
+    card = soup.find("div", class_="docflow-link-card")
+
+    assert card is not None
+    assert card.find(class_="docflow-link-card__title").get_text(strip=True) == "Example title"
+    assert card.find(class_="docflow-link-card__image")["src"] == "https://example.com/card.jpg"
+    assert "Image: https://example.com/card.jpg" not in html_fragment
+
+
 def test_markdown_to_html_fragment_preserves_paragraph_hard_breaks() -> None:
     body = "\n".join(
         [

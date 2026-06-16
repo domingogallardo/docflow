@@ -17,7 +17,7 @@ except ImportError:  # pragma: no cover - environment without Playwright
     sync_playwright = None  # type: ignore[assignment]
 
 import config as cfg
-from utils.markdown_utils import enrich_markdown_metadata, front_matter_block
+from utils.markdown_utils import enrich_markdown_metadata, front_matter_block, link_card_markdown
 
 USER_AGENT = (
     "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
@@ -2746,20 +2746,18 @@ def _append_link_card_lines(lines: List[str], card: LinkCard | None) -> None:
     if not any([card.domain, card.title, card.description, card.image_url, card.url]):
         return
 
-    lines.extend(["", "#### Link card"])
-    if card.title:
-        if card.url:
-            lines.append(f"[{card.title}]({card.url})")
-        else:
-            lines.append(card.title)
-    if card.domain:
-        lines.append(f"Domain: {card.domain}")
-    if card.description:
-        lines.append(f"Description: {card.description}")
-    if card.image_url:
-        lines.append(f"Image: {card.image_url}")
-    if card.url and not card.title:
-        lines.append(f"URL: {card.url}")
+    lines.extend(
+        [
+            "",
+            link_card_markdown(
+                domain=card.domain,
+                title=card.title,
+                description=card.description,
+                image_url=card.image_url,
+                url=card.url,
+            ),
+        ]
+    )
 
 
 def _build_single_tweet_markdown(
