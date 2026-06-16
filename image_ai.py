@@ -27,7 +27,7 @@ class ImageAIDescriber:
         self,
         ai_client,
         *,
-        model: str = "gpt-5-mini",
+        model: str = "gpt-5.4-mini",
         max_name_len: int = 120,
         detail: str = "low",
         preview_max_side: int = 1024,

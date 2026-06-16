@@ -17,7 +17,7 @@ class SummaryAIUpdater:
         self,
         ai_client,
         *,
-        model: str = "gpt-5-mini",
+        model: str = "gpt-5.4-mini",
         num_words: int = 1200,
         max_bytes_md: int = 5000,
         max_summary_chars: int = 500,

@@ -24,7 +24,7 @@ class TitleAIUpdater:
         num_words: int = 500,
         max_bytes_md: int = 1600,
         delay_seconds: float = 1.0,
-        model: str = "gpt-5-mini",
+        model: str = "gpt-5.4-mini",
     ) -> None:
         self.client = ai_client
         self.max_title_len = max_title_len
