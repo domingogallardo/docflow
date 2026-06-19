@@ -787,6 +787,22 @@ Body.
     assert 'href="https://x.com/user/status/123"' in html
 
 
+def test_markdown_to_html_wraps_long_original_source_urls():
+    from utils import markdown_to_html
+
+    md = """---
+source_url: https://example.com/a-very-long-source-url-without-natural-breaking-points
+docflow_source_type: web
+---
+
+Body.
+"""
+
+    html = markdown_to_html(md, title="Article")
+
+    assert ".docflow-original-link { overflow-wrap: anywhere; word-break: break-word; }" in html
+
+
 def test_markdown_to_html_does_not_render_source_x_post_for_tweets():
     from utils import markdown_to_html
 

@@ -1531,6 +1531,7 @@ def markdown_to_html(md_text: str, title: str = None) -> str:
         f"{title_tag}"
         "<style>\n"
         ".docflow-author { color: #555; font-size: 0.95rem; margin: 0 0 1.5rem; }\n"
+        ".docflow-original-link { overflow-wrap: anywhere; word-break: break-word; }\n"
         f"{_DOCFLOW_LINK_CARD_CSS}"
         "</style>\n"
         "</head>\n<body>\n"
