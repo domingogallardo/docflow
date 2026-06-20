@@ -18,7 +18,7 @@ import tempfile
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Iterable, List, Sequence
-from urllib.parse import unquote, urlparse
+from urllib.parse import unquote, urljoin, urlparse
 
 import requests
 from bs4 import BeautifulSoup
@@ -298,18 +298,29 @@ def fetch_html(url: str, *, timeout: int = 30) -> tuple[str, str]:
     return html, response.url
 
 
-def clean_html_for_markdown(html: str, *, remove_data_images: bool = True) -> tuple[str, int]:
+def clean_html_for_markdown(
+    html: str,
+    *,
+    base_url: str | None = None,
+    remove_data_images: bool = True,
+) -> tuple[str, int]:
     """Apply minimal docflow-specific cleanup before handing HTML to Clipper."""
-    if not remove_data_images:
+    if not remove_data_images and not base_url:
         return html, 0
 
     soup = BeautifulSoup(html, "html.parser")
+    document_base = base_url
+    if base_url and soup.base:
+        document_base = urljoin(base_url, str(soup.base.get("href") or ""))
     removed = 0
     for img in soup.find_all("img"):
         src = img.get("src") or ""
-        if src.startswith("data:image"):
+        if remove_data_images and src.startswith("data:image"):
             img.decompose()
             removed += 1
+            continue
+        if document_base and src:
+            img["src"] = urljoin(document_base, src)
     return str(soup), removed
 
 
@@ -569,6 +580,7 @@ def download_url_to_markdown(
     html, final_url = fetch_html(url)
     cleaned_html, removed_data_images = clean_html_for_markdown(
         html,
+        base_url=final_url,
         remove_data_images=remove_data_images,
     )
     output_dir.mkdir(parents=True, exist_ok=True)

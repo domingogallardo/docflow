@@ -54,6 +54,40 @@ def test_clean_html_removes_data_images_but_keeps_remote_images():
     assert "https://example.com/image.png" in cleaned
 
 
+def test_clean_html_resolves_relative_images_against_document_base():
+    html = """
+    <html>
+      <head><base href="/"></head>
+      <body>
+        <img src="images/article/photo.avif" alt="relative">
+        <img src="https://cdn.example/photo.jpg" alt="absolute">
+      </body>
+    </html>
+    """
+
+    cleaned, removed = clean_html_for_markdown(
+        html,
+        base_url="https://example.com/posts/article/",
+    )
+
+    assert removed == 0
+    assert 'src="https://example.com/images/article/photo.avif"' in cleaned
+    assert 'src="https://cdn.example/photo.jpg"' in cleaned
+
+
+def test_clean_html_keeps_data_images_when_removal_is_disabled():
+    html = '<img src="data:image/png;base64,AAAA" alt="inline">'
+
+    cleaned, removed = clean_html_for_markdown(
+        html,
+        base_url="https://example.com/article/",
+        remove_data_images=False,
+    )
+
+    assert removed == 0
+    assert "data:image/png;base64,AAAA" in cleaned
+
+
 def test_html_bridge_redirect_url_reads_substack_title_bridge():
     html = (
         '<head><noscript><meta http-equiv="refresh" '
