@@ -75,6 +75,7 @@ def add_margins_to_html_files(directory: Path, file_filter=None):
         "overflow-x: auto; max-width: 100%; }\n"
         "pre code { white-space: inherit; }\n"
     )
+    responsive_video_rule = "video { max-width: 100%; height: auto; }\n"
     embed_rule = (
         ".docflow-embed { border: 1px solid #e5e7eb; border-radius: 12px; padding: 14px 16px; "
         "margin: 18px 0 24px; background: #fff; box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04); "
@@ -191,7 +192,8 @@ def add_margins_to_html_files(directory: Path, file_filter=None):
                 head = soup.new_tag("head")
                 style_tag = soup.new_tag("style")
                 style_tag.string = (
-                    margin_style + "\n" + img_rule + "\n" + pre_rule + "\n" + embed_rule + "\n" + viewer_css
+                    margin_style + "\n" + img_rule + "\n" + pre_rule + "\n"
+                    + responsive_video_rule + embed_rule + "\n" + viewer_css
                 )
                 head.append(style_tag)
                 script_tag = soup.new_tag("script", id="image-viewer")
@@ -216,6 +218,8 @@ def add_margins_to_html_files(directory: Path, file_filter=None):
                         style_tag.string += "\n" + img_rule
                     if pre_rule not in (style_tag.string or ""):
                         style_tag.string += "\n" + pre_rule
+                    if responsive_video_rule not in (style_tag.string or ""):
+                        style_tag.string += "\n" + responsive_video_rule
                     if embed_rule not in (style_tag.string or ""):
                         style_tag.string += "\n" + embed_rule
                     if viewer_css not in (style_tag.string or ""):
@@ -223,7 +227,8 @@ def add_margins_to_html_files(directory: Path, file_filter=None):
                 else:
                     style_tag = soup.new_tag("style")
                     style_tag.string = (
-                        margin_style + "\n" + img_rule + "\n" + pre_rule + "\n" + embed_rule + "\n" + viewer_css
+                        margin_style + "\n" + img_rule + "\n" + pre_rule + "\n"
+                        + responsive_video_rule + embed_rule + "\n" + viewer_css
                     )
                     head.append(style_tag)
                 script_tag = head.find("script", id="image-viewer")

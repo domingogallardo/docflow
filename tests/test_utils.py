@@ -190,6 +190,19 @@ def test_add_margins_adds_wrapped_pre_styles(tmp_path):
     assert "pre code { white-space: inherit; }" in out
 
 
+def test_add_margins_makes_fixed_width_videos_responsive(tmp_path):
+    html = tmp_path / "sample.html"
+    html.write_text(
+        '<html><head></head><body><video width="1188"></video></body></html>',
+        encoding="utf-8",
+    )
+
+    utils.add_margins_to_html_files(tmp_path)
+
+    out = html.read_text(encoding="utf-8")
+    assert "video { max-width: 100%; height: auto; }" in out
+
+
 def test_convert_urls_integration():
     """End-to-end test for URL processing (dedupe + conversion)."""
     from utils import convert_urls_to_links
