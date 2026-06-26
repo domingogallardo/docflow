@@ -75,6 +75,34 @@ def test_clean_html_resolves_relative_images_against_document_base():
     assert 'src="https://cdn.example/photo.jpg"' in cleaned
 
 
+def test_clean_html_resolves_document_relative_links_and_media():
+    html = """
+    <html>
+      <head><base href="/"></head>
+      <body>
+        <a href="/pdf/main.pdf">Preprint</a>
+        <a href="supplement.html">Supplement</a>
+        <a href="#methods">Methods</a>
+        <a href="mailto:team@example.com">Contact</a>
+        <video poster="img/poster.webp"><source src="media/demo.webm"></video>
+      </body>
+    </html>
+    """
+
+    cleaned, removed = clean_html_for_markdown(
+        html,
+        base_url="https://example.com/posts/article/",
+    )
+
+    assert removed == 0
+    assert 'href="https://example.com/pdf/main.pdf"' in cleaned
+    assert 'href="https://example.com/supplement.html"' in cleaned
+    assert 'href="#methods"' in cleaned
+    assert 'href="mailto:team@example.com"' in cleaned
+    assert 'poster="https://example.com/img/poster.webp"' in cleaned
+    assert 'src="https://example.com/media/demo.webm"' in cleaned
+
+
 def test_clean_html_keeps_data_images_when_removal_is_disabled():
     html = '<img src="data:image/png;base64,AAAA" alt="inline">'
 

@@ -318,10 +318,23 @@ def clean_html_for_markdown(
         if remove_data_images and src.startswith("data:image"):
             img.decompose()
             removed += 1
-            continue
-        if document_base and src:
-            img["src"] = urljoin(document_base, src)
+    if document_base:
+        _resolve_document_urls(soup, document_base)
     return str(soup), removed
+
+
+def _resolve_document_urls(soup: BeautifulSoup, document_base: str) -> None:
+    """Resolve document-relative URLs so clipped pages work off their source site.
+
+    Fragment-only links deliberately stay local: Clipper emits heading permalinks as
+    fragments, and those should keep navigating within the saved document.
+    """
+    for tag in soup.find_all(True):
+        for attribute in ("href", "src", "poster", "cite", "action", "data-src"):
+            value = tag.get(attribute)
+            if not isinstance(value, str) or not value or value.startswith("#"):
+                continue
+            tag[attribute] = urljoin(document_base, value)
 
 
 def build_template(attempt: ClipAttempt) -> dict:
