@@ -50,6 +50,8 @@ URL_RE = re.compile(r"https?://[^\s<>\"]+")
 DATA_IMAGE_RE = re.compile(r"data:image/[^)\s\"']+", re.IGNORECASE)
 DEFAULT_NODE_BIN = Path("/opt/homebrew/bin/node")
 ESCAPED_JSON_NOISE_RE = re.compile(r"\\n|\\/|\\u[0-9A-Fa-f]{4}")
+ESCAPED_JSON_WRAPPER_RE = re.compile(r'^\s*\\\["')
+ESCAPED_MARKDOWN_DESTINATION_RE = re.compile(r'!?\[[^\]]*\]\(\\"')
 HEADER_CHARSET_RE = re.compile(r"(?:^|;)\s*charset=[\"']?([^;\"'\s]+)", re.IGNORECASE)
 HTML_CHARSET_RE = re.compile(
     rb"<meta[^>]+charset=[\"']?\s*([A-Za-z0-9._:-]+)",
@@ -304,11 +306,13 @@ def clean_html_for_markdown(
     base_url: str | None = None,
     remove_data_images: bool = True,
 ) -> tuple[str, int]:
-    """Apply minimal docflow-specific cleanup before handing HTML to Clipper."""
-    if not remove_data_images and not base_url:
-        return html, 0
-
+    """Remove non-content payloads and normalize document-relative resources."""
     soup = BeautifulSoup(html, "html.parser")
+    # Server-rendered apps often embed large serialized state payloads in scripts.
+    # Clipper should receive the visible document, not those transport payloads.
+    for tag in soup.find_all(("script", "template")):
+        tag.decompose()
+
     document_base = base_url
     if base_url and soup.base:
         document_base = urljoin(base_url, str(soup.base.get("href") or ""))
@@ -413,6 +417,9 @@ def markdown_quality(
     words = re.findall(r"\w+", body, flags=re.UNICODE)
     data_image_count = len(DATA_IMAGE_RE.findall(markdown))
     escaped_json_noise_count = len(ESCAPED_JSON_NOISE_RE.findall(body))
+    escaped_markdown_destination_count = len(
+        ESCAPED_MARKDOWN_DESTINATION_RE.findall(body)
+    )
 
     if data_image_count:
         return MarkdownQuality(
@@ -429,6 +436,17 @@ def markdown_quality(
             len(words),
             0,
             "looks like escaped JSON instead of Markdown",
+        )
+    if (
+        ESCAPED_JSON_WRAPPER_RE.match(body)
+        and escaped_markdown_destination_count >= 2
+    ):
+        return MarkdownQuality(
+            False,
+            body_chars,
+            len(words),
+            0,
+            "contains escaped Markdown destinations in a JSON-like wrapper",
         )
     if "childrenIDs" in body and escaped_json_noise_count >= 20:
         return MarkdownQuality(

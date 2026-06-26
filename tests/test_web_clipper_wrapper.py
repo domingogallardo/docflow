@@ -116,6 +116,21 @@ def test_clean_html_keeps_data_images_when_removal_is_disabled():
     assert "data:image/png;base64,AAAA" in cleaned
 
 
+def test_clean_html_removes_script_and_template_payloads_but_keeps_article_content():
+    html = """
+    <article><p>Visible article text.</p></article>
+    <script>self.__next_f.push('large serialized application state')</script>
+    <template><p>Transport payload</p></template>
+    """
+
+    cleaned, removed = clean_html_for_markdown(html)
+
+    assert removed == 0
+    assert "Visible article text." in cleaned
+    assert "serialized application state" not in cleaned
+    assert "Transport payload" not in cleaned
+
+
 def test_html_bridge_redirect_url_reads_substack_title_bridge():
     html = (
         '<head><noscript><meta http-equiv="refresh" '
@@ -198,6 +213,20 @@ def test_markdown_quality_rejects_escaped_json_payload():
 
     assert not quality.usable
     assert quality.reason == "looks like escaped JSON instead of Markdown"
+
+
+def test_markdown_quality_rejects_json_wrapped_escaped_markdown_destinations():
+    noisy_body = (
+        '\\["Intro [first](\\"https://example.com/one\\") and '
+        '[second](\\"/two\\")", "more text"\\]'
+    )
+
+    quality = markdown_quality(noisy_body, min_chars=20, min_words=2)
+
+    assert not quality.usable
+    assert quality.reason == (
+        "contains escaped Markdown destinations in a JSON-like wrapper"
+    )
 
 
 def test_strip_frontmatter_returns_body_only():
