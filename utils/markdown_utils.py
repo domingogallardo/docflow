@@ -805,17 +805,19 @@ def ensure_pdf_sidecar_markdown(
         md_path.write_text(f"# {title}\n\nAssociated PDF: `{pdf_path.name}`\n", encoding="utf-8")
 
     md_text = md_path.read_text(encoding="utf-8", errors="replace")
+    pdf_meta = {
+        "docflow_source_type": "pdf",
+        "docflow_pdf_path": _relative_docflow_path(pdf_path, base_dir),
+    }
     defaults = {
         "title": title,
         "source": "pdf",
-        "docflow_source_type": "pdf",
-        "docflow_pdf_path": _relative_docflow_path(pdf_path, base_dir),
     }
     if not existed:
         defaults["docflow_ingested_at"] = now or utc_now_iso()
     updated_md = upsert_front_matter(
         md_text,
-        {},
+        pdf_meta,
         defaults=defaults,
     )
     if updated_md != md_text:

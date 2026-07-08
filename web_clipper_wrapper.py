@@ -28,7 +28,7 @@ import utils as U
 from path_utils import unique_path
 from openai_client import build_openai_client
 from summary_ai import SummaryAIUpdater
-from utils.backfill_original_article_dates import (
+from utils.original_dates import (
     ORIGINAL_PUBLISHED_AT_KEY,
     ORIGINAL_PUBLISHED_SOURCE_KEY,
     extract_original_published_date,

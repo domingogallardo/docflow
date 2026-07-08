@@ -1,38 +1,20 @@
-"""Backfill original article publication dates from post URLs."""
+"""Extract original publication dates from clipped article content."""
 
 from __future__ import annotations
 
-import argparse
 import json
-import os
 import re
-import sys
 from dataclasses import dataclass
 from datetime import date, datetime, timezone
 from email.utils import parsedate_to_datetime
-from pathlib import Path
-from typing import Callable
 from urllib.parse import urlparse
 
-import requests
 from bs4 import BeautifulSoup
 
-# Support direct execution: `python utils/backfill_original_article_dates.py ...`
-if __package__ in (None, ""):
-    _REPO_ROOT = Path(__file__).resolve().parents[1]
-    if str(_REPO_ROOT) not in sys.path:
-        sys.path.insert(0, str(_REPO_ROOT))
-
-from utils.markdown_utils import split_front_matter, update_html_meta_tags, upsert_front_matter
-from utils.site_paths import library_roots, resolve_base_dir
+from utils.markdown_utils import split_front_matter
 
 ORIGINAL_PUBLISHED_AT_KEY = "docflow_original_published_at"
 ORIGINAL_PUBLISHED_SOURCE_KEY = "docflow_original_published_source"
-USER_AGENT = (
-    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
-    "AppleWebKit/537.36 (KHTML, like Gecko) "
-    "Chrome/124.0 Safari/537.36 docflow-original-date-backfill/1.0"
-)
 
 _JSON_LD_DATE_KEYS = (
     "datePublished",
@@ -157,47 +139,6 @@ _MARKDOWN_DATE_NOISE_RE = re.compile(
 class DateCandidate:
     value: str
     source: str
-
-
-@dataclass(frozen=True)
-class BackfillResult:
-    scanned: int
-    with_url: int
-    updated: int
-    skipped_existing: int
-    not_found: int
-    failed: int
-
-
-FetchUrl = Callable[[str, float], str]
-
-
-def _iter_post_markdown_paths(base_dir: Path) -> list[Path]:
-    posts_root = library_roots(base_dir)["posts"]
-    if not posts_root.is_dir():
-        return []
-
-    paths: list[Path] = []
-    for path in posts_root.rglob("*.md"):
-        if any(part.startswith(".") for part in path.relative_to(posts_root).parts):
-            continue
-        if path.is_file():
-            paths.append(path)
-    return sorted(paths)
-
-
-def _post_url_from_meta(meta: dict[str, str]) -> str:
-    for key in ("docflow_post_url", "source_url"):
-        value = str(meta.get(key, "")).strip()
-        if value.startswith(("http://", "https://")):
-            return value
-    return ""
-
-
-def _default_fetch_url(url: str, timeout: float) -> str:
-    response = requests.get(url, headers={"User-Agent": USER_AGENT}, timeout=timeout)
-    response.raise_for_status()
-    return response.text
 
 
 def _normalize_date_value(raw_value: object) -> str | None:
@@ -514,122 +455,3 @@ def _is_supported_original_date(value: str) -> bool:
     except ValueError:
         return False
     return _MIN_ORIGINAL_DATE <= parsed <= date.today()
-
-
-def backfill_original_article_dates(
-    base_dir: Path,
-    *,
-    dry_run: bool = False,
-    force: bool = False,
-    limit: int | None = None,
-    timeout: float = 10.0,
-    fetch_url: FetchUrl | None = None,
-) -> BackfillResult:
-    fetch = fetch_url or _default_fetch_url
-    scanned = 0
-    with_url = 0
-    updated = 0
-    skipped_existing = 0
-    not_found = 0
-    failed = 0
-
-    for path in _iter_post_markdown_paths(base_dir):
-        if limit is not None and scanned >= limit:
-            break
-        scanned += 1
-
-        md_text = path.read_text(encoding="utf-8", errors="replace")
-        meta, _ = split_front_matter(md_text)
-        url = _post_url_from_meta(meta)
-        if not url:
-            continue
-        with_url += 1
-
-        if meta.get(ORIGINAL_PUBLISHED_AT_KEY) and not force:
-            skipped_existing += 1
-            continue
-
-        try:
-            html = fetch(url, timeout)
-            candidate = (
-                extract_original_published_date(html)
-                or extract_original_published_date_from_markdown(md_text)
-                or extract_original_published_date("", url=url)
-            )
-        except Exception as exc:
-            candidate = extract_original_published_date_from_markdown(md_text) or _url_date_candidate(url)
-            if candidate is None:
-                failed += 1
-                print(f"failed: {path.name}: {exc}")
-                continue
-
-        if candidate is None:
-            not_found += 1
-            continue
-
-        if dry_run:
-            updated += 1
-            print(f"would update: {path.name}: {candidate.value} ({candidate.source})")
-            continue
-
-        original_stat = path.stat()
-        updated_md = upsert_front_matter(
-            md_text,
-            {
-                ORIGINAL_PUBLISHED_AT_KEY: candidate.value,
-                ORIGINAL_PUBLISHED_SOURCE_KEY: candidate.source,
-            },
-        )
-        if updated_md != md_text:
-            path.write_text(updated_md, encoding="utf-8")
-            os.utime(path, ns=(original_stat.st_atime_ns, original_stat.st_mtime_ns))
-        html_path = path.with_suffix(".html")
-        if html_path.is_file():
-            html_stat = html_path.stat()
-            updated_meta, _ = split_front_matter(updated_md)
-            update_html_meta_tags(html_path, updated_meta)
-            os.utime(html_path, ns=(html_stat.st_atime_ns, html_stat.st_mtime_ns))
-        updated += 1
-
-    return BackfillResult(
-        scanned=scanned,
-        with_url=with_url,
-        updated=updated,
-        skipped_existing=skipped_existing,
-        not_found=not_found,
-        failed=failed,
-    )
-
-
-def parse_args(argv: list[str]) -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Backfill original article publication dates in post Markdown.")
-    parser.add_argument("--base-dir", help="BASE_DIR with Posts/ and state/")
-    parser.add_argument("--dry-run", action="store_true", help="Report changes without writing Markdown")
-    parser.add_argument("--force", action="store_true", help="Refresh dates even when already present")
-    parser.add_argument("--limit", type=int, help="Maximum number of Markdown files to scan")
-    parser.add_argument("--timeout", type=float, default=10.0, help="HTTP timeout per URL in seconds")
-    return parser.parse_args(argv)
-
-
-def main(argv: list[str]) -> int:
-    args = parse_args(argv[1:])
-    base_dir = resolve_base_dir(args.base_dir)
-    result = backfill_original_article_dates(
-        base_dir,
-        dry_run=args.dry_run,
-        force=args.force,
-        limit=args.limit,
-        timeout=args.timeout,
-    )
-    mode = "would update" if args.dry_run else "updated"
-    print(
-        f"Original article dates: scanned {result.scanned}, "
-        f"{result.with_url} with URL, {result.updated} {mode}, "
-        f"{result.skipped_existing} skipped existing, {result.not_found} not found, "
-        f"{result.failed} failed"
-    )
-    return 0
-
-
-if __name__ == "__main__":
-    raise SystemExit(main(sys.argv))

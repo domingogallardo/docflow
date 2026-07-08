@@ -171,7 +171,6 @@ This file stores stable, reusable operational notes for future agent runs.
 - Reading order now uses latest reading activity: `docflow_last_read` from paired Markdown front matter when present, otherwise `reading_at`.
 - Saving a meaningful reading position for an item currently in Reading rebuilds `/reading/` so the last-read item can move to the top immediately.
 - PDF ingestion and PDF reading-position saves create or complete a same-stem Markdown sidecar with `docflow_pdf_path` so PDFs can participate in last-read ordering.
-- Existing PDFs can be backfilled with `python utils/backfill_pdf_sidecars.py --base-dir "$DOCFLOW_BASE_DIR"`; use `--dry-run` first to report created/updated counts.
 
 ### 2026-03-17
 
