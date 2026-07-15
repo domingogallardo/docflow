@@ -175,23 +175,6 @@ def _should_continue(collected: Sequence[object], max_tweets: int, stop_found: b
     return len(collected) < max_tweets and not stop_found
 
 
-def _extract_tweet_urls(page, seen: Set[str]) -> List[str]:
-    urls: List[str] = []
-    articles = page.locator("article")
-    for article in articles.element_handles():
-        links = article.query_selector_all("a[href*='/status/']")
-        for link in links:
-            href = link.get_attribute("href")
-            canonical = _canonical_status_url(href)
-            if not canonical:
-                continue
-            if canonical in seen:
-                continue
-            seen.add(canonical)
-            urls.append(canonical)
-    return urls
-
-
 def _extract_tweet_metadata(article) -> tuple[str | None, str | None, str | None, str | None]:
     author_name = None
     author_handle = None
@@ -244,9 +227,7 @@ def _matches_expected_author(
     article_handle = _normalize_handle(author_handle)
     if url_handle == expected:
         return True
-    if article_handle == expected:
-        return True
-    return False
+    return article_handle == expected
 
 
 def _profile_handle_from_href(href: str | None) -> str | None:

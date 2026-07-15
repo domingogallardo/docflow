@@ -1053,7 +1053,7 @@ def test_api_export_pdf_returns_503_when_pandoc_missing(tmp_path: Path, monkeypa
         payload = json.loads(body)
         assert status == 503
         assert payload["ok"] is False
-        assert "Missing required executable: pandoc" == payload["error"]
+        assert payload["error"] == "Missing required executable: pandoc"
     finally:
         server.shutdown()
         server.server_close()
@@ -1081,7 +1081,7 @@ def test_api_export_pdf_returns_503_when_pdflatex_missing(tmp_path: Path, monkey
         payload = json.loads(body)
         assert status == 503
         assert payload["ok"] is False
-        assert "Missing required executable: pdflatex" == payload["error"]
+        assert payload["error"] == "Missing required executable: pdflatex"
     finally:
         server.shutdown()
         server.server_close()

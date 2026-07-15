@@ -1,8 +1,7 @@
 import sys
 from pathlib import Path
-import pytest
 
-sys.path.append(str(Path(__file__).parent.parent))  # To import utils.py.
+sys.path.append(str(Path(__file__).parent.parent))  # To import the utils package.
 import utils
 from podcast_processor import PodcastProcessor
 

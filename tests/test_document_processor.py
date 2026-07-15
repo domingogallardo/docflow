@@ -52,7 +52,7 @@ def test_document_processor_integration(tmp_path):
     # 4. Create and run processor.
     processor = DocumentProcessor(tmp_path, 2025)
     # Avoid Playwright/X calls in tests.
-    processor.process_tweet_urls = lambda: []
+    processor.process_tweet_urls = list
     processor.markdown_processor.title_updater.update_titles = lambda files, renamer: None
     processor.image_processor.image_namer = StubImageNamer({"sample.png": "Desk notes screenshot"})
     success = processor.process_all()

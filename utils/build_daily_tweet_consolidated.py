@@ -377,7 +377,7 @@ def _clean_body(body: str, meta: dict[str, str] | None = None) -> str:
     # in metadata. Keep all later links (thread sections, quoted tweets, etc.).
     if lines:
         first = lines[0].strip().lower()
-        if first.startswith("[view on x](") or first.startswith("[ver en x]("):
+        if first.startswith(("[view on x](", "[ver en x](")):
             lines.pop(0)
             while lines and not lines[0].strip():
                 lines.pop(0)
@@ -754,7 +754,7 @@ def _split_inline_quoted_tweets(text: str) -> str:
                 out.append("")
                 in_inline_quote = False
                 continue
-            if stripped.startswith("[![") or stripped.startswith("!["):
+            if stripped.startswith(("[![", "![")):
                 in_inline_quote = False
                 out.append(line)
                 continue

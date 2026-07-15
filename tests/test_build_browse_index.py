@@ -784,14 +784,6 @@ def test_content_filter_pool_fallback_uses_statistical_coverage(monkeypatch):
     assert "single oddity" not in pool
 
 
-def test_collect_category_items_handles_missing_dirs(tmp_path: Path):
-    base = tmp_path / "base"
-    base.mkdir()
-
-    items = build_browse_index.collect_category_items(base, "images")
-    assert items == []
-
-
 def test_browse_hides_reading_items_without_touching_mtime(tmp_path: Path):
     base = tmp_path / "base"
     posts = base / "Posts" / "Posts 2026"

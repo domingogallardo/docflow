@@ -226,17 +226,6 @@ def _save_content_filter_cache(base_dir: Path, cache: dict[str, object]) -> None
 
 
 @dataclass(frozen=True)
-class BrowseItem:
-    rel_path: str
-    name: str
-    mtime: float
-    reading: bool
-    highlighted: bool
-    highlight_last_epoch: float | None = None
-    sort_mtime: float | None = None
-
-
-@dataclass(frozen=True)
 class BrowseEntry:
     name: str
     href: str
@@ -361,9 +350,7 @@ def _is_content_filter_term(term: str) -> bool:
 
     if len(words) == 1:
         return words[0] not in excluded and words[0] not in CONTENT_FILTER_GENERIC_SINGLE_WORDS
-    if words[0] in excluded or words[-1] in CONTENT_FILTER_STOPWORDS:
-        return False
-    return True
+    return words[0] not in excluded and words[-1] not in CONTENT_FILTER_STOPWORDS
 
 
 def _content_filter_candidate_phrases(text: str) -> list[tuple[str, str]]:
@@ -374,7 +361,7 @@ def _content_filter_candidate_phrases(text: str) -> list[tuple[str, str]]:
         if not words:
             continue
         for size in (2, 1):
-            for index in range(0, len(words) - size + 1):
+            for index in range(len(words) - size + 1):
                 phrase_words = words[index : index + size]
                 normalized_words = [_content_filter_token_value(word) for word in phrase_words]
                 if any(re.search(r"[a-z][A-Z]", word) for word in phrase_words):
@@ -569,7 +556,7 @@ def _content_filter_pool(entries: list[BrowseEntry], limit: int = CONTENT_FILTER
 
 def _content_filter_match_tokens(value: str) -> set[str]:
     normalized = _normalize_filter_term(value)
-    return set(token for token in re.split(r"[^a-z0-9]+", normalized) if token)
+    return {token for token in re.split(r"[^a-z0-9]+", normalized) if token}
 
 
 def _content_filter_token_coverage_match(filter_tokens: list[str], document_tokens: set[str]) -> bool:
@@ -944,16 +931,14 @@ def _render_directory_page(
                 continue
             rows.append(f"<h3 class='dg-time-heading'>{html.escape(label)}</h3>")
             rows.append("<ul class='dg-index dg-time-section'>")
-            for entry in section_entries:
-                rows.append(_render_entry(entry))
+            rows.extend(_render_entry(entry) for entry in section_entries)
             rows.append("</ul>")
         rows.append("<hr></body></html>")
         return "\n".join(rows)
 
     rows.append("<ul class='dg-index'>")
 
-    for entry in entries:
-        rows.append(_render_entry(entry))
+    rows.extend(_render_entry(entry) for entry in entries)
 
     rows.append("</ul><hr></body></html>")
     return "\n".join(rows)
@@ -1096,7 +1081,7 @@ def _search_suggestion_candidates(stem: str) -> list[str]:
     candidates: list[str] = []
     seen: set[str] = set()
     for size in (3, 2):
-        for index in range(0, len(words) - size + 1):
+        for index in range(len(words) - size + 1):
             phrase_words = words[index : index + size]
             normalized_words = [_search_suggestion_token_value(word) for word in phrase_words]
             if any(not word or word.isdigit() for word in normalized_words):
@@ -1692,11 +1677,6 @@ def _entry_local_date(entry: BrowseEntry) -> date | None:
     return datetime.fromtimestamp(entry.temporal_epoch).astimezone().date()
 
 
-def _temporal_sections_for_entries(entries: list[BrowseEntry]) -> list[tuple[str, list[BrowseEntry]]]:
-    today = _local_today()
-    return _relative_temporal_sections_for_entries(entries, today)
-
-
 def _relative_temporal_sections_for_entries(
     entries: list[BrowseEntry],
     today: date,
@@ -1706,8 +1686,10 @@ def _relative_temporal_sections_for_entries(
     last_30_start = today - timedelta(days=30)
 
     labels: list[str] = ["Hoy", "Ayer", "Últimos 7 días", "Últimos 30 días"]
-    for month in range(today.month - 1, 0, -1):
-        labels.append(f"{SPANISH_MONTH_NAMES[month]} {today.year}")
+    labels.extend(
+        f"{SPANISH_MONTH_NAMES[month]} {today.year}"
+        for month in range(today.month - 1, 0, -1)
+    )
 
     buckets: dict[str, list[BrowseEntry]] = {label: [] for label in labels}
     extra_months: dict[tuple[int, int], list[BrowseEntry]] = {}
@@ -2469,76 +2451,6 @@ main { max-width: 1100px; }
     (assets_dir / "site.css").write_text(css + "\n", encoding="utf-8")
     article_js_source = Path(__file__).resolve().parent / "static" / "article.js"
     (assets_dir / "article.js").write_text(article_js_source.read_text(encoding="utf-8"), encoding="utf-8")
-
-
-def collect_category_items(base_dir: Path, category: str) -> list[BrowseItem]:
-    """Compatibility helper used by tests (recursive file summary)."""
-    roots = _category_roots(base_dir)
-    root = roots[category]
-    if not root.is_dir():
-        return []
-
-    done_state = load_done_state(base_dir)
-    done_state_items = done_state.get("items", {})
-    done_items = done_state_items if isinstance(done_state_items, dict) else {}
-    reading_state = load_reading_state(base_dir)
-    reading_state_items = reading_state.get("items", {})
-    reading_items = reading_state_items if isinstance(reading_state_items, dict) else {}
-
-    items: list[BrowseItem] = []
-    for path in root.rglob("*"):
-        if not path.is_file():
-            continue
-        rel_to_root = path.relative_to(root)
-        if any(_skip_directory(part) for part in rel_to_root.parts[:-1]):
-            continue
-        if not _is_visible_file_name(path.name):
-            continue
-
-        rel = rel_path_from_abs(base_dir, path)
-        reading_entry = reading_items.get(rel)
-        is_reading = rel in reading_items
-        st = path.stat()
-        done_entry = done_items.get(rel)
-        done_at_mtime = None
-        if isinstance(done_entry, dict):
-            done_at_mtime = _iso_to_epoch(done_entry.get("done_at"))
-        is_done = rel in done_items
-        if is_done:
-            is_reading = False
-
-        reading_at_mtime = None
-        if isinstance(reading_entry, dict):
-            reading_at_mtime = _iso_to_epoch(reading_entry.get("reading_at"))
-        display_mtime = st.st_mtime
-        if is_reading and reading_at_mtime is not None:
-            effective_mtime = reading_at_mtime
-        elif is_done and done_at_mtime is not None:
-            effective_mtime = done_at_mtime
-        else:
-            effective_mtime = display_mtime
-        highlighted, highlight_last_epoch = _highlight_status(base_dir, rel)
-
-        items.append(
-            BrowseItem(
-                rel_path=rel,
-                name=path.name,
-                mtime=display_mtime,
-                sort_mtime=effective_mtime,
-                reading=is_reading,
-                highlighted=highlighted,
-                highlight_last_epoch=highlight_last_epoch,
-            )
-        )
-
-    items.sort(
-        key=lambda item: (
-            0 if item.reading else 1,
-            -(item.sort_mtime if item.sort_mtime is not None else item.mtime),
-            item.name.lower(),
-        )
-    )
-    return items
 
 
 def _category_roots(base_dir: Path) -> dict[str, Path]:

@@ -1,6 +1,4 @@
 def test_browse_assets_include_article_js(tmp_path):
-    from pathlib import Path
-
     from utils import build_browse_index
 
     base = tmp_path / "base"

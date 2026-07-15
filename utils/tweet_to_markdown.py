@@ -783,12 +783,14 @@ def strip_platform_inline_prompts(
         for cleaned_line in cleaned.splitlines():
             if is_prompt_line(cleaned_line):
                 continue
-            for normalized_line in normalize_glued_author_body_breaks(
-                cleaned_line,
-                author_name=author_name,
-                author_handle=author_handle,
-            ).splitlines():
-                filtered.append(normalized_line.strip())
+            filtered.extend(
+                normalized_line.strip()
+                for normalized_line in normalize_glued_author_body_breaks(
+                    cleaned_line,
+                    author_name=author_name,
+                    author_handle=author_handle,
+                ).splitlines()
+            )
     return "\n".join(_collapse_blank_lines(filtered))
 
 
@@ -1607,7 +1609,7 @@ def _insert_quote_separator(text: str, quoted_url: str | None = None) -> str:
                 out.append("")
                 in_inline_quote = False
                 continue
-            if stripped.startswith("[![") or stripped.startswith("!["):
+            if stripped.startswith(("[![", "![")):
                 in_inline_quote = False
                 out.append(line)
                 continue
@@ -2568,12 +2570,6 @@ def _append_tweet_content_lines(lines: List[str], parts: TweetParts, *, strip_au
         lines.extend(["", f"Original link: {parts.external_link}"])
 
 
-def _reply_parent_markdown_lines(parent_context: ReplyParentContext | None) -> List[str]:
-    if parent_context is None:
-        return []
-    return _reply_parent_contexts_markdown_lines([parent_context])
-
-
 def _reply_parent_contexts_markdown_lines(parent_contexts: Sequence[ReplyParentContext]) -> List[str]:
     if not parent_contexts:
         return []
@@ -2587,65 +2583,6 @@ def _reply_parent_contexts_markdown_lines(parent_contexts: Sequence[ReplyParentC
             lines.extend(["", f"**{_author_label_from_parts(parent_context.parts)}**"])
             _append_tweet_content_lines(lines, parent_context.parts, strip_author=True)
     return lines
-
-
-def _find_article_index_for_status(articles, status_url: str | None) -> int | None:
-    status_id = _status_id_from_url(status_url)
-    if not status_id:
-        return None
-    selector = f"a[href*='/status/{status_id}']"
-    total = articles.count()
-    for idx in range(total):
-        if articles.nth(idx).locator(selector).count() > 0:
-            return idx
-    return None
-
-
-def _extract_reply_parent_context(
-    page,
-    articles,
-    *,
-    target_idx: int | None,
-    parent_url: str | None,
-) -> ReplyParentContext | None:
-    if page is None:
-        return ReplyParentContext(parent_url) if parent_url else None
-
-    candidate_url = parent_url
-    candidate_article = None
-    parent_idx = _find_article_index_for_status(articles, parent_url)
-    if parent_idx is not None and parent_idx != target_idx:
-        candidate_article = articles.nth(parent_idx)
-
-    if candidate_article is None and target_idx is not None and target_idx > 0:
-        candidate_article = articles.nth(target_idx - 1)
-        candidate_url = _extract_article_status_url(candidate_article, None) or candidate_url
-
-    if candidate_url:
-        try:
-            page.goto(candidate_url, wait_until="domcontentloaded", timeout=60000)
-            _wait_with_log(page, WAIT_MS, "load the parent tweet")
-            parent_article = _locate_tweet_article(page, candidate_url)
-            if parent_article is not None:
-                return ReplyParentContext(
-                    url=candidate_url,
-                    parts=_extract_tweet_parts(parent_article, candidate_url, page=page),
-                )
-        except Exception:
-            pass
-    if candidate_article is not None and candidate_url:
-        try:
-            return ReplyParentContext(
-                url=candidate_url,
-                parts=_extract_tweet_parts(candidate_article, candidate_url, page=page),
-            )
-        except Exception:
-            return ReplyParentContext(candidate_url)
-
-    if candidate_url:
-        return ReplyParentContext(candidate_url)
-
-    return None
 
 
 def _load_tweet_detail_page(page, tweet_url: str) -> tuple[object | None, object | None]:
@@ -2724,9 +2661,7 @@ def _should_download_reply_chain(
         return False
     parent_handle = _handle_from_status_url(parent_url)
     target_handle = _normalize_handle_for_match(target_author_handle)
-    if parent_handle and target_handle and parent_handle == target_handle:
-        return False
-    return True
+    return not (parent_handle and target_handle and parent_handle == target_handle)
 
 
 def _is_self_thread_parent(parts: TweetParts, parent_url: str | None) -> bool:

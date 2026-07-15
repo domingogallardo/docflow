@@ -113,27 +113,6 @@ class FakePage:
         return self._locator
 
 
-def test_extract_tweet_urls_collects_multiple_links_per_article():
-    articles = [
-        FakeArticle(["/user1/status/1"]),
-        FakeArticle(
-            [
-                "/user2/status/2",
-                "/user2/status/2",  # duplicated link inside same article
-                "https://x.com/user3/status/3",
-                "/user4/not-a-status",
-            ]
-        ),
-    ]
-    page = FakePage(articles)
-    urls = xl._extract_tweet_urls(page, set())
-    assert urls == [
-        "https://x.com/user1/status/1",
-        "https://x.com/user2/status/2",
-        "https://x.com/user3/status/3",
-    ]
-
-
 def test_normalize_stop_url_handles_relative_and_spaces():
     assert xl._normalize_stop_url("  /user/status/42  ") == "https://x.com/user/status/42"
     assert xl._normalize_stop_url(None) is None

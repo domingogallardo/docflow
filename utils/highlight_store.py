@@ -190,7 +190,3 @@ def clear_highlights_for_path(base_dir: Path, rel_path: str) -> bool:
     canonical_path.unlink()
     _remove_dir_if_empty(canonical_path.parent)
     return True
-
-
-def has_highlights_for_path(base_dir: Path, rel_path: str) -> bool:
-    return highlight_status_for_path(base_dir, rel_path)[0]

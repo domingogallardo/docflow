@@ -2,8 +2,6 @@
 """
 Tests for PDFProcessor
 """
-import pytest
-from pathlib import Path
 
 from pdf_processor import PDFProcessor
 from utils import split_front_matter

@@ -60,7 +60,7 @@ class ImageProcessor:
 
     # --------- helpers ---------
     def _list_incoming_images(self) -> List[Path]:
-        return [p for p in U.list_files(self.SUPPORTED_EXTS, root=self.incoming_dir)]
+        return list(U.list_files(self.SUPPORTED_EXTS, root=self.incoming_dir))
 
     def _build_target_filename(self, image_path: Path) -> str:
         description = self.image_namer.describe_filename(image_path)

@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
 """Tests for MarkdownProcessor."""
-from pathlib import Path
 
 from markdown_processor import MarkdownProcessor
 import utils as U

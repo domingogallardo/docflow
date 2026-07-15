@@ -153,9 +153,7 @@ def add_margins_to_html_files(directory: Path, file_filter=None):
         "})();\n"
     )
 
-    html_files = [
-        file_path for file_path in iter_html_files(directory, file_filter)
-    ]
+    html_files = list(iter_html_files(directory, file_filter))
 
     if not html_files:
         print("📏 No HTML files to add margins to")

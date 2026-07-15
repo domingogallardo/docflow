@@ -24,7 +24,6 @@ def test_save_and_load_canonical_highlights(tmp_path: Path):
     loaded = highlight_store.load_highlights_for_path(base, rel)
     assert loaded["path"] == rel
     assert loaded["highlights"][0]["text"] == "hello"
-    assert highlight_store.has_highlights_for_path(base, rel) is True
 
 
 def test_empty_highlights_remove_canonical_file(tmp_path: Path):
@@ -39,7 +38,6 @@ def test_empty_highlights_remove_canonical_file(tmp_path: Path):
     highlight_store.save_highlights_for_path(base, rel, {"highlights": []})
     assert not path.exists()
     assert not path.parent.exists()
-    assert highlight_store.has_highlights_for_path(base, rel) is False
 
 
 def test_empty_highlights_keep_hash_dir_when_not_empty(tmp_path: Path):
@@ -77,7 +75,6 @@ def test_load_does_not_use_old_posts_highlights(tmp_path: Path):
     payload = highlight_store.load_highlights_for_path(base, rel)
     assert payload["path"] == rel
     assert payload["highlights"] == []
-    assert highlight_store.has_highlights_for_path(base, rel) is False
 
 
 def test_missing_ids_are_generated_and_stable(tmp_path: Path):

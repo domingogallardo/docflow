@@ -2,8 +2,6 @@
 """
 Tests for PodcastProcessor
 """
-import pytest
-from pathlib import Path
 
 from podcast_processor import PodcastProcessor
 import utils as U
@@ -329,7 +327,7 @@ def test_podcast_processor_splits_multi_episode_file(tmp_path):
     )
 
     processor = PodcastProcessor(incoming, destination)
-    moved = processor.process_podcasts()
+    processor.process_podcasts()
 
     # The original file should disappear after the split.
     assert not multi.exists()

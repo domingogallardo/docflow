@@ -314,7 +314,7 @@ def _parse_markdown_link_card_lines(lines: list[str]) -> dict[str, str | None]:
             card["domain"] = line
             continue
 
-        if line.startswith("http://") or line.startswith("https://"):
+        if line.startswith(("http://", "https://")):
             card["url"] = card["url"] or line
             continue
 
@@ -418,9 +418,7 @@ def _parse_front_matter(lines: list[str]) -> dict[str, str]:
                 item = next_line.strip()
                 if item.startswith("-"):
                     item = item[1:].strip()
-                    if item.startswith('"') and item.endswith('"') and len(item) >= 2:
-                        item = item[1:-1]
-                    elif item.startswith("'") and item.endswith("'") and len(item) >= 2:
+                    if len(item) >= 2 and item[0] == item[-1] and item[0] in {'"', "'"}:
                         item = item[1:-1]
                     if item:
                         list_values.append(item)
@@ -1321,16 +1319,12 @@ def strip_unstable_embed_artifacts(text: str) -> str:
     text = _TIKTOK_IFRAME_RE.sub("", text)
 
     cleaned_lines: list[str] = []
-    skip_next_cookie_hint = False
     for line in text.splitlines():
         lowered = line.lower()
         if "tiktok failed to load" in lowered:
-            skip_next_cookie_hint = True
             continue
         if "3rd party cookies" in lowered:
-            skip_next_cookie_hint = False
             continue
-        skip_next_cookie_hint = False
         cleaned_lines.append(line)
 
     result = "\n".join(cleaned_lines)

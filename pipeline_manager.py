@@ -22,6 +22,13 @@ from web_clipper_wrapper import (
     download_url_to_markdown,
     read_urls_from_file,
 )
+from utils.tweet_to_markdown import fetch_tweet_thread_markdown
+from utils.x_likes_fetcher import (
+    LikeTweet,
+    fetch_like_items_with_state,
+    fetch_post_items_with_state,
+    fetch_reply_items_with_state,
+)
 
 PIPELINE_STEPS = (
     ("tweets", "process_tweets_pipeline"),
@@ -31,15 +38,8 @@ PIPELINE_STEPS = (
     ("images", "process_images"),
     ("md", "process_markdown"),
 )
-TARGET_HANDLERS = {name: method for name, method in PIPELINE_STEPS}
+TARGET_HANDLERS = dict(PIPELINE_STEPS)
 PIPELINE_TARGETS = tuple(name for name, _ in PIPELINE_STEPS)
-from utils.tweet_to_markdown import fetch_tweet_thread_markdown
-from utils.x_likes_fetcher import (
-    LikeTweet,
-    fetch_like_items_with_state,
-    fetch_post_items_with_state,
-    fetch_reply_items_with_state,
-)
 
 
 class DocumentProcessor:
@@ -378,9 +378,7 @@ class DocumentProcessor:
         path = parsed.path.lower()
         if path.endswith(".pdf"):
             return False
-        if host == "arxiv.org" and path.startswith("/pdf/"):
-            return False
-        return True
+        return not (host == "arxiv.org" and path.startswith("/pdf/"))
 
     @staticmethod
     def _is_tco_url(url: str) -> bool:
@@ -401,22 +399,6 @@ class DocumentProcessor:
             if response.url and response.url != url:
                 return response.url
         return None
-
-    @classmethod
-    def _extract_primary_article_links_from_tweet_markdown(
-        cls,
-        markdown: str,
-        *,
-        resolve_short_url: Callable[[str], str | None] | None = None,
-    ) -> List[str]:
-        """Return the first external article-like link from each captured tweet block."""
-        return [
-            link
-            for link, _ in cls._extract_primary_article_links_with_sources_from_tweet_markdown(
-                markdown,
-                resolve_short_url=resolve_short_url,
-            )
-        ]
 
     @classmethod
     def _extract_primary_article_links_with_sources_from_tweet_markdown(
@@ -459,7 +441,7 @@ class DocumentProcessor:
 
         flush_block()
         deduped_links = cls._dedupe_urls(links)
-        sources_by_link = {link: source for link, source in links_with_sources}
+        sources_by_link = dict(links_with_sources)
         return [(link, sources_by_link.get(link, "")) for link in deduped_links]
 
     @classmethod
@@ -474,7 +456,7 @@ class DocumentProcessor:
             stripped = line.strip()
             if stripped.startswith("[View quoted tweet](") or stripped == "Quote":
                 return None
-            if stripped.startswith("![") or stripped.startswith("[!["):
+            if stripped.startswith(("![", "[![")):
                 continue
             for match in URL_RE.finditer(line):
                 url = match.group(0).rstrip(").,;:!\u2026")
