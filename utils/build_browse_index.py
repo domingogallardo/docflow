@@ -316,6 +316,49 @@ def _filter_text_for_path(path: Path) -> str:
     return _filter_text_part(text)
 
 
+def _filter_source_signature(path: Path) -> tuple[int, int] | None:
+    md_path = path if path.suffix.lower() == ".md" else path.with_suffix(".md")
+    try:
+        stat = md_path.stat()
+    except OSError:
+        return None
+    return stat.st_mtime_ns, stat.st_size
+
+
+def _cached_filter_data_for_path(
+    path: Path,
+    rel_path: str,
+    source_cache: dict[str, object] | None,
+    *,
+    include_post_epoch: bool,
+) -> tuple[str, float | None]:
+    if source_cache is None:
+        return (
+            _filter_text_for_path(path),
+            _post_effective_date_epoch(path) if include_post_epoch else None,
+        )
+
+    signature = _filter_source_signature(path)
+    cached = source_cache.get(rel_path)
+    if isinstance(cached, dict):
+        raw_signature = cached.get("signature")
+        cached_text = cached.get("filter_text")
+        expected_signature = list(signature) if signature is not None else None
+        has_cached_epoch = not include_post_epoch or "post_epoch" in cached
+        if raw_signature == expected_signature and isinstance(cached_text, str) and has_cached_epoch:
+            cached_epoch = cached.get("post_epoch")
+            return cached_text, cached_epoch if isinstance(cached_epoch, (int, float)) else None
+
+    filter_text = _filter_text_for_path(path)
+    post_epoch = _post_effective_date_epoch(path) if include_post_epoch else None
+    source_cache[rel_path] = {
+        "signature": list(signature) if signature is not None else None,
+        "filter_text": filter_text,
+        "post_epoch": post_epoch,
+    }
+    return filter_text, post_epoch
+
+
 def _normalize_filter_term(value: str) -> str:
     normalized = unicodedata.normalize("NFD", value)
     normalized = "".join(ch for ch in normalized if unicodedata.category(ch) != "Mn")
@@ -647,12 +690,46 @@ def _cached_content_filter_terms(
     cached = pages.get(display_path)
     if not isinstance(cached, dict):
         return None
-    if cached.get("fingerprint") != _content_filter_page_fingerprint(entries):
-        return None
+    fingerprint = _content_filter_page_fingerprint(entries)
+    fingerprint_matches = cached.get("fingerprint") == fingerprint
     raw_pool = cached.get("filter_pool")
     raw_terms = cached.get("filter_terms")
     if not isinstance(raw_pool, list) or not isinstance(raw_terms, dict):
         return None
+
+    current_filter_texts = {
+        _content_filter_entry_key(entry): entry.filter_text
+        for entry in _content_filter_file_entries(entries)
+    }
+    if fingerprint_matches:
+        # Transparently upgrade caches written before filter_texts was stored.
+        cached["filter_texts"] = current_filter_texts
+
+    # Removing an entry cannot make the cached terms for the remaining entries
+    # incorrect. Reuse them so delete/stage actions do not rerun the relatively
+    # expensive content-filter analysis for the whole directory. Additions and
+    # text changes still invalidate the cache normally.
+    if not fingerprint_matches:
+        raw_filter_texts = cached.get("filter_texts")
+        if isinstance(raw_filter_texts, dict):
+            if len(current_filter_texts) >= len(raw_filter_texts) or any(
+                raw_filter_texts.get(key) != filter_text
+                for key, filter_text in current_filter_texts.items()
+            ):
+                return None
+        else:
+            # Legacy caches lack source text. A strict subset of their entry
+            # keys still identifies the normal single-action removal case.
+            if not set(current_filter_texts) < set(raw_terms):
+                return None
+        cached["fingerprint"] = fingerprint
+        cached["filter_texts"] = current_filter_texts
+        cached["filter_terms"] = {
+            key: raw_terms[key]
+            for key in current_filter_texts
+            if key in raw_terms
+        }
+        raw_terms = cached["filter_terms"]
 
     filter_pool = [term for term in raw_pool if isinstance(term, str) and term.strip()]
     terms_by_key: dict[str, tuple[str, ...]] = {}
@@ -676,13 +753,20 @@ def _cache_content_filter_terms(
     cache: dict[str, object],
 ) -> None:
     pages = _content_filter_cache_pages(cache)
+    existing = pages.get(display_path)
+    filter_sources = existing.get("filter_sources", {}) if isinstance(existing, dict) else {}
     pages[display_path] = {
         "fingerprint": _content_filter_page_fingerprint(entries),
         "filter_pool": filter_pool,
+        "filter_texts": {
+            _content_filter_entry_key(entry): entry.filter_text
+            for entry in _content_filter_file_entries(entries)
+        },
         "filter_terms": {
             _content_filter_entry_key(entry): list(terms_by_key.get(_content_filter_entry_key(entry), ()))
             for entry in _content_filter_file_entries(entries)
         },
+        "filter_sources": filter_sources,
     }
 
 
@@ -1484,6 +1568,7 @@ def _scan_directory(
     reading_items: dict[str, dict],
     done_items: dict[str, dict],
     visibility_cache: dict[str, bool],
+    filter_source_cache: dict[str, object] | None = None,
 ) -> tuple[list[BrowseEntry], list[str], int]:
     entries: list[BrowseEntry] = []
     child_dirs: list[str] = []
@@ -1543,8 +1628,14 @@ def _scan_directory(
                 display_mtime = st.st_mtime
                 effective_mtime = display_mtime
                 temporal_epoch = effective_mtime
+                filter_text, cached_post_epoch = _cached_filter_data_for_path(
+                    abs_path,
+                    rel,
+                    filter_source_cache,
+                    include_post_epoch=category == "posts",
+                )
                 if category == "posts":
-                    post_epoch = _post_effective_date_epoch(abs_path)
+                    post_epoch = cached_post_epoch
                     if post_epoch is not None:
                         effective_mtime = post_epoch
                     temporal_epoch = post_epoch
@@ -1561,7 +1652,7 @@ def _scan_directory(
                         highlighted=highlighted,
                         highlight_last_epoch=highlight_last_epoch,
                         temporal_epoch=temporal_epoch,
-                        filter_text=_filter_text_for_path(abs_path),
+                        filter_text=filter_text,
                     )
                 )
     except OSError:
@@ -1590,6 +1681,20 @@ def _write_category_directory_page(
     out_dir = out_root / rel_dir
     out_dir.mkdir(parents=True, exist_ok=True)
 
+    display_path = _display_path_for_category_dir(category, rel_dir)
+    filter_source_cache: dict[str, object] | None = None
+    if content_filter_cache is not None:
+        pages = _content_filter_cache_pages(content_filter_cache)
+        page_cache = pages.get(display_path)
+        if not isinstance(page_cache, dict):
+            page_cache = {}
+            pages[display_path] = page_cache
+        raw_source_cache = page_cache.get("filter_sources")
+        if not isinstance(raw_source_cache, dict):
+            raw_source_cache = {}
+            page_cache["filter_sources"] = raw_source_cache
+        filter_source_cache = raw_source_cache
+
     entries, child_dirs, direct_files = _scan_directory(
         base_dir=base_dir,
         category=category,
@@ -1597,7 +1702,13 @@ def _write_category_directory_page(
         reading_items=reading_items,
         done_items=done_items,
         visibility_cache=visibility_cache,
+        filter_source_cache=filter_source_cache,
     )
+    if filter_source_cache is not None:
+        current_keys = {entry.rel_path for entry in entries if entry.rel_path}
+        for key in list(filter_source_cache):
+            if key not in current_keys:
+                filter_source_cache.pop(key, None)
     if category in YEAR_SORT_CATEGORIES and rel_dir == Path("."):
         entries = _sort_root_year_entries(entries)
     entries = _annotate_root_year_counts(
@@ -1609,7 +1720,6 @@ def _write_category_directory_page(
         reading_items=reading_items,
         done_items=done_items,
     )
-    display_path = _display_path_for_category_dir(category, rel_dir)
     entry_sections = _temporal_sections_for_category_year(
         category=category,
         rel_dir=rel_dir,

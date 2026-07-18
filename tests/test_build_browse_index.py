@@ -665,6 +665,84 @@ def test_rebuild_browse_for_path_reuses_content_filter_cache(tmp_path: Path, mon
     assert "/browse/posts/Posts 2026/" in result["updated"]
 
 
+def test_rebuild_browse_for_path_reuses_cached_filter_source_text(tmp_path: Path, monkeypatch):
+    base = tmp_path / "base"
+    posts = base / "Posts" / "Posts 2026"
+    posts.mkdir(parents=True)
+    html = posts / "doc.html"
+    html.write_text("<html><body>Doc</body></html>", encoding="utf-8")
+    html.with_suffix(".md").write_text(
+        "---\ndocflow_summary: cached semantic summary\n---\n\n# Doc\n",
+        encoding="utf-8",
+    )
+    build_browse_index.build_browse_site(base)
+
+    def fail_filter_text(_path):
+        raise AssertionError("unchanged Markdown metadata should come from cache")
+
+    monkeypatch.setattr(build_browse_index, "_filter_text_for_path", fail_filter_text)
+
+    result = build_browse_index.rebuild_browse_for_path(base, "Posts/Posts 2026/doc.html")
+
+    assert result["mode"] == "partial"
+
+
+def test_rebuild_browse_for_deleted_path_reuses_content_filter_cache(tmp_path: Path, monkeypatch):
+    base = tmp_path / "base"
+    posts = base / "Posts" / "Posts 2026"
+    posts.mkdir(parents=True)
+    docs = []
+    for index in range(5):
+        html = posts / f"doc-{index}.html"
+        docs.append(html)
+        html.write_text(f"<html><body>Doc {index}</body></html>", encoding="utf-8")
+        html.with_suffix(".md").write_text(
+            f"---\ndocflow_summary: semantic cluster {index}\n---\n\n# Doc {index}\n",
+            encoding="utf-8",
+        )
+
+    build_browse_index.build_browse_site(base)
+    docs[0].unlink()
+    docs[0].with_suffix(".md").unlink()
+
+    def fail_pool(_entries, _limit=build_browse_index.CONTENT_FILTER_POOL_LIMIT):
+        raise AssertionError("deleting an entry should reuse cached filter data")
+
+    monkeypatch.setattr(build_browse_index, "_content_filter_pool", fail_pool)
+
+    result = build_browse_index.rebuild_browse_for_path(base, "Posts/Posts 2026/doc-0.html")
+
+    assert result["mode"] == "partial"
+    year_page = base / "_site" / "browse" / "posts" / "Posts 2026" / "index.html"
+    assert "doc-0.html" not in year_page.read_text(encoding="utf-8")
+
+
+def test_rebuild_browse_for_deleted_path_reuses_legacy_content_filter_cache(tmp_path: Path, monkeypatch):
+    base = tmp_path / "base"
+    posts = base / "Posts" / "Posts 2026"
+    posts.mkdir(parents=True)
+    docs = []
+    for index in range(3):
+        html = posts / f"doc-{index}.html"
+        docs.append(html)
+        html.write_text(f"<html><body>Doc {index}</body></html>", encoding="utf-8")
+
+    build_browse_index.build_browse_site(base)
+    cache_path = build_browse_index.content_filter_cache_path(base)
+    cache = json.loads(cache_path.read_text(encoding="utf-8"))
+    for page in cache["pages"].values():
+        page.pop("filter_texts", None)
+    cache_path.write_text(json.dumps(cache), encoding="utf-8")
+    docs[0].unlink()
+
+    def fail_pool(_entries, _limit=build_browse_index.CONTENT_FILTER_POOL_LIMIT):
+        raise AssertionError("legacy cache should support a deletion without recomputing")
+
+    monkeypatch.setattr(build_browse_index, "_content_filter_pool", fail_pool)
+
+    build_browse_index.rebuild_browse_for_path(base, "Posts/Posts 2026/doc-0.html")
+
+
 def test_content_filter_pool_falls_back_to_titles_when_summaries_are_missing():
     entries = [
         build_browse_index.BrowseEntry(
