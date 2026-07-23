@@ -128,6 +128,12 @@ history would need separate state.
 External input files:
 
 - Drop local `.md`, `.pdf`, images, and other source files into `BASE_DIR/Incoming/`.
+- Full Snipd transcript Markdown is detected by its `Episode metadata`,
+  `share.snipd.com/episode/...` link, publish date, and `## Transcript`
+  section. The `md` target files it under `Podcasts/Podcasts <YEAR>/` as
+  `<Show> - <Episode title> - Transcripción`, generates the paired HTML, and
+  leaves both file dates at the Docflow processing time. The episode date is
+  retained separately in `podcast_publish_date`.
 - URL queue: `BASE_DIR/Incoming/links.txt`
   - The `urls` step downloads each URL as Markdown into `Incoming/`.
   - Successful URLs are removed from `links.txt` and recorded in `processed_history.txt`.
@@ -180,7 +186,8 @@ Source-specific fields:
   `docflow_final_url`, `docflow_original_url`, and
   `docflow_removed_data_images`.
 - Podcasts: `podcast_show`, `podcast_episode_title`,
-  `podcast_publish_date`, and `podcast_export_date`.
+  `podcast_publish_date`, `podcast_export_date`, and
+  `podcast_content_type` (`transcript` for full Snipd transcripts).
 - Tweets: `tweet_url`, `tweet_id`, `tweet_author`, `tweet_author_name`,
   `tweet_capture_source`, `tweet_content_type`, `tweet_posted_kind`,
   `tweet_thread`, `tweet_thread_count`, `tweet_reply_to_url`,

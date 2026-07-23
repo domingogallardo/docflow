@@ -68,7 +68,11 @@ class DocumentProcessor:
         self.pdf_processor = PDFProcessor(self.incoming, self.pdfs_dest)
         self.podcast_processor = PodcastProcessor(self.incoming, self.podcasts_dest)
         self.image_processor = ImageProcessor(self.incoming, self.images_dest)
-        self.markdown_processor = MarkdownProcessor(self.incoming, self.posts_dest)
+        self.markdown_processor = MarkdownProcessor(
+            self.incoming,
+            self.posts_dest,
+            podcast_destination_dir=self.podcasts_dest,
+        )
         self.tweet_processor = MarkdownProcessor(self.incoming, self.tweets_dest)
         self._history: List[Path] = []
 

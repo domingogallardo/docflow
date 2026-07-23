@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+import re
 from typing import Iterable, List
 
 import config as cfg
@@ -21,30 +22,67 @@ class MarkdownProcessor:
         self,
         incoming_dir: Path,
         destination_dir: Path,
+        podcast_destination_dir: Path | None = None,
     ):
         self.incoming_dir = incoming_dir
         self.destination_dir = destination_dir
+        self.podcast_destination_dir = podcast_destination_dir
         openai_client = build_openai_client(cfg.OPENAI_KEY)
         self.title_updater = TitleAIUpdater(openai_client)
         self.summary_updater = SummaryAIUpdater(openai_client)
 
     def process_markdown(self) -> List[Path]:
-        """Convert Markdown to HTML, apply margins, and move both files to the yearly destination."""
-        markdown_files = [
+        """Convert Markdown to HTML and route each file to its yearly destination."""
+        incoming_markdown = [
             path
             for path in self.incoming_dir.glob("*.md")
-            if self._is_generic_markdown(path)
+            if path.is_file()
+        ]
+        transcript_files = [
+            path
+            for path in incoming_markdown
+            if self._snipd_transcript_metadata(path) is not None
+        ]
+        transcript_paths = {path.resolve() for path in transcript_files}
+        markdown_files = [
+            path
+            for path in incoming_markdown
+            if path.resolve() not in transcript_paths and self._is_generic_markdown(path)
         ]
 
-        if not markdown_files:
+        if not markdown_files and not transcript_files:
             print("📝 No Markdown files found to process")
             return []
 
-        return self._process_markdown_batch(
-            markdown_files,
-            context="📝 Processing Markdown files...",
-            include_summary=True,
-        )
+        moved_files: List[Path] = []
+
+        if transcript_files:
+            if self.podcast_destination_dir is None:
+                print(
+                    "⚠️ Snipd transcript files were left in Incoming because "
+                    "no podcast destination is configured"
+                )
+            else:
+                prepared_transcripts = self._prepare_snipd_transcripts(transcript_files)
+                moved_transcripts = self._process_markdown_batch(
+                    prepared_transcripts,
+                    context=f"🎙️ Processing {len(prepared_transcripts)} Snipd transcript file(s)...",
+                    include_summary=True,
+                    destination_dir=self.podcast_destination_dir,
+                    apply_ai_titles=False,
+                )
+                moved_files.extend(moved_transcripts)
+
+        if markdown_files:
+            moved_files.extend(
+                self._process_markdown_batch(
+                    markdown_files,
+                    context="📝 Processing Markdown files...",
+                    include_summary=True,
+                )
+            )
+
+        return moved_files
 
     def process_tweet_markdown_subset(self, markdown_files: Iterable[Path]) -> List[Path]:
         """Process a specific tweet Markdown subset (for example, newly downloaded tweets)."""
@@ -70,8 +108,11 @@ class MarkdownProcessor:
         *,
         context: str,
         include_summary: bool,
+        destination_dir: Path | None = None,
+        apply_ai_titles: bool = True,
     ) -> List[Path]:
         print(context)
+        target_dir = destination_dir or self.destination_dir
 
         markdown_files = self._ensure_docflow_metadata(
             markdown_files,
@@ -116,7 +157,8 @@ class MarkdownProcessor:
             tracked_paths.append(new_path)
             return new_path
 
-        self.title_updater.update_titles(markdown_files, _rename)
+        if apply_ai_titles:
+            self.title_updater.update_titles(markdown_files, _rename)
 
         if tracked_paths:
             markdown_files = tracked_paths
@@ -124,13 +166,91 @@ class MarkdownProcessor:
             markdown_files = [path for path in markdown_files if path.exists()]
 
         files_to_move = self._collect_move_candidates(markdown_files)
-        moved_files = U.move_files_with_replacement(files_to_move, self.destination_dir)
+        moved_files = U.move_files_with_replacement(files_to_move, target_dir)
         U.sync_markdown_html_pairs_metadata(moved_files, base_dir=cfg.BASE_DIR)
 
         if moved_files:
-            print(f"📝 {len(moved_files)} Markdown file(s) moved to {self.destination_dir}")
+            print(f"📝 {len(moved_files)} Markdown file(s) moved to {target_dir}")
 
         return moved_files
+
+    def _prepare_snipd_transcripts(self, markdown_files: Iterable[Path]) -> List[Path]:
+        """Add podcast metadata and canonical names to full Snipd transcripts."""
+        prepared: List[Path] = []
+        for md_file in markdown_files:
+            metadata = self._snipd_transcript_metadata(md_file)
+            if metadata is None:
+                continue
+
+            title = (
+                f"{metadata['podcast_show']} - "
+                f"{metadata['podcast_episode_title']} - Transcripción"
+            )
+            try:
+                original = md_file.read_text(encoding="utf-8", errors="replace")
+                updated = U.upsert_front_matter(
+                    original,
+                    {
+                        "source": "podcast",
+                        "title": title,
+                        "podcast_show": metadata["podcast_show"],
+                        "podcast_episode_title": metadata["podcast_episode_title"],
+                        "podcast_publish_date": metadata["podcast_publish_date"],
+                        "podcast_content_type": "transcript",
+                    },
+                )
+                if updated != original:
+                    md_file.write_text(updated, encoding="utf-8")
+                renamed_path = rename_markdown_pair(md_file, title)
+                self._refresh_title_metadata(renamed_path, renamed_path.stem)
+                prepared.append(renamed_path)
+            except Exception as exc:
+                print(f"❌ Error preparing Snipd transcript {md_file.name}: {exc}")
+
+        return prepared
+
+    @staticmethod
+    def _snipd_transcript_metadata(path: Path) -> dict[str, str] | None:
+        """Return normalized metadata only for the full-transcript Snipd format."""
+        try:
+            text = path.read_text(encoding="utf-8", errors="ignore")
+        except Exception:
+            return None
+
+        _, body = U.split_front_matter(text)
+        flags = re.IGNORECASE | re.MULTILINE
+        if not re.search(r"^##\s+Episode metadata\s*$", body, flags):
+            return None
+        if not re.search(r"^##\s+Transcript\s*$", body, flags):
+            return None
+        if not re.search(
+            r"^-\s*Episode link:\s*.*https://share\.snipd\.com/episode/[^\s)]+",
+            body,
+            flags,
+        ):
+            return None
+
+        show_match = re.search(r"^-\s*Show:\s*(.+?)\s*$", body, flags)
+        publish_match = re.search(
+            r"^-\s*(?:Episode\s+)?Publish date:\s*(\d{4}-\d{2}-\d{2})\s*$",
+            body,
+            flags,
+        )
+        episode_match = re.search(r"^-\s*Episode title:\s*(.+?)\s*$", body, flags)
+        episode_title = (
+            episode_match.group(1).strip()
+            if episode_match
+            else U.extract_markdown_title(text)
+        )
+
+        if not show_match or not publish_match or not episode_title:
+            return None
+
+        return {
+            "podcast_show": show_match.group(1).strip(),
+            "podcast_episode_title": episode_title,
+            "podcast_publish_date": publish_match.group(1),
+        }
 
     def _ensure_docflow_metadata(
         self,
