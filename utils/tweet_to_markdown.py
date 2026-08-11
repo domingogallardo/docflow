@@ -1807,6 +1807,59 @@ def _find_tweet_result_by_rest_id(payload: object, rest_id: str | None) -> dict 
     return None
 
 
+def _iter_tweet_results(payload: object):
+    if isinstance(payload, dict):
+        if payload.get("__typename") == "Tweet" and payload.get("rest_id"):
+            yield payload
+        for value in payload.values():
+            yield from _iter_tweet_results(value)
+    elif isinstance(payload, list):
+        for item in payload:
+            yield from _iter_tweet_results(item)
+
+
+def _last_self_thread_status_id(
+    payload: object | None,
+    status_id: str,
+    author_handle: str | None,
+) -> str:
+    """Follow same-author reply links and return the last status in the chain."""
+    if not payload or not author_handle:
+        return status_id
+    expected_handle = author_handle.lstrip("@").casefold()
+    parent_by_id: dict[str, str | None] = {}
+    for result in _iter_tweet_results(payload):
+        user = result.get("core", {}).get("user_results", {}).get("result", {})
+        user_core = (user.get("core") or {}) if isinstance(user, dict) else {}
+        user_legacy = (user.get("legacy") or {}) if isinstance(user, dict) else {}
+        screen_name = user_core.get("screen_name") or user_legacy.get("screen_name")
+        if not screen_name or str(screen_name).casefold() != expected_handle:
+            continue
+        rest_id = str(result.get("rest_id") or "")
+        if not rest_id:
+            continue
+        legacy = result.get("legacy") or {}
+        parent_id = legacy.get("in_reply_to_status_id_str") or legacy.get(
+            "in_reply_to_status_id"
+        )
+        parent_by_id[rest_id] = str(parent_id) if parent_id else None
+
+    if status_id not in parent_by_id:
+        return status_id
+    current = status_id
+    seen = {current}
+    while True:
+        children = [
+            tweet_id
+            for tweet_id, parent_id in parent_by_id.items()
+            if parent_id == current and tweet_id not in seen
+        ]
+        if not children:
+            return current
+        current = max(children, key=lambda value: int(value) if value.isdigit() else 0)
+        seen.add(current)
+
+
 def _reply_parent_url_from_payload(payload: object | None, tweet_url: str) -> str | None:
     if payload is None:
         return None

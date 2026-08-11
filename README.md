@@ -345,7 +345,9 @@ based on the ISO week and tweet ID. Both collection and liking retry uncertain
 operations, persist atomic checkpoints, and stop early after repeated failures.
 The helper only marks the selected tweets as likes; it does not run the docflow
 pipeline or write documents to `Incoming`. The regular tweet queue downloads
-those new likes later.
+those new likes later. When a selected tweet belongs to a same-author thread,
+the helper marks the last tweet in that reply chain so regular ingestion can
+recover the complete thread.
 
 2. Run the processing pipeline:
 

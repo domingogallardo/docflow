@@ -315,6 +315,24 @@ def test_apply_likes_retries_uncertain_clicks_and_confirms_all(
     assert order[:2] == [50, 50]
 
 
+def test_resolve_like_target_uses_last_tweet_in_thread(monkeypatch):
+    candidate = {
+        "id": "100",
+        "url": "https://x.com/author/status/100",
+        "author_handle": "@author",
+    }
+    monkeypatch.setattr(
+        weekly,
+        "_last_self_thread_status_id",
+        lambda payload, status_id, author_handle: "102",
+    )
+
+    target_id, target_url = weekly._resolve_like_target(candidate, {"thread": True})
+
+    assert target_id == "102"
+    assert target_url == "https://x.com/author/status/102"
+
+
 def test_apply_likes_stops_after_repeated_failures(tmp_path, monkeypatch):
     state_path = tmp_path / "state.json"
     browser_state = tmp_path / "x-state.json"

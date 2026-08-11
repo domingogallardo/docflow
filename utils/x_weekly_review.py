@@ -31,6 +31,12 @@ from utils.x_likes_fetcher import (
     _dismiss_cookie_prompt,
     collect_timeline_items_from_page,
 )
+from utils.tweet_to_markdown import (
+    TWEET_DETAIL_WAIT_MS,
+    _attach_tweet_detail_listener,
+    _last_self_thread_status_id,
+    _wait_for_tweet_detail,
+)
 
 MADRID = ZoneInfo("Europe/Madrid")
 STATE_SCHEMA_VERSION = 2
@@ -493,6 +499,19 @@ def apply_selection(state_path: Path, selection_path: Path) -> None:
     print(f"Applied a selection of {len(selection)} tweets to {state_path}")
 
 
+def _resolve_like_target(candidate: dict, payload: object | None) -> tuple[str, str]:
+    author_handle = candidate.get("author_handle") or candidate.get("source_handle")
+    target_id = _last_self_thread_status_id(
+        payload,
+        str(candidate["id"]),
+        author_handle,
+    )
+    if target_id == str(candidate["id"]):
+        return target_id, candidate["url"]
+    handle = str(author_handle or "").lstrip("@")
+    return target_id, f"https://x.com/{handle}/status/{target_id}"
+
+
 def _perform_like_attempt(playwright, candidate: dict, state: Path) -> str:
     browser = playwright.chromium.launch(headless=True, channel="chrome")
     context = None
@@ -501,11 +520,25 @@ def _perform_like_attempt(playwright, candidate: dict, state: Path) -> str:
         context = browser.new_context(storage_state=str(state))
         context.add_init_script(STEALTH_SNIPPET)
         page = context.new_page()
-        page.goto(candidate["url"], wait_until="domcontentloaded", timeout=60000)
+        detail = _attach_tweet_detail_listener(page)
+        target_url = candidate.get("like_target_url") or candidate["url"]
+        page.goto(target_url, wait_until="domcontentloaded", timeout=60000)
         if any(hint in (page.url or "") for hint in LOGIN_WALL_HINTS):
             raise RuntimeError("login wall detected")
         _dismiss_cookie_prompt(page)
-        tweet_id = candidate["id"]
+        tweet_id = str(candidate.get("like_target_id") or candidate["id"])
+        if not candidate.get("like_target_id"):
+            payload = detail.get("payload")
+            if payload is None:
+                payload = _wait_for_tweet_detail(page, TWEET_DETAIL_WAIT_MS)
+            tweet_id, target_url = _resolve_like_target(candidate, payload)
+            if tweet_id != str(candidate["id"]):
+                print(f"   Thread target resolved: {target_url}")
+                page.goto(target_url, wait_until="domcontentloaded", timeout=60000)
+                if any(hint in (page.url or "") for hint in LOGIN_WALL_HINTS):
+                    raise RuntimeError("login wall detected")
+            candidate["like_target_id"] = tweet_id
+            candidate["like_target_url"] = target_url
         article = page.locator(f"article:has(a[href*='/status/{tweet_id}'])").first
         try:
             article.wait_for(state="visible", timeout=15000)

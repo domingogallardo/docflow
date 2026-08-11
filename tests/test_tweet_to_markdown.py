@@ -9,6 +9,7 @@ from utils.tweet_to_markdown import (
     strip_tweet_stats,
     _media_markdown_lines,
     _split_image_urls,
+    _last_self_thread_status_id,
     _emoji_from_twimg_url,
     _insert_quote_separator,
     _pick_quoted_tweet_url,
@@ -65,6 +66,40 @@ def test_split_image_urls_never_treats_extra_avatar_sizes_as_media():
 
     assert avatar == "https://pbs.twimg.com/profile_images/user_normal.jpg"
     assert media == ["https://pbs.twimg.com/media/photo.jpg"]
+
+
+def test_last_self_thread_status_id_follows_same_author_reply_chain():
+    def tweet(tweet_id, handle, parent_id=None):
+        legacy = {}
+        if parent_id:
+            legacy["in_reply_to_status_id_str"] = parent_id
+        return {
+            "__typename": "Tweet",
+            "rest_id": tweet_id,
+            "core": {
+                "user_results": {
+                    "result": {"core": {"screen_name": handle}},
+                }
+            },
+            "legacy": legacy,
+        }
+
+    payload = {
+        "data": {
+            "entries": [
+                tweet("100", "author"),
+                tweet("101", "author", "100"),
+                tweet("102", "author", "101"),
+                tweet("103", "other", "102"),
+                tweet("104", "author", "999"),
+            ]
+        }
+    }
+
+    assert _last_self_thread_status_id(payload, "100", "@author") == "102"
+    assert _last_self_thread_status_id(payload, "101", "@author") == "102"
+    assert _last_self_thread_status_id(payload, "102", "@author") == "102"
+    assert _last_self_thread_status_id(None, "100", "@author") == "100"
 
 
 def test_rebuild_urls_stops_on_ellipsis_or_blank():
