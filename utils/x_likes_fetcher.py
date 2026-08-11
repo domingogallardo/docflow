@@ -6,6 +6,7 @@ import re
 import unicodedata
 from contextlib import suppress
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import List, Sequence, Set, Tuple
 from urllib.parse import urljoin, urlparse
@@ -46,6 +47,10 @@ window.navigator.permissions.query = (parameters) => (
     : originalQuery(parameters)
 );
 """
+COOKIE_DECLINE_LABELS = (
+    "Refuse non-essential cookies",
+    "Rechazar cookies no esenciales",
+)
 
 
 @dataclass(frozen=True)
@@ -57,6 +62,8 @@ class TimelineTweet:
     time_datetime: str | None = None
     posted_kind: str | None = None
     reply_to_url: str | None = None
+    text: str | None = None
+    text_truncated: bool = False
 
 
 LikeTweet = TimelineTweet
@@ -110,6 +117,18 @@ def _wait_for_timeline_articles(page, *, timeline_url: str, retries: int = 1) ->
             _log("   ⚠️  No articles detected; the session may not be active.")
             return False
     return False
+
+
+def _dismiss_cookie_prompt(page) -> None:
+    for label in COOKIE_DECLINE_LABELS:
+        try:
+            button = page.get_by_text(label, exact=True)
+            if button.count() and button.first.is_visible():
+                button.first.click()
+                page.wait_for_timeout(500)
+                return
+        except Exception:
+            continue
 
 
 def _canonical_status_url(href: str | None) -> str | None:
@@ -202,6 +221,50 @@ def _extract_tweet_metadata(article) -> tuple[str | None, str | None, str | None
             time_text = None
         time_datetime = time_el.get_attribute("datetime")
     return author_name, author_handle, time_text, time_datetime
+
+
+def _article_text(article) -> str | None:
+    """Prefer semantic tweet text blocks over timeline chrome and counters."""
+    try:
+        blocks = article.locator("[data-testid='tweetText']")
+        texts: list[str] = []
+        for index in range(blocks.count()):
+            text = (blocks.nth(index).inner_text() or "").strip()
+            if text and text not in texts:
+                texts.append(text)
+        if texts:
+            return "\n\n".join(texts)
+    except Exception:
+        pass
+    try:
+        text = (article.inner_text() or "").strip()
+    except Exception:
+        return None
+    return text or None
+
+
+def _article_text_truncated(article) -> bool:
+    try:
+        lines = {
+            line.strip().casefold()
+            for line in (article.inner_text() or "").splitlines()
+            if line.strip()
+        }
+    except Exception:
+        return False
+    return bool(lines & {"show more", "mostrar más", "mostrar mas"})
+
+
+def _parse_timeline_datetime(value: str | None) -> datetime | None:
+    if not value:
+        return None
+    try:
+        parsed = datetime.fromisoformat(value.strip().replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=timezone.utc)
+    return parsed.astimezone(timezone.utc)
 
 
 def _is_pinned_article(article) -> bool:
@@ -352,6 +415,8 @@ def _extract_timeline_items(
                 time_text=time_text,
                 time_datetime=time_datetime,
                 posted_kind=posted_kind,
+                text=_article_text(article),
+                text_truncated=_article_text_truncated(article),
             )
         )
     return items
@@ -464,6 +529,7 @@ def collect_reply_items_from_page(
     page.on("response", handle_response)
     _log(f"▶️  Trying to load {replies_url}…")
     page.goto(replies_url, wait_until="domcontentloaded", timeout=60000)
+    _dismiss_cookie_prompt(page)
     if not _wait_for_timeline_articles(page, timeline_url=replies_url):
         return False, 0, [], False, _normalize_stop_url(stop_at_url)
 
@@ -537,22 +603,38 @@ def collect_timeline_items_from_page(
     exclude_pinned: bool = False,
     include_reposts: bool = False,
     timeline_label: str = "Timeline",
+    since_datetime: datetime | None = None,
+    until_datetime: datetime | None = None,
 ) -> Tuple[bool, int, List[TimelineTweet], bool, str | None]:
     """Load a timeline and return tweets with metadata."""
     _log(f"▶️  Trying to load {timeline_url}…")
     page.goto(timeline_url, wait_until="domcontentloaded", timeout=60000)
+    _dismiss_cookie_prompt(page)
     if not _wait_for_timeline_articles(page, timeline_url=timeline_url):
         return False, 0, [], False, _normalize_stop_url(stop_at_url)
 
     collected: List[TimelineTweet] = []
     seen: Set[str] = set()
     max_scrolls = 20
+    max_total_scrolls = 30
+    total_scrolls = 0
     idle_scrolls = 0
     stop_absolute = _normalize_stop_url(stop_at_url)
     stop_found = False
+    date_range_exhausted = False
+    seen_at_or_after_since = False
     articles = page.locator("article")
 
-    while _should_continue(collected, max_tweets, stop_found):
+    since_utc = since_datetime.astimezone(timezone.utc) if since_datetime else None
+    until_utc = until_datetime.astimezone(timezone.utc) if until_datetime else None
+
+    while (
+        _should_continue(collected, max_tweets, stop_found)
+        and not date_range_exhausted
+        and total_scrolls < max_total_scrolls
+    ):
+        batch_has_older_item = False
+        batch_has_newer_item = False
         for item in _extract_timeline_items(
             page,
             seen,
@@ -560,17 +642,32 @@ def collect_timeline_items_from_page(
             exclude_pinned=exclude_pinned,
             include_reposts=include_reposts,
         ):
+            item_datetime = _parse_timeline_datetime(item.time_datetime)
+            if since_utc and item_datetime and item_datetime < since_utc:
+                batch_has_older_item = True
+                if seen_at_or_after_since or batch_has_newer_item:
+                    date_range_exhausted = True
+                    break
+                continue
+            if since_utc and item_datetime and item_datetime >= since_utc:
+                batch_has_newer_item = True
+                seen_at_or_after_since = True
+            if until_utc and item_datetime and item_datetime >= until_utc:
+                continue
             collected.append(item)
             if stop_absolute and item.url == stop_absolute:
                 stop_found = True
                 break
             if not _should_continue(collected, max_tweets, stop_found):
                 break
-        if not _should_continue(collected, max_tweets, stop_found):
+        if since_utc and batch_has_older_item and not seen_at_or_after_since:
+            date_range_exhausted = True
+        if date_range_exhausted or not _should_continue(collected, max_tweets, stop_found):
             break
 
         before_articles = articles.count()
         page.mouse.wheel(0, 2000)
+        total_scrolls += 1
         page.wait_for_timeout(1500)
         after_articles = articles.count()
         if after_articles <= before_articles:
@@ -587,6 +684,8 @@ def collect_timeline_items_from_page(
     )
     if stop_absolute:
         summary += f". Stop URL {'found' if stop_found else 'not found'}."
+    if since_utc or until_utc:
+        summary += f". Date range {'exhausted' if date_range_exhausted else 'not exhausted'}."
     _log(summary)
 
     if collected:
@@ -608,6 +707,8 @@ def fetch_timeline_items_with_state(
     exclude_pinned: bool = False,
     include_reposts: bool = False,
     timeline_label: str = "Timeline",
+    since_datetime: datetime | None = None,
+    until_datetime: datetime | None = None,
 ) -> Tuple[List[TimelineTweet], bool, int]:
     """Load a timeline and return tweets with metadata (author + relative time)."""
     path = state_path.expanduser()
@@ -635,6 +736,8 @@ def fetch_timeline_items_with_state(
                 exclude_pinned=exclude_pinned,
                 include_reposts=include_reposts,
                 timeline_label=timeline_label,
+                since_datetime=since_datetime,
+                until_datetime=until_datetime,
             )
             if not success:
                 raise RuntimeError("Could not retrieve articles on the timeline page.")

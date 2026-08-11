@@ -8,6 +8,7 @@ from utils.tweet_to_markdown import (
     strip_article_metric_preamble,
     strip_tweet_stats,
     _media_markdown_lines,
+    _split_image_urls,
     _emoji_from_twimg_url,
     _insert_quote_separator,
     _pick_quoted_tweet_url,
@@ -51,6 +52,19 @@ def test_rebuild_urls_from_lines_merges_wrapped_urls():
     result = rebuild_urls_from_lines(raw)
     assert "https://example.com/path/segmentofinal" in result
     assert "segmento" not in result.splitlines()[2]
+
+
+def test_split_image_urls_never_treats_extra_avatar_sizes_as_media():
+    avatar, media = _split_image_urls(
+        [
+            "https://pbs.twimg.com/profile_images/user_normal.jpg",
+            "https://pbs.twimg.com/profile_images/user_bigger.jpg",
+            "https://pbs.twimg.com/media/photo.jpg",
+        ]
+    )
+
+    assert avatar == "https://pbs.twimg.com/profile_images/user_normal.jpg"
+    assert media == ["https://pbs.twimg.com/media/photo.jpg"]
 
 
 def test_rebuild_urls_stops_on_ellipsis_or_blank():
@@ -1206,6 +1220,57 @@ def test_build_thread_markdown_strips_repeated_author_headers():
     assert md.count("Jack Cole\n@MindsAI_Jack") == 0
     assert "1/ Humpty Dumpty sat on a wall." in md
     assert "2/ The agent spun up 400 subagents." in md
+
+
+def test_build_thread_markdown_prepends_external_reply_parent():
+    parent = TweetParts(
+        author_name="GDB",
+        author_handle="@gdb",
+        body_text="Original tweet.",
+        avatar_url=None,
+        trailing_media_lines=[],
+        media_present=False,
+        external_link=None,
+    )
+    first = TweetParts(
+        author_name="Simon Willison",
+        author_handle="@simonw",
+        body_text="First thread tweet.",
+        avatar_url=None,
+        trailing_media_lines=[],
+        media_present=False,
+        external_link=None,
+    )
+    second = TweetParts(
+        author_name="Simon Willison",
+        author_handle="@simonw",
+        body_text="Second thread tweet.",
+        avatar_url=None,
+        trailing_media_lines=[],
+        media_present=False,
+        external_link=None,
+    )
+
+    md = _build_thread_markdown(
+        [
+            ("https://x.com/simonw/status/2", first),
+            ("https://x.com/simonw/status/3", second),
+        ],
+        "https://x.com/simonw/status/3",
+        second,
+        author_handle="@simonw",
+        reply_parent_contexts=[
+            ReplyParentContext("https://x.com/gdb/status/1", parent),
+        ],
+    )
+
+    assert "tweet_thread_count: 3" in md
+    assert "tweet_conversation_count: 3" in md
+    assert "tweet_reply_to_url: https://x.com/gdb/status/1" in md
+    assert "tweet_reply_context_included: true" in md
+    assert "**GDB @gdb**" in md
+    assert md.index("Original tweet.") < md.index("First thread tweet.")
+    assert md.index("First thread tweet.") < md.index("Second thread tweet.")
 
 
 def test_wait_for_tweet_detail_returns_payload():

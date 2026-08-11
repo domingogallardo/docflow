@@ -318,7 +318,34 @@ export DONE_LINKS_FILE="/path/to/Obsidian/Leidos.md"
 ```
 
 Keep `TWEET_LIKES_STATE` outside the repo so cleanup operations do not delete it.
+When a liked thread starts as a reply to another author, the downloaded thread
+includes that external parent tweet first and preserves its author attribution.
 If `TWEET_POSTS_URL` is set, the tweet pipeline also downloads your published tweets, reposts, and replies and tags them separately from likes. Replies are read from `TWEET_REPLIES_URL`, or from `<TWEET_POSTS_URL>/with_replies` when that variable is unset.
+
+The fixed-corpus weekly X review uses a re-entrant state file under
+`BASE_DIR/state/x_weekly/`. Collection, editorial selection, and idempotent
+liking are separate commands:
+
+```bash
+python utils/x_weekly_review.py plan --start 2026-08-10
+python utils/x_weekly_review.py collect --start 2026-08-10
+python utils/x_weekly_review.py select /path/to/2026-W33.json /path/to/selection.json
+python utils/x_weekly_review.py apply /path/to/2026-W33.json
+python utils/x_weekly_review.py status /path/to/2026-W33.json
+```
+
+The private corpus is read from `BASE_DIR/state/x_weekly/corpus.json`. It must
+contain exactly 50 objects with `handle` and an integer `weight` from 1 to 100;
+the file stays outside the repository.
+
+The selection JSON must contain exactly 50 objects with `id`, `summary`, and
+`topic`. Collection creates a deterministic weighted review pool: weight 100
+includes every candidate, while lower weights introduce reproducible sampling
+based on the ISO week and tweet ID. Both collection and liking retry uncertain
+operations, persist atomic checkpoints, and stop early after repeated failures.
+The helper only marks the selected tweets as likes; it does not run the docflow
+pipeline or write documents to `Incoming`. The regular tweet queue downloads
+those new likes later.
 
 2. Run the processing pipeline:
 

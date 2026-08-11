@@ -1958,8 +1958,9 @@ def _split_image_urls(image_urls: List[str]) -> Tuple[Optional[str], List[str]]:
     avatar = None
     media: List[str] = []
     for url in image_urls:
-        if avatar is None and "profile_images" in url:
-            avatar = url
+        if "profile_images" in url:
+            if avatar is None:
+                avatar = url
             continue
         media.append(url)
     return avatar, media
@@ -2803,18 +2804,21 @@ def _build_thread_markdown(
     author_handle: str | None,
     capture_source: str = "liked",
     posted_kind: str | None = None,
+    reply_parent_contexts: Sequence[ReplyParentContext] | None = None,
 ) -> str:
     normalized_capture_source = _normalize_capture_source(capture_source)
     normalized_posted_kind = (
         _normalize_posted_kind(posted_kind) if normalized_capture_source == "posted" else None
     )
+    parent_contexts = list(reply_parent_contexts or [])
+    total_tweets = len(parent_contexts) + len(thread_parts)
     title = _build_title(target_parts.author_name, author_handle, kind="Thread")
     front_matter: dict[str, object] = {
         "source": "tweet",
         "tweet_url": tweet_url,
         "tweet_capture_source": normalized_capture_source,
         "tweet_thread": True,
-        "tweet_thread_count": len(thread_parts),
+        "tweet_thread_count": total_tweets,
     }
     if normalized_posted_kind:
         front_matter["tweet_posted_kind"] = normalized_posted_kind
@@ -2824,11 +2828,24 @@ def _build_thread_markdown(
         front_matter["tweet_author_name"] = target_parts.author_name
     if target_parts.is_article:
         front_matter["tweet_content_type"] = "article"
+    if parent_contexts:
+        front_matter["tweet_reply_to_url"] = parent_contexts[-1].url
+        front_matter["tweet_reply_context_included"] = any(
+            context.parts is not None for context in parent_contexts
+        )
+        front_matter["tweet_conversation_count"] = total_tweets
     front_matter.update(_link_card_metadata(target_parts.link_card))
 
     md_lines = [*front_matter_block(front_matter).splitlines(), f"# {title}"]
     if target_parts.avatar_url:
         md_lines.extend(["", f"![avatar]({target_parts.avatar_url})"])
+
+    for parent_context in parent_contexts:
+        md_lines.extend(["", "---", f"[View on X]({parent_context.url})"])
+        if parent_context.parts is not None:
+            md_lines.extend(["", f"**{_author_label_from_parts(parent_context.parts)}**"])
+            _append_tweet_content_lines(md_lines, parent_context.parts, strip_author=True)
+            _append_link_card_lines(md_lines, parent_context.parts.link_card)
 
     for section_url, parts in thread_parts:
         link_url = section_url or tweet_url
@@ -3009,7 +3026,7 @@ def fetch_tweet_thread_markdown(
 
         if thread_ids and target_id and target_id in thread_ids:
             target_idx = thread_ids.index(target_id)
-        if thread_ids and len(thread_ids) > len(selected_indices):
+        if len(thread_ids) > 1:
             primary_handle = effective_author_handle
             handle_slug = (primary_handle or "").lstrip("@")
             thread_parts: List[tuple[str | None, TweetParts]] = []
@@ -3048,6 +3065,18 @@ def fetch_tweet_thread_markdown(
                 parts = target_parts if idx == target_idx else _extract_tweet_parts(art, extract_url, page=page)
                 thread_parts.append((section_url, parts))
 
+        if thread_ids and len(thread_ids) == len(thread_parts):
+            handle_slug = (effective_author_handle or "").lstrip("@")
+            thread_parts = [
+                (
+                    f"https://x.com/{handle_slug}/status/{rest_id}"
+                    if handle_slug
+                    else f"https://x.com/i/web/status/{rest_id}",
+                    parts,
+                )
+                for rest_id, (_, parts) in zip(thread_ids, thread_parts)
+            ]
+
         if len(thread_parts) <= 1:
             browser.close()
             return _build_single_tweet_markdown(
@@ -3057,7 +3086,32 @@ def fetch_tweet_thread_markdown(
                 posted_kind=normalized_posted_kind,
             ), filename
 
-        print(f"🧵 Thread downloaded ({len(thread_parts)} tweets).")
+        parent_contexts: List[ReplyParentContext] = []
+        if normalized_capture_source == "liked":
+            handle_slug = (effective_author_handle or "").lstrip("@")
+            thread_root_url = thread_parts[0][0]
+            if thread_ids and handle_slug:
+                thread_root_url = f"https://x.com/{handle_slug}/status/{thread_ids[0]}"
+            if thread_root_url:
+                thread_root_parent_url = _reply_parent_url_from_payload(
+                    thread_payload,
+                    thread_root_url,
+                )
+                if _should_download_reply_chain(
+                    capture_source=normalized_capture_source,
+                    posted_kind=normalized_posted_kind,
+                    parent_url=thread_root_parent_url,
+                    target_author_handle=effective_author_handle,
+                ):
+                    parent_contexts = _extract_reply_parent_chain(
+                        page,
+                        tweet_url=thread_root_url,
+                        first_parent_url=thread_root_parent_url,
+                        first_payload=thread_payload,
+                    )
+
+        total_tweets = len(parent_contexts) + len(thread_parts)
+        print(f"🧵 Thread downloaded ({total_tweets} tweets).")
         markdown = _build_thread_markdown(
             thread_parts,
             url,
@@ -3065,6 +3119,7 @@ def fetch_tweet_thread_markdown(
             author_handle=effective_author_handle,
             capture_source=normalized_capture_source,
             posted_kind=normalized_posted_kind,
+            reply_parent_contexts=parent_contexts,
         )
         browser.close()
         return markdown, filename

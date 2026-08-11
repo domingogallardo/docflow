@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+from datetime import datetime, timezone
+
 from utils import x_likes_fetcher as xl
 
 
@@ -48,6 +50,25 @@ class FakeTime:
         return None
 
 
+class FakeTextBlock:
+    def __init__(self, text: str):
+        self.text = text
+
+    def inner_text(self):
+        return self.text
+
+
+class FakeTextLocator:
+    def __init__(self, texts):
+        self.texts = texts
+
+    def count(self):
+        return len(self.texts)
+
+    def nth(self, index):
+        return FakeTextBlock(self.texts[index])
+
+
 class FakeArticle:
     def __init__(
         self,
@@ -58,6 +79,8 @@ class FakeArticle:
         time_href: str | None = None,
         time_text: str | None = None,
         time_datetime: str | None = None,
+        text: str | None = None,
+        tweet_texts=None,
     ):
         self.hrefs = hrefs
         self.spans = spans or []
@@ -65,6 +88,11 @@ class FakeArticle:
         self.time_href = time_href
         self.time_text = time_text
         self.time_datetime = time_datetime
+        self.text = text
+        self.tweet_texts = tweet_texts or []
+
+    def inner_text(self):
+        return self.text or "\n".join(self.spans)
 
     def query_selector_all(self, selector):
         if selector == "a[href*='/status/']":
@@ -91,6 +119,10 @@ class FakeArticle:
                 return None
             return FakeTime(self.time_text, self.time_datetime)
         return None
+
+    def locator(self, selector):
+        assert selector == "[data-testid='tweetText']"
+        return FakeTextLocator(self.tweet_texts)
 
 
 class FakeLocator:
@@ -143,6 +175,33 @@ def test_extract_timeline_items_filters_to_expected_author():
     )
 
     assert [item.url for item in items] == ["https://x.com/domingo/status/1"]
+    assert items[0].text == "Domingo\n@domingo"
+
+
+def test_parse_timeline_datetime_normalizes_to_utc():
+    parsed = xl._parse_timeline_datetime("2026-08-03T01:30:00+02:00")
+
+    assert parsed == datetime(2026, 8, 2, 23, 30, tzinfo=timezone.utc)
+    assert xl._parse_timeline_datetime("not-a-date") is None
+
+
+def test_extract_timeline_items_prefers_semantic_text_and_flags_truncation():
+    article = FakeArticle(
+        ["/domingo/status/1"],
+        spans=["Domingo", "@domingo"],
+        time_href="/domingo/status/1",
+        text="Domingo\n@domingo\nSemantic content\nShow more\n1\n2\n3",
+        tweet_texts=["Semantic content", "Quoted context"],
+    )
+
+    items = xl._extract_timeline_items(
+        FakePage([article]),
+        set(),
+        expected_author_handle="@domingo",
+    )
+
+    assert items[0].text == "Semantic content\n\nQuoted context"
+    assert items[0].text_truncated is True
 
 
 def test_extract_timeline_items_includes_reposts_when_requested():
