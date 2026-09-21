@@ -160,7 +160,9 @@ PLATFORM_UI_PROMPT_INLINE_RE = re.compile(
     re.IGNORECASE,
 )
 COMPACT_ARTICLE_METRIC_PREAMBLE_RE = re.compile(
-    r"^(?P<prefix>.+?)(?P<metrics>\d[\d.,]*(?:[kmbKMB])?(?:\d[\d.,]*(?:[kmbKMB])?){3,})"
+    # Individual counters have no separator, so count their digits after matching.
+    # Repeating overlapping digit groups here causes catastrophic backtracking.
+    r"^(?P<prefix>.+?)(?P<metrics>\d[\d.,kmbKMB]*[kmbKMB])"
     r"(?P<body>[A-ZÁÉÍÓÚÜÑ][^\n]*)$"
 )
 EMBEDDED_TWEET_DATE_RE = re.compile(

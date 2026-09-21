@@ -626,6 +626,23 @@ def test_strip_article_metric_preamble_removes_compact_x_article_counters():
     )
 
 
+def test_strip_article_metric_preamble_keeps_long_numeric_tweet_text():
+    factor = (
+        "636606729769440499166579950236036751749912014371509557713570027508971809534551913252252094954941974952859310861988904737359709200557919"
+    )
+    assert len(factor) == 135
+    raw = "\n".join(
+        [
+            "Steve Weis",
+            "@sweis",
+            factor,
+            "is a factor of RSA-896",
+        ]
+    )
+
+    assert strip_article_metric_preamble(raw, author_handle="@sweis") == raw
+
+
 def test_strip_article_metric_preamble_leaves_regular_numeric_body():
     raw = "\n".join(
         [
