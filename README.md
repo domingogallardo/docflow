@@ -393,6 +393,14 @@ bin/urlclip "https://example.com/article"
 (`links.txt`, `processed_history.txt`, and `links_failed.txt`) is handled by the
 `urls` pipeline target.
 
+Capture URLs from an iPhone using the `A Docflow` share-sheet/Unread shortcut.
+Its append-only iCloud queue is consumed nightly by the existing cron at 23:30.
+To inspect or process it manually, run `bash bin/docflow-captures.sh --dry-run`
+or `bash bin/docflow-captures.sh`. Failed captures stay pending, and completed
+captures require an archived Markdown/HTML pair. See
+[iPhone capture setup](docs/iphone-captures.md) for installation, status files,
+and recovery instructions.
+
 3. Build local intranet pages manually:
 
 ```bash

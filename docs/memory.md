@@ -119,6 +119,15 @@ This file stores stable, reusable operational notes for future agent runs.
 
 ### Incoming Ingress
 
+- iPhone/Unread captures use the append-only iCloud `Shortcuts/Docflow/queue.md`
+  and `capture_queue.py`; generated `status.md` is the readable completion view.
+- Durable receipts are in `BASE_DIR/state/capture_queue.json`. Downloaded captures
+  are completed only after a nonempty Markdown/HTML pair reaches `Posts`.
+- `bin/docflow-captures.sh` shares the full cron's `docflow-all.lock`. The
+  `computer-ops` capture wrapper is scheduled nightly at 23:30.
+- The signed `A Docflow.shortcut` installer and device verification instructions
+  are documented in `docs/iphone-captures.md`.
+
 - docflow reads source documents from `BASE_DIR/Incoming`.
 - Markdown files in `Incoming/` are converted/renamed/moved to `Posts/Posts <YEAR>/` by `MarkdownProcessor`.
 - PDFs in `Incoming/` are moved to `Pdfs/Pdfs <YEAR>/` by `PDFProcessor`.
