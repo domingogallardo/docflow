@@ -150,6 +150,8 @@ This file stores stable, reusable operational notes for future agent runs.
 
 ### Daily Tweet Consolidation Rendering
 
+- Weekly selections use the same rendering/cleanup engine with an explicit file list. `utils/weekly_tweet_consolidation.py` matches selected IDs and `like_target_id` to captured tweet metadata, persists `<WEEK>-downloads.json`, and reserves found Markdown with `tweet_weekly_week` (preserving content mtimes). Daily grouping excludes these sources, including while a weekly batch is pending. The tweet pipeline resumes the latest confirmed batch; `--weekly-state` provides manual consolidation and `--dry-run` inspects membership without writes. X articles remain in Posts and appear as links in the weekly document.
+
 - `utils/build_daily_tweet_consolidated.py` has its own Markdown-to-HTML path for entry bodies (`_markdown_to_html_fragment`) and does not use `utils.markdown_to_html`.
 - To preserve tweet hard line breaks without breaking list markup, keep line-break conversion scoped to plain paragraph content only (current helper: `_preserve_paragraph_line_breaks`).
 - Do not apply global newline-to-`<br>` transforms on container tags (`div/ul/li/...`) in consolidated tweet output; that can reintroduce artifacts like `<li><br>` and malformed list spacing.

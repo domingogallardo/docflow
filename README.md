@@ -349,6 +349,27 @@ those new likes later. When a selected tweet belongs to a same-author thread,
 the helper marks the last tweet in that reply chain so regular ingestion can
 recover the complete thread.
 
+After tweet ingestion, the pipeline resolves the latest confirmed weekly selection
+to an explicit downloaded-file manifest (`state/x_weekly/<WEEK>-downloads.json`).
+It matches selected IDs or their recorded thread Like targets against source
+metadata, never by download date or mentions in the body. Partial batches are
+reserved for their week and resumed on subsequent pipeline runs. Once all 50
+selected IDs are represented, the existing consolidation renderer produces
+`Tweets semana <WEEK>.md` and `.html`. A shared downloaded thread appears once;
+X articles stay in Posts and are linked from the weekly document. These source
+files are excluded from daily consolidation. Other tweets keep the daily flow.
+
+To inspect or explicitly consolidate a saved weekly selection:
+
+```bash
+source ~/.docflow_env
+python -m utils.build_daily_tweet_consolidated --weekly-state "$DOCFLOW_BASE_DIR/state/x_weekly/2026-W40.json" --dry-run
+python -m utils.build_daily_tweet_consolidated --weekly-state "$DOCFLOW_BASE_DIR/state/x_weekly/2026-W40.json"
+```
+
+Re-running an unchanged, complete manifest leaves its consolidated files alone.
+When a missing download becomes available, the weekly manifest is resolved again.
+
 2. Run the processing pipeline:
 
 ```bash

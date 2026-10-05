@@ -149,13 +149,15 @@ class TweetEntry:
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="Generate a daily consolidated tweets file from Tweets/Tweets <YEAR>.",
+        description="Generate daily or selection-based weekly consolidated tweets.",
     )
-    parser.add_argument(
+    grouping = parser.add_mutually_exclusive_group(required=True)
+    grouping.add_argument(
         "--day",
-        required=True,
         help="Day to consolidate in YYYY-MM-DD format.",
     )
+    grouping.add_argument("--weekly-state", type=Path, help="Consolidate the downloaded files for an explicit weekly X selection.")
+    parser.add_argument("--dry-run", action="store_true", help="Inspect weekly file membership without changing files.")
     parser.add_argument(
         "--year",
         type=int,
@@ -266,6 +268,8 @@ def _collect_daily_source_markdown(
         if not _matches_capture_source(meta, normalized_source):
             continue
         if _is_tweet_article(meta):
+            continue
+        if meta.get("tweet_weekly_week"):
             continue
         local_day = _tweet_operational_day_from_mtime(path.stat().st_mtime)
         if local_day == day:
@@ -1300,12 +1304,12 @@ def _heading_for_capture_source(capture_source: str) -> str:
     return "Consolidado diario de tweets"
 
 
-def _render_markdown(day: str, entries: Iterable[TweetEntry], *, capture_source: str) -> str:
+def _render_markdown(day: str, entries: Iterable[TweetEntry], *, capture_source: str, heading: str | None = None) -> str:
     entry_list = list(entries)
     thread_total = sum(1 for entry in entry_list if entry.kind.startswith("Thread"))
 
     lines: list[str] = [
-        f"# {_heading_for_capture_source(capture_source)} ({day})",
+        f"# {heading or _heading_for_capture_source(capture_source)} ({day})",
         "",
         f"- Total de ficheros: **{len(entry_list)}**",
         f"- Hilos detectados: **{thread_total}**",
@@ -1444,12 +1448,12 @@ def _render_entries_html(entries: Iterable[TweetEntry]) -> str:
     return "\n".join(lines).rstrip() + "\n"
 
 
-def _render_html_document(day: str, entries: Iterable[TweetEntry], *, title: str, capture_source: str) -> str:
+def _render_html_document(day: str, entries: Iterable[TweetEntry], *, title: str, capture_source: str, heading: str | None = None) -> str:
     entry_list = list(entries)
     thread_total = sum(1 for entry in entry_list if entry.kind.startswith("Thread"))
     header_markdown = "\n".join(
         [
-            f"# {_heading_for_capture_source(capture_source)} ({day})",
+            f"# {heading or _heading_for_capture_source(capture_source)} ({day})",
             "",
             f"- Total de ficheros: **{len(entry_list)}**",
             f"- Hilos detectados: **{thread_total}**",
@@ -1535,17 +1539,35 @@ def _build_daily_consolidated_from_markdown(
         )
         return 0
 
-    entries = [_build_entry(path) for path in source_markdown]
+    return build_consolidated_from_files(tweets_dir, source_markdown, day=day,
+                                        output_base=output_base or _default_output_base(day, capture_source),
+                                        capture_source=capture_source)
+
+
+def build_consolidated_from_files(
+    tweets_dir: Path,
+    source_markdown: list[Path],
+    *,
+    day: str,
+    output_base: str,
+    capture_source: str = DEFAULT_CAPTURE_SOURCE,
+    heading: str | None = None,
+    additional_entries: Iterable[TweetEntry] = (),
+) -> int:
+    """Use the existing renderer and cleanup with an explicit source file list."""
+    entries = [_build_entry(path) for path in source_markdown] + list(additional_entries)
+    if not entries:
+        return 0
     entries.sort(key=lambda item: (item.mtime, item.title.lower()))
     latest_tweet_mtime = max(entry.mtime for entry in entries)
     consolidated_mtime = latest_tweet_mtime + 60
     consolidated_at = U.utc_now_iso()
 
-    output_name = output_base or _default_output_base(day, capture_source)
+    output_name = output_base
     md_path = tweets_dir / f"{output_name}.md"
     html_path = tweets_dir / f"{output_name}.html"
 
-    markdown_text = _render_markdown(day, entries, capture_source=capture_source)
+    markdown_text = _render_markdown(day, entries, capture_source=capture_source, heading=heading)
     markdown_text = U.upsert_front_matter(
         markdown_text,
         {
@@ -1559,7 +1581,7 @@ def _build_daily_consolidated_from_markdown(
     )
     md_path.write_text(markdown_text, encoding="utf-8")
 
-    html_text = _render_html_document(day, entries, title=md_path.stem, capture_source=capture_source)
+    html_text = _render_html_document(day, entries, title=md_path.stem, capture_source=capture_source, heading=heading)
     html_path.write_text(html_text, encoding="utf-8")
     U.add_margins_to_html_files(tweets_dir, file_filter=lambda path: path == html_path)
     U.sync_markdown_html_pair_metadata(
@@ -1569,7 +1591,7 @@ def _build_daily_consolidated_from_markdown(
     )
     linked_markdown = _sync_source_consolidated_links(
         tweets_dir,
-        entries,
+        [entry for entry in entries if entry.path in source_markdown],
         html_path=html_path,
     )
 
@@ -1613,6 +1635,11 @@ def _build_daily_consolidated_from_markdown(
 
 def main() -> int:
     args = parse_args()
+    if getattr(args, "weekly_state", None):
+        from utils.weekly_tweet_consolidation import consolidate_week
+        return 0 if consolidate_week(args.weekly_state, cfg.BASE_DIR, dry_run=args.dry_run) else 1
+    if getattr(args, "dry_run", False):
+        raise SystemExit("--dry-run requires --weekly-state")
     day_dt = _parse_day(args.day)
     year = args.year or day_dt.year
     capture_source = _normalize_capture_source(getattr(args, "capture_source", DEFAULT_CAPTURE_SOURCE))

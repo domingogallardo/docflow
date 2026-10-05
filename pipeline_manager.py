@@ -725,7 +725,10 @@ class DocumentProcessor:
         """Process the tweet queue and move results to the appropriate yearly folder."""
         generated = self.process_tweet_urls()
         tweet_markdown = self._merge_paths(self._list_tweet_markdown(), generated)
-        return self._process_tweet_markdown_subset(tweet_markdown, log_empty=log_empty_conversion)
+        moved = self._process_tweet_markdown_subset(tweet_markdown, log_empty=log_empty_conversion)
+        from utils.weekly_tweet_consolidation import consolidate_latest_week
+        consolidate_latest_week(self.base_dir)
+        return moved
 
     def process_targets(self, targets: Iterable[str], *, log_empty_tweets: bool = True) -> bool:
         """Run a subset of the pipeline for the given targets."""

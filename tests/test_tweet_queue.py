@@ -417,6 +417,17 @@ def test_process_tweets_pipeline_runs_markdown_subset(tmp_path, monkeypatch):
     assert moved == [processor.tweets_dest / "Tweet - processed.md"]
 
 
+def test_process_tweets_pipeline_resumes_weekly_batch_after_conversion(tmp_path, monkeypatch):
+    processor, _ = prepare_processor(tmp_path)
+    events = []
+    monkeypatch.setattr(processor, "process_tweet_urls", lambda: [])
+    monkeypatch.setattr(processor, "_process_tweet_markdown_subset", lambda files, **kw: events.append("converted") or [])
+    monkeypatch.setattr("utils.weekly_tweet_consolidation.consolidate_latest_week",
+                        lambda base: events.append(("weekly", base)))
+    processor.process_tweets_pipeline()
+    assert events == ["converted", ("weekly", tmp_path)]
+
+
 def test_process_tweets_pipeline_moves_tweet_articles_to_posts(tmp_path, monkeypatch):
     processor, incoming = prepare_processor(tmp_path)
     mock_likes(monkeypatch, [])
