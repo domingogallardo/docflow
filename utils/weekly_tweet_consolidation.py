@@ -36,9 +36,6 @@ def consolidate_week(state_path: Path, base_dir: Path, *, dry_run: bool = False)
     selected = [c for c in state["candidates"] if c.get("selected")]
     if len(selected) != SELECTION_SIZE or len({c["id"] for c in selected}) != SELECTION_SIZE:
         raise ValueError(f"Weekly selection must contain {SELECTION_SIZE} unique tweets")
-    if any(c.get("like_status") not in {"liked", "already_liked"} for c in selected):
-        print(f"Weekly consolidation {week}: waiting for confirmed Likes")
-        return False
 
     targets: set[str] = set()
     for candidate in selected:
@@ -100,6 +97,19 @@ def consolidate_week(state_path: Path, base_dir: Path, *, dry_run: bool = False)
         return True
     if missing:
         print(f"Weekly consolidation {week}: waiting for {len(missing)} downloaded tweet(s)")
+        # The normal timeline may omit a selected tweet after an uncertain Like.
+        # Hand missing captures to the existing retry queue instead of waiting
+        # for them to appear among recent Likes on a later run.
+        retry_path = base_dir / "Incoming" / "tweets_failed.txt"
+        retries = retry_path.read_text(encoding="utf-8").splitlines() if retry_path.exists() else []
+        for candidate in selected:
+            if str(candidate["id"]) in missing:
+                url = candidate.get("like_target_url") or candidate.get("url")
+                if url and url not in retries:
+                    retries.append(url)
+        if retries:
+            retry_path.parent.mkdir(parents=True, exist_ok=True)
+            retry_path.write_text("\n".join(retries) + "\n", encoding="utf-8")
     else:
         regular = [p for p, meta in files.items() if not builder._is_tweet_article(meta)]
         articles = []
@@ -128,9 +138,9 @@ def consolidate_week(state_path: Path, base_dir: Path, *, dry_run: bool = False)
 
 
 def consolidate_latest_week(base_dir: Path) -> None:
-    """Resume the latest applied weekly batch after each normal tweet pipeline."""
+    """Reserve and resume the latest selection independently of X Like results."""
     states = sorted((base_dir / "state" / "x_weekly").glob("????-W??.json"))
     if states:
         state = json.loads(states[-1].read_text())
-        if state.get("application", {}).get("status") == "complete":
+        if len([c for c in state.get("candidates", []) if c.get("selected")]) == SELECTION_SIZE:
             consolidate_week(states[-1], base_dir)

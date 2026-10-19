@@ -349,11 +349,14 @@ those new likes later. When a selected tweet belongs to a same-author thread,
 the helper marks the last tweet in that reply chain so regular ingestion can
 recover the complete thread.
 
-After tweet ingestion, the pipeline resolves the latest confirmed weekly selection
+After tweet ingestion, the pipeline resolves the latest saved weekly selection
 to an explicit downloaded-file manifest (`state/x_weekly/<WEEK>-downloads.json`).
 It matches selected IDs or their recorded thread Like targets against source
 metadata, never by download date or mentions in the body. Partial batches are
-reserved for their week and resumed on subsequent pipeline runs. Once all 50
+reserved even if X has not confirmed every Like; Like status does not determine
+membership or whether an already downloaded file can be consolidated. Missing
+selected captures are added to the normal tweet retry queue, including when the
+tweet never appeared in recent Likes. Batches resume on subsequent pipeline runs. Once all 50
 selected IDs are represented, the existing consolidation renderer produces
 `Tweets semana <WEEK>.md` and `.html`. A shared downloaded thread appears once;
 X articles stay in Posts and are linked from the weekly document. These source

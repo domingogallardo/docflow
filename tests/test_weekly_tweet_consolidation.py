@@ -127,3 +127,27 @@ def test_prefer_downloaded_full_thread_to_earlier_standalone_capture(corpus):
     assert set(manifest["selected_files"].values()) == {full_thread.relative_to(base).as_posix()}
     assert "tweet_weekly_week: 2026-W40" in earlier.read_text()
     assert daily._collect_daily_source_markdown(folder, "2026-10-05") == []
+
+
+def test_failed_like_does_not_block_weekly_reservation_or_downloaded_batch(corpus):
+    base, folder = corpus
+    candidates = [_candidate("1"), _candidate("2", "20")]
+    candidates[1]["like_status"] = "failed"
+    candidates[1]["like_target_url"] = "https://x.com/author/status/20"
+    state = _state(base, candidates)
+    payload = json.loads(state.read_text())
+    payload["application"]["status"] = "failed"
+    state.write_text(json.dumps(payload))
+    original_state = state.read_bytes()
+    first, _ = _tweet(folder, "confirmed", "1")
+    weekly.consolidate_latest_week(base)
+    assert "tweet_weekly_week: 2026-W40" in first.read_text()
+    assert daily._collect_daily_source_markdown(folder, "2026-10-05") == []
+    manifest_path = state.with_name("2026-W40-downloads.json")
+    assert json.loads(manifest_path.read_text())["missing_ids"] == ["2"]
+    assert (base / "Incoming/tweets_failed.txt").read_text().splitlines() == ["https://x.com/author/status/20"]
+    _tweet(folder, "downloaded despite uncertain Like", "20")
+    weekly.consolidate_latest_week(base)
+    assert (folder / "Tweets semana 2026-W40.html").exists()
+    assert json.loads(manifest_path.read_text())["status"] == "complete"
+    assert state.read_bytes() == original_state
