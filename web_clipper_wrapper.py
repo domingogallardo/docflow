@@ -313,6 +313,21 @@ def clean_html_for_markdown(
     for tag in soup.find_all(("script", "template")):
         tag.decompose()
 
+    # UI icons lose their size constraints when the publisher's CSS is gone.
+    # Remove their controls before Clipper serializes SVG into Markdown (where
+    # path data can also masquerade as article words). Keep editorial SVGs.
+    controls = (
+        'nav, button, form, [role="navigation"], [role="toolbar"], '
+        '.social-links, .social-more, .share-buttons, .share-tools, .sharing-tools, '
+        '.comments-button, .bookmark-button, .nav__local'
+    )
+    for tag in soup.select(controls):
+        if tag.parent is not None:
+            tag.decompose()
+    for svg in soup.find_all("svg"):
+        if svg.get("aria-hidden") == "true" or svg.get("role") == "presentation":
+            svg.decompose()
+
     document_base = base_url
     if base_url and soup.base:
         document_base = urljoin(base_url, str(soup.base.get("href") or ""))

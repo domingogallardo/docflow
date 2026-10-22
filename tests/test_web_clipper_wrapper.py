@@ -131,6 +131,58 @@ def test_clean_html_removes_script_and_template_payloads_but_keeps_article_conte
     assert "Transport payload" not in cleaned
 
 
+def test_clean_html_removes_publisher_controls_before_svg_conversion():
+    html = """
+    <main>
+      <div class="nav__local"><p>Duplicate title</p>
+        <div class="comments-button"><svg><title>Comment</title></svg></div>
+        <button>Read Later</button>
+      </div>
+      <h1>Microscopic images</h1>
+      <div class="social-links"><a href="/share">
+        <svg viewBox="0 0 50 50"><title>Facebook</title><path d="M13 16"/></svg>
+      </a></div>
+      <div class="comments-button"><a href="#comments">Comments</a></div>
+      <div role="toolbar"><svg><title>Copy link</title></svg></div>
+      <nav>Navigation</nav><form><button>Subscribe</button></form>
+      <p>Living cells under the microscope.</p>
+      <figure><img src="/cells.webp"><figcaption>Neurons</figcaption></figure>
+      <video><source src="/cells.mp4"></video>
+    </main>
+    """
+    cleaned, removed = clean_html_for_markdown(html, base_url="https://example.com/")
+
+    assert removed == 0
+    for label in ("Duplicate title", "Comment", "Facebook", "Copy link", "Read Later",
+                  "Navigation", "Subscribe"):
+        assert label not in cleaned
+    assert "Microscopic images" in cleaned
+    assert "Living cells under the microscope." in cleaned
+    assert "Neurons" in cleaned
+    assert 'src="https://example.com/cells.webp"' in cleaned
+    assert 'src="https://example.com/cells.mp4"' in cleaned
+
+
+def test_clean_html_preserves_editorial_svg_and_article_links():
+    html = """
+    <article><a href="/research">Research</a>
+      <figure><svg role="img" viewBox="0 0 600 400">
+        <title>Cell structure</title><path d="M10 20"/>
+      </svg><figcaption>Cell diagram</figcaption></figure>
+      <svg aria-hidden="true"><path d="M0 0"/></svg>
+      <svg role="presentation"><path d="M1 1"/></svg>
+      <img src="/diagram.svg">
+    </article>
+    """
+    cleaned, _ = clean_html_for_markdown(html)
+
+    assert cleaned.count("<svg") == 1
+    assert "Cell structure" in cleaned
+    assert "Cell diagram" in cleaned
+    assert 'href="/research"' in cleaned
+    assert 'src="/diagram.svg"' in cleaned
+
+
 def test_html_bridge_redirect_url_reads_substack_title_bridge():
     html = (
         '<head><noscript><meta http-equiv="refresh" '

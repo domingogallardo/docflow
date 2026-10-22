@@ -299,6 +299,11 @@ docflow uses that `dist/cli.cjs` path by default when the Web Clipper checkout
 lives under `$HOME/Repos-Github/obsidian-clipper`. Set
 `DOCFLOW_OBSIDIAN_CLIPPER_CLI` when the checkout lives somewhere else.
 
+Before clipping, Docflow removes navigation, forms, sharing/bookmark/comment
+controls and decorative inline SVGs. This prevents interface icons from becoming
+oversized article illustrations or inflating word counts. Editorial SVG diagrams,
+photos, captions and videos remain available to the extractor.
+
 ### Manual quick start
 
 1. Configure environment variables (as needed):
