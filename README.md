@@ -303,6 +303,9 @@ Before clipping, Docflow removes navigation, forms, sharing/bookmark/comment
 controls and decorative inline SVGs. This prevents interface icons from becoming
 oversized article illustrations or inflating word counts. Editorial SVG diagrams,
 photos, captions and videos remain available to the extractor.
+Duplicate `noscript` image fallbacks alongside responsive photos are removed
+before extraction, preventing two sizes of the same photo from appearing in the
+saved article. Images available only through a fallback are retained.
 
 ### Manual quick start
 

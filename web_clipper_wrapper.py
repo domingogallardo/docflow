@@ -328,6 +328,8 @@ def clean_html_for_markdown(
         if svg.get("aria-hidden") == "true" or svg.get("role") == "presentation":
             svg.decompose()
 
+    _remove_duplicate_noscript_images(soup)
+
     document_base = base_url
     if base_url and soup.base:
         document_base = urljoin(base_url, str(soup.base.get("href") or ""))
@@ -340,6 +342,26 @@ def clean_html_for_markdown(
     if document_base:
         _resolve_document_urls(soup, document_base)
     return str(soup), removed
+
+
+def _remove_duplicate_noscript_images(soup: BeautifulSoup) -> None:
+    """Keep fallback-only images, but omit copies of nearby responsive images."""
+    for fallback in soup.find_all("noscript"):
+        sources: set[str] = set()
+        for image in fallback.parent.find_all("img"):
+            if image.find_parent("noscript") is not None:
+                continue
+            if image.get("src"):
+                sources.add(str(image["src"]))
+            for candidate in str(image.get("srcset") or "").split(","):
+                parts = candidate.split()
+                if parts:
+                    sources.add(parts[0])
+        for image in fallback.find_all("img"):
+            if image.get("src") in sources:
+                image.decompose()
+        if not fallback.get_text(strip=True) and not fallback.find(True):
+            fallback.decompose()
 
 
 def _resolve_document_urls(soup: BeautifulSoup, document_base: str) -> None:

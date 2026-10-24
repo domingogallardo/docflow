@@ -131,6 +131,60 @@ def test_clean_html_removes_script_and_template_payloads_but_keeps_article_conte
     assert "Transport payload" not in cleaned
 
 
+def test_clean_html_removes_responsive_noscript_duplicates():
+    from bs4 import BeautifulSoup
+
+    html = """
+    <article><figure>
+      <img src="https://i.blogs.es/hash/photo/450_1000.jpeg"
+           srcset="https://i.blogs.es/hash/photo/1366_2000.jpeg 1366w">
+      <noscript><img src="https://i.blogs.es/hash/photo/450_1000.jpeg"></noscript>
+      <figcaption>Photo caption</figcaption>
+    </figure><figure>
+      <img src="large.jpg" srcset="small.jpg 450w, large.jpg 1366w">
+      <noscript><img src="small.jpg"></noscript>
+    </figure></article>
+    """
+
+    cleaned, removed = clean_html_for_markdown(html)
+    soup = BeautifulSoup(cleaned, "html.parser")
+
+    assert removed == 0  # This counter tracks data images only.
+    assert len(soup.find_all("img")) == 2
+    assert not soup.find("noscript")
+    assert "1366_2000.jpeg 1366w" in cleaned
+    assert "Photo caption" in cleaned
+
+
+def test_clean_html_preserves_fallback_only_images_and_distinct_fallbacks():
+    from bs4 import BeautifulSoup
+
+    html = """
+    <article>
+      <figure><noscript><img src="only.jpg"></noscript></figure>
+      <figure><img src="main.jpg"><noscript><img src="other.jpg"></noscript></figure>
+      <figure><img src="repeated.jpg"></figure>
+      <figure><noscript><img src="repeated.jpg"></noscript></figure>
+    </article>
+    """
+
+    cleaned, _ = clean_html_for_markdown(html)
+    soup = BeautifulSoup(cleaned, "html.parser")
+
+    assert [img["src"] for img in soup.find_all("img")] == [
+        "only.jpg", "main.jpg", "other.jpg", "repeated.jpg", "repeated.jpg",
+    ]
+
+
+def test_clean_html_keeps_noscript_text_when_removing_duplicate_image():
+    html = '<figure><img src="photo.jpg"><noscript><img src="photo.jpg">Credit</noscript></figure>'
+
+    cleaned, _ = clean_html_for_markdown(html)
+
+    assert cleaned.count("<img") == 1
+    assert "Credit" in cleaned
+
+
 def test_clean_html_removes_publisher_controls_before_svg_conversion():
     html = """
     <main>
