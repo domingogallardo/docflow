@@ -5,6 +5,7 @@ import argparse
 import base64
 import hashlib
 import json
+import os
 import re
 import subprocess
 from dataclasses import asdict, dataclass
@@ -94,6 +95,18 @@ def completed_document(path: Path, base_dir: Path) -> bool:
             and html.is_file() and html.stat().st_size > 0)
 
 
+def inherited_pipeline_lock_fds() -> tuple[int, ...]:
+    """Pass the shared shell lock to nested ingestion, never an unrelated FD 9."""
+    path = os.environ.get("DOCFLOW_LOCK_FILE")
+    if path:
+        try:
+            if os.path.samestat(os.fstat(9), os.stat(path)):
+                return (9,)
+        except OSError:
+            pass
+    return ()
+
+
 def process_queue(queue: Path, base_dir: Path, *, dry_run: bool = False, downloader=None, ingest=None) -> dict:
     """Download, persist receipts, ingest, and confirm each resulting Markdown/HTML pair."""
     captures, errors = parse_queue(queue.read_text(encoding="utf-8") if queue.exists() else "")
@@ -143,7 +156,8 @@ def process_queue(queue: Path, base_dir: Path, *, dry_run: bool = False, downloa
             if ingest:
                 ingest()
             else:
-                subprocess.run(["/bin/bash", str(Path(__file__).parent / "bin/docflow.sh"), "md"], check=True)
+                subprocess.run(["/bin/bash", str(Path(__file__).parent / "bin/docflow.sh"), "md"],
+                               check=True, pass_fds=inherited_pipeline_lock_fds())
         except Exception as exc:
             for identity in paths:
                 receipts[identity]["error"] = f"Ingestion did not complete: {exc}"

@@ -12,6 +12,9 @@ if [ -f "${ENV_FILE}" ]; then
   source "${ENV_FILE}"
 fi
 
+# Shared lock covers processing and index rebuilds, including nested captures.
+source "${DOCFLOW_LOCK_HELPER:-/Users/domingo/Programacion/computer-ops/ops/bin/docflow_lock.sh}"
+
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
 cd "${REPO_DIR}"

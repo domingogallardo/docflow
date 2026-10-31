@@ -622,3 +622,16 @@ pytest tests/test_docflow_server.py -q
 ## Optional remote access
 
 You can expose the local intranet through a private VPN (for example, Tailscale).
+
+## Operational ingestion concurrency (2026-10-31)
+
+Use `bash bin/docflow.sh ...` and `bash bin/docflow-captures.sh` for ingestion.
+These wrappers, central `docflow_all.sh`, imports and daily wrappers share
+`~/Library/Logs/remotecontrol/docflow-all.lock` through the operational helper in
+`/Users/domingo/Programacion/computer-ops/ops/bin/docflow_lock.sh`.
+A busy invocation exits 75 before starting work; it must not be reported as a
+successful ingestion. The lock covers processing and index rebuilds. Captures
+pass descriptor 9 to nested `docflow.sh md`, avoiding a second independent lock.
+Cron calls the guarded wrapper without an external lockf. Never unlink the lock
+file or reintroduce the old external cron lock without reverting the inner guards.
+Direct calls to Python entrypoints/functions do not take this shell-level lock.

@@ -190,3 +190,10 @@ This file stores stable, reusable operational notes for future agent runs.
 - Changed list-page `Highlight` ordering so highlighted files sort by latest highlight timestamp instead of only floating to the top.
 - Added persistent browser state for the `Highlight` toggle across Browse/Reading/Done using localStorage key `docflow.highlight-sort`.
 - Updated `Done` highlight mode to regroup items by the year of the latest highlight, so newly re-highlighted older items appear under the current highlight year.
+
+- 2026-10-31: Ingestion shell wrappers now acquire the shared flock internally,
+  including manual `bin/docflow.sh`, captures and index rebuilds. Cron's outer
+  lockf was removed. Exit 75 means busy/no work. FD 9 is inherited and explicitly
+  passed by capture_queue to nested ingestion. Do not unlink the lock or wrap
+  the guarded cron wrapper in a new independent lock. Direct Python utilities
+  remain lower-level APIs without this shell guard.

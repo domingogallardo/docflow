@@ -97,3 +97,13 @@ Useful setup (new environment):
 - Optional year override: `DOCPIPE_YEAR`.
 - Keep `TWEET_LIKES_STATE` outside the repo (for example `"$HOME/.secrets/docflow/x_state.json"`) to avoid losing session state during repo cleanup.
 - Keep `DOCFLOW_BASE_DIR` in `~/.docflow_env` aligned with your local environment.
+
+## Operational ingestion lock
+
+- Use `bin/docflow.sh` for operational ingestion, including selective `urls md`.
+  Direct Python entrypoints/functions do not acquire the shared shell lock.
+- Central and manual shell wrappers share `docflow-all.lock`, including index
+  rebuilds. A busy attempt exits 75 before work; do not treat it as success.
+- Never remove the lock file, wrap cron in another independent lockf, or drop
+  inherited descriptor 9 when capture ingestion invokes a child wrapper.
+- The common operational helper lives in computer-ops/ops/bin/docflow_lock.sh.
