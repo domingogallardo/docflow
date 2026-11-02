@@ -6,6 +6,11 @@ import pytest
 from utils import x_weekly_review as weekly
 
 
+@pytest.fixture(autouse=True)
+def no_real_delays(monkeypatch):
+    monkeypatch.setattr(weekly, "_pause", lambda seconds: None)
+
+
 def _test_corpus():
     return [
         {"handle": f"@user{index:02d}", "weight": 100 if index < 5 else 60}
@@ -294,7 +299,7 @@ def test_apply_likes_retries_uncertain_clicks_and_confirms_all(
     calls = {}
     order = []
 
-    def fake_like_attempt(playwright, candidate, state):
+    def fake_like_attempt(session, candidate):
         order.append(candidate["rank"])
         calls[candidate["id"]] = calls.get(candidate["id"], 0) + 1
         if calls[candidate["id"]] == 1:
@@ -350,7 +355,7 @@ def test_apply_likes_stops_after_repeated_failures(tmp_path, monkeypatch):
     state_path.write_text(json.dumps({"candidates": candidates}), encoding="utf-8")
     calls = []
 
-    def always_fail(playwright, candidate, state):
+    def always_fail(session, candidate):
         calls.append(candidate["id"])
         raise RuntimeError("login wall")
 
@@ -363,5 +368,268 @@ def test_apply_likes_stops_after_repeated_failures(tmp_path, monkeypatch):
 
     payload = json.loads(state_path.read_text(encoding="utf-8"))
     assert payload["application"]["status"] == "failed"
-    assert payload["application"]["failure_reason"].startswith("Stopped after 3")
-    assert len(calls) == 6
+    assert "Authentication" in payload["application"]["failure_reason"]
+    assert len(calls) == 1
+
+
+def _application_state(tmp_path, monkeypatch):
+    state = tmp_path / 'session.json'
+    state.write_text('{}')
+    monkeypatch.setattr(weekly.cfg, 'TWEET_LIKES_STATE', state)
+    monkeypatch.setattr(weekly, 'sync_playwright', _FakePlaywrightContext)
+    path = tmp_path / 'week.json'
+    candidates = [dict(id=str(i), url=f'https://x.com/user/status/{i}',
+                       selected=True, rank=i + 1, like_status='already_liked')
+                  for i in range(50)]
+    candidates[-1]['like_status'] = 'pending'
+    path.write_text(json.dumps({'candidates': candidates}))
+    return path
+
+
+def test_automatic_recovery_waits_and_skips_confirmed_likes(tmp_path, monkeypatch):
+    path = _application_state(tmp_path, monkeypatch)
+    calls, pauses = [], []
+
+    def attempt(session, candidate):
+        calls.append(candidate['id'])
+        if len(calls) <= 2:
+            candidate['like_click_uncertain'] = True
+            raise RuntimeError('confirmation timeout')
+        return 'already_liked'
+
+    monkeypatch.setattr(weekly, '_perform_like_attempt', attempt)
+    monkeypatch.setattr(weekly, '_pause', pauses.append)
+    weekly.apply_likes(path)
+    payload = json.loads(path.read_text())
+    assert calls == ['49'] * 3
+    assert pauses == [30, 180, 12]
+    assert payload['application']['confirmed_count'] == 50
+    assert 'retry_not_before' not in payload['application']
+    assert 'like_click_uncertain' not in payload['candidates'][-1]
+
+
+def test_rate_limit_cools_down_without_immediate_retry(tmp_path, monkeypatch):
+    path = _application_state(tmp_path, monkeypatch)
+    calls, pauses = [], []
+
+    def attempt(session, candidate):
+        calls.append(candidate['id'])
+        if len(calls) == 1:
+            raise weekly.LikeAttemptError('rate_limit', 'HTTP 429')
+        return 'liked'
+
+    monkeypatch.setattr(weekly, '_perform_like_attempt', attempt)
+    monkeypatch.setattr(weekly, '_pause', pauses.append)
+    weekly.apply_likes(path)
+    assert calls == ['49', '49']
+    assert pauses == [180, 12]
+
+
+def test_recovery_exhaustion_is_bounded_and_persists_cooldown(tmp_path, monkeypatch):
+    path = _application_state(tmp_path, monkeypatch)
+    calls = []
+
+    def attempt(session, candidate):
+        calls.append(candidate['id'])
+        raise RuntimeError('article timeout')
+
+    monkeypatch.setattr(weekly, '_perform_like_attempt', attempt)
+    with pytest.raises(RuntimeError, match='1 selected tweets remain'):
+        weekly.apply_likes(path)
+    payload = json.loads(path.read_text())
+    assert calls == ['49'] * 4
+    assert payload['application']['status'] == 'failed'
+    assert payload['application']['confirmed_count'] == 49
+    assert payload['application']['retry_not_before']
+    # A separate invocation must also respect the saved deadline.
+    pauses = []
+    monkeypatch.setattr(weekly, '_pause', pauses.append)
+    monkeypatch.setattr(weekly, '_perform_like_attempt', lambda session, candidate: 'already_liked')
+    weekly.apply_likes(path)
+    assert 0 < pauses[0] <= 180
+
+
+class _LikeLocator:
+    def __init__(self, page, kind):
+        self.page, self.kind = page, kind
+        self.first = self
+
+    def locator(self, selector):
+        return _LikeLocator(self.page, 'unlike' if "'unlike'" in selector else 'like')
+
+    def count(self):
+        return int(self.page.challenge if self.kind == 'challenge' else
+                   self.page.liked if self.kind == 'unlike' else True)
+
+    def is_visible(self):
+        return bool(self.count())
+
+    def wait_for(self, **kwargs):
+        if (self.kind == 'article' and self.page.missing) or (
+            self.kind == 'unlike' and self.page.fail_confirmation
+        ):
+            raise RuntimeError('Timeout waiting for exact target')
+
+    def click(self):
+        self.page.clicks += 1
+        self.page.liked = True
+
+
+class _LikePage:
+    def __init__(self, *, missing=False, fail_confirmation=False, challenge=False):
+        self.missing, self.fail_confirmation = missing, fail_confirmation
+        self.challenge = challenge
+        self.liked, self.clicks = False, 0
+        self.url = 'https://x.com/user/status/100'
+        self.selectors, self.handlers = [], []
+        self.closed = False
+
+    def on(self, event, callback):
+        self.handlers.append(callback)
+
+    def goto(self, url, **kwargs):
+        self.url = url
+
+    def locator(self, selector):
+        self.selectors.append(selector)
+        if selector.startswith('article:has'):
+            assert selector == "article:has(a[href$='/status/100'] time)"
+            return _LikeLocator(self, 'article')
+        assert selector.startswith('iframe')
+        return _LikeLocator(self, 'challenge')
+
+    def screenshot(self, *, path, **kwargs):
+        from pathlib import Path
+        Path(path).write_bytes(b'fake screenshot')
+
+    def close(self):
+        self.closed = True
+
+
+def _like_attempt_setup(tmp_path, monkeypatch, page):
+    from types import SimpleNamespace
+    monkeypatch.setattr(weekly, '_dismiss_cookie_prompt', lambda page: None)
+    monkeypatch.setattr(weekly, '_attach_tweet_detail_listener', lambda page: {'payload': None})
+    session = SimpleNamespace(new_page=lambda: page, state_path=tmp_path / 'week.json')
+    candidate = dict(id='100', url=page.url, like_target_id='100', like_target_url=page.url)
+    return session, candidate
+
+
+def test_missing_exact_tweet_never_clicks_another_article(tmp_path, monkeypatch):
+    page = _LikePage(missing=True)
+    session, candidate = _like_attempt_setup(tmp_path, monkeypatch, page)
+    with pytest.raises(RuntimeError, match='exact target'):
+        weekly._perform_like_attempt(session, candidate)
+    assert page.clicks == 0 and page.closed
+    assert 'article' not in page.selectors
+    assert candidate['like_diagnostic']['phase'] == 'exact_tweet'
+    assert (tmp_path / 'week-diagnostics/100-0.png').exists()
+
+
+def test_uncertain_click_is_checked_before_any_second_click(tmp_path, monkeypatch):
+    page = _LikePage(fail_confirmation=True)
+    session, candidate = _like_attempt_setup(tmp_path, monkeypatch, page)
+    with pytest.raises(RuntimeError, match='exact target'):
+        weekly._perform_like_attempt(session, candidate)
+    assert candidate['like_click_uncertain'] is True
+    page.fail_confirmation = False
+    assert weekly._perform_like_attempt(session, candidate) == 'already_liked'
+    assert page.clicks == 1
+
+
+def test_unresolved_thread_detail_never_marks_the_anchor(tmp_path, monkeypatch):
+    page = _LikePage()
+    session, candidate = _like_attempt_setup(tmp_path, monkeypatch, page)
+    candidate.pop('like_target_id')
+    monkeypatch.setattr(weekly, '_wait_for_tweet_detail', lambda page, timeout: {'errors': []})
+    with pytest.raises(weekly.LikeAttemptError, match='thread target not resolved'):
+        weekly._perform_like_attempt(session, candidate)
+    assert page.clicks == 0
+
+
+@pytest.mark.parametrize('status,kind', [(401, 'authentication'), (403, 'authentication'),
+                                         (429, 'rate_limit'), (503, 'server')])
+def test_http_failures_are_classified(tmp_path, monkeypatch, status, kind):
+    from types import SimpleNamespace
+    page = _LikePage()
+    session, candidate = _like_attempt_setup(tmp_path, monkeypatch, page)
+    def navigate(url, **kwargs):
+        response = SimpleNamespace(url='https://x.com/i/api/graphql/key/TweetDetail?secret=hidden',
+                                   status=status, request=SimpleNamespace(resource_type='xhr'))
+        for handler in page.handlers:
+            handler(response)
+    page.goto = navigate
+    with pytest.raises(weekly.LikeAttemptError) as error:
+        weekly._perform_like_attempt(session, candidate)
+    assert error.value.kind == kind
+    assert page.clicks == 0
+    assert candidate['like_diagnostic']['http_errors'] == [
+        {'path': '/i/api/graphql/key/TweetDetail', 'status': status}]
+    assert 'secret' not in json.dumps(candidate['like_diagnostic'])
+
+
+def test_captcha_stops_before_clicking(tmp_path, monkeypatch):
+    page = _LikePage(challenge=True)
+    session, candidate = _like_attempt_setup(tmp_path, monkeypatch, page)
+    with pytest.raises(weekly.LikeAttemptError) as error:
+        weekly._perform_like_attempt(session, candidate)
+    assert error.value.kind == 'authentication'
+    assert page.clicks == 0
+
+
+def test_like_session_reuses_browser_context_between_pages(tmp_path):
+    playwright = _FakeCollectionPlaywright()
+    session = weekly._LikeSession(playwright, tmp_path / 'session.json', tmp_path / 'week.json')
+    first = session.new_page()
+    second = session.new_page()
+    assert first is not second
+    assert playwright.chromium.launch_count == 1
+    session.close()
+
+
+def test_consecutive_transient_failures_stop_each_pass(tmp_path, monkeypatch):
+    path = _application_state(tmp_path, monkeypatch)
+    payload = json.loads(path.read_text())
+    for candidate in payload['candidates'][-5:]:
+        candidate['like_status'] = 'pending'
+    path.write_text(json.dumps(payload))
+    calls = []
+
+    def fail(session, candidate):
+        calls.append(candidate['id'])
+        raise RuntimeError('article timeout')
+
+    monkeypatch.setattr(weekly, '_perform_like_attempt', fail)
+    with pytest.raises(RuntimeError, match='5 selected tweets remain'):
+        weekly.apply_likes(path)
+    assert calls == ['49', '49', '48', '48', '47', '47'] * 2
+    payload = json.loads(path.read_text())
+    assert payload['candidates'][-4]['like_status'] == 'pending'
+    assert payload['candidates'][-5]['like_status'] == 'pending'
+    assert payload['application']['confirmed_count'] == 45
+
+
+def test_uncertain_status_survives_failed_run(tmp_path, monkeypatch):
+    path = _application_state(tmp_path, monkeypatch)
+
+    def fail(session, candidate):
+        candidate['like_click_uncertain'] = True
+        raise RuntimeError('confirmation timeout')
+
+    monkeypatch.setattr(weekly, '_perform_like_attempt', fail)
+    with pytest.raises(RuntimeError, match='1 selected tweets remain'):
+        weekly.apply_likes(path, recovery_rounds=0)
+    payload = json.loads(path.read_text())
+    assert payload['candidates'][-1]['like_status'] == 'uncertain'
+    assert weekly.status_payload(path)['unresolved_count'] == 1
+
+
+def test_valid_thread_detail_resolves_before_clicking(tmp_path, monkeypatch):
+    page = _LikePage()
+    session, candidate = _like_attempt_setup(tmp_path, monkeypatch, page)
+    candidate.pop('like_target_id')
+    tweet = {'__typename': 'Tweet', 'rest_id': '100'}
+    monkeypatch.setattr(weekly, '_wait_for_tweet_detail', lambda page, timeout: {'result': tweet})
+    assert weekly._perform_like_attempt(session, candidate) == 'liked'
+    assert candidate['like_target_id'] == '100'
+    assert page.clicks == 1

@@ -10,10 +10,12 @@ import os
 import random
 import re
 import sys
+import time as clock_time
 from contextlib import contextmanager, suppress
 from datetime import date, datetime, time, timedelta, timezone
 from pathlib import Path
 from typing import Iterator
+from urllib.parse import urlsplit
 from zoneinfo import ZoneInfo
 
 if __package__ in {None, ""}:
@@ -34,6 +36,7 @@ from utils.x_likes_fetcher import (
 from utils.tweet_to_markdown import (
     TWEET_DETAIL_WAIT_MS,
     _attach_tweet_detail_listener,
+    _iter_tweet_results,
     _last_self_thread_status_id,
     _wait_for_tweet_detail,
 )
@@ -512,56 +515,158 @@ def _resolve_like_target(candidate: dict, payload: object | None) -> tuple[str, 
     return target_id, f"https://x.com/{handle}/status/{target_id}"
 
 
-def _perform_like_attempt(playwright, candidate: dict, state: Path) -> str:
-    browser = playwright.chromium.launch(headless=True, channel="chrome")
-    context = None
-    page = None
+class LikeAttemptError(RuntimeError):
+    """A classified browser failure, persisted alongside the checkpoint."""
+
+    def __init__(self, kind: str, message: str):
+        super().__init__(message)
+        self.kind = kind
+
+
+def _failure_kind(exc: Exception) -> str:
+    if isinstance(exc, LikeAttemptError):
+        return exc.kind
+    message = str(exc).lower()
+    if any(word in message for word in ("login wall", "session invalid", "captcha")):
+        return "authentication"
+    return "transient"
+
+
+def _pause(seconds: float) -> None:
+    # Keep individual sleeps bounded, including during an automatic cooldown.
+    remaining = seconds
+    while remaining > 0:
+        interval = min(remaining, 60)
+        clock_time.sleep(interval)
+        remaining -= interval
+
+
+class _LikeSession:
+    """Reuse authenticated Chrome context; isolate listeners in per-attempt pages."""
+
+    def __init__(self, playwright, state: Path, state_path: Path):
+        self.playwright = playwright
+        self.state = state
+        self.state_path = state_path
+        self.browser = None
+        self.context = None
+
+    def new_page(self):
+        if self.context is None:
+            self.browser = self.playwright.chromium.launch(headless=True, channel="chrome")
+            self.context = self.browser.new_context(storage_state=str(self.state))
+            self.context.add_init_script(STEALTH_SNIPPET)
+        return self.context.new_page()
+
+    def close(self) -> None:
+        if self.context is not None:
+            with suppress(Exception):
+                self.context.close()
+        if self.browser is not None:
+            with suppress(Exception):
+                self.browser.close()
+        self.context = self.browser = None
+
+
+def _check_like_page(page, http_errors: list[dict]) -> None:
+    if any(hint in (page.url or "") for hint in LOGIN_WALL_HINTS):
+        raise LikeAttemptError("authentication", "Login wall or account challenge detected")
+    if page.locator('iframe[src*="captcha"], [data-testid="LoginForm_Login_Button"]').count():
+        raise LikeAttemptError("authentication", "Login wall or CAPTCHA detected")
+    for item in http_errors:
+        status = item["status"]
+        if status in (401, 403):
+            raise LikeAttemptError("authentication", f"X rejected access (HTTP {status})")
+        if status == 429:
+            raise LikeAttemptError("rate_limit", "X rate limit detected (HTTP 429)")
+        if status >= 500:
+            raise LikeAttemptError("server", f"X server error (HTTP {status})")
+
+
+def _perform_like_attempt(session: _LikeSession, candidate: dict) -> str:
+    page = session.new_page()
+    http_errors: list[dict] = []
+    phase = "navigation"
+
+    def record_response(response):
+        # Record endpoint paths only, never query strings, headers or cookies.
+        path = urlsplit(response.url).path
+        if response.status >= 400 and (
+            response.request.resource_type == "document"
+            or any(name in path for name in ("TweetDetail", "FavoriteTweet", "CreateFavorite"))
+        ):
+            http_errors.append({"path": path, "status": response.status})
+            del http_errors[:-10]
+
+    page.on("response", record_response)
     try:
-        context = browser.new_context(storage_state=str(state))
-        context.add_init_script(STEALTH_SNIPPET)
-        page = context.new_page()
         detail = _attach_tweet_detail_listener(page)
         target_url = candidate.get("like_target_url") or candidate["url"]
         page.goto(target_url, wait_until="domcontentloaded", timeout=60000)
-        if any(hint in (page.url or "") for hint in LOGIN_WALL_HINTS):
-            raise RuntimeError("login wall detected")
+        _check_like_page(page, http_errors)
         _dismiss_cookie_prompt(page)
         tweet_id = str(candidate.get("like_target_id") or candidate["id"])
         if not candidate.get("like_target_id"):
+            phase = "thread_resolution"
             payload = detail.get("payload")
             if payload is None:
                 payload = _wait_for_tweet_detail(page, TWEET_DETAIL_WAIT_MS)
+            if not any(
+                str(item.get("rest_id")) == str(candidate["id"])
+                for item in _iter_tweet_results(payload)
+            ):
+                raise LikeAttemptError(
+                    "transient", "Tweet detail unavailable; thread target not resolved"
+                )
             tweet_id, target_url = _resolve_like_target(candidate, payload)
             if tweet_id != str(candidate["id"]):
                 print(f"   Thread target resolved: {target_url}")
                 page.goto(target_url, wait_until="domcontentloaded", timeout=60000)
-                if any(hint in (page.url or "") for hint in LOGIN_WALL_HINTS):
-                    raise RuntimeError("login wall detected")
             candidate["like_target_id"] = tweet_id
             candidate["like_target_url"] = target_url
-        article = page.locator(f"article:has(a[href*='/status/{tweet_id}'])").first
-        try:
-            article.wait_for(state="visible", timeout=15000)
-        except Exception:
-            article = page.locator("article").first
-            article.wait_for(state="visible", timeout=5000)
+        phase = "exact_tweet"
+        # Never fall back to another article (a reply or recommendation).
+        article = page.locator(f"article:has(a[href$='/status/{tweet_id}'] time)").first
+        article.wait_for(state="visible", timeout=30000)
+        _check_like_page(page, http_errors)
         unlike = article.locator("[data-testid='unlike']")
         if unlike.count() and unlike.first.is_visible():
             return "already_liked"
+        phase = "click"
         like = article.locator("[data-testid='like']")
-        like.first.wait_for(state="visible", timeout=10000)
+        like.first.wait_for(state="visible", timeout=15000)
+        # Persisted by the caller even if click or its confirmation times out.
+        candidate["like_click_uncertain"] = True
         like.first.click()
-        unlike.first.wait_for(state="visible", timeout=10000)
+        phase = "confirmation"
+        unlike.first.wait_for(state="visible", timeout=20000)
+        _check_like_page(page, http_errors)
         return "liked"
-    finally:
-        if page is not None:
-            with suppress(Exception):
-                page.wait_for_timeout(500)
-        if context is not None:
-            with suppress(Exception):
-                context.close()
+    except Exception as exc:
+        try:
+            _check_like_page(page, http_errors)
+        except LikeAttemptError as classified:
+            exc = classified
+        except Exception:
+            pass  # A closed page must not hide the original browser failure.
+        diagnostic = {
+            "phase": phase,
+            "kind": _failure_kind(exc),
+            "url": (page.url or "").split("?", 1)[0],
+            "http_errors": http_errors,
+            "recorded_at": _utc_now(),
+        }
         with suppress(Exception):
-            browser.close()
+            folder = session.state_path.parent / f"{session.state_path.stem}-diagnostics"
+            folder.mkdir(parents=True, exist_ok=True)
+            screenshot = folder / f"{candidate['id']}-{candidate.get('like_attempts', 0)}.png"
+            page.screenshot(path=str(screenshot), timeout=5000)
+            diagnostic["screenshot"] = str(screenshot)
+        candidate["like_diagnostic"] = diagnostic
+        raise exc
+    finally:
+        with suppress(Exception):
+            page.close()
 
 
 def apply_likes(
@@ -569,6 +674,10 @@ def apply_likes(
     *,
     attempts_per_tweet: int = DEFAULT_LIKE_ATTEMPTS,
     max_consecutive_errors: int = 3,
+    action_delay: float = 12,
+    retry_delay: float = 30,
+    cooldown: float = 180,
+    recovery_rounds: int = 1,
 ) -> None:
     payload = _read_state(state_path)
     selected = sorted(
@@ -578,8 +687,10 @@ def apply_likes(
     )
     if len(selected) != SELECTION_SIZE:
         raise RuntimeError(f"Weekly state must contain exactly {SELECTION_SIZE} selected tweets")
-    if attempts_per_tweet < 1:
-        raise ValueError("attempts_per_tweet must be at least 1")
+    if attempts_per_tweet < 1 or max_consecutive_errors < 1 or recovery_rounds < 0:
+        raise ValueError("Attempt/error limits must be positive and recovery rounds nonnegative")
+    if min(action_delay, retry_delay, cooldown) < 0:
+        raise ValueError("Delays must be nonnegative")
     state = cfg.TWEET_LIKES_STATE.expanduser()
     if not state.exists():
         raise FileNotFoundError(f"storage_state not found at {state}")
@@ -587,54 +698,82 @@ def apply_likes(
     application = payload.setdefault("application", {})
     application.setdefault("started_at", _utc_now())
     application["status"] = "running"
-    consecutive_errors = 0
-    stopped_early = False
-
+    application.pop("failure_reason", None)
+    application.pop("finished_at", None)
+    hard_failure = False
+    attempted = False
     with sync_playwright() as playwright:
-        for position, candidate in enumerate(selected, 1):
-            if candidate.get("like_status") in CONFIRMED_LIKE_STATUSES:
-                continue
-            last_error: Exception | None = None
-            for attempt in range(1, attempts_per_tweet + 1):
-                print(
-                    f"[{position:02d}/{len(selected)}] Rank {candidate.get('rank')} "
-                    f"Like {candidate['url']} (attempt {attempt}/{attempts_per_tweet})"
-                )
-                candidate["like_attempts"] = int(candidate.get("like_attempts", 0)) + 1
-                candidate["last_like_attempt_at"] = _utc_now()
-                try:
-                    candidate["like_status"] = _perform_like_attempt(
-                        playwright, candidate, state
-                    )
-                    candidate["like_confirmed_at"] = _utc_now()
-                    candidate.pop("like_error", None)
-                    last_error = None
-                except Exception as exc:
-                    last_error = exc
-                    candidate["like_status"] = "failed"
-                    candidate["like_error"] = str(exc)
-                _write_state(state_path, payload)
-                if last_error is None:
-                    break
-                if attempt < attempts_per_tweet:
-                    print(f"   Retrying after: {last_error}")
-
-            if last_error is None:
+        session = _LikeSession(playwright, state, state_path)
+        try:
+            # Honor an interrupted cooldown across separate invocations.
+            if application.get("retry_not_before"):
+                deadline = datetime.fromisoformat(application["retry_not_before"])
+                _pause(max(0, (deadline - datetime.now(timezone.utc)).total_seconds()))
+                application.pop("retry_not_before", None)
+            for recovery in range(recovery_rounds + 1):
                 consecutive_errors = 0
-            else:
-                consecutive_errors += 1
-                if consecutive_errors >= max_consecutive_errors:
-                    stopped_early = True
+                for position, candidate in enumerate(selected, 1):
+                    if candidate.get("like_status") in CONFIRMED_LIKE_STATUSES:
+                        continue
+                    for attempt in range(1, attempts_per_tweet + 1):
+                        if attempted:
+                            _pause(action_delay if attempt == 1 else retry_delay * 2 ** (attempt - 2))
+                        attempted = True
+                        print(
+                            f"[{position:02d}/{len(selected)}] Rank {candidate.get('rank')} "
+                            f"Like {candidate['url']} (attempt {attempt}/{attempts_per_tweet})",
+                            flush=True,
+                        )
+                        candidate["like_attempts"] = int(candidate.get("like_attempts", 0)) + 1
+                        candidate["last_like_attempt_at"] = _utc_now()
+                        try:
+                            candidate["like_status"] = _perform_like_attempt(session, candidate)
+                            candidate["like_confirmed_at"] = _utc_now()
+                            candidate.pop("like_error", None)
+                            candidate.pop("like_error_kind", None)
+                            candidate.pop("like_click_uncertain", None)
+                            candidate.pop("like_diagnostic", None)
+                        except Exception as exc:
+                            kind = _failure_kind(exc)
+                            candidate["like_status"] = (
+                                "uncertain" if candidate.get("like_click_uncertain") else "failed"
+                            )
+                            candidate["like_error"] = str(exc)
+                            candidate["like_error_kind"] = kind
+                            hard_failure = kind == "authentication"
+                            print(f"   {kind}: {exc}", flush=True)
+                        _write_state(state_path, payload)
+                        if hard_failure or candidate["like_status"] in CONFIRMED_LIKE_STATUSES:
+                            break
+                        # A 429 needs a cooldown, not an immediate same-tweet retry.
+                        if candidate.get("like_error_kind") == "rate_limit":
+                            break
+                    if candidate["like_status"] in CONFIRMED_LIKE_STATUSES:
+                        consecutive_errors = 0
+                    else:
+                        consecutive_errors += 1
+                    if hard_failure or consecutive_errors >= max_consecutive_errors:
+                        break
+                    if candidate.get("like_error_kind") == "rate_limit":
+                        break
+                unresolved = [c for c in selected if c.get("like_status") not in CONFIRMED_LIKE_STATUSES]
+                if not unresolved or hard_failure:
                     break
+                if recovery < recovery_rounds:
+                    application["retry_not_before"] = (
+                        datetime.now(timezone.utc) + timedelta(seconds=cooldown * 2 ** recovery)
+                    ).isoformat()
+                    _write_state(state_path, payload)
+                    print("Pausing before automatic recovery of unconfirmed Likes", flush=True)
+                    # Refresh a potentially broken browser only after cooling down.
+                    session.close()
+                    _pause(cooldown * 2 ** recovery)
+                    application.pop("retry_not_before", None)
+        finally:
+            session.close()
 
-    confirmed = [
-        candidate for candidate in selected
-        if candidate.get("like_status") in CONFIRMED_LIKE_STATUSES
-    ]
-    unresolved = [
-        candidate for candidate in selected
-        if candidate.get("like_status") not in CONFIRMED_LIKE_STATUSES
-    ]
+    confirmed = [c for c in selected if c.get("like_status") in CONFIRMED_LIKE_STATUSES]
+    unresolved = [c for c in selected if c.get("like_status") not in CONFIRMED_LIKE_STATUSES]
     application.update(
         status="complete" if not unresolved else "failed",
         finished_at=_utc_now(),
@@ -642,17 +781,18 @@ def apply_likes(
         confirmed_count=len(confirmed),
         unresolved_count=len(unresolved),
     )
-    if stopped_early:
+    if unresolved and not hard_failure:
+        application["retry_not_before"] = (
+            datetime.now(timezone.utc) + timedelta(seconds=cooldown)
+        ).isoformat()
+    if unresolved:
         application["failure_reason"] = (
-            f"Stopped after {max_consecutive_errors} consecutive Like failures"
+            "Authentication or account challenge; manual session repair required"
+            if hard_failure else "Recovery exhausted; unconfirmed Likes remain"
         )
-    else:
-        application.pop("failure_reason", None)
     _write_state(state_path, payload)
     if unresolved:
-        raise RuntimeError(
-            f"{len(unresolved)} selected tweets remain without a confirmed Like"
-        )
+        raise RuntimeError(f"{len(unresolved)} selected tweets remain without a confirmed Like")
     print(f"Confirmed {len(confirmed)} weekly Likes")
 
 

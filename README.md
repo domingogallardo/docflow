@@ -357,6 +357,25 @@ those new likes later. When a selected tweet belongs to a same-author thread,
 the helper marks the last tweet in that reply chain so regular ingestion can
 recover the complete thread.
 
+`apply` reuses an authenticated Chrome context, with a fresh page per attempt.
+Actions are spaced by 12 seconds; transient retries wait 30 seconds (doubling
+for additional attempts). After repeated failures or HTTP 429, it waits three
+minutes and makes at most one automatic recovery pass over unconfirmed items.
+An interrupted cooldown is saved as `application.retry_not_before` and honored
+by the next invocation. Exhausted recovery also sets a three-minute cooldown.
+Login/account challenges, CAPTCHA and HTTP 401/403 stop the batch immediately.
+
+Only an article containing the exact target status link can be clicked. Missing
+thread detail stops that attempt rather than assuming the anchor is the final
+thread tweet. A click without confirmation remains `uncertain`; the next attempt
+checks whether the target is already liked before attempting any click. Only
+`liked` and `already_liked` count as confirmed. Failures keep their phase, error
+category and relevant HTTP status/path in the checkpoint, plus a local screenshot
+under `state/x_weekly/<WEEK>-diagnostics/`. Diagnostics exclude request headers,
+cookies and URL query strings. These are local technical files, not documents
+for ingestion. No browser automation can guarantee that X remains available;
+`status` must still report 50 confirmed Likes before the run is successful.
+
 After tweet ingestion, the pipeline resolves the latest saved weekly selection
 to an explicit downloaded-file manifest (`state/x_weekly/<WEEK>-downloads.json`).
 It matches selected IDs or their recorded thread Like targets against source

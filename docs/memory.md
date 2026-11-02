@@ -197,3 +197,10 @@ This file stores stable, reusable operational notes for future agent runs.
   passed by capture_queue to nested ingestion. Do not unlink the lock or wrap
   the guarded cron wrapper in a new independent lock. Direct Python utilities
   remain lower-level APIs without this shell guard.
+
+
+## Weekly X Like recovery (2026-11-02)
+
+- `utils/x_weekly_review.py apply` reuses a Chrome context, paces attempts, and performs one bounded automatic recovery after a cooldown. Login/CAPTCHA/access rejection stops immediately. A saved `retry_not_before` survives interrupted runs and also delays manual retries after exhausted recovery.
+- Exact target status links are mandatory; never fall back to the first article. Missing thread data must not silently resolve to the anchor. Unconfirmed clicks remain uncertain and are checked for an existing Like on the next page before any click.
+- Failure diagnostics (phase, category, relevant HTTP paths/statuses and screenshots) stay under the weekly technical state directory. Never record cookies, request headers or URL query strings. Preserve the selected IDs and all confirmed checkpoints when recovering.
