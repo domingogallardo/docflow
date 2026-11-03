@@ -1,0 +1,35 @@
+.dg-article-preview {
+  position: fixed;
+  z-index: 10000;
+  box-sizing: border-box;
+  width: min(420px, calc(100vw - 24px));
+  max-height: calc(100dvh - 24px);
+  overflow: auto;
+  padding: 14px 16px;
+  border: 1px solid #ccc;
+  border-radius: 10px;
+  background: #fff;
+  color: #222;
+  box-shadow: 0 6px 24px #0003;
+  font: 14px/1.5 -apple-system, system-ui, sans-serif;
+  overflow-wrap: anywhere;
+}
+.dg-article-preview[hidden] { display: none; }
+.dg-article-preview strong { display: block; margin-bottom: 6px; }
+.dg-article-preview strong a { color: #087f63; text-decoration: underline; }
+.dg-article-preview strong a:focus-visible { outline: 2px solid #087f63; outline-offset: 3px; }
+.dg-article-preview p { margin: 0; cursor: pointer; }
+
+/* Safari's link callout/selection competes with the custom long press.
+ * Limit suppression to summary titles on touch-capable devices, and only
+ * after the preview controller has loaded. Do not disable pan or pinch. */
+@media (any-pointer: coarse) {
+  .dg-summary-previews a[data-dg-summary]:not([data-dg-summary=""]),
+  .dg-summary-previews .dg-search-results li:has(a[data-dg-summary]:not([data-dg-summary=""])),
+  .dg-summary-previews .dg-article-preview,
+  .dg-summary-previews .dg-article-preview * {
+    -webkit-touch-callout: none;
+    -webkit-user-select: none;
+    user-select: none;
+  }
+}

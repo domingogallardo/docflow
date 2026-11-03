@@ -39,6 +39,16 @@ Podcast snippets are typically captured in [Snipd](https://www.snipd.com) and th
 
 - Home page with title search and `History`, a recent list derived from saved meaningful reading positions.
 - Browse / Reading / Done views.
+- Existing article summaries appear in a shared preview card in Browse, Reading,
+  Done, search results and History: hover a title for 400 ms, hold it on touch,
+  or focus it with the keyboard. The card title links to the article; tapping the summary text dismisses the card.
+  A normal click/tap opens the document. Moving
+  the finger, scrolling, multiple touches or Escape dismiss/cancel the preview.
+  On touch devices, summary titles suppress native link callouts and text
+  selection so a hold can show the summary. This also covers search result
+  folder labels and the preview card under the finger. Scrolling and pinch zoom stay native.
+  Desktop right-click and links without a summary keep their native menus.
+  Documents without a saved summary have no preview; no AI calls are made.
 - Browse hides items already in Reading / Done.
 - Browse list pages include topical filter buttons next to the highlight toggle, with a dice button to refresh suggestions.
 - Highlight toggle on list pages, with browser-persistent state until switched back off.

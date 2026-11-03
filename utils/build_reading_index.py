@@ -16,6 +16,7 @@ if __package__ in (None, ""):
     if str(_REPO_ROOT) not in sys.path:
         sys.path.insert(0, str(_REPO_ROOT))
 
+from utils.article_preview import preview_attributes, preview_head, summary_for_path
 from utils.highlight_store import highlight_status_for_path
 from utils.markdown_utils import split_front_matter
 from utils.site_paths import (
@@ -56,6 +57,7 @@ class SiteReadingItem(NamedTuple):
     sort_mtime: float
     highlighted: bool
     highlight_last_epoch: float | None
+    summary: str = ""
 
 
 def _icon_for(name: str) -> str:
@@ -133,6 +135,7 @@ def collect_site_reading_items(base_dir: Path) -> list[SiteReadingItem]:
         highlighted, highlight_last_epoch = _site_highlight_status(base_dir, rel)
         items.append(
             SiteReadingItem(
+                summary=summary_for_path(abs_path),
                 rel_path=rel,
                 name=abs_path.name,
                 mtime=display_mtime,
@@ -165,7 +168,7 @@ def build_site_reading_html(items: list[SiteReadingItem]) -> str:
                 f"data-dg-name='{html.escape(item.name.lower(), quote=True)}'"
             )
             lines.append(
-                f'<li {row_attrs}><span>{hl_icon}{icon}<a href="{href}" title="{esc_name}">{esc_name}</a></span></li>'
+                f'<li {row_attrs}><span>{hl_icon}{icon}<a href="{href}"{preview_attributes(item.summary)}>{esc_name}</a></span></li>'
             )
         lines.append("</ul>")
         list_html = "\n".join(lines)
@@ -173,7 +176,7 @@ def build_site_reading_html(items: list[SiteReadingItem]) -> str:
     return (
         '<!DOCTYPE html><html><head><meta charset="utf-8">'
         f'<meta name="viewport" content="{READING_VIEWPORT}">'
-        f"<style>{READING_BASE_STYLE}</style>"
+        f"{preview_head()}<style>{READING_BASE_STYLE}</style>"
         f'<script src="{static_asset_url("actions.js")}" defer></script>'
         f'<script src="{static_asset_url("browse-sort.js")}" defer></script>'
         f"<title>{title}</title></head><body>"

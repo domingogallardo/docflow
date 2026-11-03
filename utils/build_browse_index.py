@@ -40,6 +40,7 @@ from utils.site_paths import (
     static_asset_url,
     viewer_url_for_rel_path,
 )
+from utils.article_preview import preview_attributes, preview_head, summary_for_path
 from utils.highlight_store import highlight_status_for_path
 from utils.markdown_utils import split_front_matter
 from utils.reading_position_store import reading_positions_state_root
@@ -238,6 +239,7 @@ class BrowseEntry:
     sort_mtime: float | None = None
     temporal_epoch: float | None = None
     item_count: int | None = None
+    summary: str = ""
     filter_text: str = ""
     filter_terms: tuple[str, ...] = ()
 
@@ -881,7 +883,7 @@ def _render_entry(entry: BrowseEntry) -> str:
     ]
     attrs = f"{cls_attr} " + " ".join(attr_bits) if cls_attr else " " + " ".join(attr_bits)
     return (
-        f"<li{attrs}><span>{prefix}<a href=\"{entry.href}\">{esc_name}</a>{count_html}</span></li>"
+        f"<li{attrs}><span>{prefix}<a href=\"{entry.href}\"{preview_attributes(entry.summary)}>{esc_name}</a>{count_html}</span></li>"
     )
 
 
@@ -923,7 +925,8 @@ def _local_today() -> date:
 def _base_head(title: str) -> str:
     return (
         f"<html><head><meta charset='utf-8'><meta name='viewport' content='width=device-width, initial-scale=1'><title>{html.escape(title)}</title>"
-        "<style>"
+        + preview_head()
+        + "<style>"
         "body{margin:14px 18px;font:14px -apple-system,system-ui,Segoe UI,Roboto,Helvetica,Arial;color:#222;background:#fff}"
         "h2{margin:6px 0 10px;font-weight:600}"
         "hr{border:0;border-top:1px solid #e6e6e6;margin:8px 0}"
@@ -1069,6 +1072,7 @@ def _collect_browse_search_entries(base_dir: Path, category_roots: dict[str, Pat
                         "href": href,
                         "folder": path.parent.name,
                         "category": category,
+                        "summary": summary_for_path(path),
                     },
                 )
             )
@@ -1257,6 +1261,7 @@ def _history_entry_from_position(base_dir: Path, payload: dict[str, object]) -> 
         updated_epoch,
         {
             "name": abs_path.name,
+            "summary": summary_for_path(abs_path),
             "href": viewer_url_for_rel_path(rel_path),
             "folder": abs_path.parent.name,
             "path": rel_path,
@@ -1347,7 +1352,7 @@ def _search_script_html() -> str:
         + "function render(matches,emptyText){"
         + "if(!matches){hit.textContent='';return;}"
         + "if(!matches.length){hit.textContent=emptyText||'No matching titles found.';return;}"
-        + "hit.innerHTML='<div>'+matches.length+' result'+(matches.length===1?'':'s')+'</div><ul class=\"dg-search-results\">'+matches.map(function(e){return '<li><a href=\"'+esc(e.href)+'\">'+esc(e.name)+'</a> <span class=\"dg-search-folder\">'+esc(e.folder)+'</span></li>';}).join('')+'</ul>';"
+        + "hit.innerHTML='<div>'+matches.length+' result'+(matches.length===1?'':'s')+'</div><ul class=\"dg-search-results\">'+matches.map(function(e){return '<li><a href=\"'+esc(e.href)+'\" data-dg-summary=\"'+esc(e.summary||'')+'\">'+esc(e.name)+'</a> <span class=\"dg-search-folder\">'+esc(e.folder)+'</span></li>';}).join('')+'</ul>';"
         + "}"
         + "function run(){"
         + "showingHistory=false;"
@@ -1652,6 +1657,7 @@ def _scan_directory(
                         highlighted=highlighted,
                         highlight_last_epoch=highlight_last_epoch,
                         temporal_epoch=temporal_epoch,
+                        summary=summary_for_path(abs_path),
                         filter_text=filter_text,
                     )
                 )
@@ -2000,7 +2006,7 @@ def write_site_home(base_dir: Path, category_roots: dict[str, Path] | None = Non
         ".dg-search-results li{margin:3px 0}"
         ".dg-search-folder{color:#666;margin-left:6px}"
         ".dg-actions button{padding:2px 6px;border:1px solid #ccc;border-radius:6px;background:#f7f7f7;color:#333;font:12px -apple-system,system-ui,Segoe UI,Roboto,Helvetica,Arial;cursor:pointer}"
-        f"</style><script src='{static_asset_url('actions.js')}' defer></script></head><body>"
+        f"</style>{preview_head()}<script src='{static_asset_url('actions.js')}' defer></script></head><body>"
         "<h1>Docflow Intranet</h1>"
         "<p><a href='/browse/'>Browse</a> · <a href='/reading/'>Reading</a> · <a href='/done/'>Done</a></p>"
         f"{_home_history_link_html()}"
@@ -2559,6 +2565,9 @@ main { max-width: 1100px; }
     (assets_dir / "actions.js").write_text(js + "\n", encoding="utf-8")
     (assets_dir / "browse-sort.js").write_text(browse_sort_js + "\n", encoding="utf-8")
     (assets_dir / "site.css").write_text(css + "\n", encoding="utf-8")
+    for name in ("article-preview.js", "article-preview.css"):
+        source = Path(__file__).resolve().parent / "static" / name
+        (assets_dir / name).write_text(source.read_text(encoding="utf-8"), encoding="utf-8")
     article_js_source = Path(__file__).resolve().parent / "static" / "article.js"
     (assets_dir / "article.js").write_text(article_js_source.read_text(encoding="utf-8"), encoding="utf-8")
 
