@@ -49,4 +49,5 @@ def test_image_ai_uses_low_reasoning_with_room_for_reasoning_tokens(
 
     assert describer.describe_filename(image_path) == "Rainy pavement note"
     assert client.responses.kwargs["reasoning"] == {"effort": "low"}
-    assert client.responses.kwargs["max_output_tokens"] == 128
+    assert client.responses.kwargs["model"] == "gpt-5-nano"
+    assert client.responses.kwargs["max_output_tokens"] == 2048

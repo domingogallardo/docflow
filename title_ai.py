@@ -25,7 +25,8 @@ class TitleAIUpdater:
         num_words: int = 500,
         max_bytes_md: int = 1600,
         delay_seconds: float = 1.0,
-        model: str = "gpt-5.4-mini",
+        model: str = "gpt-5-nano",
+        verbosity: str = "low",
     ) -> None:
         self.client = ai_client
         self.max_title_len = max_title_len
@@ -33,6 +34,7 @@ class TitleAIUpdater:
         self.max_bytes_md = max_bytes_md
         self.delay_seconds = delay_seconds
         self.model = model
+        self.verbosity = verbosity
 
     # -------- public API --------
     def update_titles(self, candidates: Iterable[Path], rename_pair: RenameFunc) -> None:
@@ -184,7 +186,7 @@ class TitleAIUpdater:
                     input=prompt,
                     max_output_tokens=output_budget,
                     reasoning={"effort": "low"},
-                    text={"verbosity": "low"},
+                    text={"verbosity": self.verbosity},
                 )
 
                 text = (getattr(resp, "output_text", "") or "").strip()

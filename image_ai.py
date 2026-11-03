@@ -27,7 +27,7 @@ class ImageAIDescriber:
         self,
         ai_client,
         *,
-        model: str = "gpt-5.4-mini",
+        model: str = "gpt-5-nano",
         max_name_len: int = 120,
         detail: str = "low",
         preview_max_side: int = 1024,
@@ -83,7 +83,7 @@ class ImageAIDescriber:
                         ],
                     }
                 ],
-                max_output_tokens=128,
+                max_output_tokens=2048,
                 reasoning={"effort": "low"},
                 text={"verbosity": "low"},
             )

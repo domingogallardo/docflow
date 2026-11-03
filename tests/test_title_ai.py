@@ -40,6 +40,8 @@ def test_ai_text_uses_low_reasoning_effort() -> None:
 
     assert updater._ai_text(system="System", prompt="Prompt", max_tokens=8) == "Generated title"
     assert client.responses.calls[0]["reasoning"] == {"effort": "low"}
+    assert client.responses.calls[0]["model"] == "gpt-5-nano"
+    assert client.responses.calls[0]["text"] == {"verbosity": "low"}
     assert client.responses.calls[0]["max_output_tokens"] == 128
 
 

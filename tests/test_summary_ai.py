@@ -5,9 +5,36 @@ from summary_ai import SummaryAIUpdater
 from utils import split_front_matter
 
 
+def test_summary_ai_sends_terra_detail_prompt_and_medium_verbosity():
+    from types import SimpleNamespace
+
+    calls = []
+    outputs = iter(["English", "A workshop covers JavaScript, Gulp, Bower and npm."])
+
+    def create(**kwargs):
+        calls.append(kwargs)
+        return SimpleNamespace(output_text=next(outputs))
+
+    client = SimpleNamespace(responses=SimpleNamespace(create=create))
+    updater = SummaryAIUpdater(client, delay_seconds=0)
+    updated = updater.add_summary_to_markdown("# Workshop\n\nJavaScript, Gulp, Bower and npm.")
+
+    meta, _ = split_front_matter(updated)
+    assert meta["docflow_summary"] == "A workshop covers JavaScript, Gulp, Bower and npm."
+    assert [call["model"] for call in calls] == ["gpt-5-nano", "gpt-6.1-terra"]
+    request = calls[1]
+    assert request["text"] == {"verbosity": "medium"}
+    assert request["reasoning"] == {"effort": "low"}
+    assert request["max_output_tokens"] == 2048
+    assert "430–500 characters" in request["instructions"]
+    assert "Keep specific technical names, tools, libraries" in request["instructions"]
+    assert "If the text lacks substantive content" in request["instructions"]
+    assert "3 to 5 sentences" not in request["instructions"]
+
+
 def test_summary_ai_adds_spanish_docflow_summary(monkeypatch):
     updater = SummaryAIUpdater(object(), delay_seconds=0)
-    monkeypatch.setattr(updater._ai, "_detect_language", lambda snippet: "Spanish")
+    monkeypatch.setattr(updater._language_ai, "_detect_language", lambda snippet: "Spanish")
     monkeypatch.setattr(
         updater._ai,
         "_ai_text",
@@ -29,7 +56,7 @@ def test_summary_ai_uses_detected_article_language(monkeypatch):
     updater = SummaryAIUpdater(object(), delay_seconds=0)
     calls = []
 
-    monkeypatch.setattr(updater._ai, "_detect_language", lambda snippet: "English")
+    monkeypatch.setattr(updater._language_ai, "_detect_language", lambda snippet: "English")
 
     def fake_ai_text(**kwargs):
         calls.append(kwargs)
@@ -43,7 +70,7 @@ def test_summary_ai_uses_detected_article_language(monkeypatch):
 
     meta, _ = split_front_matter(updated)
     assert meta["docflow_summary"].startswith("The article argues")
-    assert "Write it in English." in calls[0]["system"]
+    assert "summary in English," in calls[0]["system"]
 
 
 def test_summary_ai_skips_tweets(monkeypatch):
@@ -82,7 +109,7 @@ def test_summary_ai_preserves_existing_summary(monkeypatch):
 
 def test_summary_ai_clips_summary_to_500_chars(monkeypatch):
     updater = SummaryAIUpdater(object(), delay_seconds=0)
-    monkeypatch.setattr(updater._ai, "_detect_language", lambda snippet: "Spanish")
+    monkeypatch.setattr(updater._language_ai, "_detect_language", lambda snippet: "Spanish")
     monkeypatch.setattr(updater._ai, "_ai_text", lambda **kwargs: "Palabra " * 120)
 
     updated = updater.add_summary_to_markdown("# Título\n\nContenido del artículo.")

@@ -393,3 +393,61 @@ def test_podcast_processor_builds_snip_index(tmp_path):
     html_content = processed_html.read_text(encoding="utf-8")
     assert 'id="snip-01-00-01-primer-snip"' in html_content
     assert 'href="#snip-02-10-00-segundo-snip"' in html_content
+
+
+def _snip_case_processor(tmp_path, response):
+    from types import SimpleNamespace
+
+    processor = PodcastProcessor(tmp_path, tmp_path)
+    processor.snip_title_ai.client = object()
+    calls = []
+
+    def ai_text(**kwargs):
+        calls.append(kwargs)
+        return response
+
+    processor.snip_title_ai = SimpleNamespace(client=object(), _ai_text=ai_text)
+    return processor, calls
+
+
+def test_snip_sentence_case_preserves_links_names_and_acronyms(tmp_path, monkeypatch):
+    import json
+
+    titles = ['[19:43] La IA Cambiará La Literatura', '[20:40] Apple Y Stephen Wolfram']
+    normalized = ['[19:43] La IA cambiará la literatura', '[20:40] Apple y Stephen Wolfram']
+    processor, calls = _snip_case_processor(tmp_path, json.dumps(normalized))
+    original = '# Episode\n\n## Snips\n\n' + '\n\n'.join('### ' + t for t in titles)
+    indexed = processor._add_snip_index(original)
+    updated = processor._sentence_case_snip_titles(indexed)
+    assert '- [[19:43] La IA cambiará la literatura](#snip-01-19-43-la-ia-cambiara-la-literatura)' in updated
+    assert '### [20:40] Apple y Stephen Wolfram {#snip-02-20-40-apple-y-stephen-wolfram}' in updated
+    assert processor._sentence_case_snip_titles(updated) == updated
+    assert len(calls) == 1
+
+
+def test_snip_sentence_case_rejects_rewriting_and_lowercased_acronyms(tmp_path, monkeypatch):
+    import json
+
+    original = '# Episode\n\n## Snips\n\n### [00:01] La IA Cambia Todo\n'
+    for response in (['[00:01] La IA transforma todo'], ['[00:01] La ia cambia todo'],
+                     [], ['[00:01] La IA cambia todo!']):
+        processor, _ = _snip_case_processor(tmp_path, json.dumps(response))
+        assert processor._sentence_case_snip_titles(original) == original
+
+
+def test_snip_sentence_case_failure_and_no_client_keep_original(tmp_path, monkeypatch):
+    original = '# Episode\n\n## Snips\n\n### [00:01] Primer Snip\n'
+    processor, calls = _snip_case_processor(tmp_path, 'not JSON')
+    assert processor._sentence_case_snip_titles(original) == original
+    processor.snip_title_ai.client = None
+    assert processor._sentence_case_snip_titles(original) == original
+    assert len(calls) == 1
+
+
+def test_snip_sentence_case_before_index_leaves_other_sections_unchanged(tmp_path, monkeypatch):
+    processor, _ = _snip_case_processor(tmp_path, '["[00:01] Primer snip"]')
+    original = ('# Episode\n\n## Snips\n\n### [00:01] Primer Snip\n\n'
+                'Some Body Text.\n\n## Notes\n\n### Other Title\n')
+    updated = processor._add_snip_index(processor._sentence_case_snip_titles(original))
+    assert '- [[00:01] Primer snip](#snip-01-00-01-primer-snip)' in updated
+    assert 'Some Body Text.\n\n## Notes\n\n### Other Title\n' in updated
