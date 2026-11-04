@@ -308,6 +308,55 @@ def test_markdown_quality_rejects_data_images():
     assert quality.reason == "contains data:image payloads"
 
 
+def test_clean_html_drops_inline_video_posters_but_preserves_video_sources():
+    html = '''<article><img src="photo.jpg">
+    <video poster="data:image/gif;base64,AAAA" controls>
+      <source src="movie.mp4" type="video/mp4">
+    </video><video poster="cover.jpg" src="other.mp4"></video></article>'''
+    cleaned, removed = clean_html_for_markdown(html, base_url="https://example.com/post/")
+    assert removed == 1
+    assert "data:image" not in cleaned
+    assert '<video controls="">' in cleaned
+    assert 'src="https://example.com/post/movie.mp4"' in cleaned
+    assert 'poster="https://example.com/post/cover.jpg"' in cleaned
+    assert 'src="https://example.com/post/photo.jpg"' in cleaned
+
+
+def test_clean_html_keeps_inline_video_poster_when_requested():
+    cleaned, removed = clean_html_for_markdown(
+        '<video poster="data:image/gif;base64,AAAA" src="movie.mp4"></video>',
+        remove_data_images=False,
+    )
+    assert removed == 0
+    assert 'poster="data:image/gif;base64,AAAA"' in cleaned
+
+
+def test_markdown_quality_accepts_image_data_examples_in_code():
+    body = "Article text. " * 100
+    for example in (
+        '\n```json\n{"url": "data:image/png;base64,..."}\n```',
+        '\nUse `data:image/png;base64,...` for an image.',
+        '\n<pre><code>data:image/png;base64,...</code></pre>',
+        '\n    data:image/png;base64,...\n',
+    ):
+        quality = markdown_quality(body + "\n" + example)
+        assert quality.usable, example
+        assert quality.data_image_count == 0
+
+
+def test_markdown_quality_still_rejects_real_inline_media_alongside_code():
+    body = "Article text. " * 100
+    example = '\n```json\n{"url": "data:image/png;base64,..."}\n```\n'
+    for media in (
+        '![](data:image/png;base64,AAAA)',
+        '<img src="data:image/png;base64,AAAA">',
+        '<video poster="data:image/gif;base64,AAAA" src="movie.mp4"></video>',
+    ):
+        quality = markdown_quality(body + example + media)
+        assert not quality.usable
+        assert quality.data_image_count == 1
+
+
 def test_markdown_quality_rejects_escaped_json_payload():
     escaped_comments = "<\\\\/p>\\\\n".join(["Comment"] * 25)
     noisy_body = (

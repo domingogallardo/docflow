@@ -228,3 +228,15 @@ This file stores stable, reusable operational notes for future agent runs.
 - Replies progress is logged every five scrolls; reaching the total bound
   emits an explicit incomplete-results warning. The limit does not advance
   the saved checkpoint by itself.
+
+## Image extraction false positives (2026-11-04)
+
+- Reproduced both prior `contains data:image payloads` failures through the real
+  Clipper CLI: Ready for Duo had three one-pixel GIF video posters; Mistral Large
+  4 had a literal `data:image/png;base64,...` string inside a code example.
+  The article illustrations already had remote image URLs.
+- Cleaning now removes inline video poster attributes while retaining videos
+  and their sources. Quality checks exclude fenced, indented, inline and HTML
+  code examples from data-image detection, but still reject actual inline media.
+- Hugging Face blog fallback selects `.blog-content > .overflow-clip` plus the
+  heading; the broad `main` fallback included authors, comments and avatars.

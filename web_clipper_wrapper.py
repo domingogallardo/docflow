@@ -21,6 +21,7 @@ from typing import Any, Iterable, List, Sequence
 from urllib.parse import unquote, urljoin, urlparse
 
 import requests
+import markdown as markdown_renderer
 from bs4 import BeautifulSoup
 
 import config as cfg
@@ -105,6 +106,16 @@ class ArticleDownloadResult:
 CONTENT_ATTEMPT = ClipAttempt("content", "{{content}}")
 
 DOMAIN_RULES: tuple[DomainRule, ...] = (
+    DomainRule(
+        "huggingface.co",
+        (
+            ClipAttempt(
+                "huggingface-blog-content",
+                "{{selectorHtml:h1|markdown}}\n\n"
+                "{{selectorHtml:.blog-content > .overflow-clip|markdown}}",
+            ),
+        ),
+    ),
     DomainRule(
         "esade.edu",
         (
@@ -339,6 +350,13 @@ def clean_html_for_markdown(
         if remove_data_images and src.startswith("data:image"):
             img.decompose()
             removed += 1
+    if remove_data_images:
+        # Publishers use inline one-pixel images as provisional video posters.
+        # Drop only that attribute; keep the video and its original source URLs.
+        for video in soup.find_all("video"):
+            if str(video.get("poster") or "").lower().startswith("data:image"):
+                del video["poster"]
+                removed += 1
     if document_base:
         _resolve_document_urls(soup, document_base)
     return str(soup), removed
@@ -452,7 +470,14 @@ def markdown_quality(
     body = strip_frontmatter(markdown).strip()
     body_chars = len(body)
     words = re.findall(r"\w+", body, flags=re.UNICODE)
-    data_image_count = len(DATA_IMAGE_RE.findall(markdown))
+    # Documentation may mention data:image in fenced or inline code. Those are
+    # examples, not embedded media; reject only occurrences outside code blocks.
+    quality_html = BeautifulSoup(
+        markdown_renderer.markdown(body, extensions=["fenced_code"]), "html.parser"
+    )
+    for code in quality_html.find_all(("pre", "code")):
+        code.decompose()
+    data_image_count = len(DATA_IMAGE_RE.findall(str(quality_html)))
     escaped_json_noise_count = len(ESCAPED_JSON_NOISE_RE.findall(body))
     escaped_markdown_destination_count = len(
         ESCAPED_MARKDOWN_DESTINATION_RE.findall(body)

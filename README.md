@@ -337,6 +337,10 @@ photos, captions and videos remain available to the extractor.
 Duplicate `noscript` image fallbacks alongside responsive photos are removed
 before extraction, preventing two sizes of the same photo from appearing in the
 saved article. Images available only through a fallback are retained.
+Inline `data:image` video posters are removed without dropping the video or its
+source URLs. Quality validation ignores image-data strings inside code examples,
+while still rejecting actual inline image payloads. Hugging Face blog fallback
+extraction targets the article body to avoid author avatars and comments.
 
 ### Manual quick start
 
