@@ -9,7 +9,7 @@ from pathlib import Path
 from urllib.parse import quote, unquote
 
 BASE_DIR_ENV = "DOCFLOW_BASE_DIR"
-STATIC_ASSET_VERSION = "20261103-preview-card"
+STATIC_ASSET_VERSION = "20261104-link-colors"
 
 
 class PathValidationError(ValueError):

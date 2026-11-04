@@ -1,3 +1,8 @@
+/* Author-level defaults prevent the browser's red :active link color.
+ * Page-specific link colors still take priority, including search and previews. */
+:where(.dg-summary-previews a:link) { color: #0000ee; }
+:where(.dg-summary-previews a:visited) { color: #551a8b; }
+
 .dg-article-preview {
   position: fixed;
   z-index: 10000;

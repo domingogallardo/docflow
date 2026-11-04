@@ -45,7 +45,7 @@ def test_viewer_url_for_rel_path_uses_pdf_viewer_only_for_pdfs():
 
 
 def test_static_asset_url_includes_cache_busting_version():
-    assert site_paths.static_asset_url("browse-sort.js") == "/assets/browse-sort.js?v=20261103-preview-card"
+    assert site_paths.static_asset_url("browse-sort.js") == "/assets/browse-sort.js?v=20261104-link-colors"
 
 
 def test_resolve_base_dir_prefers_env(monkeypatch, tmp_path: Path):
