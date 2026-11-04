@@ -204,3 +204,13 @@ This file stores stable, reusable operational notes for future agent runs.
 - `utils/x_weekly_review.py apply` reuses a Chrome context, paces attempts, and performs one bounded automatic recovery after a cooldown. Login/CAPTCHA/access rejection stops immediately. A saved `retry_not_before` survives interrupted runs and also delays manual retries after exhausted recovery.
 - Exact target status links are mandatory; never fall back to the first article. Missing thread data must not silently resolve to the anchor. Unconfirmed clicks remain uncertain and are checked for an existing Like on the next page before any click.
 - Failure diagnostics (phase, category, relevant HTTP paths/statuses and screenshots) stay under the weekly technical state directory. Never record cookies, request headers or URL query strings. Preserve the selected IDs and all confirmed checkpoints when recovering.
+
+## Snipd episode replacement (2026-11-04)
+
+- Podcast snippet ingestion matches the stable ID in `Episode link` across all
+  podcast year folders. Re-exports replace the complete Markdown/HTML pair at
+  the original location, preserving existing mtimes, `docflow_id`, ingestion
+  date and last-read metadata. The new export is authoritative; snippets are
+  not merged. Missing new HTML aborts replacement before changing the old pair.
+- Full transcripts are excluded from snippet matching. Different or missing
+  episode IDs never authorize overwriting a filename collision.

@@ -15,6 +15,7 @@ import utils as U
 from openai_client import build_openai_client
 from summary_ai import SummaryAIUpdater
 from title_ai import TitleAIUpdater
+from utils.podcasts import move_podcast_files
 
 
 SNIP_INDEX_MARKER = "<!-- snip-index -->"
@@ -65,8 +66,7 @@ class PodcastProcessor:
             
             # 3. Rename and move files.
             renamed_files = U.rename_podcast_files(podcasts)
-            moved_files = U.move_files(renamed_files, self.destination_dir)
-            U.sync_markdown_html_pairs_metadata(moved_files, base_dir=cfg.BASE_DIR)
+            moved_files = move_podcast_files(renamed_files, self.destination_dir, base_dir=cfg.BASE_DIR)
             
             if moved_files:
                 print(f"📻 {len(moved_files)} podcast file(s) moved to {self.destination_dir}")

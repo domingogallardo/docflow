@@ -147,6 +147,14 @@ External input files:
   the original titles intact. Headings and the snippet index use the same text,
   existing anchors are preserved, and `podcast_snip_title_case: sentence` prevents
   repeated requests after a successful conversion.
+- Re-exported Snipd snippets are matched by the episode ID in `Episode link`
+  across all `Podcasts/Podcasts <YEAR>/` folders. A matching export replaces
+  the existing Markdown/HTML pair at its original path, retaining file dates,
+  document identity and last-read metadata. The incoming export is the complete
+  replacement, not a merge of individual snippets. Full transcripts remain
+  separate. Without a matching episode ID, filename collisions get a numeric
+  suffix rather than overwriting another document. Replacement requires the
+  new HTML to have been generated successfully.
 - Full Snipd transcript Markdown is detected by its `Episode metadata`,
   `share.snipd.com/episode/...` link, publish date, and `## Transcript`
   section. The `md` target files it under `Podcasts/Podcasts <YEAR>/` as

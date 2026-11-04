@@ -1,10 +1,82 @@
 from pathlib import Path
+import os
 import re
+import shutil
 
 from config import INCOMING
 from path_utils import unique_pair
 from utils.file_ops import list_files
-from utils.markdown_utils import split_front_matter, upsert_front_matter
+from utils.markdown_utils import split_front_matter, upsert_front_matter, sync_markdown_html_pair_metadata
+
+
+def podcast_episode_id(text: str) -> str | None:
+    """Read the stable episode ID from Snipd's episode metadata link."""
+    match = re.search(
+        r"^-\s*Episode link:.*?https://share\.snipd\.com/episode/([\w-]+)",
+        text, re.MULTILINE,
+    )
+    return match.group(1) if match else None
+
+
+def snip_episode_id(text: str) -> str | None:
+    """Exclude full transcripts even when they share the same episode ID."""
+    meta, body = split_front_matter(text)
+    if meta.get("podcast_content_type") == "transcript":
+        return None
+    if not re.search(r"^##\s+Snips\s*$", body, re.MULTILINE | re.IGNORECASE):
+        return None
+    return podcast_episode_id(text)
+
+
+def replace_podcast_pair(source: Path, target: Path, *, base_dir: Path) -> list[Path]:
+    """Install a complete pair, retaining an existing document's identity and dates."""
+    source_html = source.with_suffix(".html")
+    if not source_html.is_file():
+        raise FileNotFoundError(f"Podcast HTML is missing: {source_html}")
+    target_html = target.with_suffix(".html")
+    existing_stats = {p: p.stat() for p in (target, target_html) if p.exists()}
+    text = source.read_text(encoding="utf-8")
+    if target.exists():
+        old_meta, _ = split_front_matter(target.read_text(encoding="utf-8"))
+        preserved = {key: old_meta[key] for key in (
+            "docflow_id", "docflow_ingested_at", "docflow_last_read",
+        ) if old_meta.get(key)}
+        text = upsert_front_matter(text, preserved)
+    source.write_text(text, encoding="utf-8")
+    target.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        shutil.move(str(source), str(target))
+        shutil.move(str(source_html), str(target_html))
+        sync_markdown_html_pair_metadata(target, target_html, base_dir=base_dir)
+    finally:
+        for path, stat in existing_stats.items():
+            if path.exists():
+                os.utime(path, ns=(stat.st_atime_ns, stat.st_mtime_ns))
+    return [target, target_html]
+
+
+def move_podcast_files(files: list[Path], destination: Path, *, base_dir: Path) -> list[Path]:
+    """Replace snip exports by episode ID across all years of the podcast library."""
+    library = destination.parent if re.fullmatch(r"Podcasts \d{4}", destination.name) else destination
+    episodes: dict[str, Path] = {}
+    for path in sorted(library.rglob("*.md"), key=lambda p: (p.stat().st_mtime_ns, str(p))):
+        episode_id = snip_episode_id(path.read_text(encoding="utf-8"))
+        if episode_id:
+            episodes.setdefault(episode_id, path)
+    moved: list[Path] = []
+    for source in files:
+        if source.suffix != ".md":
+            continue
+        episode_id = snip_episode_id(source.read_text(encoding="utf-8"))
+        target = episodes.get(episode_id) if episode_id else None
+        if target is None:
+            target, _ = unique_pair(destination / source.name, destination / source.with_suffix(".html").name)
+        else:
+            print(f"Updating existing podcast episode: {target.name}")
+        moved.extend(replace_podcast_pair(source, target, base_dir=base_dir))
+        if episode_id:
+            episodes[episode_id] = target
+    return moved
 
 
 def is_podcast_file(file_path: Path) -> bool:
