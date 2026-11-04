@@ -214,3 +214,17 @@ This file stores stable, reusable operational notes for future agent runs.
   not merged. Missing new HTML aborts replacement before changing the old pair.
 - Full transcripts are excluded from snippet matching. Different or missing
   episode IDs never authorize overwriting a filename collision.
+
+## X replies scan limits (2026-11-04)
+
+- Live diagnosis confirmed that X now sends replies through `UserRepliesTimeline`;
+  listening only for `UserTweetsAndReplies` ignored the actual timeline payload.
+  Both external operation names are recognized, and a scan without a matching
+  payload reports failure instead of claiming there were no new replies.
+- Replies collection now has the same 30-scroll total bound as the general
+  timeline collector. Its 20-scroll idle counter uses newly observed tweet IDs
+  and article growth, rather than the arrival of repeated response payloads.
+  Pending payloads are parsed before either stopping condition is checked.
+- Replies progress is logged every five scrolls; reaching the total bound
+  emits an explicit incomplete-results warning. The limit does not advance
+  the saved checkpoint by itself.

@@ -519,7 +519,8 @@ def collect_reply_items_from_page(
     payloads: List[object] = []
 
     def handle_response(response) -> None:
-        if "UserTweetsAndReplies" not in response.url:
+        operation = urlparse(response.url).path.rsplit("/", 1)[-1]
+        if operation not in {"UserRepliesTimeline", "UserTweetsAndReplies"}:
             return
         try:
             payloads.append(response.json())
@@ -538,13 +539,19 @@ def collect_reply_items_from_page(
     stop_found = False
     articles = page.locator("article")
     max_scrolls = 20
+    max_total_scrolls = 30
+    total_scrolls = 0
     idle_scrolls = 0
     parsed_payload_count = 0
+    seen_tweet_ids: set[str] = set()
+    previous_article_count = articles.count()
 
     while _should_continue(collected, max_tweets, stop_found):
+        before_tweet_ids = len(seen_tweet_ids)
         while parsed_payload_count < len(payloads):
             payload = payloads[parsed_payload_count]
             parsed_payload_count += 1
+            seen_tweet_ids.update(str(tweet["rest_id"]) for tweet in _iter_tweet_results(payload))
             before = len(collected)
             _merge_timeline_items(
                 collected,
@@ -562,21 +569,34 @@ def collect_reply_items_from_page(
                 collected = collected[:max_tweets]
             if not _should_continue(collected, max_tweets, stop_found):
                 break
-        if not _should_continue(collected, max_tweets, stop_found):
+        current_article_count = articles.count()
+        if len(seen_tweet_ids) > before_tweet_ids or current_article_count > previous_article_count:
+            idle_scrolls = 0
+        elif total_scrolls:
+            idle_scrolls += 1
+        if (
+            not _should_continue(collected, max_tweets, stop_found)
+            or total_scrolls >= max_total_scrolls
+            or idle_scrolls >= max_scrolls
+        ):
             break
 
-        before_articles = articles.count()
+        previous_article_count = current_article_count
         page.mouse.wheel(0, 2000)
+        total_scrolls += 1
         page.wait_for_timeout(1500)
-        after_articles = articles.count()
-        if after_articles <= before_articles and parsed_payload_count >= len(payloads):
-            idle_scrolls += 1
-            if idle_scrolls >= max_scrolls:
-                break
-        else:
-            idle_scrolls = 0
+        if total_scrolls % 5 == 0:
+            _log(
+                f"   Replies progress: {total_scrolls}/{max_total_scrolls} scrolls, "
+                f"{len(collected)} replies, {parsed_payload_count} response payloads parsed."
+            )
 
+    if total_scrolls >= max_total_scrolls and _should_continue(collected, max_tweets, stop_found):
+        _log("   ⚠️ Replies scroll limit reached; results may be incomplete.")
     total_articles = articles.count()
+    if not payloads:
+        _log("   ⚠️ No replies timeline payload received; replies could not be verified.")
+        return False, total_articles, [], False, stop_absolute
     summary = (
         f"   ✅ Replies loaded successfully. Visible articles: {total_articles}. "
         f"URLs collected: {len(collected)} (limit: {max_tweets})"

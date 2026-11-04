@@ -375,6 +375,109 @@ def test_reply_items_from_payload_collects_only_expected_author_replies():
     assert items[0].reply_to_url == "https://x.com/other/status/99"
 
 
+def _reply_payload(tweet_id, *, author="domingo"):
+    return {"__typename": "Tweet", "rest_id": str(tweet_id),
+            "core": {"user_results": {"result": {"core": {"screen_name": author}}}},
+            "legacy": {"in_reply_to_status_id_str": "99", "in_reply_to_screen_name": "other"}}
+
+
+class ReplyScrollPage:
+    """Deliver simulated X response events without browser or network access."""
+
+    def __init__(self, payload_at, *, growing_articles=False, operation="UserRepliesTimeline"):
+        self.payload_at = payload_at
+        self.growing_articles = growing_articles
+        self.scrolls = 0
+        self.mouse = self
+        self.operation = operation
+
+    def on(self, event, callback):
+        assert event == "response"
+        self.callback = callback
+
+    def _respond(self):
+        payload = self.payload_at(self.scrolls)
+        response = type("Response", (), {
+            "url": f"https://x.com/i/api/graphql/example/{self.operation}",
+            "json": lambda _self: payload,
+        })()
+        self.callback(response)
+
+    def goto(self, *_args, **_kwargs):
+        self._respond()
+
+    def locator(self, selector):
+        assert selector == "article"
+        return self
+
+    def count(self):
+        return 6 + self.scrolls if self.growing_articles else 6
+
+    def wheel(self, *_args):
+        self.scrolls += 1
+        assert self.scrolls <= 35, "Replies loop did not terminate"
+
+    def wait_for_timeout(self, _milliseconds):
+        self._respond()
+
+
+def _collect_fake_replies(page, monkeypatch, **kwargs):
+    monkeypatch.setattr(xl, "_dismiss_cookie_prompt", lambda _page: None)
+    monkeypatch.setattr(xl, "_wait_for_timeline_articles", lambda *_args, **_kwargs: True)
+    return xl.collect_reply_items_from_page(
+        page, "https://x.com/domingo/with_replies", expected_author_handle="domingo", **kwargs
+    )
+
+
+def test_replies_repeated_payloads_do_not_reset_idle_limit(monkeypatch):
+    page = ReplyScrollPage(lambda _scroll: _reply_payload("1", author="other"))
+    success, _, items, stop_found, _ = _collect_fake_replies(page, monkeypatch)
+    assert success and not items and not stop_found
+    assert page.scrolls == 20
+
+
+def test_replies_continuous_unrelated_payloads_have_total_scroll_limit(monkeypatch, capsys):
+    page = ReplyScrollPage(lambda scroll: _reply_payload(scroll, author="other"), growing_articles=True)
+    success, _, items, _, _ = _collect_fake_replies(page, monkeypatch)
+    assert success and not items
+    assert page.scrolls == 30
+    output = capsys.readouterr().out
+    assert "Replies progress: 5/30 scrolls" in output
+    assert "results may be incomplete" in output
+
+
+def test_replies_process_payload_from_last_allowed_scroll(monkeypatch, capsys):
+    page = ReplyScrollPage(
+        lambda scroll: _reply_payload(scroll, author="domingo" if scroll == 30 else "other")
+    )
+    _, _, items, _, _ = _collect_fake_replies(page, monkeypatch, max_tweets=1)
+    assert [item.url for item in items] == ["https://x.com/domingo/status/30"]
+    assert page.scrolls == 30
+    assert "results may be incomplete" not in capsys.readouterr().out
+
+
+def test_replies_stop_at_checkpoint_without_scrolling(monkeypatch):
+    page = ReplyScrollPage(lambda _scroll: _reply_payload("1"))
+    _, _, items, stop_found, _ = _collect_fake_replies(
+        page, monkeypatch, stop_at_url="https://x.com/domingo/status/1"
+    )
+    assert stop_found and not items
+    assert page.scrolls == 0
+
+
+def test_replies_detects_previous_external_operation_name(monkeypatch):
+    page = ReplyScrollPage(lambda _scroll: _reply_payload("1"), operation="UserTweetsAndReplies")
+    _, _, items, _, _ = _collect_fake_replies(page, monkeypatch, max_tweets=1)
+    assert [item.url for item in items] == ["https://x.com/domingo/status/1"]
+
+
+def test_replies_without_matching_payload_is_not_reported_as_success(monkeypatch, capsys):
+    page = ReplyScrollPage(lambda _scroll: _reply_payload("1"), operation="UnrelatedTimeline")
+    success, _, items, stop_found, _ = _collect_fake_replies(page, monkeypatch)
+    assert not success and not items and not stop_found
+    assert "replies could not be verified" in capsys.readouterr().out
+
+
 def test_fetch_reply_items_requires_with_replies_timeline(tmp_path, monkeypatch):
     captured = {}
 

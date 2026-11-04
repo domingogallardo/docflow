@@ -360,6 +360,14 @@ Keep `TWEET_LIKES_STATE` outside the repo so cleanup operations do not delete it
 When a liked thread starts as a reply to another author, the downloaded thread
 includes that external parent tweet first and preserves its author attribution.
 If `TWEET_POSTS_URL` is set, the tweet pipeline also downloads your published tweets, reposts, and replies and tags them separately from likes. Replies are read from `TWEET_REPLIES_URL`, or from `<TWEET_POSTS_URL>/with_replies` when that variable is unset.
+The replies scan stops after 20 scrolls without new tweet IDs or additional
+visible articles, or after 30 scrolls in total. Repeated response payloads do
+not count as progress. It logs progress every five scrolls and warns when the
+total limit is reached, since that scan may be incomplete. Responses from the
+last scroll are parsed before stopping.
+It reads replies from X's `UserRepliesTimeline` operation (also recognizing
+`UserTweetsAndReplies`). If no replies payload arrives, it reports an
+unverified scan instead of claiming that there are no new replies.
 
 The fixed-corpus weekly X review uses a re-entrant state file under
 `BASE_DIR/state/x_weekly/`. Collection, editorial selection, and idempotent
