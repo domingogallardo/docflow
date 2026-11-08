@@ -1994,13 +1994,19 @@ def _send_overlay_html(handler: BaseHTTPRequestHandler, app: DocflowApp, abs_pat
 
 
 def _parse_json_body(handler: BaseHTTPRequestHandler) -> dict[str, object]:
+    if handler.headers.get_content_type() != "application/json":
+        raise ApiError(415, "Content-Type must be application/json")
     raw_len = handler.headers.get("Content-Length", "0")
     try:
         length = int(raw_len)
     except ValueError:
         raise ApiError(400, "Invalid Content-Length")
 
-    if length <= 0:
+    if length < 0:
+        raise ApiError(400, "Invalid Content-Length")
+    if length > 2 * 1024 * 1024:
+        raise ApiError(413, "JSON body exceeds 2 MiB")
+    if length == 0:
         return {}
 
     body = handler.rfile.read(length)
@@ -2023,9 +2029,47 @@ def _get_query_path(parsed) -> str:
     return value
 
 
-def make_handler(app: DocflowApp):
+def make_handler(app: DocflowApp, public_origin: str = ""):
+    public_origin = public_origin.rstrip("/").lower()
+    public_host = ""
+    if public_origin:
+        origin = urlparse(public_origin)
+        if (origin.scheme not in {"http", "https"} or not origin.hostname
+                or origin.username or origin.password or origin.path or origin.query or origin.fragment):
+            raise ValueError("public_origin must be an HTTP(S) origin without credentials or a path")
+        public_host = origin.netloc
+
     class DocflowHandler(BaseHTTPRequestHandler):
+        def end_headers(self) -> None:
+            self.send_header("X-Content-Type-Options", "nosniff")
+            self.send_header("X-Frame-Options", "SAMEORIGIN")
+            self.send_header("Referrer-Policy", "no-referrer")
+            super().end_headers()
+
+        def trusted_request(self, *, write: bool = False) -> bool:
+            port = self.server.server_port
+            hosts = {f"127.0.0.1:{port}", f"localhost:{port}", f"[::1]:{port}"}
+            if public_host:
+                hosts.add(public_host)
+            host_values = self.headers.get_all("Host", [])
+            if len(host_values) != 1 or host_values[0].lower() not in hosts:
+                _send_json(self, 403, {"ok": False, "error": "Host not allowed"})
+                return False
+            if write:
+                origins = {f"http://127.0.0.1:{port}", f"http://localhost:{port}", f"http://[::1]:{port}"}
+                if public_origin:
+                    origins.add(public_origin)
+                origin_values = self.headers.get_all("Origin", [])
+                if (len(origin_values) > 1
+                        or (origin_values and origin_values[0].lower() not in origins)
+                        or self.headers.get("Sec-Fetch-Site", "").lower() == "cross-site"):
+                    _send_json(self, 403, {"ok": False, "error": "Request origin not allowed"})
+                    return False
+            return True
+
         def do_GET(self) -> None:  # type: ignore[override]
+            if not self.trusted_request():
+                return
             parsed = urlparse(self.path)
             path = parsed.path
 
@@ -2170,6 +2214,8 @@ def make_handler(app: DocflowApp):
             _send_json(self, 404, {"ok": False, "error": "Not found"})
 
         def do_POST(self) -> None:  # type: ignore[override]
+            if not self.trusted_request(write=True):
+                return
             parsed = urlparse(self.path)
             if not parsed.path.startswith("/api/"):
                 _send_json(self, 404, {"ok": False, "error": "Unknown endpoint"})
@@ -2192,6 +2238,8 @@ def make_handler(app: DocflowApp):
                 _send_json(self, 500, {"ok": False, "error": str(exc)})
 
         def do_PUT(self) -> None:  # type: ignore[override]
+            if not self.trusted_request(write=True):
+                return
             parsed = urlparse(self.path)
             if parsed.path not in {"/api/highlights", "/api/reading-position"}:
                 _send_json(self, 404, {"ok": False, "error": "Unknown endpoint"})
@@ -2234,6 +2282,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--base-dir", help="BASE_DIR with Incoming/Posts/Tweets/... and _site/")
     parser.add_argument("--host", default=os.getenv("DOCFLOW_HOST", "127.0.0.1"))
     parser.add_argument("--port", type=int, default=int(os.getenv("DOCFLOW_PORT", "8080")))
+    parser.add_argument("--public-origin", default=os.getenv("DOCFLOW_PUBLIC_ORIGIN", ""),
+                        help="Trusted public HTTP(S) origin used by the private reverse proxy.")
     parser.set_defaults(rebuild_on_start=False)
     parser.add_argument(
         "--rebuild-on-start",
@@ -2253,7 +2303,7 @@ def main() -> int:
     if args.rebuild_on_start:
         app.rebuild()
 
-    handler_cls = make_handler(app)
+    handler_cls = make_handler(app, args.public_origin)
 
     with ThreadingHTTPServer((args.host, args.port), handler_cls) as server:
         print(f"Serving docflow intranet from {base_dir}")
