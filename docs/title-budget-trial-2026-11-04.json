@@ -1,0 +1,1137 @@
+{
+  "model": "gpt-5-nano",
+  "initial_budget": 512,
+  "method": "Current stored input, same prompt and input extractor; logged original filename hint when available; deterministic language fallback; no content changes. Not an exact historical replay.",
+  "results": [
+    {
+      "document": "Posts/Posts 2026/Import AI - Spacewar Low-Latency- Realtime-Bench Evaluates AI Agents on 50 Dynamic Tasks Across Wall-Clock and Token Clocks.md",
+      "existing_title": "Import AI - Spacewar Low-Latency- Realtime-Bench Evaluates AI Agents on 50 Dynamic Tasks Across Wall-Clock and Token Clocks",
+      "original_filename_hint": "Import AI - Spacewar Low-Latency- Realtime-Bench Evaluates AI Agents on 50 Dynamic Tasks Across Wall-Clock and Token Clocks",
+      "language": "English",
+      "input_sha256": "7cfc95d3625b239814e09e3314d1357cdbec1d0310826497c213ca4a14938141",
+      "attempts": [
+        {
+          "budget": 512,
+          "status": "completed",
+          "reason": null,
+          "text": "Import AI - Spacewar Low-Latency Realtime-Bench Evaluates AI Agents on 50 Dynamic Tasks Across Wall-Clock and Token Clocks",
+          "model": "gpt-5-nano-2025-08-07",
+          "usage": {
+            "input_tokens": 545,
+            "input_tokens_details": {
+              "cached_tokens": 0,
+              "cache_write_tokens": 0
+            },
+            "output_tokens": 387,
+            "output_tokens_details": {
+              "reasoning_tokens": 320
+            },
+            "total_tokens": 932
+          },
+          "seconds": 5.197
+        }
+      ],
+      "title": "Import AI - Spacewar Low-Latency Realtime-Bench Evaluates AI Agents on 50 Dynamic Tasks Across Wall-Clock and Token Clocks"
+    },
+    {
+      "document": "Posts/Posts 2026/Sergio San Juan - De coleccionar frases virales a cambiar- cómo convertir atención en acción con Simone Weil y un club de lectura.md",
+      "existing_title": "Sergio San Juan - De coleccionar frases virales a cambiar- cómo convertir atención en acción con Simone Weil y un club de lectura",
+      "original_filename_hint": "Sergio San Juan - De coleccionar frases virales a cambiar- cómo convertir atención en acción con Simone Weil y un club de lectura",
+      "language": "Spanish",
+      "input_sha256": "c2fe27044ff9f5c2f7fa48f28164ffc3e9f408bd61ae50ba2fbcbb2890c3aa39",
+      "attempts": [
+        {
+          "budget": 512,
+          "status": "completed",
+          "reason": null,
+          "text": "Sergio San Juan - De coleccionar frases virales a cambiar: convertir atención en acción con Simone Weil y un club de lectura",
+          "model": "gpt-5-nano-2025-08-07",
+          "usage": {
+            "input_tokens": 590,
+            "input_tokens_details": {
+              "cached_tokens": 0,
+              "cache_write_tokens": 0
+            },
+            "output_tokens": 219,
+            "output_tokens_details": {
+              "reasoning_tokens": 128
+            },
+            "total_tokens": 809
+          },
+          "seconds": 4.141
+        }
+      ],
+      "title": "Sergio San Juan - De coleccionar frases virales a cambiar- convertir atención en acción con Simone Weil y un club de lectura"
+    },
+    {
+      "document": "Posts/Posts 2026/Miguel A- Román - GDPx- el benchmark de SemiAnalysis sitúa a los mejores modelos en solo un 12% de media.md",
+      "existing_title": "Miguel A- Román - GDPx- el benchmark de SemiAnalysis sitúa a los mejores modelos en solo un 12% de media",
+      "original_filename_hint": "Miguel A- Román - GDPx- el benchmark de SemiAnalysis sitúa a los mejores modelos en solo un 12% de media",
+      "language": "Spanish",
+      "input_sha256": "900228bc4fc8c8ec15eebd852e80e018f5fbca21aeef54bbb20c2eadfb6032ab",
+      "attempts": [
+        {
+          "budget": 512,
+          "status": "completed",
+          "reason": null,
+          "text": "Miguel A. Román - GDPx: el benchmark de SemiAnalysis sitúa a los mejores modelos en solo un 12% de media",
+          "model": "gpt-5-nano-2025-08-07",
+          "usage": {
+            "input_tokens": 659,
+            "input_tokens_details": {
+              "cached_tokens": 0,
+              "cache_write_tokens": 0
+            },
+            "output_tokens": 185,
+            "output_tokens_details": {
+              "reasoning_tokens": 128
+            },
+            "total_tokens": 844
+          },
+          "seconds": 3.708
+        }
+      ],
+      "title": "Miguel A- Román - GDPx- el benchmark de SemiAnalysis sitúa a los mejores modelos en solo un 12% de media"
+    },
+    {
+      "document": "Posts/Posts 2026/Paul Henderson, Federica Nicolardi - Writing Seen in PHerc- 306B- Reading the Vesuvius Scroll After Its Eruption.md",
+      "existing_title": "Paul Henderson, Federica Nicolardi - Writing Seen in PHerc- 306B- Reading the Vesuvius Scroll After Its Eruption",
+      "original_filename_hint": "Paul Henderson, Federica Nicolardi - Writing Seen in PHerc- 306B- Reading the Vesuvius Scroll After Its Eruption",
+      "language": "English",
+      "input_sha256": "1fa9d095280effaf6e412d750fe2a6dcfb2240a4d55556e7bc55d2f0470bf4e9",
+      "attempts": [
+        {
+          "budget": 512,
+          "status": "completed",
+          "reason": null,
+          "text": "Paul Henderson, Federica Nicolardi - Writing Seen in PHerc-306B: Reading the Vesuvius Scroll After Its Eruption",
+          "model": "gpt-5-nano-2025-08-07",
+          "usage": {
+            "input_tokens": 566,
+            "input_tokens_details": {
+              "cached_tokens": 0,
+              "cache_write_tokens": 0
+            },
+            "output_tokens": 328,
+            "output_tokens_details": {
+              "reasoning_tokens": 256
+            },
+            "total_tokens": 894
+          },
+          "seconds": 3.813
+        }
+      ],
+      "title": "Paul Henderson, Federica Nicolardi - Writing Seen in PHerc-306B- Reading the Vesuvius Scroll After Its Eruption"
+    },
+    {
+      "document": "Posts/Posts 2026/Six Colors - He admit it!- Notes from another record Apple quarter.md",
+      "existing_title": "Six Colors - He admit it!- Notes from another record Apple quarter",
+      "original_filename_hint": "clipper-he-admit-it-notes-from-another-record-apple-quarter",
+      "language": "English",
+      "input_sha256": "08e92b771f05e9cbf76cad2ca8a52a2fa28b83dc1e7b8faeb82192d9495b05d4",
+      "attempts": [
+        {
+          "budget": 512,
+          "status": "completed",
+          "reason": null,
+          "text": "Six Colors - He Admit It! Notes from Another Record Apple Quarter",
+          "model": "gpt-5-nano-2025-08-07",
+          "usage": {
+            "input_tokens": 559,
+            "input_tokens_details": {
+              "cached_tokens": 0,
+              "cache_write_tokens": 0
+            },
+            "output_tokens": 181,
+            "output_tokens_details": {
+              "reasoning_tokens": 128
+            },
+            "total_tokens": 740
+          },
+          "seconds": 3.766
+        }
+      ],
+      "title": "Six Colors - He Admit It! Notes from Another Record Apple Quarter"
+    },
+    {
+      "document": "Posts/Posts 2026/Xataka - El auge de la IA en Macs- OpenClaw impulsa el Mac mini y Siri queda como asistente.md",
+      "existing_title": "Xataka - El auge de la IA en Macs- OpenClaw impulsa el Mac mini y Siri queda como asistente",
+      "original_filename_hint": "clipper-gran-ganador-ia-apple-no-siri-mac",
+      "language": "Spanish",
+      "input_sha256": "4284f2998cdfca041b9eb9fc9138213382cb715a2793f0fd9271e9f5bfa716d5",
+      "attempts": [
+        {
+          "budget": 512,
+          "status": "completed",
+          "reason": null,
+          "text": "Xataka - El auge de la IA en Macs: OpenClaw impulsa el Mac mini y Siri permanece como simple asistente",
+          "model": "gpt-5-nano-2025-08-07",
+          "usage": {
+            "input_tokens": 585,
+            "input_tokens_details": {
+              "cached_tokens": 0,
+              "cache_write_tokens": 0
+            },
+            "output_tokens": 256,
+            "output_tokens_details": {
+              "reasoning_tokens": 192
+            },
+            "total_tokens": 841
+          },
+          "seconds": 2.924
+        }
+      ],
+      "title": "Xataka - El auge de la IA en Macs- OpenClaw impulsa el Mac mini y Siri permanece como simple asistente"
+    },
+    {
+      "document": "Posts/Posts 2026/John Cook - Hack to Rigor- From a Graphic Programmers Hack to a Rigorous Projective Plane Definition.md",
+      "existing_title": "John Cook - Hack to Rigor- From a Graphic Programmers Hack to a Rigorous Projective Plane Definition",
+      "original_filename_hint": "clipper-hack-to-rigor",
+      "language": "English",
+      "input_sha256": "9443ac47453e52da22c36bc16f9581456f3e802ec13d4b0198501fc533825cb0",
+      "attempts": [
+        {
+          "budget": 512,
+          "status": "completed",
+          "reason": null,
+          "text": "John Cook - Hack to Rigor: From a Graphic Programmer's Hack to a Rigorous Projective Plane Definition",
+          "model": "gpt-5-nano-2025-08-07",
+          "usage": {
+            "input_tokens": 559,
+            "input_tokens_details": {
+              "cached_tokens": 0,
+              "cache_write_tokens": 0
+            },
+            "output_tokens": 227,
+            "output_tokens_details": {
+              "reasoning_tokens": 192
+            },
+            "total_tokens": 786
+          },
+          "seconds": 3.571
+        }
+      ],
+      "title": "John Cook - Hack to Rigor- From a Graphic Programmer's Hack to a Rigorous Projective Plane Definition"
+    },
+    {
+      "document": "Posts/Posts 2026/Pau Brunet Fuertes - Taquillas del fin de semana Halloween- afluencia baja y la estrategia de Netflix con La bola negra expandiéndose a más salas.md",
+      "existing_title": "Pau Brunet Fuertes - Taquillas del fin de semana Halloween- afluencia baja y la estrategia de Netflix con La bola negra expandiéndose a más salas",
+      "original_filename_hint": "Pau Brunet Fuertes - Taquillas del fin de semana Halloween- afluencia baja y la estrategia de Netflix con La bola negra expandiéndose a más salas",
+      "language": "Spanish",
+      "input_sha256": "b972f013162f6648f62e0912f2e7697c374a22fe3750fde9ee33a2709b7e1d36",
+      "attempts": [
+        {
+          "budget": 512,
+          "status": "completed",
+          "reason": null,
+          "text": "Pau Brunet Fuertes - Halloween: Netflix amplía La Bola Negra a más salas y 70 ciudades tras un fin de semana débil",
+          "model": "gpt-5-nano-2025-08-07",
+          "usage": {
+            "input_tokens": 589,
+            "input_tokens_details": {
+              "cached_tokens": 0,
+              "cache_write_tokens": 0
+            },
+            "output_tokens": 290,
+            "output_tokens_details": {
+              "reasoning_tokens": 192
+            },
+            "total_tokens": 879
+          },
+          "seconds": 3.248
+        }
+      ],
+      "title": "Pau Brunet Fuertes - Halloween- Netflix amplía La Bola Negra a más salas y 70 ciudades tras un fin de semana débil"
+    },
+    {
+      "document": "Posts/Posts 2026/Federico.md",
+      "existing_title": "Federico",
+      "original_filename_hint": "clipper-how-to-easily-create-multiple-windows-for-the-same-app-on-iphone-duo",
+      "language": "English",
+      "input_sha256": "395ebbd07c41bf373c16afb62ea124f21e4fcbd2d624d11197388ac321d7bcea",
+      "attempts": [
+        {
+          "budget": 512,
+          "status": "completed",
+          "reason": null,
+          "text": "Federico Viticci - How to Easily Create Multiple Windows for the Same App on iPhone Duo (Self Split Shortcut)",
+          "model": "gpt-5-nano-2025-08-07",
+          "usage": {
+            "input_tokens": 571,
+            "input_tokens_details": {
+              "cached_tokens": 0,
+              "cache_write_tokens": 0
+            },
+            "output_tokens": 204,
+            "output_tokens_details": {
+              "reasoning_tokens": 128
+            },
+            "total_tokens": 775
+          },
+          "seconds": 3.316
+        }
+      ],
+      "title": "Federico Viticci - How to Easily Create Multiple Windows for the Same App on iPhone Duo (Self Split Shortcut)"
+    },
+    {
+      "document": "Posts/Posts 2026/Sergio Parra - A favor del desacuerdo y la polarización.md",
+      "existing_title": "Sergio Parra - A favor del desacuerdo y la polarización",
+      "original_filename_hint": "Sergio Parra - A favor del desacuerdo y la polarización",
+      "language": "Spanish",
+      "input_sha256": "53c0a2dbc46293cf17997110d5d8103d72acc24eacd5c7e3824180f092f2dc3c",
+      "attempts": [
+        {
+          "budget": 512,
+          "status": "completed",
+          "reason": null,
+          "text": "Sergio Parra - Desacuerdo y polarización: por qué la diversidad de ideas fortalece a la sociedad",
+          "model": "gpt-5-nano-2025-08-07",
+          "usage": {
+            "input_tokens": 562,
+            "input_tokens_details": {
+              "cached_tokens": 0,
+              "cache_write_tokens": 0
+            },
+            "output_tokens": 270,
+            "output_tokens_details": {
+              "reasoning_tokens": 192
+            },
+            "total_tokens": 832
+          },
+          "seconds": 2.409
+        }
+      ],
+      "title": "Sergio Parra - Desacuerdo y polarización- por qué la diversidad de ideas fortalece a la sociedad"
+    },
+    {
+      "document": "Posts/Posts 2026/Daniel Arjona - Todo lo que pueda hackearse va a ser hackeado- lecciones históricas sobre señales falsas y vulnerabilidades digitales.md",
+      "existing_title": "Daniel Arjona - Todo lo que pueda hackearse va a ser hackeado- lecciones históricas sobre señales falsas y vulnerabilidades digitales",
+      "original_filename_hint": "Daniel Arjona - Todo lo que pueda hackearse va a ser hackeado- lecciones históricas sobre señales falsas y vulnerabilidades digitales",
+      "language": "Spanish",
+      "input_sha256": "e92fa217a03d94eadcadf12051db1debd8eabf539aaa91cdfcf5bed3b88a8a7a",
+      "attempts": [
+        {
+          "budget": 512,
+          "status": "completed",
+          "reason": null,
+          "text": "Daniel Arjona - Todo lo que pueda hackearse va a ser hackeado: Lecciones históricas sobre señales falsas y vulnerabilidades digitales",
+          "model": "gpt-5-nano-2025-08-07",
+          "usage": {
+            "input_tokens": 586,
+            "input_tokens_details": {
+              "cached_tokens": 0,
+              "cache_write_tokens": 0
+            },
+            "output_tokens": 209,
+            "output_tokens_details": {
+              "reasoning_tokens": 128
+            },
+            "total_tokens": 795
+          },
+          "seconds": 2.396
+        }
+      ],
+      "title": "Daniel Arjona - Todo lo que pueda hackearse va a ser hackeado- Lecciones históricas sobre señales falsas y vulnerabilidades digitales"
+    },
+    {
+      "document": "Posts/Posts 2026/Kent Beck - Not a Copier- Rethinking Genie-like Task Delegation in Software.md",
+      "existing_title": "Kent Beck - Not a Copier- Rethinking Genie-like Task Delegation in Software",
+      "original_filename_hint": "Kent Beck - Not a Copier- Rethinking Genie-like Task Delegation in Software",
+      "language": "English",
+      "input_sha256": "6bf9c8bbae854113d6d62f230847ac8b66fa498eb34b7095f2d0ac5660ad4cab",
+      "attempts": [
+        {
+          "budget": 512,
+          "status": "completed",
+          "reason": null,
+          "text": "Kent Beck - Not a Copier- Rethinking Genie-like Task Delegation in Software",
+          "model": "gpt-5-nano-2025-08-07",
+          "usage": {
+            "input_tokens": 571,
+            "input_tokens_details": {
+              "cached_tokens": 0,
+              "cache_write_tokens": 0
+            },
+            "output_tokens": 206,
+            "output_tokens_details": {
+              "reasoning_tokens": 128
+            },
+            "total_tokens": 777
+          },
+          "seconds": 3.1
+        }
+      ],
+      "title": "Kent Beck - Not a Copier- Rethinking Genie-like Task Delegation in Software"
+    },
+    {
+      "document": "Posts/Posts 2026/Zvi Mowshowitz - OpenAI Updates Its Model Spec- A Diff-Focused Look at Five Core Values.md",
+      "existing_title": "Zvi Mowshowitz - OpenAI Updates Its Model Spec- A Diff-Focused Look at Five Core Values",
+      "original_filename_hint": "Zvi Mowshowitz - OpenAI Updates Its Model Spec- A Diff-Focused Look at Five Core Values",
+      "language": "English",
+      "input_sha256": "187507e5b7ee6e5e708369444371153a648f1f873503f890eb2d3974164730e6",
+      "attempts": [
+        {
+          "budget": 512,
+          "status": "completed",
+          "reason": null,
+          "text": "Zvi Mowshowitz - OpenAI Updates Its Model Spec: A Diff-Focused Look at Five Core Values",
+          "model": "gpt-5-nano-2025-08-07",
+          "usage": {
+            "input_tokens": 525,
+            "input_tokens_details": {
+              "cached_tokens": 0,
+              "cache_write_tokens": 0
+            },
+            "output_tokens": 215,
+            "output_tokens_details": {
+              "reasoning_tokens": 128
+            },
+            "total_tokens": 740
+          },
+          "seconds": 2.444
+        }
+      ],
+      "title": "Zvi Mowshowitz - OpenAI Updates Its Model Spec- A Diff-Focused Look at Five Core Values"
+    },
+    {
+      "document": "Posts/Posts 2026/Simon Willison - October 2026 Newsletter- Vibe Game Dev, Vulnerability Apocalypse, LLM Releases, and $100+-month API Credits.md",
+      "existing_title": "Simon Willison - October 2026 Newsletter- Vibe Game Dev, Vulnerability Apocalypse, LLM Releases, and $100+-month API Credits",
+      "original_filename_hint": "clipper-october-newsletter",
+      "language": "English",
+      "input_sha256": "f23011ff409cfb6f072791013407679384649fc64f93b81ba035073a52eac658",
+      "attempts": [
+        {
+          "budget": 512,
+          "status": "completed",
+          "reason": null,
+          "text": "Simon Willison - October 2026 Newsletter: Vibe Game Dev, Vulnerability Apocalypse, LLM Releases, and $100+/Month API Credits",
+          "model": "gpt-5-nano-2025-08-07",
+          "usage": {
+            "input_tokens": 538,
+            "input_tokens_details": {
+              "cached_tokens": 0,
+              "cache_write_tokens": 0
+            },
+            "output_tokens": 165,
+            "output_tokens_details": {
+              "reasoning_tokens": 128
+            },
+            "total_tokens": 703
+          },
+          "seconds": 2.538
+        }
+      ],
+      "title": "Simon Willison - October 2026 Newsletter- Vibe Game Dev, Vulnerability Apocalypse, LLM Releases, and $100+-Month API Credits"
+    },
+    {
+      "document": "Posts/Posts 2026/Reyk Knuhtsen, Jeremie Eliahou Ontiveros, Dylan Patel - Making 13GW in 1-5 Years- Repurposing Rocket Ship Campuses and a TeraFab Datacenter.md",
+      "existing_title": "Reyk Knuhtsen, Jeremie Eliahou Ontiveros, Dylan Patel - Making 13GW in 1-5 Years- Repurposing Rocket Ship Campuses and a TeraFab Datacenter",
+      "original_filename_hint": "Reyk Knuhtsen, Jeremie Eliahou Ontiveros, Dylan Patel - Making 13GW in 1-5 Years- Repurposing Rocket Ship Campuses and a TeraFab Datacenter",
+      "language": "English",
+      "input_sha256": "6f573c0305046eba0754a992b7f764ccc9203b778f18250bf72513cf72d03e65",
+      "attempts": [
+        {
+          "budget": 512,
+          "status": "completed",
+          "reason": null,
+          "text": "Reyk Knuhtsen, Jeremie Eliahou Ontiveros, Dylan Patel - Making 13GW in 1-5 Years: Repurposing Rocket Ship Campuses into a TeraFab Datacenter Powerhouse",
+          "model": "gpt-5-nano-2025-08-07",
+          "usage": {
+            "input_tokens": 604,
+            "input_tokens_details": {
+              "cached_tokens": 0,
+              "cache_write_tokens": 0
+            },
+            "output_tokens": 447,
+            "output_tokens_details": {
+              "reasoning_tokens": 384
+            },
+            "total_tokens": 1051
+          },
+          "seconds": 5.767
+        }
+      ],
+      "title": "Reyk Knuhtsen, Jeremie Eliahou Ontiveros, Dylan Patel - Making 13GW in 1-5 Years- Repurposing Rocket Ship Campuses into a TeraFab Datacenter Powerhouse"
+    },
+    {
+      "document": "Posts/Posts 2026/Alberto Romero - The Dawn of a New AI Paradigm- Weight Clipper and the Possibility of Recursive Self-Improvement.md",
+      "existing_title": "Alberto Romero - The Dawn of a New AI Paradigm- Weight Clipper and the Possibility of Recursive Self-Improvement",
+      "original_filename_hint": "Alberto Romero - The Dawn of a New AI Paradigm- Weight Clipper and the Possibility of Recursive Self-Improvement",
+      "language": "English",
+      "input_sha256": "5288d72bfcd515357d021cc414e2f60662102d80e9473229dc0021b2a245403c",
+      "attempts": [
+        {
+          "budget": 512,
+          "status": "completed",
+          "reason": null,
+          "text": "Alberto Romero - The Dawn of a New AI Paradigm: Weight Clipper and the Possibility of Recursive Self-Improvement",
+          "model": "gpt-5-nano-2025-08-07",
+          "usage": {
+            "input_tokens": 554,
+            "input_tokens_details": {
+              "cached_tokens": 0,
+              "cache_write_tokens": 0
+            },
+            "output_tokens": 271,
+            "output_tokens_details": {
+              "reasoning_tokens": 192
+            },
+            "total_tokens": 825
+          },
+          "seconds": 2.501
+        }
+      ],
+      "title": "Alberto Romero - The Dawn of a New AI Paradigm- Weight Clipper and the Possibility of Recursive Self-Improvement"
+    },
+    {
+      "document": "Posts/Posts 2026/John - Spherical and Projective Geometry- From Great Circles to the Projective Plane and Polars.md",
+      "existing_title": "John - Spherical and Projective Geometry- From Great Circles to the Projective Plane and Polars",
+      "original_filename_hint": "clipper-spherical-and-projective-geometry",
+      "language": "English",
+      "input_sha256": "453ce39dca494bea495e4bf44fb5474262392a0a3fc270150768bdcc5186ad09",
+      "attempts": [
+        {
+          "budget": 512,
+          "status": "completed",
+          "reason": null,
+          "text": "John - Spherical and Projective Geometry: From Great Circles to the Projective Plane and Polars",
+          "model": "gpt-5-nano-2025-08-07",
+          "usage": {
+            "input_tokens": 556,
+            "input_tokens_details": {
+              "cached_tokens": 0,
+              "cache_write_tokens": 0
+            },
+            "output_tokens": 226,
+            "output_tokens_details": {
+              "reasoning_tokens": 192
+            },
+            "total_tokens": 782
+          },
+          "seconds": 3.089
+        }
+      ],
+      "title": "John - Spherical and Projective Geometry- From Great Circles to the Projective Plane and Polars"
+    },
+    {
+      "document": "Posts/Posts 2026/rikiyat-github-io - Sparks of Weight-Space Programming- LLMs can natively read & write neural network weights.md",
+      "existing_title": "rikiyat-github-io - Sparks of Weight-Space Programming- LLMs can natively read & write neural network weights",
+      "original_filename_hint": "clipper-weight-space-programming",
+      "language": "English",
+      "input_sha256": "2226f3be91de9c722839abdd1d20678d233286c78f6c34b23963efd377b321a6",
+      "attempts": [
+        {
+          "budget": 512,
+          "status": "completed",
+          "reason": null,
+          "text": "rikiyat-github-io - Sparks of Weight-Space Programming: LLMs that Read & Write Neural Network Weights",
+          "model": "gpt-5-nano-2025-08-07",
+          "usage": {
+            "input_tokens": 516,
+            "input_tokens_details": {
+              "cached_tokens": 0,
+              "cache_write_tokens": 0
+            },
+            "output_tokens": 244,
+            "output_tokens_details": {
+              "reasoning_tokens": 192
+            },
+            "total_tokens": 760
+          },
+          "seconds": 2.76
+        }
+      ],
+      "title": "rikiyat-github-io - Sparks of Weight-Space Programming- LLMs that Read & Write Neural Network Weights"
+    },
+    {
+      "document": "Posts/Posts 2026/Simon Willison @simonw - GitHub Sponsors Update.md",
+      "existing_title": "Simon Willison @simonw - GitHub Sponsors Update",
+      "original_filename_hint": "Sin título 1",
+      "language": "English",
+      "input_sha256": "fcdf591f353ff81b1a3e02addfaef35d2b9e1a98fe51a8714cec8ab51ee7751f",
+      "attempts": [
+        {
+          "budget": 512,
+          "status": "completed",
+          "reason": null,
+          "text": "Simon Willison @simonw - GitHub Sponsors Update",
+          "model": "gpt-5-nano-2025-08-07",
+          "usage": {
+            "input_tokens": 468,
+            "input_tokens_details": {
+              "cached_tokens": 0,
+              "cache_write_tokens": 0
+            },
+            "output_tokens": 215,
+            "output_tokens_details": {
+              "reasoning_tokens": 192
+            },
+            "total_tokens": 683
+          },
+          "seconds": 3.136
+        }
+      ],
+      "title": "Simon Willison @simonw - GitHub Sponsors Update"
+    },
+    {
+      "document": "Posts/Posts 2026/Asymco - The Ternus Doctrine- How John Ternus Reframes Apple's Strategy Around People, Products, and Execution.md",
+      "existing_title": "Asymco - The Ternus Doctrine- How John Ternus Reframes Apple's Strategy Around People, Products, and Execution",
+      "original_filename_hint": "The Ternus Doctrine",
+      "language": "English",
+      "input_sha256": "eb5c991becc753818ac0cf173620e4143a8120857035b7e39201d10ca520c055",
+      "attempts": [
+        {
+          "budget": 512,
+          "status": "completed",
+          "reason": null,
+          "text": "Asymco - The Ternus Doctrine: How John Ternus Reframes Apple's Strategy Around People, Products, and Execution",
+          "model": "gpt-5-nano-2025-08-07",
+          "usage": {
+            "input_tokens": 521,
+            "input_tokens_details": {
+              "cached_tokens": 0,
+              "cache_write_tokens": 0
+            },
+            "output_tokens": 218,
+            "output_tokens_details": {
+              "reasoning_tokens": 128
+            },
+            "total_tokens": 739
+          },
+          "seconds": 2.582
+        }
+      ],
+      "title": "Asymco - The Ternus Doctrine- How John Ternus Reframes Apple's Strategy Around People, Products, and Execution"
+    },
+    {
+      "document": "Posts/Posts 2026/Zvi Mowshowitz - If Youre Helping Build Something That Might Kill Everyone, Stop (And Tell Others to Stop Too).md",
+      "existing_title": "Zvi Mowshowitz - If Youre Helping Build Something That Might Kill Everyone, Stop (And Tell Others to Stop Too)",
+      "original_filename_hint": "Zvi Mowshowitz - If Youre Helping Build Something That Might Kill Everyone, Stop (And Tell Others to Stop Too)",
+      "language": "English",
+      "input_sha256": "9a4b6afc877e2423b1e608e20e38dbdb52bb49afb641bdc7ddccfbde709f63eb",
+      "attempts": [
+        {
+          "budget": 512,
+          "status": "completed",
+          "reason": null,
+          "text": "Zvi Mowshowitz - Stop, If You're Building Something That Could Kill Everyone (And Tell Others to Stop Too)",
+          "model": "gpt-5-nano-2025-08-07",
+          "usage": {
+            "input_tokens": 538,
+            "input_tokens_details": {
+              "cached_tokens": 0,
+              "cache_write_tokens": 0
+            },
+            "output_tokens": 248,
+            "output_tokens_details": {
+              "reasoning_tokens": 192
+            },
+            "total_tokens": 786
+          },
+          "seconds": 3.112
+        }
+      ],
+      "title": "Zvi Mowshowitz - Stop, If You're Building Something That Could Kill Everyone (And Tell Others to Stop Too)"
+    },
+    {
+      "document": "Posts/Posts 2026/Six Colors - Hello, everyone, its John- Apples Q4 2026 earnings call transcript.md",
+      "existing_title": "Six Colors - Hello, everyone, its John- Apples Q4 2026 earnings call transcript",
+      "original_filename_hint": "clipper-hello-everyone-its-john-apples-q4-2026-earnings-call-transcript",
+      "language": "English",
+      "input_sha256": "54142ce55f9a456d60d38825e97a0d925c0b5ac128145970d529f976a21db95b",
+      "attempts": [
+        {
+          "budget": 512,
+          "status": "completed",
+          "reason": null,
+          "text": "Six Colors - Hello, Everyone—It's John: Apple's Q4 2026 Earnings Call Transcript",
+          "model": "gpt-5-nano-2025-08-07",
+          "usage": {
+            "input_tokens": 590,
+            "input_tokens_details": {
+              "cached_tokens": 0,
+              "cache_write_tokens": 0
+            },
+            "output_tokens": 276,
+            "output_tokens_details": {
+              "reasoning_tokens": 192
+            },
+            "total_tokens": 866
+          },
+          "seconds": 3.283
+        }
+      ],
+      "title": "Six Colors - Hello, Everyone—It's John- Apple's Q4 2026 Earnings Call Transcript"
+    },
+    {
+      "document": "Posts/Posts 2026/AINews - Weight Space Programming- LLMs Edit Small Network Weights to Bypass PyTorch-JAX Experiments.md",
+      "existing_title": "AINews - Weight Space Programming- LLMs Edit Small Network Weights to Bypass PyTorch-JAX Experiments",
+      "original_filename_hint": "Sin título",
+      "language": "English",
+      "input_sha256": "da3d5c1bbafff4e107d4c0ffb09fc6d237f166b270235552784be108240267ae",
+      "attempts": [
+        {
+          "budget": 512,
+          "status": "completed",
+          "reason": null,
+          "text": "AINews - Weight Space Programming- LLMs Edit Small Network Weights to Bypass PyTorch-JAX Experiments",
+          "model": "gpt-5-nano-2025-08-07",
+          "usage": {
+            "input_tokens": 669,
+            "input_tokens_details": {
+              "cached_tokens": 0,
+              "cache_write_tokens": 0
+            },
+            "output_tokens": 202,
+            "output_tokens_details": {
+              "reasoning_tokens": 128
+            },
+            "total_tokens": 871
+          },
+          "seconds": 2.968
+        }
+      ],
+      "title": "AINews - Weight Space Programming- LLMs Edit Small Network Weights to Bypass PyTorch-JAX Experiments"
+    },
+    {
+      "document": "Posts/Posts 2026/Six Colors - OLED iPad mini review- A modern multitasker.md",
+      "existing_title": "Six Colors - OLED iPad mini review- A modern multitasker",
+      "original_filename_hint": "clipper-ipad-mini-review-a-modern-multitasker",
+      "language": "English",
+      "input_sha256": "cfe6905561c4d27cec33dc3c6195ea59f302080e39a7bbc638b66a9193750c14",
+      "attempts": [
+        {
+          "budget": 512,
+          "status": "completed",
+          "reason": null,
+          "text": "Six Colors - OLED iPad mini Review: A Modern Multitasker",
+          "model": "gpt-5-nano-2025-08-07",
+          "usage": {
+            "input_tokens": 567,
+            "input_tokens_details": {
+              "cached_tokens": 0,
+              "cache_write_tokens": 0
+            },
+            "output_tokens": 166,
+            "output_tokens_details": {
+              "reasoning_tokens": 128
+            },
+            "total_tokens": 733
+          },
+          "seconds": 2.678
+        }
+      ],
+      "title": "Six Colors - OLED iPad mini Review- A Modern Multitasker"
+    },
+    {
+      "document": "Posts/Posts 2026/euge - Navegar lo incierto- la orientación de la naturaleza frente a la luz de las pantallas.md",
+      "existing_title": "euge - Navegar lo incierto- la orientación de la naturaleza frente a la luz de las pantallas",
+      "original_filename_hint": "euge - Navegar lo incierto- la orientación de la naturaleza frente a la luz de las pantallas",
+      "language": "Spanish",
+      "input_sha256": "5714f5d6fbb59dc512477217478825336d3c17496bb041ed95251c0db01501f3",
+      "attempts": [
+        {
+          "budget": 512,
+          "status": "completed",
+          "reason": null,
+          "text": "euge - Navegar lo incierto: la orientación de la naturaleza frente a la luz de las pantallas",
+          "model": "gpt-5-nano-2025-08-07",
+          "usage": {
+            "input_tokens": 587,
+            "input_tokens_details": {
+              "cached_tokens": 0,
+              "cache_write_tokens": 0
+            },
+            "output_tokens": 263,
+            "output_tokens_details": {
+              "reasoning_tokens": 192
+            },
+            "total_tokens": 850
+          },
+          "seconds": 3.532
+        }
+      ],
+      "title": "euge - Navegar lo incierto- la orientación de la naturaleza frente a la luz de las pantallas"
+    },
+    {
+      "document": "Posts/Posts 2026/Alexander Kruel - Clipper Links for 2026-11-02- Linux IPv4 TCP UAF Exploit, Quantum Calibration Law, and Ukraine Tech Developments.md",
+      "existing_title": "Alexander Kruel - Clipper Links for 2026-11-02- Linux IPv4 TCP UAF Exploit, Quantum Calibration Law, and Ukraine Tech Developments",
+      "original_filename_hint": "Alexander Kruel - Clipper Links for 2026-11-02- Linux IPv4 TCP UAF Exploit, Quantum Calibration Law, and Ukraine Tech Developments",
+      "language": "English",
+      "input_sha256": "63b2ca304850f6b5817c04162ebebfbc56b139f99cdd9acf0cc4662676cb82f7",
+      "attempts": [
+        {
+          "budget": 512,
+          "status": "completed",
+          "reason": null,
+          "text": "Alexander Kruel - Clipper Links for 2026-11-02: Linux IPv4 TCP UAF Exploit, Quantum Calibration Law, and Ukraine Tech Developments",
+          "model": "gpt-5-nano-2025-08-07",
+          "usage": {
+            "input_tokens": 550,
+            "input_tokens_details": {
+              "cached_tokens": 0,
+              "cache_write_tokens": 0
+            },
+            "output_tokens": 285,
+            "output_tokens_details": {
+              "reasoning_tokens": 192
+            },
+            "total_tokens": 835
+          },
+          "seconds": 4.278
+        }
+      ],
+      "title": "Alexander Kruel - Clipper Links for 2026-11-02- Linux IPv4 TCP UAF Exploit, Quantum Calibration Law, and Ukraine Tech Developments"
+    },
+    {
+      "document": "Posts/Posts 2026/Simon Willison - Qwen 3-8 27B on my laptop can interpret model weights.md",
+      "existing_title": "Simon Willison - Qwen 3-8 27B on my laptop can interpret model weights",
+      "original_filename_hint": "Simon Willison - Qwen 3-8 27B on my laptop can interpret model weights",
+      "language": "English",
+      "input_sha256": "03d88dd6791f056bd23130b550183847043af594062d37a9028f68e5f35e6d74",
+      "attempts": [
+        {
+          "budget": 512,
+          "status": "completed",
+          "reason": null,
+          "text": "Simon Willison - Qwen 3.8 27B on My Laptop: Interpreting Neural Network Weights Without Tools",
+          "model": "gpt-5-nano-2025-08-07",
+          "usage": {
+            "input_tokens": 572,
+            "input_tokens_details": {
+              "cached_tokens": 0,
+              "cache_write_tokens": 0
+            },
+            "output_tokens": 215,
+            "output_tokens_details": {
+              "reasoning_tokens": 128
+            },
+            "total_tokens": 787
+          },
+          "seconds": 3.04
+        }
+      ],
+      "title": "Simon Willison - Qwen 3-8 27B on My Laptop- Interpreting Neural Network Weights Without Tools"
+    },
+    {
+      "document": "Posts/Posts 2026/Noah Smith -.md",
+      "existing_title": "Noah Smith -",
+      "original_filename_hint": "Noah Smith -",
+      "language": "English",
+      "input_sha256": "aba30c6eea723a76b916585fab6a667dfeb8d1fe3daec3de03732f8ac7a0b0c5",
+      "attempts": [
+        {
+          "budget": 512,
+          "status": "completed",
+          "reason": null,
+          "text": "Noah Smith - The Bull Case for Anthropic’s IPO: Valuation, Upside, and Risks",
+          "model": "gpt-5-nano-2025-08-07",
+          "usage": {
+            "input_tokens": 569,
+            "input_tokens_details": {
+              "cached_tokens": 0,
+              "cache_write_tokens": 0
+            },
+            "output_tokens": 189,
+            "output_tokens_details": {
+              "reasoning_tokens": 128
+            },
+            "total_tokens": 758
+          },
+          "seconds": 2.304
+        }
+      ],
+      "title": "Noah Smith - The Bull Case for Anthropics IPO- Valuation, Upside, and Risks"
+    },
+    {
+      "document": "Posts/Posts 2026/eferro - Building for Cheap Complexity- Designing Lean Solutions Without the Cumulative Cost.md",
+      "existing_title": "eferro - Building for Cheap Complexity- Designing Lean Solutions Without the Cumulative Cost",
+      "original_filename_hint": "eferro - Building for Cheap Complexity- Designing Lean Solutions Without the Cumulative Cost",
+      "language": "English",
+      "input_sha256": "8c7f5d69d341480ef83dc85c4e217a54e5ce5e433fafd649f1ba5aa7d01b486b",
+      "attempts": [
+        {
+          "budget": 512,
+          "status": "completed",
+          "reason": null,
+          "text": "eferro - Building for Cheap Complexity: Designing Lean Solutions Without the Cumulative Cost",
+          "model": "gpt-5-nano-2025-08-07",
+          "usage": {
+            "input_tokens": 514,
+            "input_tokens_details": {
+              "cached_tokens": 0,
+              "cache_write_tokens": 0
+            },
+            "output_tokens": 212,
+            "output_tokens_details": {
+              "reasoning_tokens": 128
+            },
+            "total_tokens": 726
+          },
+          "seconds": 2.737
+        }
+      ],
+      "title": "eferro - Building for Cheap Complexity- Designing Lean Solutions Without the Cumulative Cost"
+    },
+    {
+      "document": "Posts/Posts 2026/Apple - Apple Reports Fourth Quarter 2026 Results- Revenue $114-5B, EPS $2-10, Record iPhone and Services.md",
+      "existing_title": "Apple - Apple Reports Fourth Quarter 2026 Results- Revenue $114-5B, EPS $2-10, Record iPhone and Services",
+      "original_filename_hint": "clipper-apple-reports-fourth-quarter-results",
+      "language": "English",
+      "input_sha256": "7a66b63e1a19f5c1b33653e5cf90ab89ac5cd4b80bb343181901e80caf48370a",
+      "attempts": [
+        {
+          "budget": 512,
+          "status": "completed",
+          "reason": null,
+          "text": "Apple - Apple Reports Fourth Quarter 2026 Results: Revenue $114.5B, EPS $2.10, iPhone and Services Hit Records",
+          "model": "gpt-5-nano-2025-08-07",
+          "usage": {
+            "input_tokens": 573,
+            "input_tokens_details": {
+              "cached_tokens": 0,
+              "cache_write_tokens": 0
+            },
+            "output_tokens": 170,
+            "output_tokens_details": {
+              "reasoning_tokens": 128
+            },
+            "total_tokens": 743
+          },
+          "seconds": 2.428
+        }
+      ],
+      "title": "Apple - Apple Reports Fourth Quarter 2026 Results- Revenue $114-5B, EPS $2-10, iPhone and Services Hit Records"
+    },
+    {
+      "document": "Posts/Posts 2026/Pragmatic Engineer – How Software Engineering Is Changing- A Tale of Two Eras.md",
+      "existing_title": "Pragmatic Engineer – How Software Engineering Is Changing- A Tale of Two Eras",
+      "original_filename_hint": "Pragmatic Engineer – How Software Engineering Is Changing- A Tale of Two Eras",
+      "language": "English",
+      "input_sha256": "7e1a99d001ba3e74760ec894673ebe76d228d2fb2b6d459dc829d9aa7cd1023a",
+      "attempts": [
+        {
+          "budget": 512,
+          "status": "completed",
+          "reason": null,
+          "text": "Pragmatic Engineer - How Software Engineering Is Changing: A Tale of Two Eras",
+          "model": "gpt-5-nano-2025-08-07",
+          "usage": {
+            "input_tokens": 512,
+            "input_tokens_details": {
+              "cached_tokens": 0,
+              "cache_write_tokens": 0
+            },
+            "output_tokens": 269,
+            "output_tokens_details": {
+              "reasoning_tokens": 192
+            },
+            "total_tokens": 781
+          },
+          "seconds": 4.726
+        }
+      ],
+      "title": "Pragmatic Engineer - How Software Engineering Is Changing- A Tale of Two Eras"
+    },
+    {
+      "document": "Posts/Posts 2026/Antonio Ortiz - El algoritmo de la plataforma- equilibrio entre usuarios, creadores y anunciantes (y la visión del agente de IA que prioriza al usuario).md",
+      "existing_title": "Antonio Ortiz - El algoritmo de la plataforma- equilibrio entre usuarios, creadores y anunciantes (y la visión del agente de IA que prioriza al usuario)",
+      "original_filename_hint": "Antonio Ortiz - El algoritmo de la plataforma- equilibrio entre usuarios, creadores y anunciantes (y la visión del agente de IA que prioriza al usuario)",
+      "language": "Spanish",
+      "input_sha256": "aac08b1ae315e2f83f8a7067f05cd61ad464ca68216d0479bfa45a3545df603a",
+      "attempts": [
+        {
+          "budget": 512,
+          "status": "completed",
+          "reason": null,
+          "text": "Antonio Ortiz - El algoritmo de la plataforma: equilibrio entre usuarios, creadores y anunciantes y la visión del agente de IA que prioriza al usuario",
+          "model": "gpt-5-nano-2025-08-07",
+          "usage": {
+            "input_tokens": 592,
+            "input_tokens_details": {
+              "cached_tokens": 0,
+              "cache_write_tokens": 0
+            },
+            "output_tokens": 256,
+            "output_tokens_details": {
+              "reasoning_tokens": 192
+            },
+            "total_tokens": 848
+          },
+          "seconds": 5.692
+        }
+      ],
+      "title": "Antonio Ortiz - El algoritmo de la plataforma- equilibrio entre usuarios, creadores y anunciantes y la visión del agente de IA que prioriza al usuario"
+    },
+    {
+      "document": "Posts/Posts 2026/José Ramón Pérez Agüera - Clipper- qué instalar y qué no para que tu flujo funcione.md",
+      "existing_title": "José Ramón Pérez Agüera - Clipper- qué instalar y qué no para que tu flujo funcione",
+      "original_filename_hint": "José Ramón Pérez Agüera - Clipper- qué instalar y qué no para que tu flujo funcione",
+      "language": "Spanish",
+      "input_sha256": "5c0cbe11d5c8fee88410b2d99996f690c529c6df202dd8c58d33c4f15e4edf34",
+      "attempts": [
+        {
+          "budget": 512,
+          "status": "completed",
+          "reason": null,
+          "text": "José Ramón Pérez Agüera - Clipper: qué instalar y qué no para que tu flujo funcione",
+          "model": "gpt-5-nano-2025-08-07",
+          "usage": {
+            "input_tokens": 588,
+            "input_tokens_details": {
+              "cached_tokens": 0,
+              "cache_write_tokens": 0
+            },
+            "output_tokens": 263,
+            "output_tokens_details": {
+              "reasoning_tokens": 192
+            },
+            "total_tokens": 851
+          },
+          "seconds": 3.745
+        }
+      ],
+      "title": "José Ramón Pérez Agüera - Clipper- qué instalar y qué no para que tu flujo funcione"
+    },
+    {
+      "document": "Posts/Posts 2026/Cremieux - Is this really where longevity science needs to go.md",
+      "existing_title": "Cremieux - Is this really where longevity science needs to go",
+      "original_filename_hint": "Cremieux - Is this really where longevity science needs to go",
+      "language": "English",
+      "input_sha256": "636abc71735434e0f1fb8b2b99dba00649cc945d40c2ad865cf914cdada38416",
+      "attempts": [
+        {
+          "budget": 512,
+          "status": "completed",
+          "reason": null,
+          "text": "Cremieux - Is this really where longevity science needs to go?",
+          "model": "gpt-5-nano-2025-08-07",
+          "usage": {
+            "input_tokens": 584,
+            "input_tokens_details": {
+              "cached_tokens": 0,
+              "cache_write_tokens": 0
+            },
+            "output_tokens": 175,
+            "output_tokens_details": {
+              "reasoning_tokens": 128
+            },
+            "total_tokens": 759
+          },
+          "seconds": 3.166
+        }
+      ],
+      "title": "Cremieux - Is this really where longevity science needs to go?"
+    },
+    {
+      "document": "Tweets/Tweets 2026/Tweet - Mike Knoop - ARC Prize 2026- $1M Open-Source ARC-AGI Challenge & Final Winners Dec 4.md",
+      "existing_title": "Tweet - Mike Knoop - ARC Prize 2026- $1M Open-Source ARC-AGI Challenge & Final Winners Dec 4",
+      "original_filename_hint": "Tweet - mikeknoop-2117414816466014290",
+      "language": "English",
+      "input_sha256": "87efa7ec8bfea123ca2b69139934a52398be8f3081dae12b7577bafba2fd5618",
+      "attempts": [
+        {
+          "budget": 512,
+          "status": "completed",
+          "reason": null,
+          "text": "Mike Knoop - ARC Prize 2026: $1M Open-Source ARC-AGI Challenge & Final Winners (Dec 4)",
+          "model": "gpt-5-nano-2025-08-07",
+          "usage": {
+            "input_tokens": 578,
+            "input_tokens_details": {
+              "cached_tokens": 0,
+              "cache_write_tokens": 0
+            },
+            "output_tokens": 208,
+            "output_tokens_details": {
+              "reasoning_tokens": 128
+            },
+            "total_tokens": 786
+          },
+          "seconds": 1.997
+        }
+      ],
+      "title": "Tweet - Mike Knoop - ARC Prize 2026- $1M Open-Source ARC-AGI Challenge & Final Winners (Dec 4)"
+    },
+    {
+      "document": "Tweets/Tweets 2026/Tweet - Rikiya Takehi - Thread- Weight-Space Programming—Frontier LLMs Read-Write Neural Weights.md",
+      "existing_title": "Tweet - Rikiya Takehi - Thread- Weight-Space Programming—Frontier LLMs Read-Write Neural Weights",
+      "original_filename_hint": "Tweet - rikiyatakehi-2117313812768665832",
+      "language": "English",
+      "input_sha256": "9f69bd073e36550777b15474a4d7b7441b3055ec6c32c263f7b2c99d4b5ad986",
+      "attempts": [
+        {
+          "budget": 512,
+          "status": "completed",
+          "reason": null,
+          "text": "Rikiya Takehi - Weight-Space Programming: Frontier LLMs Read-Write Neural Weights Thread",
+          "model": "gpt-5-nano-2025-08-07",
+          "usage": {
+            "input_tokens": 570,
+            "input_tokens_details": {
+              "cached_tokens": 0,
+              "cache_write_tokens": 0
+            },
+            "output_tokens": 191,
+            "output_tokens_details": {
+              "reasoning_tokens": 128
+            },
+            "total_tokens": 761
+          },
+          "seconds": 4.492
+        }
+      ],
+      "title": "Tweet - Rikiya Takehi - Weight-Space Programming- Frontier LLMs Read-Write Neural Weights Thread"
+    },
+    {
+      "document": "Tweets/Tweets 2026/Tweet - Andrej Karpathy - Weekend Hack- HackerTube—Claude-Powered Video Curation from 43M Comments.md",
+      "existing_title": "Tweet - Andrej Karpathy - Weekend Hack- HackerTube—Claude-Powered Video Curation from 43M Comments",
+      "original_filename_hint": "Tweet - karpathy-2116957135661945283",
+      "language": "English",
+      "input_sha256": "6aca12e56eb78f1848a86ab06d8627f20f21e1ee1d4c8e2daaab54f6b5f0d5f2",
+      "attempts": [
+        {
+          "budget": 512,
+          "status": "completed",
+          "reason": null,
+          "text": "Andrej Karpathy - Weekend Hack: HackerTube—Claude-Powered Video Curation from 43M Comments",
+          "model": "gpt-5-nano-2025-08-07",
+          "usage": {
+            "input_tokens": 549,
+            "input_tokens_details": {
+              "cached_tokens": 0,
+              "cache_write_tokens": 0
+            },
+            "output_tokens": 283,
+            "output_tokens_details": {
+              "reasoning_tokens": 192
+            },
+            "total_tokens": 832
+          },
+          "seconds": 3.689
+        }
+      ],
+      "title": "Tweet - Andrej Karpathy - Weekend Hack- HackerTube—Claude-Powered Video Curation from 43M Comments"
+    }
+  ],
+  "summary": {
+    "documents": 37,
+    "requests": 37,
+    "completed_first_attempt": 37,
+    "input_tokens": 20926,
+    "cached_input_tokens": 0,
+    "output_tokens_including_reasoning": 8834,
+    "reasoning_tokens": 6336,
+    "mean_output_tokens": 238.75675675675674,
+    "min_output_tokens": 165,
+    "max_output_tokens": 447,
+    "estimated_cost_usd": 0.0045799000000000005,
+    "estimated_cost_per_1000_titles_usd": 0.12378108108108109,
+    "pricing_source": "https://developers.openai.com/api/docs/pricing",
+    "standard_usd_per_million_tokens": {
+      "input": 0.05,
+      "cached_input": 0.005,
+      "output": 0.4
+    }
+  }
+}

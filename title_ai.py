@@ -189,6 +189,24 @@ class TitleAIUpdater:
                     text={"verbosity": self.verbosity},
                 )
 
+                # An incomplete response may already contain a partial title.
+                # Validate status before accepting any of its text representations.
+                if getattr(resp, "status", None) == "incomplete":
+                    details = getattr(resp, "incomplete_details", None)
+                    reason = (
+                        details.get("reason", "unknown")
+                        if isinstance(details, dict)
+                        else getattr(details, "reason", "unknown")
+                    )
+                    if reason == "max_output_tokens" and attempt < retries:
+                        print(
+                            f"⚠️ Incomplete AI response for {self.model}: "
+                            f"increasing output budget from {output_budget} to {output_budget * 2}"
+                        )
+                        output_budget *= 2
+                        continue
+                    raise RuntimeError(f"Incomplete OpenAI response: {reason}")
+
                 text = (getattr(resp, "output_text", "") or "").strip()
                 if text:
                     return text
@@ -228,20 +246,6 @@ class TitleAIUpdater:
                     text = _collect(messages).strip()
                     if text:
                         return text
-
-                incomplete_details = getattr(resp, "incomplete_details", None)
-                incomplete_reason = ""
-                if isinstance(incomplete_details, dict):
-                    incomplete_reason = str(incomplete_details.get("reason", ""))
-                elif incomplete_details is not None:
-                    incomplete_reason = str(getattr(incomplete_details, "reason", ""))
-                if (
-                    getattr(resp, "status", None) == "incomplete"
-                    and incomplete_reason == "max_output_tokens"
-                    and attempt < retries
-                ):
-                    output_budget *= 2
-                    continue
 
                 try:
                     debug_payload = resp.model_dump() if hasattr(resp, "model_dump") else repr(resp)
@@ -384,7 +388,7 @@ class TitleAIUpdater:
             f"Original filename title: {original_title}\n\n"
             f"Content:\n{snippet}\n\nTitle:"
         )
-        resp = self._ai_text(system=system, prompt=prompt, max_tokens=64)
+        resp = self._ai_text(system=system, prompt=prompt, max_tokens=512)
         title = (
             resp.replace('"', "")
             .replace("#", "")

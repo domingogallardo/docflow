@@ -1,5 +1,8 @@
 """Tests for TitleAIUpdater language handling."""
 from pathlib import Path
+from types import SimpleNamespace
+
+import pytest
 
 from title_ai import TitleAIUpdater
 
@@ -56,6 +59,53 @@ def test_ai_text_retries_incomplete_token_budget() -> None:
 
     assert updater._ai_text(system="System", prompt="Prompt", max_tokens=8) == "Generated title"
     assert [call["max_output_tokens"] for call in client.responses.calls] == [128, 256]
+
+
+@pytest.mark.parametrize("nested", [False, True])
+def test_ai_text_rejects_partial_text_before_retrying(nested: bool) -> None:
+    partial = _FakeResponse(
+        "Federico", status="incomplete", incomplete_reason="max_output_tokens"
+    )
+    if nested:
+        partial.output_text = ""
+        partial.output = [{"content": [{"text": "Federico"}]}]
+        partial.incomplete_details = SimpleNamespace(reason="max_output_tokens")
+    client = _FakeClient([partial, _FakeResponse("Federico Viticci - Multiple Windows")])
+    updater = TitleAIUpdater(ai_client=client)
+
+    assert updater._generate_title("Article", "English", "clipper-article") == (
+        "Federico Viticci - Multiple Windows"
+    )
+    assert [call["max_output_tokens"] for call in client.responses.calls] == [512, 1024]
+
+
+@pytest.mark.parametrize("reason", ["max_output_tokens", "content_filter"])
+def test_ai_text_never_accepts_incomplete_text_on_last_attempt(reason: str) -> None:
+    client = _FakeClient([
+        _FakeResponse("Federico", status="incomplete", incomplete_reason=reason)
+    ])
+    updater = TitleAIUpdater(ai_client=client)
+
+    with pytest.raises(RuntimeError, match=f"Incomplete OpenAI response: {reason}"):
+        updater._ai_text(system="System", prompt="Prompt", max_tokens=128, retries=1)
+
+
+def test_update_titles_does_not_rename_after_incomplete_response(tmp_path: Path, monkeypatch) -> None:
+    path = tmp_path / "Original title.md"
+    path.write_text("Article content", encoding="utf-8")
+    client = _FakeClient([
+        _FakeResponse("Federico", status="incomplete", incomplete_reason="max_output_tokens")
+        for _ in range(6)
+    ])
+    updater = TitleAIUpdater(ai_client=client, delay_seconds=0)
+    monkeypatch.setattr(updater, "_detect_language", lambda _sample: "English")
+    renamed = []
+
+    updater.update_titles([path], lambda *args: renamed.append(args))
+
+    assert renamed == []
+    assert path.read_text(encoding="utf-8") == "Article content"
+    assert len(client.responses.calls) == 6
 
 
 def test_extract_language_sample_ignores_tweet_boilerplate(tmp_path: Path) -> None:
