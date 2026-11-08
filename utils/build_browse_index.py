@@ -940,8 +940,8 @@ def _base_head(title: str) -> str:
         ".dg-actions button, .dg-actions a, .dg-rebuild{padding:2px 6px;border:1px solid #ccc;border-radius:6px;background:#f7f7f7;text-decoration:none;color:#333;font:12px -apple-system,system-ui,Segoe UI,Roboto,Helvetica,Arial;cursor:pointer}"
         ".dg-actions button[disabled], .dg-actions a[disabled], .dg-rebuild[disabled]{opacity:.6;pointer-events:none}"
         ".dg-count{color:#666;margin-left:8px;white-space:nowrap}"
-        ".dg-search{display:inline-flex;align-items:center;gap:6px}"
-        ".dg-search input[type='text']{padding:3px 8px;border:1px solid #ccc;border-radius:6px;min-width:420px;max-width:100%;font:13px -apple-system,system-ui,Segoe UI,Roboto,Helvetica,Arial}"
+        ".dg-search{display:inline-flex;align-items:center;gap:6px;flex-wrap:wrap;max-width:100%}"
+        ".dg-search input[type='text']{padding:3px 8px;border:1px solid #ccc;border-radius:6px;box-sizing:border-box;min-width:min(420px,100%);max-width:100%;font:13px -apple-system,system-ui,Segoe UI,Roboto,Helvetica,Arial}"
         ".dg-search button{padding:2px 8px;border:1px solid #ccc;border-radius:6px;background:#f7f7f7;color:#333;font:12px -apple-system,system-ui,Segoe UI,Roboto,Helvetica,Arial;cursor:pointer}"
         ".dg-search-toggle{display:inline-flex;align-items:center;gap:4px;color:#555;font:13px -apple-system,system-ui,Segoe UI,Roboto,Helvetica,Arial;white-space:nowrap}"
         ".dg-search-toggle input{margin:0}"
@@ -978,7 +978,7 @@ def _render_directory_page(
     content_filter_cache: dict[str, object] | None = None,
 ) -> str:
     rows: list[str] = [_base_head(title)]
-    rows.append("<div class='dg-nav'><a href='/'>Home</a> · <a href='/browse/'>Browse</a> · <a href='/reading/'>Reading</a> · <a href='/done/'>Done</a></div>")
+    rows.append("<div class='dg-nav'><a href='/index.html'>Home</a> · <a href='/browse/'>Browse</a> · <a href='/reading/'>Reading</a> · <a href='/done/'>Done</a></div>")
     rows.append(f"<h2>Index of {html.escape(display_path)}</h2>")
     if controls_html is None:
         section_entries = (
@@ -1220,6 +1220,7 @@ def _search_controls_html() -> str:
         "placeholder='Search title text or term + term' "
         "aria-label='Search title text or term plus term'>"
         "<label class='dg-search-toggle'><input type='checkbox' data-dg-search-tweets checked>Tweets</label>"
+        "<label class='dg-search-toggle'><input type='checkbox' data-dg-search-summaries>Summaries</label>"
         "<button type='submit' data-dg-search-button aria-label='Search'>🔍</button>"
         "<button type='button' data-dg-search-random aria-label='Random search suggestion' title='Random search suggestion'>🎲</button>"
         "</form>"
@@ -1334,12 +1335,14 @@ def _search_script_html() -> str:
         + "const form=document.querySelector('[data-dg-search-form]');"
         + "const input=document.querySelector('[data-dg-search-input]');"
         + "const tweetsToggle=document.querySelector('[data-dg-search-tweets]');"
+        + "const summariesToggle=document.querySelector('[data-dg-search-summaries]');"
         + "const randomButton=document.querySelector('[data-dg-search-random]');"
         + "const historyLink=document.querySelector('[data-dg-history-link]');"
         + "const hit=document.querySelector('[data-dg-search-hit]');"
         + "if(!form||!input||!hit)return;"
         + "const searchStateKey='docflow.home.search';"
         + "const tweetsStateKey='docflow.home.search.tweets';"
+        + "const summariesStateKey='docflow.home.search.summaries';"
         + "let entries=[];"
         + "let suggestions=[];"
         + "let searchIndexReady=false;"
@@ -1348,10 +1351,13 @@ def _search_script_html() -> str:
         + "function saveSearch(q){try{if(q){window.sessionStorage.setItem(searchStateKey,q);}else{window.sessionStorage.removeItem(searchStateKey);}}catch(_){}}"
         + "function loadTweetsEnabled(){try{return window.sessionStorage.getItem(tweetsStateKey)!=='0';}catch(_){return true;}}"
         + "function saveTweetsEnabled(v){try{window.sessionStorage.setItem(tweetsStateKey,v?'1':'0');}catch(_){}}"
+        + "function loadSummariesEnabled(){try{return window.sessionStorage.getItem(summariesStateKey)==='1';}catch(_){return false;}}"
+        + "function saveSummariesEnabled(v){try{window.sessionStorage.setItem(summariesStateKey,v?'1':'0');}catch(_){}}"
+        + "function updateSearchHint(){const enabled=summariesToggle&&summariesToggle.checked;input.placeholder=enabled?'Search titles and summaries or term + term':'Search title text or term + term';input.setAttribute('aria-label',enabled?'Search titles and summaries or term plus term':'Search title text or term plus term');}"
         + "function esc(v){return String(v||'').replace(/[&<>\"']/g,function(ch){return {'&':'&amp;','<':'&lt;','>':'&gt;','\"':'&quot;',\"'\":'&#39;'}[ch];});}"
         + "function render(matches,emptyText){"
         + "if(!matches){hit.textContent='';return;}"
-        + "if(!matches.length){hit.textContent=emptyText||'No matching titles found.';return;}"
+        + "if(!matches.length){hit.textContent=emptyText||'No matching documents found.';return;}"
         + "hit.innerHTML='<div>'+matches.length+' result'+(matches.length===1?'':'s')+'</div><ul class=\"dg-search-results\">'+matches.map(function(e){return '<li><a href=\"'+esc(e.href)+'\" data-dg-summary=\"'+esc(e.summary||'')+'\">'+esc(e.name)+'</a> <span class=\"dg-search-folder\">'+esc(e.folder)+'</span></li>';}).join('')+'</ul>';"
         + "}"
         + "function run(){"
@@ -1362,7 +1368,8 @@ def _search_script_html() -> str:
         + "if(!searchIndexReady){hit.textContent='Loading search index...';return;}"
         + "const terms=queryTerms(q);"
         + "const includeTweets=!tweetsToggle||tweetsToggle.checked;"
-        + "render(entries.filter(function(e){if(!includeTweets&&e&&e.category==='tweets')return false;const title=e&&String(e.stem||'');return title&&terms.every(function(term){return wholeTermMatch(title,term);});}));"
+        + "const includeSummaries=summariesToggle&&summariesToggle.checked;"
+        + "render(entries.filter(function(e){if(!e||(!includeTweets&&e.category==='tweets'))return false;const title=String(e.stem||'');const summary=includeSummaries?String(e.summary||''):'';return terms.every(function(term){return wholeTermMatch(title,term)||wholeTermMatch(summary,term);});}));"
         + "}"
         + "function loadSearchIndex(){"
         + "return fetch('/search-index.json').then(function(res){if(!res.ok)throw new Error('load failed');return res.json();}).then(function(payload){entries=Array.isArray(payload&&payload.entries)?payload.entries:[];suggestions=Array.isArray(payload&&payload.suggestions)?payload.suggestions:[];searchIndexReady=true;}).catch(function(){entries=[];suggestions=[];searchIndexReady=true;});"
@@ -1374,6 +1381,8 @@ def _search_script_html() -> str:
         + "}"
         + "form.addEventListener('submit',function(ev){ev.preventDefault();run();});"
         + "if(tweetsToggle){tweetsToggle.checked=loadTweetsEnabled();tweetsToggle.addEventListener('change',function(){saveTweetsEnabled(tweetsToggle.checked);run();});}"
+        + "if(summariesToggle){summariesToggle.checked=loadSummariesEnabled();summariesToggle.addEventListener('change',function(){saveSummariesEnabled(summariesToggle.checked);updateSearchHint();run();});}"
+        + "updateSearchHint();"
         + "if(randomButton){randomButton.addEventListener('click',function(){if(!suggestions.length)return;input.value=suggestions[Math.floor(Math.random()*suggestions.length)];saveSearch(norm(input.value));render(null);input.focus();});}"
         + "if(historyLink){historyLink.addEventListener('click',function(ev){ev.preventDefault();showHistory();});}"
         + "window.addEventListener('pageshow',function(){if(input.value){run();}});"
@@ -1968,7 +1977,7 @@ def _write_browse_home(base_dir: Path, category_roots: dict[str, Path], counts: 
         title="Index of /browse/",
         display_path="/browse/",
         entries=entries,
-        parent_href="/",
+        parent_href="/index.html",
         controls_html="",
     )
     html_doc = html_doc.replace(
@@ -1995,8 +2004,8 @@ def write_site_home(base_dir: Path, category_roots: dict[str, Path] | None = Non
         "<html><head><meta charset='utf-8'><meta name='viewport' content='width=device-width, initial-scale=1'><title>Docflow</title>"
         "<style>body{margin:14px 18px;font:14px -apple-system,system-ui,Segoe UI,Roboto,Helvetica,Arial;color:#222}"
         "h1{margin:6px 0 10px;font-weight:600}a{color:#0a7;text-decoration:none}"
-        ".dg-search{display:inline-flex;align-items:center;gap:6px}"
-        ".dg-search input[type='text']{padding:3px 8px;border:1px solid #ccc;border-radius:6px;min-width:420px;max-width:100%;font:13px -apple-system,system-ui,Segoe UI,Roboto,Helvetica,Arial}"
+        ".dg-search{display:inline-flex;align-items:center;gap:6px;flex-wrap:wrap;max-width:100%}"
+        ".dg-search input[type='text']{padding:3px 8px;border:1px solid #ccc;border-radius:6px;box-sizing:border-box;min-width:min(420px,100%);max-width:100%;font:13px -apple-system,system-ui,Segoe UI,Roboto,Helvetica,Arial}"
         ".dg-search button{padding:2px 8px;border:1px solid #ccc;border-radius:6px;background:#f7f7f7;color:#333;font:12px -apple-system,system-ui,Segoe UI,Roboto,Helvetica,Arial;cursor:pointer}"
         ".dg-search-toggle{display:inline-flex;align-items:center;gap:4px;color:#555;font:13px -apple-system,system-ui,Segoe UI,Roboto,Helvetica,Arial;white-space:nowrap}"
         ".dg-search-toggle input{margin:0}"

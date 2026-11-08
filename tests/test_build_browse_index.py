@@ -248,6 +248,7 @@ def test_build_browse_site_generates_indexes_and_actions(tmp_path: Path):
     assert "data-dg-search-button" in site_home_content
     assert "data-dg-search-random" in site_home_content
     assert "data-dg-search-tweets" in site_home_content
+    assert "data-dg-search-summaries" in site_home_content
     assert "data-dg-history-link>History</a>" in site_home_content
     assert "dg-browse-search-data" not in site_home_content
     assert "dg-search-suggestions" not in site_home_content
@@ -259,14 +260,13 @@ def test_build_browse_site_generates_indexes_and_actions(tmp_path: Path):
     assert "function queryTerms(v)" in site_home_content
     assert "split(/\\s+\\+\\s+/)" in site_home_content
     assert "const includeTweets=!tweetsToggle||tweetsToggle.checked;" in site_home_content
-    assert "if(!includeTweets&&e&&e.category==='tweets')return false;" in site_home_content
     assert "function wholeTermMatch(title,term)" in site_home_content
     assert "'iu').test(title)" in site_home_content
-    assert "terms.every(function(term){return wholeTermMatch(title,term);})" in site_home_content
     assert "title.indexOf(term)" not in site_home_content
     assert "dg-search-results" in site_home_content
     assert "docflow.home.search" in site_home_content
     assert "docflow.home.search.tweets" in site_home_content
+    assert "docflow.home.search.summaries" in site_home_content
     assert "Math.random()" in site_home_content
     assert "saveSearch(norm(input.value));render(null);input.focus();" in site_home_content
     assert "input.value=suggestions[Math.floor(Math.random()*suggestions.length)];run();" not in site_home_content

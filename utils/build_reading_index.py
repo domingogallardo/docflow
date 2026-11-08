@@ -180,7 +180,7 @@ def build_site_reading_html(items: list[SiteReadingItem]) -> str:
         f'<script src="{static_asset_url("actions.js")}" defer></script>'
         f'<script src="{static_asset_url("browse-sort.js")}" defer></script>'
         f"<title>{title}</title></head><body>"
-        '<div class="dg-nav"><a href="/">Home</a> · <a href="/browse/">Browse</a> · <a href="/reading/">Reading</a> · <a href="/done/">Done</a></div>'
+        '<div class="dg-nav"><a href="/index.html">Home</a> · <a href="/browse/">Browse</a> · <a href="/reading/">Reading</a> · <a href="/done/">Done</a></div>'
         f"<h1>{title}</h1>"
         '<div class="dg-legendbar"><div class="dg-legend">🟡 highlight</div><button type="button" class="dg-sort-toggle" data-dg-sort-toggle data-dg-sort-direction="desc" aria-pressed="false">Highlight: off</button></div><hr>'
         + list_html

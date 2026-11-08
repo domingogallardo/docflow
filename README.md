@@ -20,10 +20,22 @@ Podcast snippets are typically captured in [Snipd](https://www.snipd.com) and th
 - AI models: `gpt-6.1-terra` writes document summaries; `gpt-5-nano` handles
   language detection, Markdown titles, descriptive image filenames, and snip
   title casing. Existing titles, summaries, and image filenames are retained.
+  Markdown titles start with a 512-token response budget, including reasoning.
+  Incomplete AI responses are rejected before reading their text; token-limit
+  responses are retried with twice the budget, up to six attempts. If retries
+  fail, title generation leaves the original filename in place.
 
 ### Local intranet service
 
 - `utils/docflow_server.py` serves the intranet at `http://localhost:8080` by default.
+- HTTP requests require the loopback Host with the listening port. When using a
+  private reverse proxy, configure its exact origin with
+  `--public-origin https://your-host` (or `DOCFLOW_PUBLIC_ORIGIN`);
+  the central Mac launcher sets it.
+  POST/PUT actions require `application/json` bodies of at most 2 MiB and reject
+  foreign Origin headers and cross-site browser requests. Local JSON clients
+  without Origin remain supported. These checks complement private network
+  access; they do not authenticate callers or make public exposure appropriate.
 - It serves generated `_site` pages plus raw library content under
   `/incoming/raw/...`, `/posts/raw/...`, `/tweets/raw/...`, `/pdfs/raw/...`,
   `/images/raw/...`, `/podcasts/raw/...`, and `/files/raw/...`.
@@ -38,6 +50,10 @@ Podcast snippets are typically captured in [Snipd](https://www.snipd.com) and th
 `utils/docflow_server.py` currently offers:
 
 - Home page with title search and `History`, a recent list derived from saved meaningful reading positions.
+- The optional `Summaries` checkbox expands Home search to existing summaries
+  (off by default). Each `term + term` must match the title or summary; terms
+  can occur in different fields. It works with the independent `Tweets` toggle.
+  Both checkbox choices persist for the browser session.
 - Browse / Reading / Done views.
 - Existing article summaries appear in a shared preview card in Browse, Reading,
   Done, search results and History: hover a title for 400 ms, hold it on touch,
