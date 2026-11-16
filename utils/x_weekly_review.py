@@ -13,6 +13,7 @@ import sys
 import time as clock_time
 from contextlib import contextmanager, suppress
 from datetime import date, datetime, time, timedelta, timezone
+from itertools import groupby
 from pathlib import Path
 from typing import Iterator
 from urllib.parse import urlsplit
@@ -431,6 +432,45 @@ def collect_week(
     return state_path
 
 
+def print_review_pool(state_path: Path, *, offset: int, limit: int) -> None:
+    """Print a page of sampled tweets from the atomically saved checkpoint."""
+    if offset < 0 or limit < 1:
+        raise ValueError("Review offset must be nonnegative and limit must be positive")
+    payload = _read_state(state_path)
+    collection_status = payload.get("collection", {}).get("status")
+    if payload.get("review_pool_ready") is not True or collection_status not in {
+        "complete", "complete_with_errors",
+    }:
+        raise RuntimeError("Weekly review pool is not ready")
+
+    pool = sorted(
+        (
+            candidate for candidate in payload["candidates"]
+            if candidate.get("sampled_for_review") is True
+        ),
+        key=lambda candidate: candidate["source_handle"].casefold(),
+    )
+    if len(pool) < SELECTION_SIZE:
+        raise RuntimeError(f"Weekly review pool must contain at least {SELECTION_SIZE} candidates")
+    if offset >= len(pool):
+        raise ValueError("Review offset is past the end of the pool")
+
+    end = min(offset + limit, len(pool))
+    print(f"{payload['week']}: candidates {offset + 1}-{end} of {len(pool)} (* truncated)")
+    page = pool[offset:end]
+    for handle, candidates in groupby(page, key=lambda candidate: candidate["source_handle"]):
+        print(f"\n{handle}")
+        for candidate in candidates:
+            flag = "*" if candidate.get("text_truncated") else ""
+            lines = (candidate.get("text") or "").splitlines()
+            # The fallback capture can include the X header before the post body.
+            header = [candidate.get("author_name"), candidate.get("author_handle"), "·"]
+            if lines[:3] == header:
+                lines = lines[4:]
+            content = " ".join(" ".join(lines).split())
+            print(f"{candidate['id']}{flag} {content or '[no text]'}")
+
+
 def _selected(payload: dict) -> list[dict]:
     return [candidate for candidate in payload.get("candidates", []) if candidate.get("selected")]
 
@@ -830,6 +870,10 @@ def main() -> int:
     collect_parser.add_argument(
         "--attempts-per-handle", type=int, default=DEFAULT_COLLECTION_ATTEMPTS
     )
+    review_parser = subparsers.add_parser("review-pool", help="Print sampled tweets for editorial review")
+    review_parser.add_argument("state", type=Path)
+    review_parser.add_argument("--offset", type=int, default=0, help="Number of sampled tweets to skip")
+    review_parser.add_argument("--limit", type=int, default=100, help="Maximum sampled tweets to print")
     select_parser = subparsers.add_parser("select")
     select_parser.add_argument("state", type=Path)
     select_parser.add_argument("selection", type=Path)
@@ -876,6 +920,10 @@ def main() -> int:
         return 0
 
     state_path = args.state
+    if args.command == "review-pool":
+        print_review_pool(state_path, offset=args.offset, limit=args.limit)
+        return 0
+
     with _state_lock(state_path):
         if args.command == "select":
             apply_selection(state_path, args.selection)

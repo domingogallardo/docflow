@@ -396,6 +396,7 @@ liking are separate commands:
 ```bash
 python utils/x_weekly_review.py plan --start 2026-08-10
 python utils/x_weekly_review.py collect --start 2026-08-10
+python utils/x_weekly_review.py review-pool /path/to/2026-W33.json --offset 0 --limit 80
 python utils/x_weekly_review.py select /path/to/2026-W33.json /path/to/selection.json
 python utils/x_weekly_review.py apply /path/to/2026-W33.json
 python utils/x_weekly_review.py status /path/to/2026-W33.json
@@ -404,6 +405,12 @@ python utils/x_weekly_review.py status /path/to/2026-W33.json
 The private corpus is read from `BASE_DIR/state/x_weekly/corpus.json`. It must
 contain exactly 50 objects with `handle` and an integer `weight` from 1 to 100;
 the file stays outside the repository.
+
+`review-pool` reads a completed checkpoint and prints only sampled candidates
+grouped by author. Each row includes the tweet ID for the selection JSON, an
+asterisk when the text is truncated, and the captured text. Advance `--offset`
+by the number of rows returned to read the next page. The command leaves the
+checkpoint untouched and rejects a failed collection or a pool below 50.
 
 The selection JSON must contain exactly 50 objects with `id`, `summary`, and
 `topic`. Collection creates a deterministic weighted review pool: weight 100

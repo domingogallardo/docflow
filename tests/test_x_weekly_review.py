@@ -1,4 +1,5 @@
 import json
+import sys
 from datetime import datetime
 
 import pytest
@@ -67,6 +68,74 @@ def test_weighted_review_pool_is_deterministic_and_keeps_all_weight_100_candidat
     assert first_count >= weekly.SELECTION_SIZE
     assert all(first_flags[:10])
     assert first_flags == [candidate["sampled_for_review"] for candidate in payload["candidates"]]
+
+
+def test_review_pool_cli_pages_sampled_tweets_without_writing_state(tmp_path, monkeypatch, capsys):
+    state_path = tmp_path / "week.json"
+    candidates = [
+        {
+            "id": str(index),
+            "source_handle": "@Zoo",
+            "sampled_for_review": index < 50,
+            "text": f"Post {index}",
+        }
+        for index in range(51)
+    ]
+    candidates[2].update(
+        source_handle="@alpha",
+        author_handle="@alpha",
+        author_name="Alpha",
+        text="Alpha\n@alpha\n·\nNov 3\nFull\nquoted text",
+    )
+    candidates[3].update(text_truncated=True)
+    weekly._write_state(state_path, {
+        "week": "2026-W33",
+        "collection": {"status": "complete_with_errors"},
+        "review_pool_ready": True,
+        "candidates": candidates,
+    })
+    before = state_path.read_bytes()
+
+    monkeypatch.setattr(sys, "argv", ["x_weekly_review", "review-pool", str(state_path), "--limit", "2"])
+    assert weekly.main() == 0
+    assert capsys.readouterr().out.splitlines() == [
+        "2026-W33: candidates 1-2 of 50 (* truncated)",
+        "", "@alpha", "2 Full quoted text", "", "@Zoo", "0 Post 0",
+    ]
+
+    sys.argv.extend(["--offset", "3"])
+    assert weekly.main() == 0
+    assert capsys.readouterr().out.splitlines() == [
+        "2026-W33: candidates 4-5 of 50 (* truncated)", "", "@Zoo", "3* Post 3", "4 Post 4",
+    ]
+
+    assert state_path.read_bytes() == before
+    assert list(tmp_path.iterdir()) == [state_path]
+
+
+@pytest.mark.parametrize(
+    ("ready", "status", "sampled", "error"),
+    [
+        (False, "complete", 50, "not ready"),
+        (True, "failed", 50, "not ready"),
+        (True, "complete", 49, "at least 50"),
+    ],
+)
+def test_review_pool_rejects_unusable_checkpoints(tmp_path, capsys, ready, status, sampled, error):
+    state_path = tmp_path / "week.json"
+    weekly._write_state(state_path, {
+        "week": "2026-W33",
+        "collection": {"status": status},
+        "review_pool_ready": ready,
+        "candidates": [
+            {"id": str(index), "source_handle": "@user", "sampled_for_review": index < sampled}
+            for index in range(50)
+        ],
+    })
+
+    with pytest.raises(RuntimeError, match=error):
+        weekly.print_review_pool(state_path, offset=0, limit=100)
+    assert not capsys.readouterr().out
 
 
 def test_write_state_is_atomic_and_leaves_no_temporary_file(tmp_path):
