@@ -352,6 +352,22 @@ class DocumentProcessor:
         history_path.write_text("".join(lines_new) + old_content, encoding="utf-8")
 
     @staticmethod
+    def _clear_recovered_link_failures(urls: Sequence[str], *, failed_path: Path) -> None:
+        """Remove old failures for URLs whose latest download succeeded."""
+        if not urls or not failed_path.exists():
+            return
+        recovered = set(urls)
+        lines = failed_path.read_text(encoding="utf-8").splitlines(keepends=True)
+        kept = []
+        for line in lines:
+            fields = line.split("\t", 2)
+            if len(fields) >= 2 and fields[1].strip() in recovered:
+                continue
+            kept.append(line)
+        if kept != lines:
+            failed_path.write_text("".join(kept), encoding="utf-8")
+
+    @staticmethod
     def _append_link_failures(failures: Sequence[Tuple[str, str]], *, failed_path: Path) -> None:
         if not failures:
             return
@@ -704,6 +720,7 @@ class DocumentProcessor:
 
         if processed_urls:
             self._append_url_history(processed_urls, history_path=self.processed_history)
+            self._clear_recovered_link_failures(processed_urls, failed_path=self.links_failed)
             print(f"🔗 {len(processed_urls)} URL(s) processed")
 
         if failures:

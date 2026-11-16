@@ -112,3 +112,20 @@ def test_remove_urls_from_links_file_removes_lines_containing_processed_urls(tmp
     DocumentProcessor._remove_urls_from_links_file(links, ["https://example.com/one"])
 
     assert links.read_text(encoding="utf-8") == "# queue\nhttps://example.com/two\nplain note\n"
+
+
+def test_successful_retry_clears_only_its_previous_failures(tmp_path, monkeypatch):
+    processor, incoming = prepare_processor(tmp_path)
+    url = 'https://example.com/recovered'
+    other = url + '/still-failing'
+    processor.links_file.write_text(url + '\n')
+    other_line = f'2026-11-16 08:00:00\t{other}\tSee {url}\n'
+    processor.links_failed.write_text(
+        f'2026-11-15 08:00:00\t{url}\tExtraction failed\n' + other_line
+        + f'2026-11-16 08:00:00\t{url}\tExtraction failed again\n')
+    output = incoming / 'clipper-recovered.md'
+    output.write_text('Recovered content')
+    monkeypatch.setattr('pipeline_manager.download_url_to_markdown',
+                        lambda *args, **kwargs: SimpleNamespace(output_path=output))
+    processor.process_web_urls()
+    assert processor.links_failed.read_text() == other_line

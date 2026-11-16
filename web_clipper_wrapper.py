@@ -107,6 +107,14 @@ CONTENT_ATTEMPT = ClipAttempt("content", "{{content}}")
 
 DOMAIN_RULES: tuple[DomainRule, ...] = (
     DomainRule(
+        "mailchi.mp",
+        (ClipAttempt("mailchimp-newsletter", "{{selectorHtml:.mcnTextContent|markdown}}"),),
+    ),
+    DomainRule(
+        "campaign-archive.com",
+        (ClipAttempt("mailchimp-newsletter", "{{selectorHtml:.mcnTextContent|markdown}}"),),
+    ),
+    DomainRule(
         "huggingface.co",
         (
             ClipAttempt(
@@ -400,7 +408,14 @@ def build_template(attempt: ClipAttempt) -> dict:
     """Build a temporary Obsidian Clipper template for an attempt."""
     return {
         "noteNameFormat": "{{title}}",
-        "noteContentFormat": attempt.content_format,
+        # selectorHtml returns a JSON array, even for one matching element.
+        # Join the HTML fragments before markdown conversion so quotes/escapes
+        # from that transport representation never become article content.
+        "noteContentFormat": re.sub(
+            r"(\{\{selectorHtml:[^{}|]+)\|markdown\}\}",
+            lambda match: match.group(1) + '|join:"\\n\\n"|markdown}}',
+            attempt.content_format,
+        ),
         "properties": [
             {"name": "source", "value": "{{url}}", "type": "text"},
             {"name": "author", "value": "{{author}}", "type": "multitext"},

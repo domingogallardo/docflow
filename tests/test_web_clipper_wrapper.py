@@ -563,3 +563,42 @@ def test_resolve_node_bin_raises_for_missing_custom_binary():
         assert "Node.js executable not found" in str(exc)
     else:
         raise AssertionError("missing Node binary should fail")
+
+
+def test_selector_html_templates_join_fragments_before_markdown():
+    for attempt in attempts_for_url('https://mailchi.mp/example/newsletter'):
+        template = build_template(attempt)
+        if 'selectorHtml:' in attempt.content_format:
+            assert '|join:"\\n\\n"|markdown}}' in template['noteContentFormat']
+        else:
+            assert template['noteContentFormat'] == attempt.content_format
+
+
+def test_mailchimp_template_converts_multiple_html_blocks_without_json(tmp_path):
+    import json
+    import shutil
+    import pytest
+    from web_clipper_wrapper import DEFAULT_CLIPPER_CLI, run_clipper
+
+    if not DEFAULT_CLIPPER_CLI.exists() or not shutil.which('node'):
+        pytest.skip('Local Obsidian Clipper CLI required')
+    html = tmp_path / 'page.html'
+    html.write_text('''<html><body><nav>Translate Subscribe</nav>
+        <div class="mcnTextContent"><h1>Newsletter title</h1></div>
+        <div class="mcnTextContent"><p>First paragraph with
+        <a href="https://example.com/source">a source</a>.</p></div>
+        <div class="mcnTextContent"><p>Second paragraph.</p></div>
+        </body></html>''')
+    attempt = attempts_for_url('https://mailchi.mp/example/newsletter')[1]
+    template = tmp_path / 'template.json'
+    template.write_text(json.dumps(build_template(attempt)))
+    output = tmp_path / 'article.md'
+    run_clipper(clipper_cli=DEFAULT_CLIPPER_CLI, node_bin='node',
+                url='https://mailchi.mp/example/newsletter', html_path=html,
+                template_path=template, output_path=output)
+    body = strip_frontmatter(output.read_text()).strip()
+    assert body.startswith('First paragraph with')
+    assert '[a source](https://example.com/source)' in body
+    assert 'Second paragraph.' in body
+    assert 'Translate Subscribe' not in body
+    assert markdown_quality(body, min_chars=20, min_words=5).usable

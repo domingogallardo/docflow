@@ -499,6 +499,10 @@ You can also pass URLs directly:
 bin/urlclip "https://example.com/article"
 ```
 
+HTML selector fallbacks join the Clipper's JSON array of HTML fragments before
+converting it to Markdown. Mailchimp newsletter fallbacks select `.mcnTextContent`
+blocks to exclude the archive toolbar; invalid JSON-like output is still rejected.
+
 `bin/urlclip` is a low-level downloader for one-off tests; the queue bookkeeping
 (`links.txt`, `processed_history.txt`, and `links_failed.txt`) is handled by the
 `urls` pipeline target.
