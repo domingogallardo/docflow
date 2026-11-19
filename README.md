@@ -359,6 +359,10 @@ Inline `data:image` video posters are removed without dropping the video or its
 source URLs. Quality validation ignores image-data strings inside code examples,
 while still rejecting actual inline image payloads. Hugging Face blog fallback
 extraction targets the article body to avoid author avatars and comments.
+For Medium profiles and publications hosted on `medium.com`, Docflow first
+looks for the exact article in the public RSS feed. It uses the full feed
+content with its images and captions when available and falls back to clipping
+the web page when the feed is unavailable or contains no usable full article.
 
 ### Manual quick start
 

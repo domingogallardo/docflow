@@ -16,9 +16,12 @@ import shutil
 import subprocess
 import tempfile
 from dataclasses import dataclass
+from email.utils import parsedate_to_datetime
+from html import escape
 from pathlib import Path
 from typing import Any, Iterable, List, Sequence
 from urllib.parse import unquote, urljoin, urlparse
+from xml.etree import ElementTree
 
 import requests
 import markdown as markdown_renderer
@@ -104,6 +107,8 @@ class ArticleDownloadResult:
 
 
 CONTENT_ATTEMPT = ClipAttempt("content", "{{content}}")
+MEDIUM_RSS_ATTEMPT = ClipAttempt("medium-rss", "{{selectorHtml:article|markdown}}")
+MEDIUM_POST_ID_RE = re.compile(r"(?:^|[-/])([0-9a-f]{12})/?$", re.IGNORECASE)
 
 DOMAIN_RULES: tuple[DomainRule, ...] = (
     DomainRule(
@@ -317,6 +322,60 @@ def fetch_html(url: str, *, timeout: int = 30) -> tuple[str, str]:
         current_url = bridge_url
 
     return html, response.url
+
+
+def _medium_rss_article(url: str) -> str | None:
+    """Build a Clipper input from the matching full article in a public Medium feed."""
+    parsed = urlparse(url)
+    host = parsed.hostname or ""
+    post_id = MEDIUM_POST_ID_RE.search(parsed.path)
+    if not post_id or parsed.scheme not in {"http", "https"}:
+        return None
+    if host.endswith(".medium.com") and host != "www.medium.com":
+        feed = f"https://{host}/feed"
+    elif host in {"medium.com", "www.medium.com"}:
+        path = parsed.path.strip("/").split("/")
+        if len(path) != 2 or path[0] == "p":
+            return None
+        feed = f"https://medium.com/feed/{path[0]}"
+    else:
+        return None
+
+    try:
+        response = requests.get(feed, headers={"User-Agent": DEFAULT_USER_AGENT}, timeout=10)
+        response.raise_for_status()
+        rss = ElementTree.fromstring(response.content)
+    except (requests.RequestException, ElementTree.ParseError):
+        return None
+
+    for item in rss.findall("./channel/item"):
+        link = item.findtext("link", "").strip()
+        item_id = MEDIUM_POST_ID_RE.search(urlparse(link).path)
+        if not item_id or item_id[1].lower() != post_id[1].lower():
+            continue
+        title = " ".join(item.findtext("title", "").split())
+        content = item.findtext("{http://purl.org/rss/1.0/modules/content/}encoded", "").strip()
+        if not title or not content:
+            return None
+
+        author = item.findtext("{http://purl.org/dc/elements/1.1/}creator", "").strip()
+        head = (
+            f'<title>{escape(title)}</title>'
+            f'<meta name="author" content="{escape(author)}">'
+        )
+        try:
+            published = parsedate_to_datetime(item.findtext("pubDate", ""))
+        except ValueError:
+            pass
+        else:
+            head += f'<meta property="article:published_time" content="{published.isoformat()}">'
+        body = BeautifulSoup(content, "html.parser")
+        for img in body.find_all("img"):
+            src = urlparse(img.get("src", ""))
+            if src.hostname == "medium.com" and src.path == "/_/stat":
+                img.decompose()
+        return f"<html><head>{head}</head><body><article>{body}</article></body></html>"
+    return None
 
 
 def clean_html_for_markdown(
@@ -671,6 +730,16 @@ def default_output_path(output_dir: Path, url: str) -> Path:
     return unique_path(output_dir / f"clipper-{slug}.md")
 
 
+def _article_sources(url: str) -> Iterable[tuple[str, str, Sequence[ClipAttempt]]]:
+    """Prefer Medium's article-only feed, followed by the usual page extraction."""
+    rss_article = _medium_rss_article(url)
+    if rss_article:
+        yield rss_article, url, (MEDIUM_RSS_ATTEMPT,)
+
+    html, final_url = fetch_html(url)
+    yield html, final_url, attempts_for_url(final_url)
+
+
 def download_url_to_markdown(
     url: str,
     *,
@@ -685,86 +754,95 @@ def download_url_to_markdown(
     source_x_post_url: str | None = None,
 ) -> ArticleDownloadResult:
     """Download a URL and save a validated Markdown file."""
-    html, final_url = fetch_html(url)
-    cleaned_html, removed_data_images = clean_html_for_markdown(
-        html,
-        base_url=final_url,
-        remove_data_images=remove_data_images,
-    )
-    output_dir.mkdir(parents=True, exist_ok=True)
-    destination = output_path or default_output_path(output_dir, final_url)
-    destination.parent.mkdir(parents=True, exist_ok=True)
-
     last_quality: MarkdownQuality | None = None
     last_attempt_name = ""
 
     with tempfile.TemporaryDirectory(prefix="docflow-clipper-") as tmp:
         tmp_dir = Path(tmp)
-        html_path = tmp_dir / "page.html"
-        html_path.write_text(cleaned_html, encoding="utf-8")
+        for html, final_url, attempts in _article_sources(url):
+            cleaned_html, removed_data_images = clean_html_for_markdown(
+                html,
+                base_url=final_url,
+                remove_data_images=remove_data_images,
+            )
+            output_dir.mkdir(parents=True, exist_ok=True)
+            destination = output_path or default_output_path(output_dir, final_url)
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            html_path = tmp_dir / "page.html"
+            html_path.write_text(cleaned_html, encoding="utf-8")
 
-        if keep_html_dir:
-            keep_html_dir.mkdir(parents=True, exist_ok=True)
-            keep_target = unique_path(keep_html_dir / (destination.stem + ".html"))
-            keep_target.write_text(cleaned_html, encoding="utf-8")
+            if keep_html_dir:
+                keep_html_dir.mkdir(parents=True, exist_ok=True)
+                keep_target = unique_path(keep_html_dir / (destination.stem + ".html"))
+                keep_target.write_text(cleaned_html, encoding="utf-8")
 
-        for attempt in attempts_for_url(final_url):
-            template_path = tmp_dir / f"{attempt.name}.json"
-            attempt_output = tmp_dir / f"{attempt.name}.md"
-            template_path.write_text(
-                json.dumps(build_template(attempt), ensure_ascii=False),
-                encoding="utf-8",
-            )
-            run_clipper(
-                clipper_cli=clipper_cli,
-                node_bin=node_bin,
-                url=final_url,
-                html_path=html_path,
-                template_path=template_path,
-                output_path=attempt_output,
-            )
-            markdown = attempt_output.read_text(encoding="utf-8", errors="replace")
-            quality = markdown_quality(
-                markdown,
-                min_chars=min_chars,
-                min_words=min_words,
-            )
-            last_quality = quality
-            last_attempt_name = attempt.name
-            if quality.usable:
-                extra_metadata = {
-                    "docflow_extractor": "obsidian-clipper",
-                    "docflow_extraction_attempt": attempt.name,
-                    "docflow_final_url": final_url,
-                    "docflow_removed_data_images": removed_data_images,
-                }
-                extra_metadata.update(
-                    original_published_metadata(html, markdown, url=final_url)
+            for attempt in attempts:
+                template_path = tmp_dir / f"{attempt.name}.json"
+                attempt_output = tmp_dir / f"{attempt.name}.md"
+                template_path.write_text(
+                    json.dumps(build_template(attempt), ensure_ascii=False),
+                    encoding="utf-8",
                 )
-                extra_metadata.update(author_metadata(html))
-                if url.rstrip("/") != final_url.rstrip("/"):
-                    extra_metadata["docflow_original_url"] = url
-                if source_x_post_url and source_x_post_url.startswith(
-                    ("http://", "https://")
-                ):
-                    extra_metadata["tweet_url"] = source_x_post_url
-                markdown = U.enrich_markdown_metadata(
+                run_clipper(
+                    clipper_cli=clipper_cli,
+                    node_bin=node_bin,
+                    url=final_url,
+                    html_path=html_path,
+                    template_path=template_path,
+                    output_path=attempt_output,
+                )
+                markdown = attempt_output.read_text(encoding="utf-8", errors="replace")
+                quality = markdown_quality(
                     markdown,
-                    source_url=final_url,
-                    extra=extra_metadata,
+                    min_chars=min_chars,
+                    min_words=min_words,
                 )
-                markdown = SummaryAIUpdater(
-                    build_openai_client(cfg.OPENAI_KEY)
-                ).add_summary_to_markdown(markdown)
-                destination.write_text(markdown, encoding="utf-8")
-                return ArticleDownloadResult(
-                    url=url,
-                    final_url=final_url,
-                    output_path=destination,
-                    attempt_name=attempt.name,
-                    quality=quality,
-                    removed_data_images=removed_data_images,
-                )
+                last_quality = quality
+                last_attempt_name = attempt.name
+                if quality.usable:
+                    extra_metadata = {
+                        "docflow_extractor": "obsidian-clipper",
+                        "docflow_extraction_attempt": attempt.name,
+                        "docflow_final_url": final_url,
+                        "docflow_removed_data_images": removed_data_images,
+                    }
+                    extra_metadata.update(
+                        original_published_metadata(html, markdown, url=final_url)
+                    )
+                    extra_metadata.update(author_metadata(html))
+                    if attempt == MEDIUM_RSS_ATTEMPT:
+                        rss_title = BeautifulSoup(html, "html.parser").title.get_text()
+                        front_matter, body = U.split_front_matter(markdown)
+                        front_matter["title"] = rss_title
+                        heading = re.sub(r"([\\`*_{}\[\]#])", r"\\\1", escape(rss_title, quote=False))
+                        markdown = U.front_matter_block(front_matter) + f"# {heading}\n\n{body.lstrip()}"
+                        if extra_metadata.get(ORIGINAL_PUBLISHED_SOURCE_KEY) == "meta:property=article:published_time":
+                            extra_metadata[ORIGINAL_PUBLISHED_SOURCE_KEY] = "rss:pubDate"
+                    if url.rstrip("/") != final_url.rstrip("/"):
+                        extra_metadata["docflow_original_url"] = url
+                    if source_x_post_url and source_x_post_url.startswith(
+                        ("http://", "https://")
+                    ):
+                        extra_metadata["tweet_url"] = source_x_post_url
+                    markdown = U.enrich_markdown_metadata(
+                        markdown,
+                        source_url=final_url,
+                        extra=extra_metadata,
+                    )
+                    if attempt == MEDIUM_RSS_ATTEMPT:
+                        markdown = U.upsert_front_matter(markdown, {"docflow_post_url": final_url})
+                    markdown = SummaryAIUpdater(
+                        build_openai_client(cfg.OPENAI_KEY)
+                    ).add_summary_to_markdown(markdown)
+                    destination.write_text(markdown, encoding="utf-8")
+                    return ArticleDownloadResult(
+                        url=url,
+                        final_url=final_url,
+                        output_path=destination,
+                        attempt_name=attempt.name,
+                        quality=quality,
+                        removed_data_images=removed_data_images,
+                    )
 
     raise RuntimeError(
         f"No usable Markdown extracted from {url}; "

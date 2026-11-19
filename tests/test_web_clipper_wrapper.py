@@ -1,4 +1,8 @@
 from pathlib import Path
+import shutil
+from types import SimpleNamespace
+
+import pytest
 
 from web_clipper_wrapper import (
     _html_bridge_redirect_url,
@@ -7,6 +11,7 @@ from web_clipper_wrapper import (
     build_template,
     clean_html_for_markdown,
     default_output_path,
+    download_url_to_markdown,
     fetch_html,
     markdown_quality,
     original_published_metadata,
@@ -14,6 +19,84 @@ from web_clipper_wrapper import (
     resolve_node_bin,
     strip_frontmatter,
 )
+from utils import markdown_to_html, split_front_matter
+
+
+def test_medium_download_uses_exact_rss_article_with_title_and_images(tmp_path, monkeypatch):
+    from web_clipper_wrapper import DEFAULT_CLIPPER_CLI
+
+    if not DEFAULT_CLIPPER_CLI.exists() or not shutil.which("node"):
+        pytest.skip("Local Obsidian Clipper CLI required")
+    url = "https://writer.medium.com/requested-0123456789ab?source=rss"
+    rss = """<rss xmlns:content="http://purl.org/rss/1.0/modules/content/"
+                  xmlns:dc="http://purl.org/dc/elements/1.1/"><channel>
+      <item><title>Another story</title><link>https://writer.medium.com/another-0123456789ac</link>
+        <content:encoded><![CDATA[<p>Wrong article text</p>]]></content:encoded></item>
+      <item><title>Science &amp; art</title><link>https://writer.medium.com/new-slug-0123456789ab</link>
+        <dc:creator>Example Author</dc:creator><pubDate>Wed, 18 Nov 2026 10:22:51 GMT</pubDate>
+        <content:encoded><![CDATA[
+          <p>A public story about art and science, complete with an illustration.</p>
+          <figure><img src="https://cdn-images-1.medium.com/illustration.jpg">
+            <figcaption>Original image credit</figcaption></figure>
+          <img src="https://medium.com/_/stat?referrerSource=full_rss" width="1" height="1">
+        ]]></content:encoded></item>
+    </channel></rss>"""
+
+    def get(feed, **kwargs):
+        assert feed == "https://writer.medium.com/feed"
+        return SimpleNamespace(content=rss.encode(), raise_for_status=lambda: None)
+
+    monkeypatch.setattr("web_clipper_wrapper.requests.get", get)
+    result = download_url_to_markdown(url, output_dir=tmp_path, min_chars=20, min_words=5)
+    markdown = result.output_path.read_text()
+    meta, body = split_front_matter(markdown)
+    html = markdown_to_html(markdown)
+    assert result.attempt_name == "medium-rss"
+    assert meta["title"] == "Science & art"
+    assert meta["author"] == "Example Author"
+    assert meta["source_url"] == meta["docflow_post_url"] == url
+    assert meta["docflow_ingested_at"]
+    assert meta["docflow_original_published_at"] == "2026-11-18T10:22:51Z"
+    assert meta["docflow_original_published_source"] == "rss:pubDate"
+    assert "# Science &amp; art" in body
+    assert 'src="https://cdn-images-1.medium.com/illustration.jpg"' in html
+    assert "Original image credit" in html
+    assert "Wrong article text" not in body
+    assert "/_/stat" not in body
+
+
+@pytest.mark.parametrize("feed_content", [
+    b"not RSS",
+    b"<rss><channel><item><link>https://medium.com/@writer/other-0123456789ac</link></item></channel></rss>",
+    b"""<rss xmlns:content="http://purl.org/rss/1.0/modules/content/"><channel><item>
+        <link>https://medium.com/@writer/requested-0123456789ab</link><title>Requested</title>
+        <description>Preview only</description></item></channel></rss>""",
+    b"""<rss xmlns:content="http://purl.org/rss/1.0/modules/content/"><channel><item>
+        <link>https://medium.com/@writer/requested-0123456789ab</link><title>Requested</title>
+        <content:encoded><![CDATA[<p>Too short.</p>]]></content:encoded></item></channel></rss>""",
+])
+def test_medium_download_falls_back_to_page_without_usable_rss(tmp_path, monkeypatch, feed_content):
+    url = "https://medium.com/@writer/requested-0123456789ab"
+
+    def get(feed, **kwargs):
+        assert feed == "https://medium.com/feed/@writer"
+        return SimpleNamespace(content=feed_content, raise_for_status=lambda: None)
+
+    def fetch_page(requested):
+        assert requested == url
+        return "<article><p>The requested full website article has enough text.</p></article>", url
+
+    def clip(**kwargs):
+        page = kwargs["html_path"].read_text()
+        markdown = "Too short." if "Too short." in page else "The requested full website article has enough text."
+        kwargs["output_path"].write_text(markdown)
+
+    monkeypatch.setattr("web_clipper_wrapper.requests.get", get)
+    monkeypatch.setattr("web_clipper_wrapper.fetch_html", fetch_page)
+    monkeypatch.setattr("web_clipper_wrapper.run_clipper", clip)
+    result = download_url_to_markdown(url, output_dir=tmp_path, min_chars=20, min_words=5)
+    assert result.attempt_name == "content"
+    assert "The requested full website article" in result.output_path.read_text()
 
 
 def test_read_urls_from_file_extracts_and_dedupes(tmp_path: Path):
