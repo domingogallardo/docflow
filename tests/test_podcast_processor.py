@@ -395,6 +395,62 @@ def test_podcast_processor_builds_snip_index(tmp_path):
     assert 'href="#snip-02-10-00-segundo-snip"' in html_content
 
 
+def test_podcast_processor_removes_repeated_bold_snip_titles(tmp_path):
+    incoming = tmp_path / "Incoming"
+    incoming.mkdir()
+    destination = tmp_path / "Podcasts"
+    destination.mkdir()
+    (incoming / "snips.md").write_text(
+        """# Test Episode
+
+## Episode metadata
+- Episode title: Test Episode
+- Show: Test Show
+
+## Snips
+
+### [03:24] AI scientists could tackle unsolved problems autonomously {#snip-example}
+[🎧 Play snip - 1min️ (02:04 - 03:24)](https://share.snipd.com/snip/example)
+
+**AI Scientists Could Tackle Unsolved Problems Autonomously**
+
+- The first summary point.
+
+#### 📚 Transcript
+
+> **Speaker** The transcript.
+
+### [04:00] Another snip
+🎧 [Play snip](https://share.snipd.com/snip/another)
+
+**A distinct summary title**
+
+- The second summary point.
+
+## Notes
+
+### [05:00] Notes title
+
+**Notes title**
+""",
+        encoding="utf-8",
+    )
+
+    moved = PodcastProcessor(incoming, destination).process_podcasts()
+    markdown = next(p for p in moved if p.suffix == ".md").read_text(encoding="utf-8")
+    html = next(p for p in moved if p.suffix == ".html").read_text(encoding="utf-8")
+
+    assert "**AI Scientists Could Tackle Unsolved Problems Autonomously**" not in markdown
+    assert "### [03:24] AI scientists could tackle unsolved problems autonomously {#snip-example}" in markdown
+    assert 'id="snip-example"' in html
+    assert "AI Scientists Could Tackle Unsolved Problems Autonomously" not in html
+    assert "https://share.snipd.com/snip/example" in html
+    assert "<li>The first summary point.</li>" in html
+    assert "<strong>Speaker</strong> The transcript." in html
+    assert "<strong>A distinct summary title</strong>" in html
+    assert "<strong>Notes title</strong>" in html
+
+
 def _snip_case_processor(tmp_path, response):
     from types import SimpleNamespace
 

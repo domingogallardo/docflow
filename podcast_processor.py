@@ -19,6 +19,10 @@ from utils.podcasts import move_podcast_files
 
 
 SNIP_INDEX_MARKER = "<!-- snip-index -->"
+SNIP_SECTION_PATTERN = re.compile(
+    r"^##[ \t]+Snips[ \t]*\n(?P<body>.*?)(?=^##[ \t]|\Z)",
+    re.MULTILINE | re.DOTALL | re.IGNORECASE,
+)
 
 
 class PodcastProcessor:
@@ -149,6 +153,8 @@ class PodcastProcessor:
                 text = re.sub(r"<br\s*/?>\s*>\s*", "\n> ", text)  # <br/>> -> new line with "> "
                 text = re.sub(r"<br\s*/?>", "\n", text)           # <br/> -> simple new line
                 
+                text = self._remove_repeated_snip_titles(text)
+
                 # Replace audio links.
                 text = self.snip_link.sub(self._replace_snip_link, text)
                 
@@ -275,13 +281,37 @@ class PodcastProcessor:
             cleaned.append(line)
         return cleaned
 
+    @staticmethod
+    def _remove_repeated_snip_titles(text: str) -> str:
+        """Drop a bold copy of a timestamped title at the start of its snip."""
+        section = SNIP_SECTION_PATTERN.search(text)
+        if not section:
+            return text
+
+        title_pair = re.compile(
+            r"(?P<opening>^###[ \t]+\[\d+(?::\d{2}){1,2}\][ \t]+"
+            r"(?P<title>[^\n]+?)(?:[ \t]+\{[^}\n]+\})?[ \t]*\n"
+            r"(?:[ \t]*\n)*"
+            r"(?:(?:\[🎧|🎧[ \t]*\[)[^\]\n]*\]\(https://share\.snipd\.com/snip/[^)\n]+\)"
+            r"[ \t]*\n(?:[ \t]*\n)*)?)"
+            r"^\*\*(?P<bold>[^\n]+?)\*\*[ \t]*(?:\n|\Z)",
+            re.MULTILINE,
+        )
+
+        def remove_duplicate(match: re.Match[str]) -> str:
+            title = " ".join(match["title"].split()).casefold()
+            bold = " ".join(match["bold"].split()).casefold()
+            return match["opening"] if title == bold else match[0]
+
+        body = title_pair.sub(remove_duplicate, section["body"])
+        return text[:section.start("body")] + body + text[section.end("body"):]
+
     def _sentence_case_snip_titles(self, text: str) -> str:
         """Change only snip title casing, retaining anchors and generated index links."""
         meta, _ = U.split_front_matter(text)
         if meta.get("podcast_snip_title_case") == "sentence":
             return text
-        section = re.search(r"^##\s+Snips\s*\n(?P<body>.*?)(?=^##\s|\Z)", text,
-                            flags=re.MULTILINE | re.DOTALL | re.IGNORECASE)
+        section = SNIP_SECTION_PATTERN.search(text)
         if not section or self.snip_title_ai.client is None:
             return text
         heading = re.compile(r"^(###[ \t]+)(.+?)([ \t]*\{[^}\n]*\})?[ \t]*$", re.MULTILINE)

@@ -157,6 +157,8 @@ history would need separate state.
 External input files:
 
 - Drop local `.md`, `.pdf`, images, and other source files into `BASE_DIR/Incoming/`.
+- In Snipd exports, Docflow keeps the timestamped snip heading and removes the
+  duplicate bold title above the summary.
 - Snipd snippet titles are converted to sentence case using `gpt-5-nano`,
   sending only the titles in one request per episode. Acronyms and proper names
   retain their capitalization. Only casing changes are accepted; failures leave
